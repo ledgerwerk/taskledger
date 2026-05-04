@@ -9,6 +9,8 @@ include = ["taskledger*"]
 [tool.setuptools.package-data]
 taskledger = [
     "py.typed",
+    "web_assets/*.css",
+    "web_assets/*.js",
 ]
 
 [tool.pytest.ini_options]

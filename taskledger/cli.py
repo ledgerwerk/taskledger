@@ -391,6 +391,8 @@ def main(
         and (argv[0].startswith("tests/") or "::" in argv[0])
         and argv[0] not in _known_commands
     )
+    if argv and argv[0] not in _known_commands and ctx.invoked_subcommand:
+        argv = (ctx.invoked_subcommand, *tuple(ctx.args))
     if is_test_runner_arg:
         # This looks like pytest args, use ctx instead
         argv = ()

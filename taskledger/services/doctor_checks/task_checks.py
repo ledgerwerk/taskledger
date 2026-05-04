@@ -4,25 +4,32 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from taskledger.domain.models import (
+    ActiveTaskState,
+    TaskLock,
+    TaskRecord,
+    TaskRunRecord,
+)
 from taskledger.storage.locks import lock_is_expired
+from taskledger.storage.task_store import V2Paths
 
 
 def scan_task_integrity(  # noqa: C901
     *,
     workspace_root: Path,
-    paths,
-    tasks: list,
-    task_map: dict,
-    locks: list,
-    task_runs: dict,
-    run_map: dict,
-    active_state,
+    paths: V2Paths,
+    tasks: list[TaskRecord],
+    task_map: dict[str, TaskRecord],
+    locks: list[TaskLock],
+    task_runs: dict[str, list[TaskRunRecord]],
+    run_map: dict[tuple[str, str], TaskRunRecord],
+    active_state: ActiveTaskState | None,
     errors: list[str],
     warnings: list[str],
     repair_hints: list[str],
-    broken_links: list[dict],
-    run_lock_mismatches: list[dict],
-    diagnostics: list[dict],
+    broken_links: list[dict[str, object]],
+    run_lock_mismatches: list[dict[str, object]],
+    diagnostics: list[dict[str, object]],
 ) -> None:
     """Scan per-task integrity: plans, todos, run/lock consistency, change refs."""
     from taskledger.domain.policies import derive_active_stage  # noqa: F811
@@ -321,7 +328,7 @@ def _relative_project_path(workspace_root: Path, path: Path) -> str:
 
 
 def _add_diagnostic(
-    diagnostics: list[dict],
+    diagnostics: list[dict[str, object]],
     errors: list[str],
     *,
     severity: str,

@@ -190,7 +190,7 @@ def next_action(workspace_root: Path, task_ref: str) -> dict[str, object]:
         active_stage=active_stage,
         runs=runs,
     )
-    payload = {
+    payload: dict[str, object] = {
         "kind": "task_next_action",
         "task_id": task.id,
         "status_stage": task.status_stage,

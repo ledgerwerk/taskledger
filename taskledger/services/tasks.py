@@ -72,7 +72,6 @@ from taskledger.storage.events import append_event, next_event_id
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.locks import (
     lock_is_expired,
-    lock_status,
     read_lock,
     remove_lock,
     write_lock,
@@ -484,7 +483,7 @@ def approve_plan(
     )
 
 
-class PlanTodoMaterializationPayload(TypedDict):  # type: ignore[misc]
+class PlanTodoMaterializationPayload(TypedDict):
     """Re-exported from plan_materialization for backward compatibility."""
 
     kind: str
@@ -1319,88 +1318,22 @@ def show_task_run(*args, **kwargs):  # type: ignore[no-untyped-def]
     return _impl(*args, **kwargs)
 
 
-def show_lock(workspace_root: Path, task_ref: str) -> dict[str, object]:
-    task = resolve_task(workspace_root, task_ref)
-    lock = _current_lock(workspace_root, task.id)
-    return {
-        "kind": "task_lock",
-        "task_id": task.id,
-        "lock": lock.to_dict() if lock is not None else None,
-        "status": lock_status(lock),
-    }
+def show_lock(*args, **kwargs):  # type: ignore[no-untyped-def]
+    from taskledger.services.run_store import show_lock as _impl
+
+    return _impl(*args, **kwargs)
 
 
-def break_lock(
-    workspace_root: Path,
-    task_ref: str,
-    *,
-    reason: str,
-) -> dict[str, object]:
-    task = resolve_task(workspace_root, task_ref)
-    paths = resolve_v2_paths(workspace_root)
-    lock_path = task_lock_path(paths, task.id)
-    lock = read_lock(lock_path)
-    if lock is None:
-        raise _cli_error(
-            "No active lock exists for the task. "
-            "This is normal after plan propose, implement finish, or validate finish. "
-            "Run `taskledger next-action` to see what to do next.",
-            EXIT_CODE_MISSING,
-        )
-    broken_lock = replace(
-        lock,
-        broken_at=utc_now_iso(),
-        broken_by=_default_actor(),
-        broken_reason=reason.strip(),
-    )
-    audit_path = _write_broken_lock_audit(paths, task.id, broken_lock)
-    _append_event(
-        paths.project_dir,
-        task.id,
-        "lock.broken",
-        {
-            "lock_id": lock.lock_id,
-            "reason": reason,
-            "audit_path": audit_path.relative_to(paths.project_dir).as_posix(),
-        },
-    )
-    _append_event(
-        paths.project_dir,
-        task.id,
-        "repair.lock_broken",
-        {
-            "lock_id": lock.lock_id,
-            "reason": reason,
-            "audit_path": audit_path.relative_to(paths.project_dir).as_posix(),
-        },
-    )
-    remove_lock(lock_path)
-    rebuild_v2_indexes(paths)
-    return {
-        "ok": True,
-        "command": "lock break",
-        "task_id": task.id,
-        "status_stage": task.status_stage,
-        "changed": True,
-        "warnings": [],
-        "lock": broken_lock.to_dict(),
-        "reason": reason,
-        "audit_path": audit_path.relative_to(paths.project_dir).as_posix(),
-    }
+def break_lock(*args, **kwargs):  # type: ignore[no-untyped-def]
+    from taskledger.services.run_store import break_lock as _impl
+
+    return _impl(*args, **kwargs)
 
 
-def list_locks(workspace_root: Path) -> dict[str, object]:
-    locks = load_active_locks(workspace_root)
-    return {
-        "kind": "task_lock_list",
-        "locks": [
-            {
-                **lock.to_dict(),
-                "status": lock_status(lock),
-            }
-            for lock in locks
-        ],
-    }
+def list_locks(*args, **kwargs):  # type: ignore[no-untyped-def]
+    from taskledger.services.run_store import list_locks as _impl
+
+    return _impl(*args, **kwargs)
 
 
 def next_action(workspace_root: Path, task_ref: str) -> dict[str, object]:

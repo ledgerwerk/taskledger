@@ -64,11 +64,3 @@ repos:
         args:
           - --plugin=@prettier/plugin-xml
         files: \.(css|htm|html|js|json|jsx|less|md|scss|toml|ts|xml|yaml|yml)$
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v10.2.1
-    hooks:
-      - id: eslint
-        verbose: true
-        args:
-          - --color
-          - --fix

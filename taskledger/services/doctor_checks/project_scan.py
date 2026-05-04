@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from taskledger.storage.paths import ProjectLocator, ProjectPaths
+
 
 def scan_project_config(
     *,
     workspace_root: Path,
-    resolved_paths,
-    locator,
+    resolved_paths: ProjectPaths,
+    locator: ProjectLocator,
     errors: list[str],
     warnings: list[str],
     repair_hints: list[str],

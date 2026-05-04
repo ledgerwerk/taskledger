@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import errno
 import json
 import threading
 import time
 from contextlib import contextmanager
+from importlib.resources import files
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -46,6 +48,12 @@ from taskledger.storage.task_store import (
     save_task,
     save_todos,
 )
+
+
+def _skip_if_socket_forbidden(exc: OSError) -> None:
+    if exc.errno in {errno.EPERM, errno.EACCES}:
+        pytest.skip("Socket bind not permitted in this test environment.")
+    raise exc
 
 
 def _build_workspace(tmp_path: Path) -> None:
@@ -245,14 +253,18 @@ def _running_server(
     port: int = 0,
     task_ref: str | None = None,
 ) -> DashboardServerHandle:
-    handle = launch_dashboard_server(
-        DashboardServerConfig(
-            workspace_root=workspace_root,
-            host=host,
-            port=port,
-            task_ref=task_ref,
+    try:
+        handle = launch_dashboard_server(
+            DashboardServerConfig(
+                workspace_root=workspace_root,
+                host=host,
+                port=port,
+                task_ref=task_ref,
+            )
         )
-    )
+    except OSError as exc:
+        _skip_if_socket_forbidden(exc)
+        raise
     thread = threading.Thread(target=handle.serve_forever, daemon=True)
     thread.start()
     time.sleep(0.05)
@@ -395,13 +407,34 @@ def test_dashboard_html_has_accessible_landmarks() -> None:
     assert "progressbar" in html
 
 
+def test_dashboard_assets_load_from_package_resources() -> None:
+    css = (
+        files("taskledger.web_assets")
+        .joinpath("dashboard.css")
+        .read_text(encoding="utf-8")
+    )
+    script = (
+        files("taskledger.web_assets")
+        .joinpath("dashboard.js")
+        .read_text(encoding="utf-8")
+    )
+
+    assert ".dashboard-layout" in css
+    assert "const refreshMs = __REFRESH_MS__;" in script
+    assert "function renderSections()" in script
+
+
 def test_launch_dashboard_server_defaults_to_loopback_and_reports_bound_port(
     tmp_path: Path,
 ) -> None:
     _build_workspace(tmp_path)
-    handle = launch_dashboard_server(
-        DashboardServerConfig(workspace_root=tmp_path, port=0)
-    )
+    try:
+        handle = launch_dashboard_server(
+            DashboardServerConfig(workspace_root=tmp_path, port=0)
+        )
+    except OSError as exc:
+        _skip_if_socket_forbidden(exc)
+        raise
     try:
         assert handle.host == "127.0.0.1"
         assert handle.port > 0

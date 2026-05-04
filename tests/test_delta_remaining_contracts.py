@@ -901,7 +901,7 @@ def test_next_action_with_expired_lock_returns_repair_hint(tmp_path: Path) -> No
         "expired": True,
     }
     assert data["next_command"] == (
-        'taskledger lock break --task task-0001 --reason "..."'
+        'taskledger repair lock --task task-0001 --reason "..."'
     )
     assert any(b.get("kind") == "lock" for b in data["blocking"])
 

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from taskledger.domain.models import TaskRecord
+from taskledger.storage.task_store import V2Paths
+
 
 def scan_migration_state(
     *,
-    tasks: list,
-    paths,
+    tasks: list[TaskRecord],
+    paths: V2Paths,
     errors: list[str],
     warnings: list[str],
     repair_hints: list[str],

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 from taskledger.domain.models import ActorRef, HarnessRef
 from taskledger.domain.policies import plan_propose_decision
@@ -193,12 +194,15 @@ def upsert_plan(
         ]
     )
     if from_answers or stale_answers:
-        payload = _tasks.regenerate_plan_from_answers(
-            workspace_root,
-            task.id,
-            body=body,
-            criteria=criteria,
-            allow_open_questions=allow_open_questions,
+        payload = cast(
+            dict[str, object],
+            _tasks.regenerate_plan_from_answers(
+                workspace_root,
+                task.id,
+                body=body,
+                criteria=criteria,
+                allow_open_questions=allow_open_questions,
+            ),
         )
         payload["operation"] = "regenerated"
         payload["command"] = "plan upsert"

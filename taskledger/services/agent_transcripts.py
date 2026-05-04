@@ -158,7 +158,8 @@ def _render_review_markdown(
         for row in rows
         if (
             first_validation_finish is not None
-            and row["index"] > first_validation_finish
+            and (row_index := _row_index(row)) is not None
+            and row_index > first_validation_finish
         )
     ]
     missing_guidance = _missing_planning_guidance(workspace_root, rows)
@@ -184,7 +185,10 @@ def _render_review_markdown(
     if not failed_rows:
         lines.append("| (none) | - | - | - | - |")
     for row in failed_rows:
-        retry_state = "yes" if retries.get(int(row["index"])) else "no"
+        row_index = _row_index(row)
+        retry_state = (
+            "yes" if row_index is not None and retries.get(row_index) else "no"
+        )
         lines.append(
             "| "
             f"{row['display_command']} | "
@@ -245,7 +249,10 @@ def _render_failures_markdown(
     if not failed_rows:
         lines.append("| (none) | - | - | - | - |")
     for row in failed_rows:
-        retry_state = "yes" if retries.get(int(row["index"])) else "no"
+        row_index = _row_index(row)
+        retry_state = (
+            "yes" if row_index is not None and retries.get(row_index) else "no"
+        )
         lines.append(
             "| "
             f"{row['display_command']} | "
@@ -344,7 +351,9 @@ def _retry_map(rows: Sequence[dict[str, object]]) -> dict[int, bool]:
             if str(later["normalized_command"]) == command and not later["failed"]:
                 retried = True
                 break
-        retries[int(row["index"])] = retried
+        row_index = _row_index(row)
+        if row_index is not None:
+            retries[row_index] = retried
     return retries
 
 
@@ -356,7 +365,7 @@ def _first_validation_finish_index(rows: Sequence[dict[str, object]]) -> int | N
         ) or command.startswith(
             "taskledger validate finish --result failed",
         ):
-            return int(row["index"])
+            return _row_index(row)
     return None
 
 
@@ -456,6 +465,13 @@ def _is_failed(exit_code: object) -> bool:
 
 def _cell_int(value: object) -> str:
     return str(value) if isinstance(value, int) else "-"
+
+
+def _row_index(row: dict[str, object]) -> int | None:
+    value = row.get("index")
+    if isinstance(value, int):
+        return value
+    return None
 
 
 def _output_ref_summary(record: object) -> str:

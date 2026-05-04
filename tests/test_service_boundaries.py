@@ -15,23 +15,8 @@ MODULE_LINE_WHITELIST: dict[str, str] = {
 }
 
 FUNCTION_LINE_WHITELIST: dict[str, str] = {
-    "taskledger/cli_task.py::register_task_v2_commands": (
-        "Split command registration into smaller callback modules."
-    ),
-    "taskledger/cli_plan.py::register_plan_v2_commands": (
-        "Split command registration into smaller callback modules."
-    ),
-    "taskledger/cli_implement.py::register_implement_v2_commands": (
-        "Split command registration into smaller callback modules."
-    ),
     "taskledger/services/navigation.py::can_perform": (
         "Move action gating decisions into a shared pure decision layer."
-    ),
-    "taskledger/services/web_dashboard.py::_render_dashboard_css": (
-        "Move dashboard CSS into static assets."
-    ),
-    "taskledger/services/web_dashboard.py::_render_dashboard_script": (
-        "Move dashboard JavaScript into static assets."
     ),
     "taskledger/services/doctor_checks/task_checks.py::scan_task_integrity": (
         "Consolidated per-task integrity scan with change/lock validation;"
@@ -39,11 +24,74 @@ FUNCTION_LINE_WHITELIST: dict[str, str] = {
     ),
 }
 
+CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
+    "taskledger/cli.py:taskledger.services.dashboard": (
+        "Dashboard and view rendering are currently service-level read models."
+    ),
+    "taskledger/cli.py:taskledger.services.agent_logging": (
+        "Root CLI initializes recorder and payload/error notes."
+    ),
+    "taskledger/cli.py:taskledger.services.tree": (
+        "Tree rendering currently lives in services/tree.py."
+    ),
+    "taskledger/cli.py:taskledger.services.doctor": (
+        "Repair command uses doctor cleanup helper pending API wrapper."
+    ),
+    "taskledger/cli.py:taskledger.services.web_dashboard": (
+        "Serve command starts the optional web dashboard service."
+    ),
+    "taskledger/cli_actor.py:taskledger.services.actors": (
+        "Actor and harness resolution currently lives in services/actors.py."
+    ),
+    "taskledger/cli_common.py:taskledger.services.agent_logging": (
+        "CLI common emits recorder task/payload/error notes."
+    ),
+    "taskledger/cli_implement.py:taskledger.services.actors": (
+        "Implementation commands resolve actor/harness context."
+    ),
+    "taskledger/cli_implement.py:taskledger.services.agent_logging": (
+        "Implement command wrapper records managed-shell command failures."
+    ),
+    "taskledger/cli_misc.py:taskledger.services.doctor": (
+        "Doctor commands still consume doctor service inspectors directly."
+    ),
+    "taskledger/cli_plan.py:taskledger.services.actors": (
+        "Plan commands resolve actor/harness context."
+    ),
+    "taskledger/cli_plan.py:taskledger.services.plan_lint": (
+        "Plan lint payload model is still service-owned."
+    ),
+    "taskledger/cli_plan.py:taskledger.services.workflow_guidance": (
+        "Planning guidance profile read model is service-owned."
+    ),
+    "taskledger/cli_plan.py:taskledger.services.agent_logging": (
+        "Plan command wrapper records managed-shell command failures."
+    ),
+    "taskledger/cli_plan.py:taskledger.services.planning_flow": (
+        "Plan guidance command marks guidance viewed via planning flow service."
+    ),
+    "taskledger/cli_task.py:taskledger.services.actors": (
+        "Task record command resolves completed-by actor metadata."
+    ),
+    "taskledger/cli_task.py:taskledger.services.agent_transcripts": (
+        "Task transcript rendering currently lives in services."
+    ),
+    "taskledger/cli_task.py:taskledger.services.task_reports": (
+        "Task report rendering and options are service-owned."
+    ),
+    "taskledger/cli_task.py:taskledger.services.tasks": (
+        "Task events read path still uses services.tasks list_events helper."
+    ),
+    "taskledger/cli_validate.py:taskledger.services.actors": (
+        "Validation commands resolve actor/harness context."
+    ),
+}
+
 EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/cli.py:207": (
         "Top-level command dispatch keeps unexpected crashes in structured output."
     ),
-    "taskledger/cli.py:641": (
+    "taskledger/cli.py:643": (
         "Serve command optional import fallback reports missing dashboard gracefully."
     ),
     "taskledger/cli_ledger.py:111": (
@@ -73,22 +121,22 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/doctor.py:279": (
         "Doctor lock inspection wraps malformed lock reads."
     ),
-    "taskledger/services/doctor_checks/project_scan.py:47": (
+    "taskledger/services/doctor_checks/project_scan.py:49": (
         "Project scan continues past config load errors."
     ),
-    "taskledger/services/doctor_checks/project_scan.py:62": (
+    "taskledger/services/doctor_checks/project_scan.py:64": (
         "Project scan continues past project UUID load errors."
     ),
-    "taskledger/services/doctor_checks/project_scan.py:77": (
+    "taskledger/services/doctor_checks/project_scan.py:79": (
         "Project scan continues past ledger config load errors."
     ),
-    "taskledger/services/doctor_checks/task_checks.py:48": (
+    "taskledger/services/doctor_checks/task_checks.py:55": (
         "Task scan continues past broken introduction ref resolution."
     ),
     "taskledger/services/tree.py:246": (
         "Tree command keeps partial output when optional metadata parsing fails."
     ),
-    "taskledger/services/web_dashboard.py:1512": (
+    "taskledger/services/web_dashboard.py:300": (
         "Dashboard request handling must keep the server alive on unexpected "
         "route errors."
     ),
@@ -248,6 +296,26 @@ def test_except_exception_sites_are_whitelisted() -> None:
 
     assert not unexpected, f"Unapproved except Exception sites: {unexpected}"
     assert not stale, f"Whitelist sites no longer present: {stale}"
+
+
+def test_cli_services_imports_are_whitelisted() -> None:
+    found_imports: set[str] = set()
+    for path in ROOT.glob("taskledger/cli*.py"):
+        rel = _relative(path)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if not node.module or not node.module.startswith("taskledger.services"):
+                continue
+            found_imports.add(f"{rel}:{node.module}")
+
+    expected_imports = set(CLI_SERVICES_IMPORT_WHITELIST)
+    unexpected = sorted(found_imports - expected_imports)
+    stale = sorted(expected_imports - found_imports)
+
+    assert not unexpected, f"Unapproved CLI->services imports: {unexpected}"
+    assert not stale, f"Stale CLI->services import whitelist entries: {stale}"
 
 
 def test_validation_module_has_no_private_tasks_imports() -> None:
