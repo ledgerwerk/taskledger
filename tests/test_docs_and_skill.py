@@ -134,6 +134,25 @@ def test_planning_guidance_docs_are_present() -> None:
     assert 'plan_guidance(Path.cwd(), "task-0001")' in api_rst
 
 
+def test_transfer_docs_cover_project_identity_and_dry_run() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
+    command_contract = (ROOT / "docs" / "command_contract.rst").read_text(
+        encoding="utf-8"
+    )
+    transfer = (ROOT / "docs" / "transfer.rst").read_text(encoding="utf-8")
+    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "project_name" in readme
+    assert "taskledger-export-{project_slug}-{ledger_ref}-{timestamp}.tar.gz" in readme
+    assert "--project-name" in usage
+    assert "taskledger import ./taskledger-transfer.tar.gz --dry-run" in usage
+    assert "manifest.project.name" in command_contract
+    assert "project.uuid" in transfer
+    assert "taskledger import --dry-run" in transfer
+    assert "taskledger import ./taskledger-transfer.tar.gz --dry-run" in skill
+
+
 def test_docs_do_not_reference_removed_commands() -> None:
     forbidden = [
         "taskledger repo ",

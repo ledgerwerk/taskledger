@@ -357,11 +357,22 @@ def _usage_error_command(argv: tuple[str, ...], exc: click.ClickException) -> st
 def _status_human(payload: dict[str, Any]) -> str:
     workspace = payload.get("workspace_root", "?")
     config_path = payload.get("config_path", "?")
+    ledger_ref = payload.get("ledger_ref", "?")
+    project_uuid = payload.get("project_uuid")
+    project_name = payload.get("project_name")
     active_task = payload.get("active_task")
     counts = payload.get("counts")
     health = payload.get("health")
 
     lines = ["Taskledger status", f"Workspace: {workspace}", f"Config: {config_path}"]
+    if isinstance(project_name, str) and project_name.strip():
+        if isinstance(project_uuid, str) and project_uuid.strip():
+            lines.append(f"Project: {project_name} ({project_uuid})")
+        else:
+            lines.append(f"Project: {project_name}")
+    elif isinstance(project_uuid, str) and project_uuid.strip():
+        lines.append(f"Project UUID: {project_uuid}")
+    lines.append(f"Ledger: {ledger_ref}")
     if isinstance(active_task, dict):
         task_id = active_task.get("task_id", "?")
         slug = active_task.get("slug", "?")
@@ -513,16 +524,31 @@ def init_command(
         Path | None,
         typer.Option("--taskledger-dir", help="Durable taskledger storage root."),
     ] = None,
+    project_name: Annotated[
+        str | None,
+        typer.Option(
+            "--project-name",
+            help=(
+                "Human-readable project name used in reports and default "
+                "archive filenames."
+            ),
+        ),
+    ] = None,
 ) -> None:
     state = ctx.obj
     assert isinstance(state, CLIState)
-    payload = init_project(state.cwd, taskledger_dir=taskledger_dir)
+    payload = init_project(
+        state.cwd,
+        taskledger_dir=taskledger_dir,
+        project_name=project_name,
+    )
     emit_payload(
         ctx,
         payload,
         human="\n".join(
             [
                 f"initialized taskledger: {payload['root']}",
+                f"project name: {payload['project_name']}",
                 *[f"- {item}" for item in cast(list[str], payload["created"])],
             ]
         ),
@@ -1025,7 +1051,10 @@ def export_command(
     ] = None,
     include_bodies: Annotated[
         bool,
-        typer.Option("--include-bodies", help="Include Markdown bodies in the export."),
+        typer.Option(
+            "--include-bodies/--no-include-bodies",
+            help="Include Markdown bodies in the export.",
+        ),
     ] = True,
     include_run_artifacts: Annotated[
         bool,
@@ -1060,9 +1089,16 @@ def export_command(
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
     counts = cast(dict[str, object], payload.get("counts", {}))
+    project_name = cast(str | None, payload.get("project_name"))
+    project_uuid = payload["project_uuid"]
+    project_label = (
+        f"{project_name} ({project_uuid})"
+        if isinstance(project_name, str) and project_name.strip()
+        else str(project_uuid)
+    )
     human = (
         f"exported taskledger archive: {payload['path']}\n"
-        f"project: {payload['project_uuid']}\n"
+        f"project: {project_label}\n"
         f"ledger: {payload['ledger_ref']}\n"
         f"tasks: {counts.get('tasks', 0)}"
     )
@@ -1099,12 +1135,25 @@ def import_command(
                 state.cwd,
                 text=text,
                 replace=replace,
+                dry_run=dry_run,
                 lock_policy=lock_policy,
             )
         except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-        emit_payload(ctx, payload, human="imported taskledger state")
+        if dry_run:
+            json_project = payload.get("project_name") or payload.get(
+                "project_uuid", "(unknown)"
+            )
+            human = (
+                f"dry-run JSON import: {source}\n"
+                f"project: {json_project}\n"
+                f"replace: {payload['replace']}\n"
+                f"counts: {payload.get('counts', {})}"
+            )
+        else:
+            human = "imported taskledger state"
+        emit_payload(ctx, payload, human=human)
         return
     try:
         payload = project_import_archive(
@@ -1117,20 +1166,30 @@ def import_command(
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    project_name = cast(str | None, payload.get("project_name"))
+    project_uuid = payload["project_uuid"]
+    project_label = (
+        f"{project_name} ({project_uuid})"
+        if isinstance(project_name, str) and project_name.strip()
+        else str(project_uuid)
+    )
     if dry_run:
         human = (
             f"dry-run archive import: {source}\n"
-            f"project: {payload['project_uuid']}\n"
+            f"project: {project_label}\n"
+            f"ledger: {payload['ledger_ref']}\n"
             f"replace: {payload['replace']}\n"
             f"counts: {payload.get('imported', {})}"
         )
     else:
         human = (
             f"imported taskledger archive: {source}\n"
-            f"project: {payload['project_uuid']}\n"
+            f"project: {project_label}\n"
             f"ledger: {payload['ledger_ref']}\n"
             f"replace: {payload['replace']}"
         )
+    if isinstance(payload.get("next_command"), str):
+        human = f"{human}\nnext: {payload['next_command']}"
     emit_payload(ctx, payload, human=human)
 
 

@@ -456,9 +456,26 @@ Export and snapshots
 
 .. code-block:: bash
 
-   taskledger export ./taskledger-transfer.tar.gz
+   taskledger init --project-name "Taskledger"
+   taskledger export
+   taskledger import ./taskledger-transfer.tar.gz --dry-run
    taskledger import ./taskledger-transfer.tar.gz --replace
    taskledger snapshot ./artifacts
+
+Default export filenames are project-specific:
+
+.. code-block:: text
+
+   taskledger-export-{project_slug}-{ledger_ref}-{timestamp}.tar.gz
+
+``project_slug`` is derived from ``project_name`` in ``taskledger.toml``.
+If unset, taskledger falls back to the workspace directory name.
+UUID safety checks still use ``project_uuid`` only.
+
+Export include flags are content-affecting:
+
+- ``--no-include-bodies`` removes record body fields from the exported payload.
+- ``--include-run-artifacts`` embeds artifact files under ``artifacts/`` in the archive.
 
 Cross-machine imports preserve durable task/run records but quarantine imported
 runtime locks by default. For an imported in-progress implementation, run:

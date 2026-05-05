@@ -1,17 +1,22 @@
-"""Stable project identity for cross-machine export/import safety.
+"""Stable project identity and display metadata for transfer safety.
 
 The ``project_uuid`` is stored in the checked-in taskledger TOML file
 (``.taskledger.toml`` / ``taskledger.toml``) and is independent of
 ``ledger_ref``.  It identifies the *source project*, not a branch ledger.
+
+``project_name`` is an optional human-facing label used in reports and
+default archive filenames. It is never used for import safety checks.
 """
 
 from __future__ import annotations
 
 import importlib
+import re
 import uuid as _uuid
 from pathlib import Path
 
 from taskledger.errors import LaunchError
+from taskledger.ids import slugify_project_ref
 from taskledger.storage.atomic import atomic_write_text
 
 try:
@@ -20,6 +25,8 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.10
     tomllib = importlib.import_module("tomli")
 
 PROJECT_UUID_KEY = "project_uuid"
+PROJECT_NAME_KEY = "project_name"
+PROJECT_NAME_MAX_LENGTH = 120
 
 
 def new_project_uuid() -> str:
@@ -43,6 +50,26 @@ def normalize_project_uuid(value: object) -> str:
     return str(parsed)
 
 
+def normalize_project_name(value: object) -> str:
+    """Validate and return a normalized project display name."""
+    if not isinstance(value, str):
+        raise LaunchError(
+            f"project_name must be a string, got {type(value).__name__!r}."
+        )
+    normalized = value.strip()
+    if not normalized:
+        raise LaunchError("project_name must not be blank.")
+    if len(normalized) > PROJECT_NAME_MAX_LENGTH:
+        raise LaunchError(
+            f"project_name must be at most {PROJECT_NAME_MAX_LENGTH} characters."
+        )
+    if re.search(r"[\x00-\x1f\x7f]", normalized):
+        raise LaunchError("project_name must not contain control characters.")
+    if "\n" in normalized or "\r" in normalized:
+        raise LaunchError("project_name must not contain newlines.")
+    return normalized
+
+
 def load_project_uuid(config_path: Path) -> str | None:
     """Read ``project_uuid`` from ``config_path``, or return ``None`` if absent."""
     if not config_path.exists():
@@ -52,6 +79,35 @@ def load_project_uuid(config_path: Path) -> str | None:
     if raw is None:
         return None
     return normalize_project_uuid(raw)
+
+
+def load_project_name(config_path: Path) -> str | None:
+    """Read ``project_name`` from ``config_path``, or return ``None`` if absent."""
+    if not config_path.exists():
+        return None
+    data = _load_toml(config_path)
+    raw = data.get(PROJECT_NAME_KEY)
+    if raw is None:
+        return None
+    return normalize_project_name(raw)
+
+
+def project_name_or_default(config_path: Path, *, workspace_root: Path) -> str:
+    """Return configured project name or a normalized workspace fallback."""
+    configured = load_project_name(config_path)
+    if configured is not None:
+        return configured
+    candidate = workspace_root.name.strip() or "project"
+    try:
+        return normalize_project_name(candidate)
+    except LaunchError:
+        return "project"
+
+
+def project_slug_or_default(config_path: Path, *, workspace_root: Path) -> str:
+    """Return a slugified project label for filenames and lightweight display."""
+    project_name = project_name_or_default(config_path, workspace_root=workspace_root)
+    return slugify_project_ref(project_name, empty="project")
 
 
 def ensure_project_uuid(config_path: Path) -> str:

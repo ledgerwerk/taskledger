@@ -18,6 +18,7 @@ from taskledger.exchange import (
     ARCHIVE_VERSION,
     MANIFEST_MEMBER,
     MAX_ARCHIVE_MEMBERS,
+    MAX_ARTIFACT_MEMBER_BYTES,
     MAX_MANIFEST_BYTES,
     MAX_PAYLOAD_BYTES,
     PAYLOAD_MEMBER,
@@ -107,6 +108,48 @@ def _archive_with_member_sizes(*, manifest_size: int, payload_size: int) -> byte
 
 def _write_archive(path: Path, data: bytes) -> None:
     path.write_bytes(data)
+
+
+def _read_manifest_payload(path: Path) -> tuple[dict[str, Any], dict[str, Any], bytes]:
+    with tarfile.open(path, "r:gz") as tar:
+        manifest_bytes = tar.extractfile(MANIFEST_MEMBER).read()  # type: ignore[union-attr]
+        payload_bytes = tar.extractfile(PAYLOAD_MEMBER).read()  # type: ignore[union-attr]
+    manifest = cast(dict[str, Any], json.loads(manifest_bytes.decode("utf-8")))
+    payload = cast(dict[str, Any], json.loads(payload_bytes.decode("utf-8")))
+    return manifest, payload, payload_bytes
+
+
+def _archive_with_extra_member(*, member_name: str, member_size: int) -> bytes:
+    project_uuid = "11111111-1111-1111-1111-111111111111"
+    payload_dict = {
+        "version": 3,
+        "project_uuid": project_uuid,
+        "v2": {"tasks": []},
+    }
+    payload_bytes = json.dumps(payload_dict).encode("utf-8")
+    payload_sha = hashlib.sha256(payload_bytes).hexdigest()
+    manifest_dict = {
+        "kind": ARCHIVE_KIND,
+        "archive_version": ARCHIVE_VERSION,
+        "project": {"uuid": project_uuid},
+        "payload": {"sha256": payload_sha},
+    }
+    manifest_bytes = json.dumps(manifest_dict).encode("utf-8")
+    out = io.BytesIO()
+    with tarfile.open(fileobj=out, mode="w:gz") as tar:
+        manifest_info = tarfile.TarInfo(MANIFEST_MEMBER)
+        manifest_info.size = len(manifest_bytes)
+        tar.addfile(manifest_info, io.BytesIO(manifest_bytes))
+
+        payload_info = tarfile.TarInfo(PAYLOAD_MEMBER)
+        payload_info.size = len(payload_bytes)
+        tar.addfile(payload_info, io.BytesIO(payload_bytes))
+
+        extra_data = b"x" * member_size
+        extra_info = tarfile.TarInfo(member_name)
+        extra_info.size = len(extra_data)
+        tar.addfile(extra_info, io.BytesIO(extra_data))
+    return out.getvalue()
 
 
 def _task_lock_paths(project_root: Path, task_id: str) -> list[Path]:
@@ -300,6 +343,123 @@ def test_export_and_import_include_v2_state(tmp_path: Path) -> None:
         )
     )
     assert handoffs["result"]["handoffs"][0]["mode"] == "implementation"
+
+
+def test_default_export_filename_includes_project_slug_and_ledger(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "source"
+    workspace.mkdir()
+    init_result = runner.invoke(
+        app,
+        ["--cwd", str(workspace), "init", "--project-name", "Taskledger"],
+    )
+    assert init_result.exit_code == 0, init_result.output
+
+    export_result = _json(
+        runner.invoke(app, ["--cwd", str(workspace), "--json", "export", "--overwrite"])
+    )
+    result = cast(dict[str, Any], export_result["result"])
+    filename = Path(cast(str, result["path"])).name
+    assert filename.startswith("taskledger-export-taskledger-main-")
+    assert filename.endswith(".tar.gz")
+    assert result["filename_policy"] == "project-ledger-timestamp-v1"
+    assert result["project_slug"] == "taskledger"
+
+
+def test_default_export_filename_sanitizes_project_name(tmp_path: Path) -> None:
+    workspace = tmp_path / "source"
+    workspace.mkdir()
+    init_result = runner.invoke(
+        app,
+        ["--cwd", str(workspace), "init", "--project-name", "Odoo 17 Addons!"],
+    )
+    assert init_result.exit_code == 0, init_result.output
+
+    export_result = _json(
+        runner.invoke(app, ["--cwd", str(workspace), "--json", "export", "--overwrite"])
+    )
+    filename = Path(cast(str, export_result["result"]["path"])).name
+    assert filename.startswith("taskledger-export-odoo-17-addons-main-")
+
+
+def test_explicit_export_path_is_not_rewritten(tmp_path: Path) -> None:
+    workspace = tmp_path / "source"
+    workspace.mkdir()
+    _init_project(workspace)
+
+    archive_path = tmp_path / "custom.tar.gz"
+    export_result = _json(
+        runner.invoke(
+            app,
+            ["--cwd", str(workspace), "--json", "export", str(archive_path)],
+        )
+    )
+    assert export_result["result"]["path"] == str(archive_path)
+
+
+def test_archive_manifest_includes_project_name_slug_and_uuid(tmp_path: Path) -> None:
+    workspace = tmp_path / "source"
+    workspace.mkdir()
+    init_result = runner.invoke(
+        app,
+        ["--cwd", str(workspace), "init", "--project-name", "Taskledger"],
+    )
+    assert init_result.exit_code == 0, init_result.output
+    archive_path = tmp_path / "manifest-check.tar.gz"
+    export_result = runner.invoke(
+        app,
+        ["--cwd", str(workspace), "export", str(archive_path)],
+    )
+    assert export_result.exit_code == 0, export_result.output
+
+    manifest, payload, _ = _read_manifest_payload(archive_path)
+    project = cast(dict[str, Any], manifest["project"])
+    assert project["uuid"] == payload["project_uuid"]
+    assert project["name"] == "Taskledger"
+    assert project["slug"] == "taskledger"
+    assert project["ledger_ref"] == "main"
+
+
+def test_archive_import_dry_run_reports_project_name(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    dest_root = tmp_path / "dest"
+    source_root.mkdir()
+    dest_root.mkdir()
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(source_root), "init", "--project-name", "Taskledger"],
+        ).exit_code
+        == 0
+    )
+    _init_project(dest_root)
+    _copy_project_uuid(source_root, dest_root)
+    archive_path = tmp_path / "dry-run-name.tar.gz"
+    export_result = runner.invoke(
+        app,
+        ["--cwd", str(source_root), "export", str(archive_path)],
+    )
+    assert export_result.exit_code == 0, export_result.output
+
+    import_result = _json(
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(dest_root),
+                "--json",
+                "import",
+                str(archive_path),
+                "--dry-run",
+            ],
+        )
+    )
+    result = cast(dict[str, Any], import_result["result"])
+    assert result["dry_run"] is True
+    assert result["project_name"] == "Taskledger"
+    assert result["project_slug"] == "taskledger"
+    assert result["next_command"] == "taskledger next-action"
 
 
 def test_export_import_preserves_agent_command_logs(tmp_path: Path) -> None:
@@ -812,3 +972,287 @@ def test_export_import_preserves_archived_task_metadata_and_slug_reuse(
     )
     payload = _json(create)
     assert payload["result"]["slug"] == "legacy-archive"
+
+
+def test_old_archive_without_project_name_still_imports(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    dest_root = tmp_path / "dest"
+    source_root.mkdir()
+    dest_root.mkdir()
+    _init_project(source_root)
+    _init_project(dest_root)
+    _copy_project_uuid(source_root, dest_root)
+
+    assert (
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(source_root),
+                "task",
+                "create",
+                "legacy-import-task",
+                "--description",
+                "legacy archive payload",
+            ],
+        ).exit_code
+        == 0
+    )
+    archive_path = tmp_path / "legacy-no-project-name.tar.gz"
+    export_result = runner.invoke(
+        app,
+        ["--cwd", str(source_root), "export", str(archive_path)],
+    )
+    assert export_result.exit_code == 0, export_result.output
+
+    manifest, payload, _ = _read_manifest_payload(archive_path)
+    project = cast(dict[str, Any], manifest["project"])
+    project.pop("name", None)
+    project.pop("slug", None)
+    payload.pop("project_name", None)
+    payload.pop("project_slug", None)
+    rewritten_payload = (
+        json.dumps(payload, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+    )
+    cast(dict[str, Any], manifest["payload"])["sha256"] = hashlib.sha256(
+        rewritten_payload
+    ).hexdigest()
+    rewritten_manifest = (
+        json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+    )
+
+    with tarfile.open(archive_path, "w:gz") as tar:
+        manifest_info = tarfile.TarInfo(MANIFEST_MEMBER)
+        manifest_info.size = len(rewritten_manifest)
+        tar.addfile(manifest_info, io.BytesIO(rewritten_manifest))
+
+        payload_info = tarfile.TarInfo(PAYLOAD_MEMBER)
+        payload_info.size = len(rewritten_payload)
+        tar.addfile(payload_info, io.BytesIO(rewritten_payload))
+
+    import_result = runner.invoke(
+        app,
+        ["--cwd", str(dest_root), "import", str(archive_path)],
+    )
+    assert import_result.exit_code == 0, import_result.output
+
+
+def test_json_import_dry_run_does_not_mutate_state(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    dest_root = tmp_path / "dest"
+    source_root.mkdir()
+    dest_root.mkdir()
+    _init_project(source_root)
+    _init_project(dest_root)
+    _copy_project_uuid(source_root, dest_root)
+    assert (
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(source_root),
+                "task",
+                "create",
+                "json-dry-run-source",
+                "--description",
+                "source state for dry run import",
+            ],
+        ).exit_code
+        == 0
+    )
+
+    snapshot_dir = tmp_path / "snapshots"
+    snapshot_dir.mkdir()
+    snapshot_result = _json(
+        runner.invoke(
+            app,
+            ["--cwd", str(source_root), "--json", "snapshot", str(snapshot_dir)],
+        )
+    )
+    export_path = Path(cast(str, snapshot_result["result"]["export_path"]))
+
+    dry_run_result = _json(
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(dest_root),
+                "--json",
+                "import",
+                str(export_path),
+                "--dry-run",
+            ],
+        )
+    )
+    assert dry_run_result["result"]["dry_run"] is True
+    assert dry_run_result["result"]["counts"]["tasks"] == 1
+
+    list_result = _json(
+        runner.invoke(app, ["--cwd", str(dest_root), "--json", "task", "list"])
+    )
+    assert list_result["result"]["tasks"] == []
+
+
+def test_export_without_bodies_omits_plan_and_task_body(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    _init_project(source_root)
+    assert (
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(source_root),
+                "task",
+                "create",
+                "body-export",
+                "--description",
+                "Task body should be omitted when include-bodies is false.",
+            ],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(source_root), "task", "activate", "body-export"],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(app, ["--cwd", str(source_root), "plan", "start"]).exit_code == 0
+    )
+    plan_text = """---
+goal: Verify body stripping.
+acceptance_criteria:
+  - id: ac-0001
+    text: Bodies can be omitted.
+todos:
+  - id: todo-0001
+    text: Export.
+    validation_hint: taskledger export
+---
+
+# Plan body
+
+This markdown body should be removed when include-bodies=false.
+"""
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(source_root), "plan", "propose", "--text", plan_text],
+        ).exit_code
+        == 0
+    )
+    archive_path = tmp_path / "without-bodies.tar.gz"
+    export_result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(source_root),
+            "export",
+            str(archive_path),
+            "--no-include-bodies",
+        ],
+    )
+    assert export_result.exit_code == 0, export_result.output
+    archive = read_project_archive(archive_path)
+    payload = cast(dict[str, Any], archive["payload"])
+    tasks = cast(list[dict[str, Any]], payload["v2"]["tasks"])
+    plans = cast(list[dict[str, Any]], payload["v2"]["plans"])
+    assert "body" not in tasks[0]
+    assert "body" not in plans[0]
+
+
+def test_export_with_run_artifacts_includes_artifact_members(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    dest_root = tmp_path / "dest"
+    source_root.mkdir()
+    dest_root.mkdir()
+    _init_project(source_root)
+    _init_project(dest_root)
+    _copy_project_uuid(source_root, dest_root)
+    assert (
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(source_root),
+                "task",
+                "create",
+                "artifact-export",
+                "--description",
+                "Artifact export coverage.",
+            ],
+        ).exit_code
+        == 0
+    )
+    artifact_path = (
+        source_root
+        / ".taskledger"
+        / "ledgers"
+        / "main"
+        / "tasks"
+        / "task-0001"
+        / "artifacts"
+        / "run.log"
+    )
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text("artifact-output\n", encoding="utf-8")
+
+    archive_path = tmp_path / "with-artifacts.tar.gz"
+    export_result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(source_root),
+            "export",
+            str(archive_path),
+            "--include-run-artifacts",
+        ],
+    )
+    assert export_result.exit_code == 0, export_result.output
+    with tarfile.open(archive_path, "r:gz") as tar:
+        names = {member.name for member in tar.getmembers()}
+    assert "artifacts/tasks/task-0001/artifacts/run.log" in names
+
+    import_result = runner.invoke(
+        app,
+        ["--cwd", str(dest_root), "import", str(archive_path), "--replace"],
+    )
+    assert import_result.exit_code == 0, import_result.output
+    imported_artifact = (
+        dest_root
+        / ".taskledger"
+        / "ledgers"
+        / "main"
+        / "tasks"
+        / "task-0001"
+        / "artifacts"
+        / "run.log"
+    )
+    assert imported_artifact.read_text(encoding="utf-8") == "artifact-output\n"
+
+
+def test_import_archive_rejects_unsafe_artifact_member_paths(tmp_path: Path) -> None:
+    archive_path = tmp_path / "unsafe-artifact.tar.gz"
+    data = _archive_with_extra_member(
+        member_name="artifacts/../../etc/passwd",
+        member_size=8,
+    )
+    _write_archive(archive_path, data)
+
+    with pytest.raises(LaunchError, match="Unsafe archive member path"):
+        read_project_archive(archive_path)
+
+
+def test_import_archive_rejects_oversized_artifact_payload(tmp_path: Path) -> None:
+    archive_path = tmp_path / "oversized-artifact.tar.gz"
+    data = _archive_with_extra_member(
+        member_name="artifacts/tasks/task-0001/artifacts/huge.bin",
+        member_size=MAX_ARTIFACT_MEMBER_BYTES + 1,
+    )
+    _write_archive(archive_path, data)
+
+    with pytest.raises(LaunchError, match="artifact member is too large"):
+        read_project_archive(archive_path)

@@ -32,6 +32,8 @@ Project API
 - ``project_doctor``
 - ``project_export``
 - ``project_import``
+- ``project_export_archive``
+- ``project_import_archive``
 - ``project_snapshot``
 - ``project_tree``
 

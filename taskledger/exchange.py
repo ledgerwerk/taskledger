@@ -31,6 +31,7 @@ from taskledger.domain.models import (
     TodoCollection,
 )
 from taskledger.errors import LaunchError
+from taskledger.ids import slugify_project_ref
 from taskledger.storage.agent_logs import (
     append_agent_command_log,
     load_agent_command_logs,
@@ -44,6 +45,8 @@ from taskledger.storage.project_identity import (
     assert_same_project_uuid,
     ensure_project_uuid,
     normalize_project_uuid,
+    project_name_or_default,
+    project_slug_or_default,
 )
 from taskledger.storage.task_store import (
     V2Paths,
@@ -91,7 +94,7 @@ def export_project_payload(
     include_bodies: bool = False,
     include_run_artifacts: bool = False,
 ) -> dict[str, object]:
-    v2_payload = _export_v2_payload(workspace_root)
+    v2_payload = _export_v2_payload(workspace_root, include_bodies=include_bodies)
     return {
         "kind": "taskledger_export",
         "version": 2,
@@ -139,10 +142,27 @@ def import_project_payload(
     *,
     payload: dict[str, object],
     replace: bool,
+    dry_run: bool = False,
     lock_policy: ImportLockPolicy | str = "quarantine",
 ) -> dict[str, object]:
     normalized_lock_policy = normalize_import_lock_policy(lock_policy)
     _assert_payload_project_uuid(workspace_root, payload)
+    raw_v2 = payload.get("v2")
+    if not isinstance(raw_v2, dict):
+        raise LaunchError("Import payload is missing v2 task state.")
+    counts = _payload_counts(payload)
+    if dry_run:
+        return {
+            "kind": "taskledger_import",
+            "replace": replace,
+            "dry_run": True,
+            "lock_policy": normalized_lock_policy,
+            "project_uuid": payload.get("project_uuid"),
+            "project_name": payload.get("project_name"),
+            "project_slug": payload.get("project_slug"),
+            "ledger_ref": payload.get("ledger_ref"),
+            "counts": counts,
+        }
     paths = ensure_v2_layout(workspace_root)
     if replace:
         _clear_v2_state(paths)
@@ -152,11 +172,17 @@ def import_project_payload(
         replace=replace,
         lock_policy=normalized_lock_policy,
     )
-    counts = rebuild_v2_indexes(paths)
+    rebuilt_counts = rebuild_v2_indexes(paths)
+    counts = {key: value for key, value in rebuilt_counts.items()}
     return {
         "kind": "taskledger_import",
         "replace": replace,
+        "dry_run": False,
         "lock_policy": normalized_lock_policy,
+        "project_uuid": payload.get("project_uuid"),
+        "project_name": payload.get("project_name"),
+        "project_slug": payload.get("project_slug"),
+        "ledger_ref": payload.get("ledger_ref"),
         "counts": counts,
     }
 
@@ -196,10 +222,14 @@ def _dict_list(value: object) -> list[dict[str, object]]:
     return [item for item in value if isinstance(item, dict)]
 
 
-def _export_v2_payload(workspace_root: Path) -> dict[str, object]:
+def _export_v2_payload(
+    workspace_root: Path,
+    *,
+    include_bodies: bool = True,
+) -> dict[str, object]:
     tasks = list_v2_tasks(workspace_root)
     introductions = list_v2_introductions(workspace_root)
-    return {
+    payload: dict[str, object] = {
         "tasks": [item.to_dict() for item in tasks],
         "active_task": (
             active_state.to_dict()
@@ -256,6 +286,38 @@ def _export_v2_payload(workspace_root: Path) -> dict[str, object]:
         "agent_command_logs": [
             item.to_dict() for item in load_agent_command_logs(workspace_root)
         ],
+    }
+    if not include_bodies:
+        _strip_export_bodies(payload)
+    return payload
+
+
+def _strip_export_bodies(v2_payload: dict[str, object]) -> None:
+    body_fields_by_collection = {
+        "tasks": ("body",),
+        "introductions": ("body",),
+        "plans": ("body",),
+        "handoffs": ("context_body",),
+    }
+    for collection_key, body_fields in body_fields_by_collection.items():
+        for item in _dict_list(v2_payload.get(collection_key)):
+            for field in body_fields:
+                if field in item:
+                    item.pop(field, None)
+                    item[f"{field}_omitted"] = True
+
+
+def _payload_counts(payload: dict[str, object]) -> dict[str, object]:
+    counts = _sanitize_counts(payload.get("counts"))
+    if counts:
+        return counts
+    raw_v2 = payload.get("v2")
+    if not isinstance(raw_v2, dict):
+        return {}
+    return {
+        key: len(_dict_list(value))
+        for key, value in raw_v2.items()
+        if isinstance(value, list)
     }
 
 
@@ -434,9 +496,12 @@ ARCHIVE_KIND = "taskledger_archive"
 ARCHIVE_VERSION = 1
 MANIFEST_MEMBER = "manifest.json"
 PAYLOAD_MEMBER = "payload/taskledger-export.json"
-MAX_ARCHIVE_MEMBERS = 16
+ARTIFACTS_PREFIX = "artifacts/"
+MAX_ARCHIVE_MEMBERS = 4096
 MAX_MANIFEST_BYTES = 256_000
 MAX_PAYLOAD_BYTES = 50_000_000
+MAX_ARTIFACT_MEMBER_BYTES = 20_000_000
+MAX_TOTAL_ARTIFACT_BYTES = 100_000_000
 
 
 def write_project_archive(
@@ -450,6 +515,12 @@ def write_project_archive(
     paths = ensure_v2_layout(workspace_root)
     locator = load_project_locator(workspace_root)
     project_uuid = ensure_project_uuid(locator.config_path)
+    project_name = project_name_or_default(
+        locator.config_path, workspace_root=locator.workspace_root
+    )
+    project_slug = project_slug_or_default(
+        locator.config_path, workspace_root=locator.workspace_root
+    )
 
     payload = export_project_payload(
         workspace_root,
@@ -458,6 +529,8 @@ def write_project_archive(
     )
     payload["version"] = 3
     payload["project_uuid"] = project_uuid
+    payload["project_name"] = project_name
+    payload["project_slug"] = project_slug
     payload["ledger_ref"] = paths.ledger_ref
 
     payload_bytes = (
@@ -467,6 +540,8 @@ def write_project_archive(
 
     manifest = _build_manifest(
         project_uuid=project_uuid,
+        project_name=project_name,
+        project_slug=project_slug,
         ledger_ref=paths.ledger_ref,
         payload_sha=payload_sha,
         payload=payload,
@@ -474,16 +549,19 @@ def write_project_archive(
         include_run_artifacts=include_run_artifacts,
     )
 
-    output_path = output_path or _default_archive_path(paths.ledger_ref)
+    output_path = output_path or _default_archive_path(project_slug, paths.ledger_ref)
     if output_path.exists():
         raise LaunchError(
             f"Output file already exists: {output_path}. Use --overwrite to replace."
         )
 
+    artifact_members = _collect_artifact_members(paths) if include_run_artifacts else []
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(output_path, "w:gz") as tar:
         _add_json_member(tar, MANIFEST_MEMBER, manifest)
         _add_json_member(tar, PAYLOAD_MEMBER, payload)
+        for archive_name, source_path in artifact_members:
+            _add_file_member(tar, archive_name, source_path)
 
     archive_bytes = output_path.read_bytes()
     archive_sha = _sha256(archive_bytes).hexdigest()
@@ -493,9 +571,13 @@ def write_project_archive(
         "path": str(output_path),
         "archive_sha256": archive_sha,
         "project_uuid": project_uuid,
+        "project_name": project_name,
+        "project_slug": project_slug,
         "ledger_ref": paths.ledger_ref,
         "counts": payload["counts"],
         "include_run_artifacts": include_run_artifacts,
+        "filename_policy": "project-ledger-timestamp-v1",
+        "artifact_members": len(artifact_members),
     }
 
 
@@ -510,7 +592,7 @@ def read_project_archive(source_path: Path) -> dict[str, object]:
 
     with tarfile.open(source_path, "r:gz") as tar:
         members = {m.name: m for m in tar.getmembers()}
-        _validate_archive_members(members)
+        artifact_members = _validate_archive_members(members)
 
         manifest_member = members[MANIFEST_MEMBER]
         payload_member = members[PAYLOAD_MEMBER]
@@ -562,7 +644,11 @@ def read_project_archive(source_path: Path) -> dict[str, object]:
             f" manifest={archive_uuid}, payload={payload_uuid}"
         )
 
-    return {"manifest": manifest, "payload": payload}
+    return {
+        "manifest": manifest,
+        "payload": payload,
+        "artifact_members": artifact_members,
+    }
 
 
 def import_project_archive(
@@ -578,11 +664,33 @@ def import_project_archive(
     archive = read_project_archive(source_path)
     payload = cast(dict[str, object], archive["payload"])
     manifest = cast(dict[str, object], archive["manifest"])
+    artifact_members = cast(list[str], archive.get("artifact_members", []))
 
     project = manifest.get("project")
     if not isinstance(project, dict):
         raise LaunchError("Manifest missing 'project' table.")
     archive_uuid = normalize_project_uuid(project.get("uuid"))
+    project_name = project.get("name")
+    if not isinstance(project_name, str) or not project_name.strip():
+        project_name = payload.get("project_name")
+    if not isinstance(project_name, str) or not project_name.strip():
+        project_name = None
+    project_slug = project.get("slug")
+    if not isinstance(project_slug, str) or not project_slug.strip():
+        project_slug = payload.get("project_slug")
+    if (not isinstance(project_slug, str) or not project_slug.strip()) and isinstance(
+        project_name, str
+    ):
+        project_slug = slugify_project_ref(project_name, empty="project")
+    if not isinstance(project_slug, str) or not project_slug.strip():
+        project_slug = None
+    manifest_ledger_ref = project.get("ledger_ref")
+    if isinstance(manifest_ledger_ref, str) and manifest_ledger_ref.strip():
+        ledger_ref = manifest_ledger_ref
+    else:
+        ledger_ref = (
+            str(payload.get("ledger_ref", "")) if isinstance(payload, dict) else ""
+        )
     locator = load_project_locator(workspace_root)
     local_uuid = ensure_project_uuid(locator.config_path)
     assert_same_project_uuid(archive_uuid, local_uuid)
@@ -596,34 +704,43 @@ def import_project_archive(
             "kind": "taskledger_archive_import",
             "source_path": str(source_path),
             "project_uuid": archive_uuid,
-            "ledger_ref": (
-                str(payload.get("ledger_ref", "")) if isinstance(payload, dict) else ""
-            ),
+            "project_name": project_name,
+            "project_slug": project_slug,
+            "ledger_ref": ledger_ref,
             "replace": replace,
             "dry_run": True,
             "lock_policy": normalized_lock_policy,
             "counts": counts,
             "imported": counts,
+            "next_command": "taskledger next-action",
         }
 
     result = import_project_payload(
         workspace_root,
         payload=payload,
         replace=replace,
+        dry_run=False,
         lock_policy=normalized_lock_policy,
+    )
+    imported_artifacts = _extract_artifact_members(
+        source_path,
+        artifact_members=artifact_members,
+        workspace_root=workspace_root,
     )
     return {
         "kind": "taskledger_archive_import",
         "source_path": str(source_path),
         "project_uuid": archive_uuid,
-        "ledger_ref": (
-            str(payload.get("ledger_ref", "")) if isinstance(payload, dict) else ""
-        ),
+        "project_name": project_name,
+        "project_slug": project_slug,
+        "ledger_ref": ledger_ref,
         "replace": replace,
         "dry_run": False,
         "lock_policy": normalized_lock_policy,
         "counts": result.get("counts", {}),
         "imported": result.get("counts", {}),
+        "imported_artifacts": imported_artifacts,
+        "next_command": "taskledger next-action",
     }
 
 
@@ -684,6 +801,8 @@ def _write_imported_lock_audit(paths: V2Paths, lock: TaskLock) -> None:
 def _build_manifest(
     *,
     project_uuid: str,
+    project_name: str,
+    project_slug: str,
     ledger_ref: str,
     payload_sha: str,
     payload: dict[str, object],
@@ -700,6 +819,8 @@ def _build_manifest(
         },
         "project": {
             "uuid": project_uuid,
+            "name": project_name,
+            "slug": project_slug,
             "ledger_ref": ledger_ref,
         },
         "payload": {
@@ -726,14 +847,72 @@ def _add_json_member(
     return data
 
 
-def _default_archive_path(ledger_ref: str) -> Path:
+def _add_file_member(tar: tarfile.TarFile, name: str, source_path: Path) -> None:
+    data = source_path.read_bytes()
+    info = tarfile.TarInfo(name)
+    info.size = len(data)
+    info.mtime = 0
+    tar.addfile(info, io.BytesIO(data))
+
+
+def _default_archive_path(project_slug: str, ledger_ref: str) -> Path:
     ts = utc_now_iso()
     safe_ts = ts.replace(":", "").replace("-", "").replace("+00:00", "Z").split(".")[0]
-    filename = f"taskledger-export-{ledger_ref}-{safe_ts}.tar.gz"
+    safe_ledger = slugify_project_ref(ledger_ref, empty="main")
+    filename = f"taskledger-export-{project_slug}-{safe_ledger}-{safe_ts}.tar.gz"
     return Path(filename)
 
 
-def _validate_archive_members(members: dict[str, tarfile.TarInfo]) -> None:
+def _collect_artifact_members(paths: V2Paths) -> list[tuple[str, Path]]:
+    artifact_roots = [
+        paths.tasks_dir.glob("task-*/artifacts/**/*"),
+        (paths.project_dir / "agent-logs" / "artifacts").glob("**/*"),
+    ]
+    members: list[tuple[str, Path]] = []
+    for iterator in artifact_roots:
+        for source_path in iterator:
+            if not source_path.is_file():
+                continue
+            relative = source_path.relative_to(paths.project_dir)
+            archive_name = f"{ARTIFACTS_PREFIX}{relative.as_posix()}"
+            members.append((archive_name, source_path))
+    members.sort(key=lambda item: item[0])
+    return members
+
+
+def _extract_artifact_members(
+    source_path: Path,
+    *,
+    artifact_members: list[str],
+    workspace_root: Path,
+) -> int:
+    if not artifact_members:
+        return 0
+    paths = ensure_v2_layout(workspace_root)
+    with tarfile.open(source_path, "r:gz") as tar:
+        members = {m.name: m for m in tar.getmembers()}
+        extracted = 0
+        for member_name in artifact_members:
+            if member_name not in members:
+                raise LaunchError(f"Archive member not found: {member_name!r}")
+            if not member_name.startswith(ARTIFACTS_PREFIX):
+                raise LaunchError(f"Unexpected archive member: {member_name!r}")
+            relative = Path(member_name[len(ARTIFACTS_PREFIX) :])
+            if relative.is_absolute() or ".." in relative.parts:
+                raise LaunchError(f"Unsafe archive member path: {member_name!r}")
+            info = members[member_name]
+            stream = tar.extractfile(info)
+            if stream is None:
+                raise LaunchError(f"Archive member {member_name!r} cannot be read")
+            content = stream.read()
+            destination = paths.project_dir / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(content)
+            extracted += 1
+    return extracted
+
+
+def _validate_archive_members(members: dict[str, tarfile.TarInfo]) -> list[str]:
     if MANIFEST_MEMBER not in members:
         raise LaunchError(f"Archive missing {MANIFEST_MEMBER}")
     if PAYLOAD_MEMBER not in members:
@@ -744,6 +923,8 @@ def _validate_archive_members(members: dict[str, tarfile.TarInfo]) -> None:
             f"Archive contains too many members: {len(members)} > {MAX_ARCHIVE_MEMBERS}"
         )
     required = {MANIFEST_MEMBER, PAYLOAD_MEMBER}
+    artifact_members: list[str] = []
+    total_artifact_bytes = 0
     for name, info in members.items():
         if name.startswith("/") or ".." in Path(name).parts:
             raise LaunchError(f"Unsafe archive member path: {name!r}")
@@ -761,8 +942,26 @@ def _validate_archive_members(members: dict[str, tarfile.TarInfo]) -> None:
                     f"{info.size} > {MAX_PAYLOAD_BYTES} bytes"
                 )
             required.discard(name)
+            continue
+        if not name.startswith(ARTIFACTS_PREFIX):
+            raise LaunchError(f"Unexpected archive member: {name!r}")
+        if not info.isfile():
+            raise LaunchError(f"Archive member {name!r} is not a regular file")
+        if info.size > MAX_ARTIFACT_MEMBER_BYTES:
+            raise LaunchError(
+                "Archive artifact member is too large: "
+                f"{name!r} ({info.size} > {MAX_ARTIFACT_MEMBER_BYTES} bytes)"
+            )
+        total_artifact_bytes += info.size
+        if total_artifact_bytes > MAX_TOTAL_ARTIFACT_BYTES:
+            raise LaunchError(
+                "Archive artifact payload is too large: "
+                f"{total_artifact_bytes} > {MAX_TOTAL_ARTIFACT_BYTES} bytes"
+            )
+        artifact_members.append(name)
     if required:
         raise LaunchError(f"Missing required archive members: {sorted(required)}")
+    return sorted(artifact_members)
 
 
 def _taskledger_version() -> str:

@@ -17,6 +17,7 @@ Contents
    api
    public_surface
    command_contract
+   transfer
 
 Indices and tables
 ------------------

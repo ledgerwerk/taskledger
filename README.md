@@ -457,10 +457,27 @@ for task-first handoff guidance.
 ## Export, import, and snapshots
 
 ```bash
-taskledger export ./taskledger-transfer.tar.gz
+taskledger init --project-name "Taskledger"
+taskledger export
+taskledger import ./taskledger-transfer.tar.gz --dry-run
 taskledger import ./taskledger-transfer.tar.gz --replace
 taskledger snapshot ./artifacts
 ```
+
+Default export filenames use this policy:
+
+```text
+taskledger-export-{project_slug}-{ledger_ref}-{timestamp}.tar.gz
+```
+
+`project_slug` is derived from `project_name` in `taskledger.toml`. If
+`project_name` is missing, taskledger falls back to the workspace directory name.
+Import safety still relies on `project_uuid`, not the name/slug.
+
+`--include-bodies` and `--include-run-artifacts` now change archive content:
+
+- `--no-include-bodies` strips record body text (`body` / `context_body`) from exported payloads.
+- `--include-run-artifacts` embeds task and agent-log artifact files under `artifacts/` in the archive.
 
 Cross-machine imports preserve durable task/run data, but imported runtime locks
 are quarantined by default. After importing an in-progress implementation,

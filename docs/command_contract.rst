@@ -83,6 +83,31 @@ The default is ``quarantine`` so imported source-machine runtime locks are not
 restored as active ``lock.yaml`` files. ``keep`` is diagnostic-only behavior
 for full-fidelity lock restoration.
 
+Transfer archive manifest contract
+----------------------------------
+
+Transfer archives include both machine identity and human-readable metadata:
+``manifest.project.name`` and ``manifest.project.slug`` are display metadata,
+while ``manifest.project.uuid`` remains the safety identity.
+
+.. code-block:: json
+
+   {
+     "project": {
+       "uuid": "<project_uuid>",
+       "name": "<project_name>",
+       "slug": "<project_slug>",
+       "ledger_ref": "<ledger_ref>"
+     }
+   }
+
+Import compatibility is backward-safe: older archives that only contain
+``project.uuid`` and ``project.ledger_ref`` remain valid. UUID comparison is
+still authoritative for import safety.
+
+``taskledger import --dry-run`` must not mutate taskledger state for either
+archive or JSON payload imports.
+
 Positional Resource Refs
 ------------------------
 

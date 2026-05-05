@@ -58,6 +58,41 @@ def test_init_writes_root_taskledger_toml_and_default_storage(tmp_path: Path) ->
     assert not (tmp_path / ".taskledger" / "project.toml").exists()
 
 
+def test_init_writes_project_name_from_workspace_basename(tmp_path: Path) -> None:
+    workspace = tmp_path / "odoo17-addon"
+    workspace.mkdir()
+
+    result = runner.invoke(app, ["--root", str(workspace), "init"])
+
+    assert result.exit_code == 0, result.stdout
+    config_text = (workspace / "taskledger.toml").read_text(encoding="utf-8")
+    assert 'project_name = "odoo17-addon"' in config_text
+    json_result = runner.invoke(app, ["--root", str(workspace), "--json", "init"])
+    assert json_result.exit_code == 0, json_result.stdout
+    payload = json.loads(json_result.stdout)
+    assert payload["result"]["project_name"] == "odoo17-addon"
+
+
+def test_init_project_name_option_overrides_basename(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+
+    result = runner.invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "init",
+            "--project-name",
+            "Odoo 17 Addons",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    config_text = (workspace / "taskledger.toml").read_text(encoding="utf-8")
+    assert 'project_name = "Odoo 17 Addons"' in config_text
+
+
 def test_init_with_external_taskledger_dir_uses_directory_directly(
     tmp_path: Path,
 ) -> None:
@@ -468,3 +503,35 @@ def test_default_taskledger_toml_includes_commented_planning_guidance() -> None:
         '# extra_guidance = "Mention docs and validation evidence in every plan."'
         in rendered
     )
+
+
+def test_validate_project_name_rejects_non_string() -> None:
+    from taskledger.storage.project_config import _validate_project_config_overrides
+
+    with pytest.raises(LaunchError, match="project_name"):
+        _validate_project_config_overrides({"project_name": 123}, Path("test.toml"))
+
+
+def test_validate_project_name_rejects_blank() -> None:
+    from taskledger.storage.project_config import _validate_project_config_overrides
+
+    with pytest.raises(LaunchError, match="project_name"):
+        _validate_project_config_overrides({"project_name": "   "}, Path("test.toml"))
+
+
+def test_validate_project_name_rejects_newline() -> None:
+    from taskledger.storage.project_config import _validate_project_config_overrides
+
+    with pytest.raises(LaunchError, match="project_name"):
+        _validate_project_config_overrides(
+            {"project_name": "Taskledger\nRepo"},
+            Path("test.toml"),
+        )
+
+
+def test_render_default_taskledger_toml_includes_project_name_when_given() -> None:
+    rendered = render_default_taskledger_toml(
+        project_uuid="u",
+        project_name="taskledger",
+    )
+    assert 'project_name = "taskledger"' in rendered

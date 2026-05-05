@@ -24,6 +24,7 @@ def init_project_state(
     *,
     taskledger_dir: Path | None = None,
     config_filename: str = CANONICAL_PROJECT_CONFIG_FILENAME,
+    project_name: str | None = None,
 ) -> tuple[ProjectPaths, list[str]]:
     existing = load_project_locator(workspace_root, config_filename=config_filename)
     requested = load_project_locator(
@@ -81,6 +82,7 @@ def init_project_state(
         taskledger_dir_value = _taskledger_dir_setting(
             taskledger_dir or Path(".taskledger")
         )
+        effective_project_name = project_name or requested.workspace_root.name
         config_spec = [
             (
                 paths.config_path,
@@ -88,6 +90,7 @@ def init_project_state(
                     taskledger_dir=taskledger_dir_value,
                     config_version=2,
                     project_uuid=new_project_uuid(),
+                    project_name=effective_project_name,
                 ),
             )
         ]

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
 from taskledger.errors import LaunchError
+from taskledger.storage.project_identity import normalize_project_name
 
 if TYPE_CHECKING:
     from taskledger.storage.paths import ProjectPaths
@@ -18,6 +19,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10
 
 LOCATION_CONFIG_KEYS = frozenset({"config_version", "taskledger_dir"})
 IDENTITY_CONFIG_KEYS = frozenset({"project_uuid"})
+PROJECT_METADATA_CONFIG_KEYS = frozenset({"project_name"})
 LEDGER_CONFIG_KEYS = frozenset(
     {
         "ledger_ref",
@@ -65,6 +67,7 @@ AGENT_LOGGING_CONFIG_KEYS = frozenset(
 SUPPORTED_PROJECT_CONFIG_KEYS = (
     LOCATION_CONFIG_KEYS
     | IDENTITY_CONFIG_KEYS
+    | PROJECT_METADATA_CONFIG_KEYS
     | LEDGER_CONFIG_KEYS
     | WORKFLOW_CONFIG_KEYS
 )
@@ -209,14 +212,22 @@ def render_default_taskledger_toml(
     ledger_parent_ref: str = "",
     ledger_next_task_number: int = 1,
     project_uuid: str | None = None,
+    project_name: str | None = None,
 ) -> str:
+    normalized_project_name = (
+        normalize_project_name(project_name) if project_name is not None else None
+    )
     identity_block = ""
-    if project_uuid is not None:
-        identity_block = (
-            "\n"
-            "# Stable project identity. Commit this with your source tree.\n"
-            f'project_uuid = "{project_uuid}"\n'
-        )
+    if project_uuid is not None or normalized_project_name is not None:
+        identity_lines = [
+            "",
+            "# Stable project identity. Commit this with your source tree.",
+        ]
+        if project_uuid is not None:
+            identity_lines.append(f'project_uuid = "{project_uuid}"')
+        if normalized_project_name is not None:
+            identity_lines.append(f'project_name = "{normalized_project_name}"')
+        identity_block = "\n".join(identity_lines) + "\n"
     ledger_block = ""
     if config_version >= 2:
         ledger_block = (
@@ -447,6 +458,14 @@ def _validate_project_config_overrides(data: dict[str, object], path: Path) -> N
         raise LaunchError(
             f"Project config key 'taskledger_dir' must be a string in {path}"
         )
+    project_name = data.get("project_name")
+    if project_name is not None:
+        try:
+            normalize_project_name(project_name)
+        except LaunchError as exc:
+            raise LaunchError(
+                f"Project config key 'project_name' is invalid in {path}: {exc}"
+            ) from exc
     artifact_rules = data.get("artifact_rules")
     if artifact_rules is not None:
         if not isinstance(artifact_rules, dict):

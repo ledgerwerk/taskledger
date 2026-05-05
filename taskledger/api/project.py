@@ -16,7 +16,11 @@ from taskledger.services.doctor import inspect_v2_project
 from taskledger.services.tree import TreeOptions, build_tree
 from taskledger.storage.init import init_project_state
 from taskledger.storage.locks import lock_is_expired
-from taskledger.storage.paths import resolve_project_paths
+from taskledger.storage.paths import load_project_locator, resolve_project_paths
+from taskledger.storage.project_identity import (
+    load_project_uuid,
+    project_name_or_default,
+)
 from taskledger.storage.task_store import (
     list_changes,
     list_introductions,
@@ -34,8 +38,16 @@ def init_project(
     workspace_root: Path,
     *,
     taskledger_dir: Path | None = None,
+    project_name: str | None = None,
 ) -> dict[str, object]:
-    paths, created = init_project_state(workspace_root, taskledger_dir=taskledger_dir)
+    paths, created = init_project_state(
+        workspace_root,
+        taskledger_dir=taskledger_dir,
+        project_name=project_name,
+    )
+    resolved_project_name = project_name_or_default(
+        paths.config_path, workspace_root=paths.workspace_root
+    )
     return {
         "kind": "taskledger_init",
         "root": str(paths.project_dir),
@@ -43,6 +55,7 @@ def init_project(
         "workspace_root": str(paths.workspace_root),
         "config_path": str(paths.config_path),
         "taskledger_dir": str(paths.taskledger_dir),
+        "project_name": resolved_project_name,
         "created": created,
     }
 
@@ -89,6 +102,7 @@ def project_status_summary(
     workspace_root: Path, *, check_health: bool = False
 ) -> dict[str, object]:
     paths = resolve_project_paths(workspace_root)
+    identity = _project_identity(workspace_root)
     health: dict[str, object] = {"checked": check_health}
 
     if check_health:
@@ -103,6 +117,9 @@ def project_status_summary(
         "config_path": str(paths.config_path),
         "taskledger_dir": str(paths.taskledger_dir),
         "project_dir": str(paths.project_dir),
+        "ledger_ref": identity["ledger_ref"],
+        "project_uuid": identity["project_uuid"],
+        "project_name": identity["project_name"],
         "counts": _project_counts_fast(workspace_root),
         "health": health,
         "active_task": _active_task_status(workspace_root),
@@ -114,12 +131,16 @@ def project_status(workspace_root: Path) -> dict[str, object]:
     tasks = list_tasks(workspace_root)
     locks = load_active_locks(workspace_root)
     paths = resolve_project_paths(workspace_root)
+    identity = _project_identity(workspace_root)
     return {
         "kind": "taskledger_status",
         "workspace_root": str(paths.workspace_root),
         "config_path": str(paths.config_path),
         "taskledger_dir": str(paths.taskledger_dir),
         "project_dir": str(paths.project_dir),
+        "ledger_ref": identity["ledger_ref"],
+        "project_uuid": identity["project_uuid"],
+        "project_name": identity["project_name"],
         "counts": _project_counts(workspace_root),
         "healthy": bool(doctor["healthy"]),
         "active_task": _active_task_status(workspace_root),
@@ -176,6 +197,7 @@ def project_import(
     text: str,
     format_name: str = "json",
     replace: bool = False,
+    dry_run: bool = False,
     lock_policy: str = "quarantine",
 ) -> dict[str, object]:
     payload = parse_project_import_payload(text, format_name=format_name)
@@ -183,6 +205,7 @@ def project_import(
         workspace_root,
         payload=payload,
         replace=replace,
+        dry_run=dry_run,
         lock_policy=lock_policy,
     )
 
@@ -283,6 +306,18 @@ def _active_task_status(workspace_root: Path) -> dict[str, object] | None:
     }
 
 
+def _project_identity(workspace_root: Path) -> dict[str, object]:
+    locator = load_project_locator(workspace_root)
+    paths = resolve_project_paths(workspace_root)
+    return {
+        "ledger_ref": paths.project_dir.name,
+        "project_uuid": load_project_uuid(locator.config_path),
+        "project_name": project_name_or_default(
+            locator.config_path, workspace_root=locator.workspace_root
+        ),
+    }
+
+
 __all__ = [
     "init_project",
     "project_status_summary",
@@ -290,6 +325,8 @@ __all__ = [
     "project_doctor",
     "project_export",
     "project_import",
+    "project_export_archive",
+    "project_import_archive",
     "project_snapshot",
     "project_tree",
 ]
