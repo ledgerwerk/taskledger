@@ -168,7 +168,7 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
         "rewrite_task_refs falls back to plain string replacement when "
         "front matter parsing fails."
     ),
-    "taskledger/storage/task_store.py:970": (
+    "taskledger/storage/task_store.py:973": (
         "list_handoffs_with_errors tolerates malformed handoff records "
         "and continues scanning."
     ),
