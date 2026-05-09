@@ -330,6 +330,9 @@ taskledger context --for code-reviewer --run run-0008
 taskledger release tag 0.4.1 --at-task task-0030 --note "0.4.1 released"
 taskledger release changelog 0.4.2 --since 0.4.1 --until-task task-0035 --output /tmp/taskledger-0.4.2-changelog-source.md
 taskledger import ./taskledger-transfer.tar.gz --dry-run
+taskledger export --task task-0040
+taskledger export task-0040 -o ./task0040.tar.gz
+taskledger import ./task0040.tar.gz --id-policy renumber-on-conflict
 taskledger ledger status
 taskledger ledger fork feature-a
 taskledger ledger switch main

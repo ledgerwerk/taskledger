@@ -474,7 +474,11 @@ Export and snapshots
 
    taskledger init --project-name "Taskledger"
    taskledger export
+   taskledger export --task task-0040
+   taskledger export task-0040
    taskledger import ./taskledger-transfer.tar.gz --dry-run
+   taskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz
+   taskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz --id-policy fail-on-conflict
    taskledger import ./taskledger-transfer.tar.gz --replace
    taskledger snapshot ./artifacts
 
@@ -483,6 +487,7 @@ Default export filenames are project-specific:
 .. code-block:: text
 
    taskledger-export-{project_slug}-{ledger_ref}-{timestamp}.tar.gz
+   taskledger-task-{project_slug}-{ledger_ref}-{task_id}-{timestamp}.tar.gz
 
 ``project_slug`` is derived from ``project_name`` in ``taskledger.toml``.
 If unset, taskledger falls back to the workspace directory name.
@@ -503,3 +508,19 @@ runtime locks by default. For an imported in-progress implementation, run:
 
 Use ``--lock-policy keep`` only when you explicitly want diagnostic lock
 restoration behavior.
+
+Single-task transfer from a config-only checkout
+------------------------------------------------
+
+.. code-block:: bash
+
+   # fresh checkout on another PC
+   taskledger init
+   taskledger task create "Fix import edge case" --slug fix-import-edge-case --description "..."
+   # ... normal plan / implementation / validation lifecycle ...
+   taskledger export task-0040
+
+   # main dev repo
+   taskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz
+   taskledger task list
+   taskledger task show task-0040

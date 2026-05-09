@@ -1090,12 +1090,41 @@ def repair_task_dirs_command(ctx: typer.Context) -> None:
     )
 
 
+def _looks_like_archive_output_target(value: str) -> bool:
+    candidate = value.strip()
+    lowered = candidate.lower()
+    if (
+        lowered.endswith(".tar.gz")
+        or lowered.endswith(".tgz")
+        or lowered.endswith(".json")
+    ):
+        return True
+    path = Path(candidate)
+    if path.is_absolute():
+        return True
+    if "/" in candidate or "\\" in candidate:
+        return True
+    if path.parent != Path("."):
+        return True
+    return False
+
+
 @app.command("export")
 def export_command(
     ctx: typer.Context,
+    target_or_output: Annotated[
+        str | None,
+        typer.Argument(
+            help="Task ref convenience selector or output archive path (.tar.gz)."
+        ),
+    ] = None,
+    task_ref: Annotated[
+        str | None,
+        typer.Option("--task", help="Task ref to export as task-scoped archive."),
+    ] = None,
     output: Annotated[
         Path | None,
-        typer.Argument(help="Output archive path (.tar.gz)."),
+        typer.Option("--output", "-o", help="Output archive path (.tar.gz)."),
     ] = None,
     include_bodies: Annotated[
         bool,
@@ -1118,20 +1147,61 @@ def export_command(
 ) -> None:
     state = ctx.obj
     assert isinstance(state, CLIState)
-    if output is not None and output.exists() and not overwrite:
+    resolved_output = output
+    task_refs: list[str] = []
+    if task_ref is not None:
+        task_refs = [resolve_cli_task(state.cwd, task_ref).id]
+        if target_or_output is not None:
+            if output is not None:
+                emit_error(
+                    ctx,
+                    LaunchError(
+                        "export received both positional output and --output. Use one."
+                    ),
+                )
+                raise typer.Exit(code=2)
+            resolved_output = Path(target_or_output)
+    elif target_or_output is not None:
+        if _looks_like_archive_output_target(target_or_output):
+            if output is not None:
+                emit_error(
+                    ctx,
+                    LaunchError(
+                        "export received both positional output and --output. Use one."
+                    ),
+                )
+                raise typer.Exit(code=2)
+            resolved_output = Path(target_or_output)
+        else:
+            try:
+                task_refs = [resolve_cli_task(state.cwd, target_or_output).id]
+            except LaunchError as exc:
+                emit_error(
+                    ctx,
+                    LaunchError(
+                        f"No task found for '{target_or_output}'. To write an archive "
+                        "to that filename, use: taskledger export -o "
+                        f"{target_or_output}.tar.gz"
+                    ),
+                )
+                raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    if resolved_output is not None and resolved_output.exists() and not overwrite:
         emit_error(
             ctx,
             LaunchError(
-                f"Output file already exists: {output}. Use --overwrite to replace."
+                "Output file already exists: "
+                f"{resolved_output}. Use --overwrite to replace."
             ),
         )
         raise typer.Exit(code=1)
     try:
         payload = project_export_archive(
             state.cwd,
-            output_path=output,
+            output_path=resolved_output,
             include_bodies=include_bodies,
             include_run_artifacts=include_run_artifacts,
+            task_refs=task_refs,
+            overwrite=overwrite,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)
@@ -1148,6 +1218,7 @@ def export_command(
         f"exported taskledger archive: {payload['path']}\n"
         f"project: {project_label}\n"
         f"ledger: {payload['ledger_ref']}\n"
+        f"scope: {payload.get('archive_scope', 'ledger')}\n"
         f"tasks: {counts.get('tasks', 0)}"
     )
     emit_payload(ctx, payload, human=human)
@@ -1172,6 +1243,16 @@ def import_command(
             help="How imported live locks are handled: drop, quarantine, keep.",
         ),
     ] = "quarantine",
+    id_policy: Annotated[
+        str,
+        typer.Option(
+            "--id-policy",
+            help=(
+                "Task ID conflict policy for task archives: "
+                "preserve, renumber-on-conflict, fail-on-conflict."
+            ),
+        ),
+    ] = "preserve",
 ) -> None:
     state = ctx.obj
     assert isinstance(state, CLIState)
@@ -1210,6 +1291,7 @@ def import_command(
             replace=replace,
             dry_run=dry_run,
             lock_policy=lock_policy,
+            id_policy=id_policy,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)
@@ -1234,8 +1316,18 @@ def import_command(
             f"imported taskledger archive: {source}\n"
             f"project: {project_label}\n"
             f"ledger: {payload['ledger_ref']}\n"
-            f"replace: {payload['replace']}"
+            f"replace: {payload['replace']}\n"
+            f"scope: {payload.get('archive_scope', 'ledger')}"
         )
+    task_id_map = payload.get("task_id_map")
+    if isinstance(task_id_map, dict) and task_id_map:
+        id_lines = ["id map:"]
+        for source_id, target_id in sorted(task_id_map.items()):
+            if source_id == target_id:
+                id_lines.append(f"  {source_id} -> {target_id}")
+            else:
+                id_lines.append(f"  {source_id} -> {target_id}  renumbered")
+        human = f"{human}\n" + "\n".join(id_lines)
     if isinstance(payload.get("next_command"), str):
         human = f"{human}\nnext: {payload['next_command']}"
     emit_payload(ctx, payload, human=human)

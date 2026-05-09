@@ -24,8 +24,40 @@ When no output path is passed to ``taskledger export``, taskledger writes:
 
    taskledger-export-{project_slug}-{ledger_ref}-{timestamp}.tar.gz
 
+For task-scoped exports:
+
+.. code-block:: text
+
+   taskledger-task-{project_slug}-{ledger_ref}-{task_id}-{timestamp}.tar.gz
+
 ``project_slug`` comes from ``project_name`` (or workspace fallback). Import
 safety still depends on UUID checks, not name matching.
+
+Single-task transfer from a config-only checkout
+------------------------------------------------
+
+.. code-block:: bash
+
+   # fresh checkout on another PC
+   taskledger init
+   taskledger task create "Fix import edge case" --slug fix-import-edge-case --description "..."
+   # ... normal plan/implement/validate workflow ...
+   taskledger export task-0040
+
+   # main dev repo
+   taskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz
+   taskledger task list
+   taskledger task show task-0040
+
+Rules:
+
+- Keep ``project_uuid`` committed in ``taskledger.toml`` / ``.taskledger.toml``.
+- ``.taskledger/`` is local operational state and can be absent on another PC.
+- Run ``taskledger init`` after cloning to create local state.
+- ``taskledger export --task TASK_REF`` and ``taskledger export TASK_REF`` export task-scoped archives.
+- Task-scoped import is additive by default; if the task id already exists locally, import renumbers and reports an id map.
+- ``--replace`` is for full-state replacement, not the normal single-task workflow.
+- Import repairs ``ledger_next_task_number`` so future ``task create`` ids remain unique.
 
 Dry-run import
 --------------

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, cast
 
@@ -265,6 +266,8 @@ def project_export_archive(
     output_path: Path | None = None,
     include_bodies: bool = True,
     include_run_artifacts: bool = False,
+    task_refs: Sequence[str] = (),
+    overwrite: bool = False,
 ) -> dict[str, object]:
     """Export current-ledger state into a compressed archive file."""
     return write_project_archive(
@@ -272,6 +275,8 @@ def project_export_archive(
         output_path=output_path,
         include_bodies=include_bodies,
         include_run_artifacts=include_run_artifacts,
+        task_refs=task_refs,
+        overwrite=overwrite,
     )
 
 
@@ -282,6 +287,7 @@ def project_import_archive(
     replace: bool = False,
     dry_run: bool = False,
     lock_policy: str = "quarantine",
+    id_policy: str = "preserve",
 ) -> dict[str, object]:
     """Import a taskledger archive into the current project."""
     return import_project_archive(
@@ -290,6 +296,7 @@ def project_import_archive(
         replace=replace,
         dry_run=dry_run,
         lock_policy=lock_policy,
+        id_policy=id_policy,
     )
 
 

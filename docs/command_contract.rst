@@ -92,6 +92,7 @@ Archive imports support explicit lock handling:
 .. code-block:: bash
 
    taskledger import ./taskledger-transfer.tar.gz --replace [--lock-policy drop|quarantine|keep]
+   taskledger import ./taskledger-task-<project>-<ledger>-task-0040-<ts>.tar.gz [--id-policy preserve|renumber-on-conflict|fail-on-conflict]
 
 The default is ``quarantine`` so imported source-machine runtime locks are not
 restored as active ``lock.yaml`` files. ``keep`` is diagnostic-only behavior
@@ -121,6 +122,19 @@ still authoritative for import safety.
 
 ``taskledger import --dry-run`` must not mutate taskledger state for either
 archive or JSON payload imports.
+
+Export task selection
+---------------------
+
+Taskledger export supports full-ledger and task-scoped archives:
+
+.. code-block:: bash
+
+   taskledger export
+   taskledger export ./backup.tar.gz
+   taskledger export --task task-0040
+   taskledger export task-0040
+   taskledger export task-0040 -o ./task0040.tar.gz
 
 Positional Resource Refs
 ------------------------
