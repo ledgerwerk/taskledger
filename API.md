@@ -104,6 +104,9 @@ from taskledger.errors import (
 - `propose_plan`
 - `plan_template`
 - `upsert_plan`
+- `PlanReviewOptions`
+- `build_plan_review_payload`
+- `render_plan_review`
 - `export_plan`
 - `amend_plan`
 - `regenerate_plan_from_answers`

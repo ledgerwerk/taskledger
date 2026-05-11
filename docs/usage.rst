@@ -56,8 +56,9 @@ Task-first workflow
    taskledger question add --text "Should exports include v2?"
    taskledger question answer-many --text "q-0001: Yes."
    taskledger plan upsert --from-answers --criterion "Accepted workflow is implemented." --file ./plan.md
-    taskledger plan lint --version 1
-    taskledger plan accept --version 1 --note "Ready."
+   taskledger plan review --version 1
+   taskledger plan lint --version 1
+   taskledger plan accept --version 1 --note "Ready."
 
 Planning guidance profiles
 --------------------------
@@ -192,6 +193,7 @@ parent and run the normal lifecycle on that child:
    taskledger task follow-up rewrite-v2 "Rename submit label" --description "Small post-completion delta." --activate
    taskledger plan start
    taskledger plan upsert --file ./plan.md
+   taskledger plan review --version 1
    taskledger plan accept --version 1 --note "Ready."
    taskledger implement start
    taskledger validate start

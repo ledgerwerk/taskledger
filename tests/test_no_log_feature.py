@@ -74,6 +74,12 @@ class TestCommandKeyParsing:
             == "plan show"
         )
 
+    def test_nested_command_plan_review(self) -> None:
+        assert (
+            _command_key_from_argv(("plan", "review", "--task", "task-0001"))
+            == "plan review"
+        )
+
     def test_nested_command_task_report(self) -> None:
         assert (
             _command_key_from_argv(

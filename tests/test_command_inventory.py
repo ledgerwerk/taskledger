@@ -41,12 +41,20 @@ def test_registered_commands_have_inventory_metadata() -> None:
 def test_inventory_marks_core_and_repair_commands() -> None:
     assert COMMAND_METADATA["task create"].audience == STABLE_FOR_AGENTS
     assert COMMAND_METADATA["plan approve"].audience == STABLE_FOR_AGENTS
+    assert COMMAND_METADATA["plan review"].audience == STABLE_FOR_AGENTS
     assert COMMAND_METADATA["implement restart"].audience == STABLE_FOR_AGENTS
     assert COMMAND_METADATA["implement resume"].audience == STABLE_FOR_AGENTS
     assert COMMAND_METADATA["task uncancel"].audience == STABLE_FOR_AGENTS
     assert COMMAND_METADATA["serve"].audience == HUMAN_ORIENTED
     assert COMMAND_METADATA["lock break"].audience == REPAIR
     assert COMMAND_METADATA["doctor"].audience == REPAIR
+
+
+def test_plan_review_is_classified_read_only() -> None:
+    spec = COMMAND_METADATA["plan review"]
+    assert spec.effect == "safe_read_only"
+    assert spec.ledger_effect == EFFECT_READ
+    assert spec.targeting == TARGETING_ACTIVE_DEFAULT
 
 
 def test_mutating_commands_are_not_marked_safe_read_only() -> None:

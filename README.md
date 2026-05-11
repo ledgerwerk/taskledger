@@ -121,6 +121,7 @@ taskledger question answer-many --text $'q-0001: Yes.\nq-0002: No.'
 taskledger question status
 taskledger plan template --from-answers --file ./plan.md
 taskledger plan upsert --from-answers --file ./plan.md
+taskledger plan review --version 1
 taskledger plan lint --version 1
 taskledger plan accept --version 1 --note "Ready."
 

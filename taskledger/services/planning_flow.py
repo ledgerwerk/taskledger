@@ -166,6 +166,10 @@ def propose_plan(
     )
     payload["plan_body_chars"] = len(plan_body)
     payload["plan_body_lines"] = len(plan_body.splitlines())
+    payload["next_review_command"] = f"taskledger plan review --version {version}"
+    payload["approval_command_hint"] = (
+        f'taskledger plan accept --version {version} --note "User approved in harness."'
+    )
     return payload
 
 

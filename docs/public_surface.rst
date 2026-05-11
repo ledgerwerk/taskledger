@@ -39,7 +39,7 @@ question subcommands
 plan subcommands
 ----------------
 
-- ``plan start``, ``plan propose``, ``plan template``, ``plan upsert``, ``plan lint``, ``plan approve``, ``plan accept``, ``plan reject``, ``plan show``, ``plan diff``
+- ``plan start``, ``plan propose``, ``plan template``, ``plan upsert``, ``plan review``, ``plan lint``, ``plan approve``, ``plan accept``, ``plan reject``, ``plan show``, ``plan diff``
 - ``plan regenerate --from-answers``, ``plan materialize-todos``, ``plan command -- ...``
 
 task reporting and transcripts

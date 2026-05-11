@@ -382,6 +382,25 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
     )
     assert propose_plan["result"]["status_stage"] == "plan_review"
     assert propose_plan["result"]["active_stage"] is None
+    review_plan = _json(
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(tmp_path),
+                "--json",
+                "plan",
+                "review",
+                "--task",
+                "rewrite-v2",
+                "--version",
+                "1",
+            ],
+        )
+    )
+    assert review_plan["result"]["kind"] == "plan_review"
+    assert isinstance(review_plan["result"]["content"], str)
+    assert isinstance(review_plan["result"]["blockers"], list)
     assert (
         runner.invoke(
             app,

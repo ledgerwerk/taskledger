@@ -6,6 +6,7 @@ from typing import Annotated, cast
 import typer
 
 from taskledger.api.plans import (
+    PlanReviewOptions,
     amend_plan,
     approve_plan,
     diff_plan,
@@ -17,6 +18,7 @@ from taskledger.api.plans import (
     propose_plan,
     regenerate_plan_from_answers,
     reject_plan,
+    render_plan_review,
     revise_plan,
     run_planning_command,
     show_plan,
@@ -124,10 +126,16 @@ def propose_command(
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    plan_version = payload.get("plan_version")
+    assert isinstance(plan_version, int)
     emit_payload(
         ctx,
         payload,
-        human=f"proposed plan v{payload['plan_version']} for {payload['task_id']}",
+        human=_render_plan_upsert_human(
+            operation="proposed",
+            task_id=str(payload["task_id"]),
+            plan_version=plan_version,
+        ),
     )
 
 
@@ -215,10 +223,16 @@ def regenerate_command(
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    plan_version = payload.get("plan_version")
+    assert isinstance(plan_version, int)
     emit_payload(
         ctx,
         payload,
-        human=f"regenerated plan v{payload['plan_version']} for {payload['task_id']}",
+        human=_render_plan_upsert_human(
+            operation="regenerated",
+            task_id=str(payload["task_id"]),
+            plan_version=plan_version,
+        ),
     )
 
 
@@ -254,10 +268,16 @@ def upsert_command(
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
     operation = str(payload.get("operation", "upserted"))
+    plan_version = payload.get("plan_version")
+    assert isinstance(plan_version, int)
     emit_payload(
         ctx,
         payload,
-        human=f"{operation} plan v{payload['plan_version']} for {payload['task_id']}",
+        human=_render_plan_upsert_human(
+            operation=operation,
+            task_id=str(payload["task_id"]),
+            plan_version=plan_version,
+        ),
     )
 
 
@@ -305,6 +325,47 @@ def show_command(
         payload,
         human=f"plan v{plan['plan_version']} ({plan['status']})",
     )
+
+
+def review_command(
+    ctx: typer.Context,
+    task_ref: TaskOption = None,
+    version: Annotated[int | None, typer.Option("--version")] = None,
+    output: Annotated[Path | None, typer.Option("-o", "--output")] = None,
+    format_name: Annotated[str, typer.Option("--format")] = "markdown",
+    include_lint: Annotated[
+        bool, typer.Option("--include-lint/--no-include-lint")
+    ] = True,
+    include_questions: Annotated[
+        bool, typer.Option("--include-questions/--no-include-questions")
+    ] = True,
+) -> None:
+    state = cli_state_from_context(ctx)
+    try:
+        task = resolve_cli_task(state.cwd, task_ref)
+        payload = render_plan_review(
+            state.cwd,
+            task.id,
+            version=version,
+            options=PlanReviewOptions(
+                include_lint=include_lint,
+                include_questions=include_questions,
+            ),
+            format_name=format_name,
+        )
+        content = payload.get("content")
+        if not isinstance(content, str):
+            raise LaunchError("Plan review content was not rendered as text.")
+        if output is not None:
+            written = write_text_output(output, content)
+            payload = {**payload, "output_path": str(written)}
+            human = f"wrote plan review {payload['plan_id']} to {written}"
+        else:
+            human = content
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    emit_payload(ctx, payload, human=human)
 
 
 def list_command(
@@ -636,6 +697,7 @@ def register_plan_v2_commands(app: typer.Typer) -> None:
     app.command("export")(export_command)
     app.command("materialize-todos")(materialize_todos_command)
     app.command("show")(show_command)
+    app.command("review")(review_command)
     app.command("list")(list_command)
     app.command("diff")(diff_command)
     app.command("lint")(lint_command)
@@ -709,3 +771,22 @@ def _parse_version_ref(value: str | None) -> int | None:
     if parsed < 1:
         raise LaunchError("Invalid --version value. Use an integer >= 1.")
     return parsed
+
+
+def _render_plan_upsert_human(
+    *,
+    operation: str,
+    task_id: str,
+    plan_version: int,
+) -> str:
+    return "\n".join(
+        [
+            f"{operation} plan v{plan_version} for {task_id}",
+            f"Next: taskledger plan review --version {plan_version}",
+            (
+                "After explicit approval: "
+                f"taskledger plan accept --version {plan_version} --note "
+                '"User approved in harness."'
+            ),
+        ]
+    )

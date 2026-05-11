@@ -2543,7 +2543,7 @@ def _next_action_command(action: str) -> str | None:
         "plan-propose": "taskledger plan upsert --file plan.md",
         "question-answer": "taskledger question answer-many --file answers.yaml",
         "plan-regenerate": "taskledger plan upsert --from-answers --file plan.md",
-        "plan-approve": "taskledger plan approve --version VERSION --actor user",
+        "plan-approve": "taskledger plan review --version VERSION",
         "implement": "taskledger implement start",
         "todo-work": "taskledger implement checklist",
         "implement-finish": "taskledger implement finish --summary SUMMARY",
@@ -2581,7 +2581,7 @@ def _primary_command_for_next_item(
     if kind == "plan":
         version = next_item.get("version")
         if isinstance(version, int):
-            return f"taskledger plan show --version {version}"
+            return f"taskledger plan review --version {version}"
     if kind == "lock":
         task_id = next_item.get("task_id")
         if isinstance(task_id, str):
@@ -2602,7 +2602,7 @@ def _commands_for_next_item(
             "plan": "Start planning",
             "plan-propose": "Propose plan",
             "plan-regenerate": "Regenerate plan from answers",
-            "plan-approve": "Approve plan",
+            "plan-approve": "Review proposed plan",
             "implement": "Start implementation",
             "todo-work": "Show implementation checklist",
             "implement-finish": "Finish implementation",
@@ -2615,7 +2615,7 @@ def _commands_for_next_item(
             "plan": "start",
             "plan-propose": "regenerate",
             "plan-regenerate": "regenerate",
-            "plan-approve": "approve",
+            "plan-approve": "inspect",
             "implement": "start",
             "todo-work": "context",
             "implement-finish": "finish",
@@ -2680,17 +2680,20 @@ def _commands_for_next_item(
             commands = [
                 _command(
                     "inspect",
-                    "Show proposed plan",
-                    f"taskledger plan show --version {version}",
+                    "Review proposed plan",
+                    f"taskledger plan review --version {version}",
                     primary=True,
                 )
             ]
             if action == "plan-approve":
                 commands.append(
                     _command(
-                        "approve",
-                        "Approve plan",
-                        f"taskledger plan approve --version {version} --actor user",
+                        "accept",
+                        "Accept plan after explicit user approval",
+                        (
+                            f"taskledger plan accept --version {version} --note "
+                            '"User approved in harness."'
+                        ),
                     )
                 )
             return commands

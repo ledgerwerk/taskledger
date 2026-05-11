@@ -121,7 +121,7 @@ If any `taskledger ...` command fails with a Python traceback before taskledger 
 19. A proposed plan must include concrete `acceptance_criteria` and `todos` in front matter unless the user explicitly says the task is trivial.
 20. After writing the plan, do not run `taskledger repair lock`; planning locks are released by plan proposal/upsert. Run `taskledger next-action`.
 21. After `taskledger plan upsert --from-answers`, run `taskledger question status`. If it still reports `Plan regeneration needed: True`, do not ask for approval. Inspect `taskledger question answers`, `taskledger plan show --version N`, and `taskledger doctor`.
-22. Before asking the user to approve, run `taskledger plan lint --version N` and fix lint errors. Lint waiver flags are on `plan approve`/`plan accept`, not on `plan lint`.
+22. Before asking the user to approve, run `taskledger plan review --version N` and paste or summarize the rendered review. Then run `taskledger plan lint --version N` if the review did not include lint. Do not record approval until the user explicitly approves.
 23. Record approval only with clear user intent such as approve, accept, go ahead, or start implementation. Prefer `taskledger plan accept --version N --note "User approved in harness: ..."` for normal chat approval. Use `taskledger plan approve --version N --actor user --approval-source explicit_chat --note "..."` only when explicit actor/source metadata is needed (advanced).
 24. Never replace a user-provided rich plan with only generated YAML criteria and todos. Preserve the user's plan body after the front matter and use front matter only to expose machine-readable fields to Taskledger.
 25. A Taskledger plan is not just YAML front matter. The YAML block is for machine-readable `goal`, `acceptance_criteria`, `todos`, file links, and test commands. The rich human plan must remain as Markdown after the second `---`. Before approval, inspect `taskledger plan show --version N` or the saved `plan-vN.md` and verify that the accepted plan body is non-empty and contains the implementation rationale.
@@ -321,6 +321,7 @@ taskledger next-action
 taskledger plan guidance
 taskledger plan template --from-answers --file ./plan.md
 taskledger plan upsert --from-answers --file ./plan.md
+taskledger plan review --version 1
 taskledger plan lint --version 1
 taskledger plan accept --version 1 --note "User approved in harness."
 taskledger context --for implementation --format markdown

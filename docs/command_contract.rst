@@ -84,6 +84,22 @@ storage, and ``taskledger plan amend`` applies structured plan-review edits:
 Plan proposal commands that accept ``--file`` reject file paths under
 ``.taskledger/`` because that directory is private durable ledger state.
 
+Plan review command
+-------------------
+
+``taskledger plan review`` is a read-only approval-facing plan renderer:
+
+.. code-block:: bash
+
+   taskledger plan review [--task TASK_REF] [--version N] [--format markdown|json] [-o PATH]
+
+Rules:
+
+* defaults to the active task when ``--task`` is omitted;
+* defaults to the latest proposed plan in ``plan_review`` stage when ``--version`` is omitted;
+* renders Markdown by default and can emit JSON-formatted content with ``--format json``;
+* when ``-o/--output`` is provided, writes rendered content to a file path.
+
 Archive import lock policy
 --------------------------
 

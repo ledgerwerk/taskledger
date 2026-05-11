@@ -1,6 +1,11 @@
 from pathlib import Path
 
 from taskledger.services.plan_lint import lint_plan
+from taskledger.services.plan_review import (
+    PlanReviewOptions,
+    build_plan_review_payload,
+    render_plan_review,
+)
 from taskledger.services.tasks import (
     amend_plan,
     approve_plan,
@@ -36,6 +41,9 @@ __all__ = [
     "revise_plan",
     "run_planning_command",
     "lint_plan",
+    "PlanReviewOptions",
+    "build_plan_review_payload",
+    "render_plan_review",
     "plan_guidance",
 ]
 

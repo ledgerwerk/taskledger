@@ -381,6 +381,12 @@ def test_next_action_plan_review_mentions_revision_commands(tmp_path: Path) -> N
 
     next_action = runner.invoke(app, ["--cwd", str(tmp_path), "next-action"])
     assert next_action.exit_code == 0, next_action.stdout
+    assert "Command: taskledger plan review --version 1" in next_action.stdout
+    assert (
+        "Accept plan after explicit user approval: "
+        'taskledger plan accept --version 1 --note "User approved in harness."'
+        in next_action.stdout
+    )
     assert "Revise proposed plan: taskledger plan revise" in next_action.stdout
     assert (
         "Export editable plan: taskledger plan export --version 1 --file ./plan.md"
