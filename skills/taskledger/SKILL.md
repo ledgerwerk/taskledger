@@ -344,6 +344,13 @@ taskledger ledger doctor
 taskledger storage where
 taskledger sync preflight
 taskledger sync status
+taskledger sync export --output ./taskledger-transfer.tar.gz
+taskledger sync import ./taskledger-transfer.tar.gz --dry-run
+taskledger sync git init --repo ../taskledger-state --project-path project-a
+taskledger sync git status
+taskledger sync git pull
+taskledger sync git push --message "Sync project-a taskledger state"
+taskledger sync git sync --message "Sync project-a taskledger state"
 taskledger implement resume --reason "Reacquire implementation lock for existing running run."
 taskledger implement resume --repair-expired-lock --reason "Continue after expired lock."
 taskledger implement restart --summary "Fix failed validation findings."

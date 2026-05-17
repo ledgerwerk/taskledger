@@ -63,6 +63,16 @@ Clone both repositories as siblings:
 Daily sync protocol
 -------------------
 
+Taskledger provides a Git sync command group that automates this workflow:
+
+.. code-block:: bash
+
+   taskledger sync git init --repo ../taskledger-state --project-path project-a
+   taskledger sync git status
+   taskledger sync git pull
+   taskledger sync git push --message "Sync project-a taskledger state"
+   taskledger sync git sync --message "Sync project-a taskledger state"
+
 Before starting work on a PC:
 
 .. code-block:: bash
@@ -105,6 +115,16 @@ or semantic conflicts across canonical task records.
 
 When to use export/import instead
 ---------------------------------
+
+Archive commands are still the transfer primitive and remain available at both
+the root and under ``sync``:
+
+.. code-block:: bash
+
+   taskledger export task-0040
+   taskledger import ./taskledger-task-project-a-main-task-0040-...tar.gz
+   taskledger sync export --output ./taskledger-transfer.tar.gz
+   taskledger sync import ./taskledger-transfer.tar.gz --dry-run
 
 If work must move mid-run, prefer task-scoped transfer archives instead of
 syncing the full live state directory:

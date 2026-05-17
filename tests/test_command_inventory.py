@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from taskledger.cli import app
 from taskledger.command_inventory import (
     COMMAND_METADATA,
@@ -24,14 +26,26 @@ from taskledger.command_inventory import (
 
 
 def _registered_command_paths() -> set[str]:
-    paths = {command.name for command in app.registered_commands}
+    paths: set[str] = {
+        command.name for command in app.registered_commands if command.name
+    }
+
+    def _walk(prefix: str, typer_app: Any) -> None:
+        instance = typer_app
+        if " " in prefix:
+            paths.add(prefix)
+        for command in instance.registered_commands:
+            if command.name:
+                paths.add(f"{prefix} {command.name}".strip())
+        for subgroup in instance.registered_groups:
+            if subgroup.name:
+                _walk(f"{prefix} {subgroup.name}".strip(), subgroup.typer_instance)
+
     for group in app.registered_groups:
-        group_name = group.name
-        typer_app = group.typer_instance
-        for command in typer_app.registered_commands:
-            paths.add(f"{group_name} {command.name}")
+        if group.name:
+            _walk(group.name, group.typer_instance)
     paths.add("doctor")
-    return {path for path in paths if path is not None}
+    return paths
 
 
 def test_registered_commands_have_inventory_metadata() -> None:
@@ -205,8 +219,8 @@ def test_legacy_mutation_commands_classified_correctly() -> None:
         for k, v in COMMAND_METADATA.items()
         if v.effect == "ledger_mutation" and v.ledger_effect != EFFECT_WRITE
     ]
-    # export reads ledger and writes external file, so ledger_effect=read
-    assert sorted(legacy_mut_not_write) == ["export"]
+    # export/sync export read ledger and write external files
+    assert sorted(legacy_mut_not_write) == ["export", "sync export"]
 
 
 def test_read_only_commands_have_read_or_none_ledger_effect() -> None:

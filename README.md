@@ -387,6 +387,13 @@ taskledger storage where
 taskledger sync preflight
 taskledger sync status
 taskledger sync commit --message "Sync project-a taskledger state"
+taskledger sync export --output ./taskledger-transfer.tar.gz
+taskledger sync import ./taskledger-transfer.tar.gz --dry-run
+taskledger sync git init --repo ../taskledger-state --project-path project-a
+taskledger sync git pull
+taskledger sync git push --message "Sync project-a taskledger state"
+taskledger sync git sync --message "Sync project-a taskledger state"
+taskledger sync git hooks install
 ```
 
 See `docs/sync.rst` for the full second-PC bootstrap, daily sync protocol, and

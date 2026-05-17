@@ -19,6 +19,10 @@ FUNCTION_LINE_WHITELIST: dict[str, str] = {
         "Consolidated per-task integrity scan with change/lock validation;"
         " further splitting into focused inspectors is planned."
     ),
+    "taskledger/cli_sync.py::register_sync_commands": (
+        "Sync command registration currently co-locates legacy sync, archive alias,"
+        " git sync, and hook command wiring."
+    ),
 }
 
 CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
@@ -91,10 +95,10 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
 }
 
 EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
-    "taskledger/cli.py:223": (
+    "taskledger/cli.py:224": (
         "Optional command group import fallback reports missing modules gracefully."
     ),
-    "taskledger/cli.py:863": (
+    "taskledger/cli.py:864": (
         "Serve command optional import fallback reports missing dashboard gracefully."
     ),
     "taskledger/cli_ledger.py:111": (
@@ -160,7 +164,7 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
         "Path probe falls back when environment inspection raises platform-"
         "specific errors."
     ),
-    "taskledger/storage/project_config.py:387": (
+    "taskledger/storage/project_config.py:409": (
         "TOML parser error handling catches runtime-specific exceptions "
         "during project config loading."
     ),

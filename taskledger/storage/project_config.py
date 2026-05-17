@@ -46,6 +46,7 @@ WORKFLOW_CONFIG_KEYS = frozenset(
         "agent_logging",
     }
 )
+SYNC_CONFIG_KEYS = frozenset({"sync"})
 AGENT_LOGGING_CONFIG_KEYS = frozenset(
     {
         "enabled",
@@ -70,6 +71,7 @@ SUPPORTED_PROJECT_CONFIG_KEYS = (
     | PROJECT_METADATA_CONFIG_KEYS
     | LEDGER_CONFIG_KEYS
     | WORKFLOW_CONFIG_KEYS
+    | SYNC_CONFIG_KEYS
 )
 MemoryUpdateMode = Literal["replace", "append", "prepend"]
 FileRenderMode = Literal["content", "reference"]
@@ -164,6 +166,16 @@ class AgentLoggingConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class GitSyncProjectConfig:
+    repo: str | None = None
+    project_path: str | None = None
+    remote: str = "origin"
+    branch: str = "main"
+    allow_active_locks: bool = False
+    hooks: bool = False
+
+
+@dataclass(slots=True, frozen=True)
 class ProjectArtifactRule:
     name: str
     depends_on: tuple[str, ...] = ()
@@ -203,6 +215,7 @@ class ProjectConfig:
     default_artifact_order: tuple[str, ...] = ()
     prompt_profile: PromptProfile | None = None
     agent_logging: AgentLoggingConfig = AgentLoggingConfig()
+    sync_git: GitSyncProjectConfig = GitSyncProjectConfig()
 
 
 def render_default_taskledger_toml(
@@ -301,6 +314,15 @@ def render_default_taskledger_toml(
         '# redact_patterns = ["(?i)(api[_-]?key|token|password|secret)=\\\\S+"]\n'
         "# capture_safe_read_only = true\n"
         "# capture_human_oriented = true\n"
+        "\n"
+        "# Optional sync.git defaults for private external Git state.\n"
+        "# [sync.git]\n"
+        '# repo = "../taskledger-state"\n'
+        '# project_path = "project-a"\n'
+        '# remote = "origin"\n'
+        '# branch = "main"\n'
+        "# allow_active_locks = false\n"
+        "# hooks = false\n"
     )
 
 
@@ -482,6 +504,7 @@ def merge_project_config(
         overrides.get("agent_logging"),
         base.agent_logging,
     )
+    sync_git = _parse_sync_git_config(overrides.get("sync"), base.sync_git)
     return ProjectConfig(
         default_memory_update_mode=cast(
             MemoryUpdateMode,
@@ -500,6 +523,7 @@ def merge_project_config(
         default_artifact_order=tuple(default_artifact_order),
         prompt_profile=prompt_profile,
         agent_logging=agent_logging,
+        sync_git=sync_git,
     )
 
 
@@ -555,6 +579,89 @@ def _validate_project_config_overrides(data: dict[str, object], path: Path) -> N
                 )
             _validate_prompt_profile(profile_name, profile_data, path)
     _validate_agent_logging(data.get("agent_logging"), path)
+    _validate_sync_config(data.get("sync"), path)
+
+
+def _validate_sync_config(raw: object, path: Path) -> None:
+    if raw is None:
+        return
+    if not isinstance(raw, dict):
+        raise LaunchError(f"Project config key 'sync' must be a table in {path}")
+    sync_git = raw.get("git")
+    if sync_git is None:
+        return
+    if not isinstance(sync_git, dict):
+        raise LaunchError(f"Project config key 'sync.git' must be a table in {path}")
+    allowed = {
+        "repo",
+        "project_path",
+        "remote",
+        "branch",
+        "allow_active_locks",
+        "hooks",
+    }
+    for key in sync_git:
+        if key not in allowed:
+            raise LaunchError(f"Unknown sync.git key '{key}' in {path}")
+    for key in ("repo", "project_path", "remote", "branch"):
+        value = sync_git.get(key)
+        if value is not None and not isinstance(value, str):
+            raise LaunchError(f"sync.git.{key} must be a string in {path}")
+    project_path = sync_git.get("project_path")
+    if isinstance(project_path, str):
+        candidate = Path(project_path)
+        if candidate.is_absolute() or ".." in candidate.parts:
+            raise LaunchError(
+                "sync.git.project_path must be relative and must not escape repo "
+                f"in {path}"
+            )
+    for key in ("allow_active_locks", "hooks"):
+        value = sync_git.get(key)
+        if value is not None and not isinstance(value, bool):
+            raise LaunchError(f"sync.git.{key} must be a boolean in {path}")
+
+
+def _parse_sync_git_config(
+    raw: object,
+    base: GitSyncProjectConfig,
+) -> GitSyncProjectConfig:
+    if raw is None or not isinstance(raw, dict):
+        return base
+    sync_git_raw = raw.get("git")
+    if not isinstance(sync_git_raw, dict):
+        return base
+    return GitSyncProjectConfig(
+        repo=(
+            sync_git_raw["repo"]
+            if isinstance(sync_git_raw.get("repo"), str)
+            else base.repo
+        ),
+        project_path=(
+            sync_git_raw["project_path"]
+            if isinstance(sync_git_raw.get("project_path"), str)
+            else base.project_path
+        ),
+        remote=(
+            sync_git_raw["remote"]
+            if isinstance(sync_git_raw.get("remote"), str)
+            else base.remote
+        ),
+        branch=(
+            sync_git_raw["branch"]
+            if isinstance(sync_git_raw.get("branch"), str)
+            else base.branch
+        ),
+        allow_active_locks=(
+            sync_git_raw["allow_active_locks"]
+            if isinstance(sync_git_raw.get("allow_active_locks"), bool)
+            else base.allow_active_locks
+        ),
+        hooks=(
+            sync_git_raw["hooks"]
+            if isinstance(sync_git_raw.get("hooks"), bool)
+            else base.hooks
+        ),
+    )
 
 
 def _artifact_rules_from_overrides(

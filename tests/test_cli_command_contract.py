@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from typer.testing import CliRunner
 
@@ -30,12 +31,26 @@ runner = _make_runner()
 
 
 def _registered_command_paths() -> set[str]:
-    paths = {command.name for command in app.registered_commands}
+    paths: set[str] = {
+        command.name for command in app.registered_commands if command.name
+    }
+
+    def _walk(prefix: str, typer_app: Any) -> None:
+        instance = typer_app
+        if " " in prefix:
+            paths.add(prefix)
+        for command in instance.registered_commands:
+            if command.name:
+                paths.add(f"{prefix} {command.name}".strip())
+        for subgroup in instance.registered_groups:
+            if subgroup.name:
+                _walk(f"{prefix} {subgroup.name}".strip(), subgroup.typer_instance)
+
     for group in app.registered_groups:
-        for command in group.typer_instance.registered_commands:
-            paths.add(f"{group.name} {command.name}")
+        if group.name:
+            _walk(group.name, group.typer_instance)
     paths.add("doctor")
-    return {path for path in paths if path is not None}
+    return paths
 
 
 def test_removed_aliases_are_not_registered() -> None:

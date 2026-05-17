@@ -61,7 +61,8 @@ from taskledger.cli_misc import (
 )
 from taskledger.cli_plan import register_plan_v2_commands
 from taskledger.cli_question import register_question_v2_commands
-from taskledger.cli_storage import register_storage_commands, register_sync_commands
+from taskledger.cli_storage import register_storage_commands
+from taskledger.cli_sync import register_sync_commands
 from taskledger.cli_task import register_task_v2_commands
 from taskledger.cli_validate import register_validate_v2_commands
 from taskledger.command_inventory import COMMAND_METADATA
@@ -101,7 +102,7 @@ storage_app = typer.Typer(
 )
 sync_app = typer.Typer(
     add_completion=False,
-    help="Preflight and manage local storage sync helpers.",
+    help="Export/import archives and manage Git-based state sync.",
 )
 repair_app = typer.Typer(add_completion=False, help="Repair taskledger state.")
 doctor_app = typer.Typer(

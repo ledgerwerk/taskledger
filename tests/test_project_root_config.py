@@ -535,3 +535,51 @@ def test_render_default_taskledger_toml_includes_project_name_when_given() -> No
         project_name="taskledger",
     )
     assert 'project_name = "taskledger"' in rendered
+
+
+def test_validate_sync_git_allows_valid_config() -> None:
+    from taskledger.storage.project_config import _validate_project_config_overrides
+
+    data: dict[str, object] = {
+        "sync": {
+            "git": {
+                "repo": "../taskledger-state",
+                "project_path": "project-a",
+                "remote": "origin",
+                "branch": "main",
+                "allow_active_locks": False,
+                "hooks": True,
+            }
+        }
+    }
+    _validate_project_config_overrides(data, Path("taskledger.toml"))
+
+
+def test_validate_sync_git_rejects_unknown_key() -> None:
+    from taskledger.storage.project_config import _validate_project_config_overrides
+
+    with pytest.raises(LaunchError, match="sync.git"):
+        _validate_project_config_overrides(
+            {"sync": {"git": {"unknown": "value"}}},
+            Path("taskledger.toml"),
+        )
+
+
+def test_validate_sync_git_rejects_absolute_project_path() -> None:
+    from taskledger.storage.project_config import _validate_project_config_overrides
+
+    with pytest.raises(LaunchError, match="project_path"):
+        _validate_project_config_overrides(
+            {"sync": {"git": {"project_path": "/abs/path"}}},
+            Path("taskledger.toml"),
+        )
+
+
+def test_validate_sync_git_rejects_parent_path_escape() -> None:
+    from taskledger.storage.project_config import _validate_project_config_overrides
+
+    with pytest.raises(LaunchError, match="project_path"):
+        _validate_project_config_overrides(
+            {"sync": {"git": {"project_path": "../escape"}}},
+            Path("taskledger.toml"),
+        )

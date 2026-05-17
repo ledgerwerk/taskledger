@@ -220,6 +220,16 @@ Taskledger also exposes local storage discovery and sync helpers:
    taskledger sync preflight
    taskledger sync status
    taskledger sync commit --message "Sync project-a taskledger state"
+   taskledger sync export --output ./taskledger-transfer.tar.gz
+   taskledger sync import ./taskledger-transfer.tar.gz --dry-run
+   taskledger sync git status
+   taskledger sync git init --repo ../taskledger-state --project-path project-a
+   taskledger sync git pull
+   taskledger sync git push --message "Sync project-a taskledger state"
+   taskledger sync git sync --message "Sync project-a taskledger state"
+   taskledger sync git hooks install
+   taskledger sync git hooks status
+   taskledger sync git hooks uninstall
 
 Rules:
 
@@ -232,6 +242,10 @@ Rules:
   push/pull operations.
 * ``sync status`` and ``sync commit`` operate only on the Git repository that
   contains the resolved ``taskledger_dir``.
+* ``sync export`` and ``sync import`` are archive aliases for the root
+  ``export``/``import`` commands.
+* ``sync git`` commands operate on a private external Git repository that stores
+  full project taskledger state under ``<repo>/<project_path>``.
 ``next-action`` result contract
 -------------------------------
 

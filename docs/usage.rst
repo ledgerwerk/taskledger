@@ -480,10 +480,21 @@ Export and snapshots
    taskledger export
    taskledger export --task task-0040
    taskledger export task-0040
+   taskledger sync export --output ./taskledger-transfer.tar.gz
    taskledger import ./taskledger-transfer.tar.gz --dry-run
+   taskledger sync import ./taskledger-transfer.tar.gz --dry-run
    taskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz
    taskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz --id-policy fail-on-conflict
    taskledger import ./taskledger-transfer.tar.gz --replace
+
+For private multi-PC full-state sync with external storage, use:
+
+.. code-block:: bash
+
+   taskledger sync git init --repo ../taskledger-state --project-path project-a
+   taskledger sync git pull
+   taskledger sync git push --message "Sync project-a taskledger state"
+   taskledger sync git sync --message "Sync project-a taskledger state"
    taskledger snapshot ./artifacts
 
 Default export filenames are project-specific:

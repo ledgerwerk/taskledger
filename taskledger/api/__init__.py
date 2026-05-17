@@ -9,6 +9,7 @@ __all__ = [
     "questions",
     "releases",
     "search",
+    "sync",
     "task_runs",
     "tasks",
 ]

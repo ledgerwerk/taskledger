@@ -264,3 +264,48 @@ def test_sync_commit_commits_external_state_repo(tmp_path: Path) -> None:
     assert data["commit"]
     status = _git(storage, "status", "--short")
     assert status.stdout.strip() == ""
+
+
+def test_sync_help_includes_aliases_and_git_group(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
+
+    result = runner.invoke(app, ["--root", str(workspace), "sync", "--help"])
+
+    assert result.exit_code == 0, result.stdout
+    assert "preflight" in result.stdout
+    assert "status" in result.stdout
+    assert "commit" in result.stdout
+    assert "export" in result.stdout
+    assert "import" in result.stdout
+    assert "git" in result.stdout
+
+
+def test_sync_export_alias_writes_archive(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
+
+    root_archive = tmp_path / "root-export.tar.gz"
+    sync_archive = tmp_path / "sync-export.tar.gz"
+    root_result = runner.invoke(
+        app,
+        ["--root", str(workspace), "--json", "export", "-o", str(root_archive)],
+    )
+    sync_result = runner.invoke(
+        app,
+        ["--root", str(workspace), "--json", "sync", "export", "-o", str(sync_archive)],
+    )
+
+    assert root_result.exit_code == 0, root_result.stdout
+    assert sync_result.exit_code == 0, sync_result.stdout
+    root_payload = json.loads(root_result.stdout)
+    sync_payload = json.loads(sync_result.stdout)
+    assert (
+        root_payload["result"]["kind"]
+        == sync_payload["result"]["kind"]
+        == "taskledger_archive_export"
+    )
+    assert root_archive.exists()
+    assert sync_archive.exists()

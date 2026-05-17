@@ -55,6 +55,7 @@ Rules:
 - ``.taskledger/`` is local operational state and can be absent on another PC.
 - Run ``taskledger init`` after cloning to create local state.
 - ``taskledger export --task TASK_REF`` and ``taskledger export TASK_REF`` export task-scoped archives.
+- ``taskledger sync export`` and ``taskledger sync import`` are aliases for the same archive transfer primitives.
 - Task-scoped import is additive by default; if the task id already exists locally, import renumbers and reports an id map.
 - ``--replace`` is for full-state replacement, not the normal single-task workflow.
 - Import repairs ``ledger_next_task_number`` so future ``task create`` ids remain unique.
