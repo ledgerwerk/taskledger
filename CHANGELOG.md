@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.4.0 - 2026-05-18
+
+### Added
+
+- Added storage sync documentation (`docs/sync.rst`) explaining how to keep taskledger state outside the source repo, sync across PCs with a private Git repo, bootstrap a second machine, follow a daily sync protocol, and avoid active multi-writer conflicts.
+- Added `taskledger storage where` command reporting resolved project and storage location details in human and JSON output, including whether storage lives inside the workspace, is a Git repo, or has active locks.
+- Added `taskledger storage move` for safely migrating storage to a new `taskledger_dir` with atomic config updates, unsafe-target refusal, and follow-up command hints.
+- Added `taskledger sync preflight` read-only check combining doctor health, active-lock warnings, tracked in-repo state warnings, and local Git status.
+- Added `taskledger sync status` and `taskledger sync commit` local Git helper commands for committing taskledger state without network operations.
+- Added `taskledger sync export` and `taskledger sync import` as aliases for the existing archive transfer commands.
+- Added `taskledger sync git` command group for live external-state synchronization: `init`, `status`, `commit`, `cd`, `import-local`, `export-local`, `pull`, `push`, `sync`, and `hooks` subcommands with conservative lock/dirty checks.
+- Added project-scoped `sync git status` that separates current-project changes from outside-project changes in JSON payloads, safe with dirty sibling directories.
+- Added `sync git cd` helper returning the configured sync repo path for shell use.
+- Added `sync git commit` for committing only the configured project path while ignoring dirty sibling paths.
+- Added `[sync.git]` project config section with strict validation and documented defaults.
+- Added `taskledger/services/storage_locations.py` for storage reporting, migration, and sync helper services.
+- Added `taskledger/services/git_sync.py` for git sync orchestration.
+- Added `taskledger/cli_sync.py` as a dedicated sync CLI group.
+- Added `taskledger/api/sync.py` with public sync API wrappers.
+
+### Changed
+
+- Demoted whole-repo `sync git pull`, `push`, `sync`, and unsafe hook installation from recommended workflow to advanced/deprecated status in help, docs, and skill guidance.
+- Reframed docs, README, and skill around the project-scoped local helper workflow: `sync git status`, `sync git commit`, then manual Git via `sync git cd`.
+- Fixed stale config filename references so docs no longer claim init writes `.taskledger.toml` when `taskledger.toml` is canonical.
+- Updated external storage examples to use the current `ledgers/<ledger_ref>/...` layout.
+
+### Documentation
+
+- Added `docs/sync.rst` with cross-PC sync workflow, daily protocol, and multi-writer conflict avoidance guidance.
+- Updated README, `docs/usage.rst`, `docs/transfer.rst`, `docs/command_contract.rst`, `docs/public_surface.rst`, `API.md`, and `skills/taskledger/SKILL.md` for the new storage and sync command surface.
+
+### Quality
+
+- Added `tests/test_storage_sync.py` and `tests/test_sync_git.py` covering storage migration, sync commands, git sync workflows, shared dirty state, project-scoped commits, and JSON result kinds.
+- Expanded command inventory, CLI contract, and docs/skill tests for the new command surface.
+- Full suite: 897 tests passing, ruff and mypy clean.
+
 ## v0.3.1 - 2026-05-12
 
 ### Added

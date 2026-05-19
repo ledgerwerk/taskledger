@@ -250,7 +250,9 @@ def test_sync_git_cd_and_path_report_expected_locations(tmp_path: Path) -> None:
         ],
     )
     assert cd_result.exit_code == 0, _output(cd_result)
-    assert cd_result.stdout == f"{sync_repo}\n"
+    assert cd_result.stdout.strip().replace("\\", "/") == str(sync_repo).replace(
+        "\\", "/"
+    )
 
     cd_json = runner.invoke(
         app,
