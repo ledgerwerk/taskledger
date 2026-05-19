@@ -272,9 +272,9 @@ def test_sync_git_cd_and_path_report_expected_locations(tmp_path: Path) -> None:
     assert cd_json.exit_code == 0, _output(cd_json)
     cd_payload = json.loads(cd_json.stdout)["result"]
     assert cd_payload["kind"] == "taskledger_sync_git_paths"
-    assert cd_payload["repo_path"] == str(sync_repo)
+    assert Path(cd_payload["repo_path"]) == sync_repo
     assert cd_payload["project_path"] == "project-a"
-    assert cd_payload["storage_path"] == str(sync_repo / "project-a")
+    assert Path(cd_payload["storage_path"]) == sync_repo / "project-a"
 
     path_result = runner.invoke(
         app,
