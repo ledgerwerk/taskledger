@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
+from taskledger.domain.handoff import TaskHandoffRecord
 from taskledger.domain.models import (
     ActiveTaskState,
     TaskLock,
     TaskRecord,
     TaskRunRecord,
 )
+from taskledger.domain.sidecars import TaskTodo
 from taskledger.storage.locks import lock_is_expired
+from taskledger.storage.project_config import load_worker_pipeline_config
 from taskledger.storage.task_store import V2Paths
 
 
@@ -99,6 +103,14 @@ def scan_task_integrity(  # noqa: C901
         todos = load_todos(workspace_root, task.id).todos
         if len({todo.id for todo in todos}) != len(todos):
             errors.append(f"Task {task.id} contains duplicate todo ids.")
+        _warn_stale_worker_step_references(
+            workspace_root=workspace_root,
+            task=task,
+            todos=todos,
+            handoffs=_handoffs,
+            warnings=warnings,
+            diagnostics=diagnostics,
+        )
 
         # Run/lock consistency
         active_lock = next(
@@ -372,6 +384,52 @@ def _add_diagnostic(
     based_on_run_path: str | None = None,
     repair_hints: list[str] | None = None,
 ) -> None:
+    _append_diagnostic(
+        diagnostics,
+        errors,
+        severity=severity,
+        code=code,
+        message=message,
+        task_id=task_id,
+        task_slug=task_slug,
+        change_id=change_id,
+        run_id=run_id,
+        based_on_run_id=based_on_run_id,
+        expected_run_type=expected_run_type,
+        actual_run_type=actual_run_type,
+        actual_run_status=actual_run_status,
+        change_kind=change_kind,
+        change_path=change_path,
+        run_path=run_path,
+        based_on_run_path=based_on_run_path,
+        repair_hints=repair_hints,
+    )
+
+
+def _append_diagnostic(
+    diagnostics: list[dict[str, object]],
+    messages: list[str],
+    *,
+    severity: str,
+    code: str,
+    message: str,
+    task_id: str,
+    task_slug: str | None = None,
+    change_id: str | None = None,
+    run_id: str | None = None,
+    based_on_run_id: str | None = None,
+    expected_run_type: str | None = None,
+    actual_run_type: str | None = None,
+    actual_run_status: str | None = None,
+    change_kind: str | None = None,
+    change_path: str | None = None,
+    run_path: str | None = None,
+    based_on_run_path: str | None = None,
+    todo_id: str | None = None,
+    handoff_id: str | None = None,
+    worker_step_id: str | None = None,
+    repair_hints: list[str] | None = None,
+) -> None:
     diagnostic: dict[str, object] = {
         "severity": severity,
         "code": code,
@@ -400,9 +458,84 @@ def _add_diagnostic(
         diagnostic["run_path"] = run_path
     if based_on_run_path is not None:
         diagnostic["based_on_run_path"] = based_on_run_path
+    if todo_id is not None:
+        diagnostic["todo_id"] = todo_id
+    if handoff_id is not None:
+        diagnostic["handoff_id"] = handoff_id
+    if worker_step_id is not None:
+        diagnostic["worker_step_id"] = worker_step_id
     if repair_hints:
         diagnostic["repair_hints"] = repair_hints
     else:
         diagnostic["repair_hints"] = []
-    errors.append(f"[{severity}:{code}] {task_id}: {message}")
+    messages.append(f"[{severity}:{code}] {task_id}: {message}")
     diagnostics.append(diagnostic)
+
+
+def _warn_stale_worker_step_references(
+    *,
+    workspace_root: Path,
+    task: TaskRecord,
+    todos: Sequence[TaskTodo],
+    handoffs: Sequence[TaskHandoffRecord],
+    warnings: list[str],
+    diagnostics: list[dict[str, object]],
+) -> None:
+    pipeline = load_worker_pipeline_config(workspace_root)
+    valid_step_ids = (
+        set(pipeline.step_ids()) if pipeline and pipeline.enabled else set()
+    )
+    for todo in todos:
+        worker_step_id = getattr(todo, "worker_step_id", None)
+        if (
+            not isinstance(worker_step_id, str)
+            or not worker_step_id.strip()
+            or worker_step_id in valid_step_ids
+        ):
+            continue
+        _append_diagnostic(
+            diagnostics,
+            warnings,
+            severity="warning",
+            code="todo.stale_worker_step",
+            message=(
+                f"Todo {todo.id} references worker step '{worker_step_id}' but "
+                "no enabled worker pipeline defines it."
+            ),
+            task_id=task.id,
+            task_slug=task.slug,
+            todo_id=todo.id,
+            worker_step_id=worker_step_id,
+            repair_hints=[
+                "Inspect the current overlay with `taskledger pipeline show`.",
+                "Update the todo worker_step reference or restore the missing step.",
+            ],
+        )
+    for handoff in handoffs:
+        worker_step_id = getattr(handoff, "worker_step_id", None)
+        handoff_id = getattr(handoff, "handoff_id", None)
+        if (
+            not isinstance(worker_step_id, str)
+            or not worker_step_id.strip()
+            or worker_step_id in valid_step_ids
+            or not isinstance(handoff_id, str)
+        ):
+            continue
+        _append_diagnostic(
+            diagnostics,
+            warnings,
+            severity="warning",
+            code="handoff.stale_worker_step",
+            message=(
+                f"Handoff {handoff_id} references worker step '{worker_step_id}' but "
+                "no enabled worker pipeline defines it."
+            ),
+            task_id=task.id,
+            task_slug=task.slug,
+            handoff_id=handoff_id,
+            worker_step_id=worker_step_id,
+            repair_hints=[
+                "Inspect the current overlay with `taskledger pipeline show`.",
+                "Update the handoff worker_step_id or restore the missing step.",
+            ],
+        )

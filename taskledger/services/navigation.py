@@ -33,10 +33,12 @@ from taskledger.services.tasks import (
     _todo_done_command,
 )
 from taskledger.services.validation import build_validation_gate_report
+from taskledger.services.worker_pipeline import determine_next_worker_step
 from taskledger.services.workflow_guidance import (
     has_planning_profile,
 )
 from taskledger.storage.locks import lock_is_expired
+from taskledger.storage.project_config import load_worker_pipeline_config
 from taskledger.storage.task_store import (
     list_plans,
     list_questions,
@@ -246,6 +248,13 @@ def next_action(workspace_root: Path, task_ref: str) -> dict[str, object]:
                     )
                 }
             )
+    guided_worker_pipeline = _guided_worker_pipeline_payload(workspace_root, task)
+    if guided_worker_pipeline is not None:
+        payload["worker_pipeline"] = guided_worker_pipeline
+        payload["commands"] = _append_guided_worker_pipeline_commands(
+            cast(list[dict[str, object]], payload["commands"]),
+            guided_worker_pipeline,
+        )
     return _finalize_next_action_payload(payload)
 
 
@@ -877,6 +886,52 @@ def _command(
         "command": command,
         "primary": primary,
     }
+
+
+def _guided_worker_pipeline_payload(
+    workspace_root: Path,
+    task: TaskRecord,
+) -> dict[str, object] | None:
+    pipeline = load_worker_pipeline_config(workspace_root)
+    if pipeline is None or not pipeline.enabled or pipeline.mode != "guided":
+        return None
+    step = determine_next_worker_step(workspace_root, task, pipeline)
+    if step is None:
+        return None
+    return {
+        "configured": True,
+        "enabled": True,
+        "mode": pipeline.mode,
+        "next_step": step.to_dict(),
+        "context_command": f"taskledger pipeline context {step.id}",
+        "handoff_command": _guided_worker_handoff_command(step.id, step.base_context),
+    }
+
+
+def _guided_worker_handoff_command(step_id: str, base_context: str) -> str:
+    command = f"taskledger handoff create --worker {step_id}"
+    if base_context in {"spec-reviewer", "code-reviewer"}:
+        command += " --scope task"
+    return command + ' --summary "..."'
+
+
+def _append_guided_worker_pipeline_commands(
+    commands: list[dict[str, object]],
+    worker_pipeline: Mapping[str, object],
+) -> list[dict[str, object]]:
+    context_command = worker_pipeline.get("context_command")
+    handoff_command = worker_pipeline.get("handoff_command")
+    extras: list[dict[str, object]] = []
+    if isinstance(context_command, str):
+        extras.append(_command("context", "Show worker context", context_command))
+    if isinstance(handoff_command, str):
+        extras.append(_command("handoff", "Create worker handoff", handoff_command))
+    if not extras:
+        return commands
+    for index, item in enumerate(commands):
+        if bool(item.get("primary")):
+            return [*commands[: index + 1], *extras, *commands[index + 1 :]]
+    return [*commands, *extras]
 
 
 def _first_question_by_ids(

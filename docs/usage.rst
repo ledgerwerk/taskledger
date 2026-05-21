@@ -156,7 +156,7 @@ Example configuration:
    [worker_pipeline]
    enabled = true
    name = "api-contract-first"
-   mode = "template"
+   mode = "guided"
 
    [[worker_pipeline.steps]]
    id = "planner"
@@ -164,23 +164,43 @@ Example configuration:
    base_context = "planner"
 
    [[worker_pipeline.steps]]
-   id = "api-designer"
-   label = "API Designer"
+   id = "tester"
+   label = "Test Writer"
    lifecycle_stage = "implementation"
    base_context = "implementer"
-   kind = "todo"
+   actor_role = "implementer"
+   kind = "check"
+   description = "Add or update failing tests before code changes."
+   required_output = ["New or updated failing tests with a short summary."]
+   must_not = ["Do not change production code in this step."]
+   todo_tag = "tests"
+   test_command_policy = "may_fail"
 
    [[worker_pipeline.steps]]
    id = "coder"
    lifecycle_stage = "implementation"
    base_context = "implementer"
    kind = "todo"
+   description = "Implement the approved change and make the tests pass."
+   required_output = ["Code changes plus passing targeted checks."]
+   must_not = ["Do not skip required validation evidence."]
+   todo_tag = "implementation"
+   test_command_policy = "must_pass"
 
    [[worker_pipeline.steps]]
    id = "domain-reviewer"
    lifecycle_stage = "review"
    base_context = "spec-reviewer"
    kind = "review"
+
+Supported top-level keys are ``enabled``, ``name``, ``mode``, and ``steps``.
+Supported step keys are ``id``, ``label``, ``lifecycle_stage``,
+``base_context``, ``actor_role``, ``kind``, ``description``,
+``required_output``, ``must_not``, ``todo_tag``, and
+``test_command_policy``. ``guided`` mode remains advisory: it does not add
+new planning, implementation, or validation gates. Instead it augments
+``taskledger next-action`` with worker-step metadata plus ready-to-run worker
+context and handoff commands for the pending step.
 
 Inspect and use the configured overlay explicitly:
 
@@ -189,9 +209,11 @@ Inspect and use the configured overlay explicitly:
    taskledger pipeline show
    taskledger pipeline list
    taskledger pipeline next
-   taskledger pipeline context api-designer
-   taskledger context --worker api-designer
-   taskledger handoff create --worker api-designer --summary "Design the interfaces only."
+   taskledger next-action
+   taskledger pipeline context tester
+   taskledger context --worker tester
+   taskledger handoff create --worker tester --summary "Add failing tests only."
+   taskledger handoff create --worker domain-reviewer --scope task --summary "Review the implementation."
 
 To include worker-step todo hints in a plan template, enable a worker pipeline
 with ``mode = "template"`` or ``mode = "guided"`` and opt in per task:

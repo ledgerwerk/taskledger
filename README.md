@@ -101,16 +101,54 @@ name = "tdd-four-context"
 mode = "guided"
 
 [[worker_pipeline.steps]]
+id = "planner"
+lifecycle_stage = "planning"
+base_context = "planner"
+
+[[worker_pipeline.steps]]
 id = "tester"
+label = "Test Writer"
 lifecycle_stage = "implementation"
 base_context = "implementer"
+actor_role = "implementer"
 kind = "check"
+description = "Add or update failing tests before code changes."
+required_output = ["New or updated failing tests with a short summary."]
+must_not = ["Do not change production code in this step."]
+todo_tag = "tests"
+test_command_policy = "may_fail"
+
+[[worker_pipeline.steps]]
+id = "coder"
+lifecycle_stage = "implementation"
+base_context = "implementer"
+kind = "todo"
+description = "Implement the approved change and make the tests pass."
+required_output = ["Code changes plus passing targeted checks."]
+must_not = ["Do not skip required validation evidence."]
+todo_tag = "implementation"
+test_command_policy = "must_pass"
+
+[[worker_pipeline.steps]]
+id = "reviewer"
+lifecycle_stage = "review"
+base_context = "code-reviewer"
+kind = "review"
 ```
+
+Supported top-level keys are `enabled`, `name`, `mode`, and `steps`. Supported
+step keys are `id`, `label`, `lifecycle_stage`, `base_context`, `actor_role`,
+`kind`, `description`, `required_output`, `must_not`, `todo_tag`, and
+`test_command_policy`. `mode = "guided"` does not add lifecycle gates; it adds
+worker-step hints to `taskledger next-action`, including the pending step id plus
+ready-to-run worker context and handoff commands.
 
 ```bash
 taskledger pipeline show
 taskledger pipeline next
+taskledger next-action
 taskledger context --worker tester
+taskledger pipeline context tester
 taskledger handoff create --worker tester --summary "Add failing tests only."
 taskledger plan template --with-worker-pipeline --file ./plan.md
 ```

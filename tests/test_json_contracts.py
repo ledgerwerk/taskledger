@@ -25,6 +25,109 @@ def _init_project(tmp_path: Path) -> None:
     assert result.exit_code == 0
 
 
+def _append_pipeline_config(path: Path) -> None:
+    current = path.read_text(encoding="utf-8")
+    current += """
+
+[worker_pipeline]
+enabled = true
+name = "tdd-four-context"
+mode = "guided"
+
+[[worker_pipeline.steps]]
+id = "tester"
+label = "Test Writer"
+lifecycle_stage = "implementation"
+base_context = "implementer"
+kind = "check"
+test_command_policy = "may_fail"
+
+[[worker_pipeline.steps]]
+id = "coder"
+lifecycle_stage = "implementation"
+base_context = "implementer"
+kind = "todo"
+test_command_policy = "must_pass"
+"""
+    path.write_text(current, encoding="utf-8")
+
+
+def _setup_worker_pipeline_task(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    _append_pipeline_config(tmp_path / "taskledger.toml")
+    assert (
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(tmp_path),
+                "task",
+                "create",
+                "pipeline-json-task",
+                "--slug",
+                "pipeline-json-task",
+            ],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "task", "activate", "pipeline-json-task"],
+        ).exit_code
+        == 0
+    )
+    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    plan_text = """---
+acceptance_criteria:
+  - text: Pipeline JSON surfaces remain stable.
+todos:
+  - text: Add failing regression tests.
+    worker_step: tester
+    validation_hint: pytest tests/test_json_contracts.py
+  - text: Implement the approved change.
+    worker_step: coder
+    validation_hint: pytest tests/test_json_contracts.py
+---
+
+# Plan
+
+Keep worker pipeline JSON payloads explicit and stable.
+"""
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "plan", "propose", "--text", plan_text],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(tmp_path),
+                "plan",
+                "approve",
+                "--version",
+                "1",
+                "--actor",
+                "user",
+                "--note",
+                "Approved.",
+                "--allow-lint-errors",
+                "--reason",
+                "test",
+            ],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(app, ["--cwd", str(tmp_path), "implement", "start"]).exit_code
+        == 0
+    )
+
+
 def test_json_success_envelope_uses_ok_command_result_and_events(
     tmp_path: Path,
 ) -> None:
@@ -179,6 +282,77 @@ def test_status_json_reports_workspace_and_storage_paths(tmp_path: Path) -> None
     assert status["config_path"] == str(tmp_path / "taskledger.toml")
     assert status["taskledger_dir"] == str(tmp_path / ".taskledger")
     assert status["project_dir"] == str(tmp_path / ".taskledger" / "ledgers" / "main")
+
+
+def test_worker_pipeline_json_contracts_cover_guided_surfaces(tmp_path: Path) -> None:
+    _setup_worker_pipeline_task(tmp_path)
+
+    show_result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "--json", "pipeline", "show"],
+    )
+    assert show_result.exit_code == 0, show_result.stdout
+    show_payload = json.loads(show_result.stdout)
+    assert show_payload["ok"] is True
+    assert show_payload["result"]["pipeline"]["mode"] == "guided"
+
+    next_result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "--json", "pipeline", "next"],
+    )
+    assert next_result.exit_code == 0, next_result.stdout
+    next_payload = json.loads(next_result.stdout)
+    assert next_payload["result"]["step"]["id"] == "tester"
+
+    context_result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "pipeline",
+            "context",
+            "tester",
+            "--format",
+            "json",
+        ],
+    )
+    assert context_result.exit_code == 0, context_result.stdout
+    context_payload = json.loads(context_result.stdout)
+    assert context_payload["result"]["worker_step"]["id"] == "tester"
+
+    handoff_result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "handoff",
+            "create",
+            "--worker",
+            "tester",
+            "--summary",
+            "Add failing tests only.",
+        ],
+    )
+    assert handoff_result.exit_code == 0, handoff_result.stdout
+    handoff_payload = json.loads(handoff_result.stdout)
+    assert handoff_payload["result"]["worker_step_id"] == "tester"
+
+    action_result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "--json", "next-action"],
+    )
+    assert action_result.exit_code == 0, action_result.stdout
+    action_payload = json.loads(action_result.stdout)
+    worker_pipeline = action_payload["result"]["worker_pipeline"]
+    assert worker_pipeline["enabled"] is True
+    assert worker_pipeline["mode"] == "guided"
+    assert worker_pipeline["next_step"]["id"] == "tester"
+    assert worker_pipeline["context_command"] == "taskledger pipeline context tester"
+    assert worker_pipeline["handoff_command"] == (
+        'taskledger handoff create --worker tester --summary "..."'
+    )
 
 
 def test_python_m_taskledger_uses_canonical_json_command_names(tmp_path: Path) -> None:

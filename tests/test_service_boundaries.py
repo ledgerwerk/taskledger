@@ -59,6 +59,12 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     "taskledger/cli_misc.py:taskledger.services.doctor": (
         "Doctor commands still consume doctor service inspectors directly."
     ),
+    "taskledger/cli_pipeline.py:taskledger.services.handoff": (
+        "Pipeline context rendering currently reuses the handoff service payloads."
+    ),
+    "taskledger/cli_pipeline.py:taskledger.services.worker_pipeline": (
+        "Pipeline CLI commands read the worker pipeline service overlay directly."
+    ),
     "taskledger/cli_plan.py:taskledger.services.actors": (
         "Plan commands resolve actor/harness context."
     ),
@@ -98,10 +104,10 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
 }
 
 EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
-    "taskledger/cli.py:230": (
+    "taskledger/cli.py:237": (
         "Optional command group import fallback reports missing modules gracefully."
     ),
-    "taskledger/cli.py:881": (
+    "taskledger/cli.py:893": (
         "Serve command optional import fallback reports missing dashboard gracefully."
     ),
     "taskledger/cli_ledger.py:111": (
@@ -140,7 +146,7 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/doctor_checks/project_scan.py:79": (
         "Project scan continues past ledger config load errors."
     ),
-    "taskledger/services/doctor_checks/task_checks.py:55": (
+    "taskledger/services/doctor_checks/task_checks.py:59": (
         "Task scan continues past broken introduction ref resolution."
     ),
     "taskledger/services/tree.py:258": (
@@ -163,7 +169,7 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
         "Path probe falls back when environment inspection raises platform-"
         "specific errors."
     ),
-    "taskledger/storage/project_config.py:409": (
+    "taskledger/storage/project_config.py:424": (
         "TOML parser error handling catches runtime-specific exceptions "
         "during project config loading."
     ),

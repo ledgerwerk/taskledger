@@ -96,6 +96,8 @@ If any `taskledger ...` command fails with a Python traceback before taskledger 
 - Use `taskledger pipeline show`, `taskledger pipeline list`, and `taskledger pipeline next` to inspect the configured overlay.
 - Use `taskledger context --worker STEP_ID` or `taskledger pipeline context STEP_ID` to render a worker-specific context on top of the existing base context.
 - Use `taskledger handoff create --worker STEP_ID` to derive handoff mode and context from a configured worker step.
+- In `guided` mode, inspect `taskledger next-action` for `worker_pipeline.next_step`, `context_command`, and `handoff_command` hints. These are advisory only; they do not add new lifecycle gates.
+- Reviewer worker steps (`spec-reviewer`, `code-reviewer`) may require `--scope task` when no focused run is available.
 - Use `taskledger plan template --with-worker-pipeline --file ./plan.md` only when the project has an enabled worker pipeline and the task should use worker-tagged plan todos.
 - `worker_step` on plan todos is valid only when the project has an enabled worker pipeline.
 

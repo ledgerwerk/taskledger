@@ -5,12 +5,19 @@ from pathlib import Path
 from taskledger.domain.models import TaskRecord
 from taskledger.domain.run import TaskRunRecord
 from taskledger.errors import LaunchError
-from taskledger.storage.project_config import (
+from taskledger.storage.project_config import load_worker_pipeline_config
+from taskledger.storage.task_store import (
+    list_handoffs,
+    list_runs,
+    load_todos,
+    resolve_task,
+)
+from taskledger.storage.worker_pipeline_config import (
     WorkerPipelineConfig,
     WorkerStepConfig,
-    load_worker_pipeline_config,
 )
-from taskledger.storage.task_store import list_runs, load_todos, resolve_task
+
+HANDOFF_COMPLETION_STEP_KINDS = frozenset({"review", "custom", "check"})
 
 
 def worker_pipeline_status(workspace_root: Path) -> dict[str, object]:
@@ -93,21 +100,16 @@ def determine_next_worker_step(
 ) -> WorkerStepConfig | None:
     if task.accepted_plan_version is None:
         return _first_step_for_stage(pipeline, "planning")
-    todo_collection = load_todos(workspace_root, task.id)
-    open_todos = [todo for todo in todo_collection.todos if not todo.done]
-    open_worker_step_ids: list[str] = []
-    for todo in open_todos:
-        worker_step_id = getattr(todo, "worker_step_id", None)
-        if isinstance(worker_step_id, str) and worker_step_id.strip():
-            open_worker_step_ids.append(worker_step_id)
+    open_worker_step_ids = _open_worker_todo_step_ids(workspace_root, task.id)
     if open_worker_step_ids:
         return _first_matching_step(pipeline, open_worker_step_ids)
     runs = list_runs(workspace_root, task.id)
+    completed_handoff_steps = _closed_worker_handoff_step_ids(workspace_root, task.id)
     if (
         task.status_stage in {"implemented", "validating", "failed_validation"}
         and _latest_run(runs, "validation") is None
     ):
-        review_step = _first_step_for_stage(pipeline, "review")
+        review_step = _first_pending_review_step(pipeline, completed_handoff_steps)
         if review_step is not None:
             return review_step
     if task.status_stage in {"implemented", "validating", "failed_validation"}:
@@ -163,6 +165,42 @@ def _latest_run(
     if not matching:
         return None
     return matching[-1]
+
+
+def _open_worker_todo_step_ids(workspace_root: Path, task_id: str) -> list[str]:
+    todo_collection = load_todos(workspace_root, task_id)
+    open_todos = [todo for todo in todo_collection.todos if not todo.done]
+    open_worker_step_ids: list[str] = []
+    for todo in open_todos:
+        worker_step_id = getattr(todo, "worker_step_id", None)
+        if isinstance(worker_step_id, str) and worker_step_id.strip():
+            open_worker_step_ids.append(worker_step_id)
+    return open_worker_step_ids
+
+
+def _closed_worker_handoff_step_ids(workspace_root: Path, task_id: str) -> set[str]:
+    return {
+        handoff.worker_step_id
+        for handoff in list_handoffs(workspace_root, task_id)
+        if handoff.worker_step_id
+        and handoff.status == "closed"
+        and handoff.worker_step_id.strip()
+    }
+
+
+def _first_pending_review_step(
+    pipeline: WorkerPipelineConfig,
+    completed_handoff_steps: set[str],
+) -> WorkerStepConfig | None:
+    for step in pipeline.steps:
+        if step.lifecycle_stage != "review":
+            continue
+        if step.kind not in HANDOFF_COMPLETION_STEP_KINDS:
+            continue
+        if step.id in completed_handoff_steps:
+            continue
+        return step
+    return None
 
 
 def _worker_pipeline_next_reason(

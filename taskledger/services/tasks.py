@@ -77,10 +77,7 @@ from taskledger.storage.locks import (
     remove_lock,
     write_lock,
 )
-from taskledger.storage.project_config import (
-    WorkerPipelineConfig,
-    load_worker_pipeline_config,
-)
+from taskledger.storage.project_config import load_worker_pipeline_config
 from taskledger.storage.task_store import (
     TaskVisibility,
     V2Paths,
@@ -111,6 +108,7 @@ from taskledger.storage.task_store import (
 from taskledger.storage.task_store import (
     resolve_active_task as storage_resolve_active_task,
 )
+from taskledger.storage.worker_pipeline_config import WorkerPipelineConfig
 from taskledger.timeutils import utc_now_iso
 
 _REQUIRED_PLAN_FIELDS = ("goal", "acceptance_criteria", "todos")

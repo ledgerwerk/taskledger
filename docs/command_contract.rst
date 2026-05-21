@@ -276,6 +276,9 @@ Human output should stay concise but actionable:
    todo-work: Implementation is in progress; 1 todos remain.
    Next todo: todo-0001 -- Update next-action JSON payload.
    Command: taskledger todo show todo-0001
+   Worker step: tester
+   Worker context: taskledger pipeline context tester
+   Worker handoff: taskledger handoff create --worker tester --summary "..."
    Mark todo done after evidence exists: taskledger todo done todo-0001 --evidence "..."
    Progress: 0/1 todos done
 
@@ -295,6 +298,9 @@ and may also include:
 * ``next_item`` for the concrete target
 * ``commands`` for ordered command hints with one primary command
 * ``progress`` for question, todo, or validation queues
+* ``worker_pipeline`` when an enabled ``guided`` worker pipeline has a pending
+  step; this object includes ``enabled``, ``mode``, ``next_step``,
+  ``context_command``, and ``handoff_command``
 * ``template_command`` plus ``required_plan_fields`` and
   ``recommended_plan_fields`` when the next step is regenerating a plan from
   answered questions
@@ -431,6 +437,8 @@ Focused worker contexts keep lifecycle ``mode`` separate from worker-role
 
    taskledger context --for planner|implementer|validator|spec-reviewer|code-reviewer|reviewer|full [--scope task|todo|run] [--todo TODO_ID] [--run RUN_ID] [--format markdown|json|text] [--task TASK_REF]
    taskledger handoff create --mode planning|implementation|validation|review|full [--for planner|implementer|validator|spec-reviewer|code-reviewer|reviewer|full] [--scope task|todo|run] [--todo TODO_ID] [--run RUN_ID] [--task TASK_REF]
+   taskledger handoff create --worker STEP_ID [--scope task|todo|run] [--todo TODO_ID] [--run RUN_ID] [--task TASK_REF]
+   taskledger pipeline context STEP_ID [--scope task|todo|run] [--todo TODO_ID] [--run RUN_ID] [--format markdown|json|text] [--task TASK_REF]
    taskledger handoff show HANDOFF_ID --format text|markdown|json [--task TASK_REF]
 
 Rules:
@@ -441,6 +449,11 @@ Rules:
 * ``--scope run`` requires ``--run``.
 * ``--for implementation|validation|planning|review|full`` remain accepted as
   compatibility aliases.
+* ``handoff create --worker`` derives mode and context from the configured
+  worker step and stores ``worker_step_id`` in the handoff record.
+* ``pipeline context STEP_ID`` is equivalent to ``context --worker STEP_ID``.
+* ``spec-reviewer`` and ``code-reviewer`` worker contexts require ``--run`` or
+  explicit ``--scope task`` when they are not bound to a validation/review run.
 * ``handoff show --format markdown`` prints the stored snapshot body.
 
 Removed Pre-Release Aliases

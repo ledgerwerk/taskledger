@@ -5,6 +5,7 @@ from __future__ import annotations
 import py_compile
 from pathlib import Path
 
+from taskledger.domain.handoff import TaskHandoffRecord
 from taskledger.domain.models import (
     AcceptanceCriterion,
     ActiveTaskState,
@@ -28,6 +29,7 @@ from taskledger.storage.task_store import (
     ensure_v2_layout,
     save_active_task_state,
     save_change,
+    save_handoff,
     save_plan,
     save_requirements,
     save_run,
@@ -96,6 +98,11 @@ def _setup_project(tmp_path: Path) -> None:
     from taskledger.storage.meta import StorageMeta, write_storage_meta
 
     write_storage_meta(tmp_path, StorageMeta(created_with_taskledger="test"))
+
+
+def _append_pipeline_config(path: Path, text: str) -> None:
+    current = path.read_text(encoding="utf-8") if path.exists() else ""
+    path.write_text(f"{current.rstrip()}\n\n{text.strip()}\n", encoding="utf-8")
 
 
 def test_inspect_healthy_project(tmp_path: Path) -> None:
@@ -264,6 +271,78 @@ def test_inspect_duplicate_todo_ids(tmp_path: Path) -> None:
     # Per-record storage deduplicates by id (one file per id)
     result = inspect_v2_project(tmp_path)
     assert not any("duplicate todo" in e for e in result["errors"])
+
+
+def test_doctor_warns_for_worker_refs_without_enabled_pipeline(tmp_path: Path) -> None:
+    _setup_project(tmp_path)
+    save_todos(
+        tmp_path,
+        TodoCollection(
+            task_id="task-0001",
+            todos=(TaskTodo(id="todo-1", text="Review", worker_step_id="tester"),),
+        ),
+    )
+    save_handoff(
+        tmp_path,
+        TaskHandoffRecord(
+            handoff_id="handoff-0001",
+            task_id="task-0001",
+            mode="implementation",
+            context_for="implementer",
+            worker_step_id="tester",
+            created_by=_actor(),
+        ),
+    )
+
+    result = inspect_v2_project(tmp_path)
+
+    assert any(
+        "Todo todo-1 references worker step 'tester'" in w for w in result["warnings"]
+    )
+    assert any(
+        "Handoff handoff-0001 references worker step 'tester'" in w
+        for w in result["warnings"]
+    )
+    assert {
+        item["code"]
+        for item in result["diagnostics"]
+        if item.get("severity") == "warning"
+    } >= {"todo.stale_worker_step", "handoff.stale_worker_step"}
+
+
+def test_doctor_warns_for_worker_refs_missing_from_pipeline(tmp_path: Path) -> None:
+    _setup_project(tmp_path)
+    _append_pipeline_config(
+        tmp_path / "taskledger.toml",
+        """
+        [worker_pipeline]
+        enabled = true
+        name = "review-pipeline"
+        mode = "guided"
+
+        [[worker_pipeline.steps]]
+        id = "coder"
+        lifecycle_stage = "implementation"
+        base_context = "implementer"
+        kind = "todo"
+        """,
+    )
+    save_todos(
+        tmp_path,
+        TodoCollection(
+            task_id="task-0001",
+            todos=(TaskTodo(id="todo-1", text="Review", worker_step_id="tester"),),
+        ),
+    )
+
+    result = inspect_v2_project(tmp_path)
+
+    assert any("worker step 'tester'" in w for w in result["warnings"])
+    assert any(
+        item.get("code") == "todo.stale_worker_step"
+        and item.get("worker_step_id") == "tester"
+        for item in result["diagnostics"]
+    )
 
 
 def test_inspect_transient_stage_in_status(tmp_path: Path) -> None:

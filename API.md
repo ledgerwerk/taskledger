@@ -198,6 +198,7 @@ render_handoff(
     *,
     mode: str | None = None,
     context_for: str | None = None,
+    worker_step_id: str | None = None,
     scope: str | None = None,
     todo_id: str | None = None,
     focus_run_id: str | None = None,
@@ -208,8 +209,9 @@ create_handoff(
     workspace_root: Path,
     task_ref: str,
     *,
-    mode: str,
+    mode: str | None = None,
     context_for: str | None = None,
+    worker_step_id: str | None = None,
     scope: str | None = None,
     todo_id: str | None = None,
     focus_run_id: str | None = None,
@@ -225,7 +227,10 @@ create_handoff(
 
 Focused handoffs store the generated Markdown context snapshot in the handoff
 record body and return compact metadata, including `context_hash` and
-`context_path`.
+`context_path`. When `worker_step_id` is supplied, taskledger derives the
+handoff mode and context from the configured worker step, persists
+`worker_step_id` in the handoff record, and includes the resolved worker-step
+details in JSON context payloads.
 
 ### `taskledger.api.releases`
 

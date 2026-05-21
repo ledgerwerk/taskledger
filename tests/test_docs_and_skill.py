@@ -153,6 +153,24 @@ def test_plan_revision_docs_and_skill_rules_are_present() -> None:
     assert "taskledger plan review" in command_contract
 
 
+def test_worker_pipeline_docs_cover_guided_next_action_and_worker_refs() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
+    command_contract = (ROOT / "docs" / "command_contract.rst").read_text(
+        encoding="utf-8"
+    )
+    api_md = (ROOT / "API.md").read_text(encoding="utf-8")
+    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "test_command_policy" in readme
+    assert "taskledger next-action" in readme
+    assert "required_output" in usage
+    assert "worker_pipeline" in command_contract
+    assert "context_command" in command_contract
+    assert "worker_step_id" in api_md
+    assert "context_command" in skill
+
+
 def test_transfer_docs_cover_project_identity_and_dry_run() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")

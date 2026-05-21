@@ -865,6 +865,7 @@ def _next_action_human(payload: dict[str, object]) -> str:
     command = payload.get("next_command")
     if command:
         lines.append(f"Command: {command}")
+    _append_worker_pipeline_hint_lines(lines, payload)
     _append_planning_hint_lines(lines, payload)
 
     commands = payload.get("commands")
@@ -904,6 +905,26 @@ def _next_action_human(payload: dict[str, object]) -> str:
                     lines.append(f"Blocker: {msg}")
 
     return "\n".join(lines)
+
+
+def _append_worker_pipeline_hint_lines(
+    lines: list[str],
+    payload: dict[str, object],
+) -> None:
+    worker_pipeline = payload.get("worker_pipeline")
+    if not isinstance(worker_pipeline, dict):
+        return
+    next_step = worker_pipeline.get("next_step")
+    if isinstance(next_step, dict):
+        step_id = next_step.get("id")
+        if step_id:
+            lines.append(f"Worker step: {step_id}")
+    context_command = worker_pipeline.get("context_command")
+    if isinstance(context_command, str):
+        lines.append(f"Worker context: {context_command}")
+    handoff_command = worker_pipeline.get("handoff_command")
+    if isinstance(handoff_command, str):
+        lines.append(f"Worker handoff: {handoff_command}")
 
 
 def _append_planning_hint_lines(
