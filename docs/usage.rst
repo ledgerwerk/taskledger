@@ -9,6 +9,23 @@ Installation
    python -m pip install -e .
    python -m pip install -e ".[dev]"
 
+Shell completion
+----------------
+
+After installing ``taskledger``, install completion for the current shell:
+
+.. code-block:: bash
+
+   taskledger --install-completion
+
+To print the generated completion script without installing it:
+
+.. code-block:: bash
+
+   taskledger --show-completion
+
+Restart your shell session after installation.
+
 Agent workflows work best when the ``taskledger`` skill is installed in the
 coding harness. The CLI uses a task-first lifecycle with explicit planning,
 approval, implementation, validation, locks, and handoff gates; without the

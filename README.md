@@ -160,6 +160,22 @@ python -m pip install -e .
 python -m pip install -e ".[dev]"
 ```
 
+### Shell completion
+
+After installing `taskledger`, install completion for your current shell:
+
+```bash
+taskledger --install-completion
+```
+
+To inspect the generated completion script instead of installing it:
+
+```bash
+taskledger --show-completion
+```
+
+Restart your shell session after installation.
+
 ## Quick start
 
 Initialize durable state in the current workspace:

@@ -80,7 +80,7 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-app = typer.Typer(add_completion=False, help="Manage staged taskledger coding work.")
+app = typer.Typer(add_completion=True, help="Manage staged taskledger coding work.")
 task_app = typer.Typer(add_completion=False, help="Manage coding tasks.")
 plan_app = typer.Typer(add_completion=False, help="Manage plan versions.")
 question_app = typer.Typer(add_completion=False, help="Manage planning questions.")
