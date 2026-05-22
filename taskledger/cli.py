@@ -10,7 +10,6 @@ from typing import Annotated, Any, cast
 
 import click
 import typer
-import typer.completion as typer_completion
 
 from taskledger._version import __version__
 from taskledger.api.handoff import render_handoff
@@ -81,7 +80,7 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-app = typer.Typer(add_completion=False, help="Manage staged taskledger coding work.")
+app = typer.Typer(add_completion=True, help="Manage staged taskledger coding work.")
 task_app = typer.Typer(add_completion=False, help="Manage coding tasks.")
 plan_app = typer.Typer(add_completion=False, help="Manage plan versions.")
 question_app = typer.Typer(add_completion=False, help="Manage planning questions.")
@@ -323,46 +322,6 @@ _WORKFLOW_TASK_OPTION_COMMANDS = {
     ("validate", "start"),
 }
 
-_COMPLETION_SHELL_ALIASES = {"pwsh": "powershell"}
-_SUPPORTED_COMPLETION_SHELLS = {"bash", "zsh", "fish", "powershell"}
-
-
-def _normalize_completion_shell(value: str) -> str:
-    shell = value.strip().lower()
-    shell = _COMPLETION_SHELL_ALIASES.get(shell, shell)
-    if shell not in _SUPPORTED_COMPLETION_SHELLS:
-        supported = ", ".join(sorted(_SUPPORTED_COMPLETION_SHELLS))
-        raise typer.BadParameter(
-            f"Unsupported shell '{value}'. Use one of: {supported}."
-        )
-    return shell
-
-
-def _show_completion_callback(value: str | None) -> str | None:
-    if value is None:
-        return None
-    shell = _normalize_completion_shell(value)
-    script = typer_completion.get_completion_script(
-        prog_name="taskledger",
-        complete_var="_TASKLEDGER_COMPLETE",
-        shell=shell,
-    )
-    typer.echo(script)
-    raise typer.Exit()
-
-
-def _install_completion_callback(value: str | None) -> str | None:
-    if value is None:
-        return None
-    shell = _normalize_completion_shell(value)
-    installed_shell, path = typer_completion.install(
-        shell=shell,
-        prog_name="taskledger",
-        complete_var="_TASKLEDGER_COMPLETE",
-    )
-    typer.echo(f"Installed completion for {installed_shell}: {path}")
-    raise typer.Exit()
-
 
 def _is_help_or_introspection(argv: tuple[str, ...]) -> bool:
     """Return True if this is a help/completion invocation that should skip
@@ -521,26 +480,6 @@ def main(
             help="Show the version and exit.",
         ),
     ] = False,
-    show_completion: Annotated[
-        str | None,
-        typer.Option(
-            "--show-completion",
-            callback=_show_completion_callback,
-            is_eager=True,
-            help="Show shell completion script and exit.",
-            metavar="[bash|zsh|fish|powershell|pwsh]",
-        ),
-    ] = None,
-    install_completion: Annotated[
-        str | None,
-        typer.Option(
-            "--install-completion",
-            callback=_install_completion_callback,
-            is_eager=True,
-            help="Install shell completion and exit.",
-            metavar="[bash|zsh|fish|powershell|pwsh]",
-        ),
-    ] = None,
     cwd: Annotated[
         Path | None,
         typer.Option(

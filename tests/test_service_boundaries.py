@@ -104,10 +104,10 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
 }
 
 EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
-    "taskledger/cli.py:237": (
+    "taskledger/cli.py:238": (
         "Optional command group import fallback reports missing modules gracefully."
     ),
-    "taskledger/cli.py:893": (
+    "taskledger/cli.py:954": (
         "Serve command optional import fallback reports missing dashboard gracefully."
     ),
     "taskledger/cli_ledger.py:111": (

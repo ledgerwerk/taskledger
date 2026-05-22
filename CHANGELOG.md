@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.4.1 - 2026-05-22
+
+### Added
+
+- Added optional configurable worker pipeline overlay: opt-in `[worker_pipeline]` project config, read-only `pipeline show`, `pipeline list`, and `pipeline next` commands, worker-aware `context --worker` and `handoff create --worker` support, and worker-tagged plan todos with materialization and template hints.
+- Added guided worker-pipeline next-action metadata and command hints in `next-action` output for `guided` mode projects.
+- Added worker-pipeline config extraction into `taskledger/storage/worker_pipeline_config.py` and worker-only context rendering into `taskledger/services/worker_context.py`.
+- Added doctor warning diagnostics for stale worker-step todo and handoff references.
+- Added shell completion support: root Typer app now enables completion options, with `--install-completion` and `--show-completion` available.
+
+### Changed
+
+- Worker handoff defaults now derive from configured pipeline steps when `--worker` is specified.
+- Worker step metadata is rendered in task reports when present.
+- Review-stage worker routing advances from closed worker handoffs.
+- Plan template and todo parsing preserve `worker_step` metadata across export, regeneration, and materialization.
+- Updated service boundary whitelists for worker-pipeline and doctor scan import sites.
+
+### Documentation
+
+- Documented worker pipeline configuration, commands, guided workflow, and config fields in README, `docs/usage.rst`, `docs/full_task_cycle.rst`, and `docs/command_contract.rst`.
+- Updated `skills/taskledger/SKILL.md` with optional worker pipeline protocol guidance and guided next-action hints.
+- Updated `API.md` for public handoff API signatures with `worker_step_id`.
+- Added shell completion install and show command documentation in README and `docs/usage.rst`.
+
+### Quality
+
+- Added regression test modules for worker pipeline config, CLI commands, worker context, worker handoffs, worker todo materialization, guided next-action, and doctor warnings.
+- Expanded command inventory, JSON contract, docs/skill, and service boundary tests for the new surface.
+- Full suite: ruff and mypy clean.
+
 ## v0.4.0 - 2026-05-19
 
 ### Added
