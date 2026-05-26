@@ -266,7 +266,6 @@ Test plan.
         assert isinstance(skipped, list)
         assert any(s["path"] == "src/.git/config" for s in skipped)
 
-
     def test_task_export_does_not_report_missing_plan_only_source_file(
         self, tmp_path: Path
     ) -> None:
@@ -339,6 +338,7 @@ Use the temporary review input to plan the change.
         skipped = payload["skipped_files"]
         assert isinstance(skipped, list)
         assert all(s["path"] != "." for s in skipped)
+
     def test_task_export_total_source_budget_does_not_charge_skipped_file(
         self, tmp_path: Path
     ) -> None:
