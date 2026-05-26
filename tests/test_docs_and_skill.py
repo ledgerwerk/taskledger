@@ -120,6 +120,57 @@ def test_skill_contains_strict_agent_protocol() -> None:
     assert "Treat it as advisory" in skill
 
 
+def test_docs_define_agent_golden_path_and_advanced_surfaces() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    public_surface = (ROOT / "docs" / "public_surface.rst").read_text(
+        encoding="utf-8"
+    )
+    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    normal_plan_path = (
+        "plan start -> plan template -> plan upsert -> plan lint -> plan accept"
+    )
+    for text in (readme, public_surface, skill):
+        assert normal_plan_path in text
+        assert "handoff create" in text
+        assert "storage" in text
+        assert "advanced" in text.lower()
+
+    assert "41 top-level CLI entries" in public_surface
+    assert "41 registered command groups" not in public_surface
+    assert "ledger fork/switch/adopt" in public_surface
+    assert "search``/``grep``/``symbols``/``deps``" in public_surface
+    assert "## Non-goals" in readme
+
+
+def test_skill_has_single_repair_warning() -> None:
+    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
+    assert skill.count("Do not use repair commands") == 1
+
+
+def test_read_report_export_terminology_is_consolidated() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
+    public_surface = (ROOT / "docs" / "public_surface.rst").read_text(
+        encoding="utf-8"
+    )
+    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    for text in (readme, usage, public_surface, skill):
+        assert "task dossier" in text
+        assert "advanced/compatibility" in text
+        assert "context" in text
+        assert "handoff show" in text
+
+    assert "context``: canonical fresh continuation context" in usage
+    assert "task export" in public_surface
+    assert "task transcript" in public_surface
+
+
 def test_planning_guidance_docs_are_present() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")

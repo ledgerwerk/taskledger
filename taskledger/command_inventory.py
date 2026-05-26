@@ -52,6 +52,47 @@ TARGETING_POSITIONAL_RESOURCE = "positional_resource"
 TARGETING_POSITIONAL_OR_ACTIVE = "positional_resource_or_active"
 TARGETING_EXPLICIT_REQUIRED = "explicit_target_required"
 
+AGENT_GOLDEN_PATH_COMMANDS: tuple[str, ...] = (
+    "actor whoami",
+    "task active",
+    "task show",
+    "task create",
+    "task activate",
+    "task follow-up",
+    "next-action",
+    "context",
+    "can",
+    "plan start",
+    "plan template",
+    "plan upsert",
+    "plan lint",
+    "plan accept",
+    "question add",
+    "question add-many",
+    "question answer",
+    "question answer-many",
+    "question status",
+    "question answers",
+    "todo next",
+    "todo show",
+    "todo done",
+    "todo status",
+    "implement start",
+    "implement resume",
+    "implement change",
+    "implement scan-changes",
+    "implement finish",
+    "validate start",
+    "validate status",
+    "validate check",
+    "validate finish",
+    "review record",
+    "handoff create",
+    "handoff show",
+    "handoff claim",
+    "handoff close",
+)
+
 
 class CommandSpec(NamedTuple):
     audience: str
@@ -1267,14 +1308,15 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
     ),
     # ── release ───────────────────────────────────────────────────
     "release tag": CommandSpec(
-        STABLE_FOR_AGENTS,
+        HUMAN_ORIENTED,
         "ledger_mutation",
-        SUPPORT,
+        ADVANCED,
         PHASE_RELEASE,
+        agent_safe=True,
         ledger_effect=EFFECT_WRITE,
     ),
     "release list": CommandSpec(
-        STABLE_FOR_AGENTS,
+        HUMAN_ORIENTED,
         "safe_read_only",
         HUMAN,
         PHASE_RELEASE,
@@ -1282,7 +1324,7 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         ledger_effect=EFFECT_READ,
     ),
     "release show": CommandSpec(
-        STABLE_FOR_AGENTS,
+        HUMAN_ORIENTED,
         "safe_read_only",
         HUMAN,
         PHASE_RELEASE,
@@ -1291,7 +1333,7 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         targeting=TARGETING_POSITIONAL_RESOURCE,
     ),
     "release changelog": CommandSpec(
-        STABLE_FOR_AGENTS,
+        HUMAN_ORIENTED,
         "safe_read_only",
         HUMAN,
         PHASE_RELEASE,

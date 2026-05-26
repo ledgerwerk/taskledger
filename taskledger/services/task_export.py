@@ -10,6 +10,7 @@ Read-only: does not mutate storage or append events.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -91,9 +92,9 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
 
 
 def _collect_source_candidates(
-    changes: list[object],
-    links: list[object],
-    plans: list[object],
+    changes: Sequence[object],
+    links: Sequence[object],
+    plans: Sequence[object],
     extra: tuple[str, ...],
 ) -> list[str]:
     values: list[str] = []

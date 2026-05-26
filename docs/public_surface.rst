@@ -7,28 +7,50 @@ Public surface
 
    task -> plan -> approval -> implement -> validate -> done
 
-Supported CLI groups
---------------------
+Supported CLI entries
+---------------------
 
-The following table lists all 41 registered command groups, grouped by their
-primary surface classification as defined in ``COMMAND_METADATA``.
+The command inventory tracks 41 top-level CLI entries. Some are groups and some
+are root commands. The normal agent path is intentionally smaller than the full
+registered surface.
+
+Core agent path
+~~~~~~~~~~~~~~~
+
+Agents should start with this durable lifecycle path:
+
+``plan start -> plan template -> plan upsert -> plan lint -> plan accept`` is
+the normal planning/approval path for agents.
+
+- ``actor whoami``
+- ``task active``, ``task show``, ``task create``, ``task activate``, ``task follow-up``
+- ``next-action``, ``context``, ``can``
+- ``plan start``, ``plan template``, ``plan upsert``, ``plan lint``, ``plan accept``
+- ``question add``, ``question add-many``, ``question answer``, ``question answer-many``, ``question status``, ``question answers``
+- ``todo next``, ``todo show``, ``todo done``, ``todo status``
+- ``implement start``, ``implement resume``, ``implement change``, ``implement scan-changes``, ``implement finish``
+- ``validate start``, ``validate status``, ``validate check``, ``validate finish``
+- ``review record``
+- ``handoff create``, ``handoff show``, ``handoff claim``, ``handoff close``
+
+Top-level entry categories
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **Primary groups** — core task-first lifecycle:
 
 - ``task``, ``plan``, ``question``, ``implement``, ``validate``, ``review``, ``todo``
 - ``context``, ``next-action``, ``init``, ``handoff``
 
-**Support groups** — auxiliary operations:
+**Support entries** — auxiliary operations:
 
-- ``intro``, ``file``, ``link``, ``require``, ``release``, ``lock``, ``actor``, ``harness``
-- ``export``, ``import``, ``snapshot``, ``pipeline``, ``can``, ``report``
-- ``storage``, ``sync``, ``commands``
+- ``intro``, ``file``, ``link``, ``require``, ``lock``, ``actor``, ``harness``
+- ``export``, ``import``, ``snapshot``, ``pipeline``, ``can``, ``report``, ``commands``
 
-**Advanced groups** — power-user and automation:
+**Advanced entries** — power-user, storage, transfer, and project operations:
 
-- ``ledger``, ``require``, ``handoff``
+- ``ledger``, ``storage``, ``sync``, ``release``, ``migrate``
 
-**Human-oriented groups** — interactive and reporting:
+**Human-oriented entries** — interactive inspection and reporting:
 
 - ``status``, ``view``, ``serve``, ``tree``, ``search``, ``grep``, ``symbols``, ``deps``
 
@@ -49,6 +71,11 @@ new child task instead of reopening a ``done`` task.
 Release boundaries are tracked separately from task lifecycle state with
 ``release tag`` and ``release changelog``.
 
+``release *``, ``storage move``, ``sync git pull/push/sync``, sync hooks,
+``ledger fork/switch/adopt``, ``migrate *``, ``repair *``, and
+``search``/``grep``/``symbols``/``deps`` are not normal task work. They are
+advanced, repair/migration, human-oriented, or beta support surfaces.
+
 question subcommands
 --------------------
 
@@ -59,14 +86,28 @@ question subcommands
 plan subcommands
 ----------------
 
-- ``plan start``, ``plan propose``, ``plan template``, ``plan upsert``, ``plan review``, ``plan lint``, ``plan approve``, ``plan accept``, ``plan reject``, ``plan show``, ``plan diff``
-- ``plan regenerate --from-answers``, ``plan materialize-todos``, ``plan command -- ...``
+- Normal path: ``plan start`` -> ``plan template`` -> ``plan upsert`` -> ``plan lint`` -> ``plan accept``
+- Support reads/records: ``plan show``, ``plan review``, ``plan list``, ``plan diff``, ``plan export``, ``plan command -- ...``
+- Advanced or compatibility paths: ``plan approve``, ``plan propose``, ``plan draft``, ``plan regenerate --from-answers``, ``plan materialize-todos``, ``plan revise``, ``plan amend``, ``plan reject``
+
+Prefer ``plan accept`` for explicit chat approval. ``plan approve`` remains for
+advanced metadata control and compatibility.
 
 task reporting and transcripts
 ------------------------------
 
+- ``next-action`` answers what should happen next.
+- ``task show`` summarizes current task state.
+- ``context`` renders agent continuation context.
+- ``handoff create/show/claim/close`` manages durable transfer between sessions or actors.
 - ``task report`` supports section control including ``--include command-log``
+- ``task export`` writes a full single-file LLM/archive bundle.
 - ``task transcript`` renders a per-task command transcript in ``markdown`` or ``json``
+
+``task dossier``, root ``view``, and ``handoff plan-context`` /
+``handoff implementation-context`` / ``handoff validation-context`` remain
+advanced/compatibility read surfaces; prefer ``context --for ...`` and
+``handoff show`` for new agent protocols.
 
 todo subcommands
 ----------------

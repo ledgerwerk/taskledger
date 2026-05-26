@@ -17,7 +17,26 @@ fresh-context handoffs under a configurable `taskledger_dir` (default:
 task -> plan -> approval -> implement -> validate -> done
 ```
 
-The supported command surface is organized as:
+The normal agent path is deliberately small:
+
+```text
+actor whoami
+task active | task show | task create | task activate | task follow-up
+next-action | context | can
+plan start -> plan template -> plan upsert -> plan lint -> plan accept
+question add | question add-many | question answer | question answer-many | question status | question answers
+todo next | todo show | todo done | todo status
+implement start | implement resume | implement change | implement scan-changes | implement finish
+validate start | validate status | validate check | validate finish
+review record
+handoff create | handoff show | handoff claim | handoff close
+```
+
+Everything else is support, human inspection, advanced transfer/storage work,
+repair/migration, or beta project search. Those commands remain public, but
+they are not part of the baseline lifecycle agents should reach for first.
+
+The broader command surface is organized as:
 
 **Core workflow:**
 
@@ -27,7 +46,7 @@ The supported command surface is organized as:
 
 - `intro`, `file`, `link`, `require`, `handoff`
 
-**Operations:**
+**Operations and advanced overlays:**
 
 - `context`, `pipeline`, `next-action`, `can`, `search`, `grep`, `symbols`, `deps`, `actor`, `view`, `serve`, `storage`, `sync`
 
@@ -38,6 +57,14 @@ The supported command surface is organized as:
 **Project lifecycle:**
 
 - `init`, `status`, `export`, `import`, `snapshot`, `release`
+
+## Non-goals
+
+Taskledger is not a general project-management suite, issue tracker, CI system,
+release manager, or source-code intelligence platform. It is a local durable
+ledger for staged coding work. Optional reporting, sync, search, and worker
+pipeline features must not change the default task-first lifecycle unless a
+project explicitly opts in.
 
 ### Which read command to use
 
@@ -273,6 +300,9 @@ taskledger implement restart --summary "Fix failed validation findings."
 ```
 
 ## Release tagging and changelog context
+
+Release commands are advanced human/project operations, not part of the normal
+task -> plan -> approval -> implement -> validate -> done agent path.
 
 Use durable release tags to mark completed task boundaries and generate
 provider-neutral changelog source packs from finished tasks:
@@ -553,7 +583,6 @@ Fresh-context handoff is a primary feature:
 taskledger context --for planning --format markdown
 taskledger context --for implementation --format markdown
 taskledger context --for validation --format json
-taskledger task dossier --format markdown
 taskledger task report --task task-0030 -o task30.md
 taskledger task export task-0030 -o task-0030.llm.md
 taskledger report html task-0030 --output task30.html
@@ -561,6 +590,10 @@ taskledger handoff create --mode implementation --intended-actor agent --intende
 taskledger handoff claim handoff-0001
 taskledger handoff close handoff-0001 --reason "Implementation started."
 ```
+
+`task dossier`, root `view`, and the legacy `handoff *-context` renderers remain
+advanced/compatibility read surfaces. Prefer `context --for ...` and
+`handoff show` for agent continuation.
 
 ## Fresh-worker contexts
 

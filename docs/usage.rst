@@ -406,8 +406,9 @@ It is for humans who want to review, archive, or share a task outside the termin
    taskledger task report --task task-0030
 
 ``context`` is agent-handoff-oriented. ``task report`` and root ``report`` HTML
-commands are human-oriented.
-``task dossier`` remains the full agent-context dump.
+commands are human-oriented. ``task dossier`` remains available as an
+advanced/compatibility full-context dump; prefer ``context --for ...`` for new
+agent protocols.
 
 ``task transcript`` renders a per-task command transcript from the ledger-level
 agent log store:
@@ -435,7 +436,9 @@ documentation updates, or follow-up implementation work.
 Distinction:
 
 - ``task report``: human-readable review/archive report.
-- ``task dossier``: fresh continuation context for an active agent.
+- ``context``: canonical fresh continuation context for an active agent.
+- ``handoff show``: durable transfer context created for another session or actor.
+- ``task dossier``: advanced/compatibility full-context dump.
 - ``task transcript``: command audit trail.
 - ``task export``: single-file LLM handoff/archive of one complete task bundle.
 

@@ -43,7 +43,7 @@ def _markdown() -> MarkdownIt:
     for rule in ("table", "strikethrough"):
         try:
             md.enable(rule)
-        except Exception:
+        except ValueError:
             pass
     return md
 

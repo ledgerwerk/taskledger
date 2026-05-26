@@ -4,6 +4,9 @@ from typing import Any
 
 from taskledger.cli import app
 from taskledger.command_inventory import (
+    ADVANCED,
+    AGENT_GOLDEN_PATH_COMMANDS,
+    BETA,
     COMMAND_METADATA,
     EFFECT_NONE,
     EFFECT_READ,
@@ -12,7 +15,9 @@ from taskledger.command_inventory import (
     EXTERNAL_PROCESS_EXEC,
     EXTERNAL_SERVER_SOCKET,
     HUMAN_ORIENTED,
+    MIGRATION,
     REPAIR,
+    REPAIR_SURFACE,
     STABLE_FOR_AGENTS,
     TARGETING_ACTIVE_DEFAULT,
     TARGETING_EXPLICIT_REQUIRED,
@@ -128,6 +133,28 @@ def test_critical_tier_count_under_25() -> None:
     assert len(critical) <= 25, f"Too many critical: {len(critical)}"
 
 
+def test_agent_golden_path_is_explicit_and_budgeted() -> None:
+    """The normal agent path should stay much smaller than all stable commands."""
+    assert len(AGENT_GOLDEN_PATH_COMMANDS) <= 40
+    assert len(AGENT_GOLDEN_PATH_COMMANDS) == len(set(AGENT_GOLDEN_PATH_COMMANDS))
+    assert set(AGENT_GOLDEN_PATH_COMMANDS) <= set(COMMAND_METADATA)
+
+    non_agent_commands = [
+        command
+        for command in AGENT_GOLDEN_PATH_COMMANDS
+        if COMMAND_METADATA[command].audience != STABLE_FOR_AGENTS
+    ]
+    assert non_agent_commands == []
+
+    advanced_surface_names = {ADVANCED, BETA, REPAIR_SURFACE, MIGRATION}
+    advanced_surfaces = [
+        command
+        for command in AGENT_GOLDEN_PATH_COMMANDS
+        if COMMAND_METADATA[command].surface in advanced_surface_names
+    ]
+    assert advanced_surfaces == []
+
+
 def test_critical_tier_is_primary_surface() -> None:
     """Critical-tier commands should all be primary surface."""
     non_primary = [
@@ -200,6 +227,43 @@ def test_repair_commands_are_rare() -> None:
     ]
     non_rare = [k for k in repair_cmds if COMMAND_METADATA[k].tier != TIER_RARE]
     assert non_rare == [], f"Repair commands not rare: {non_rare}"
+
+
+def test_advanced_operations_are_not_in_agent_golden_path() -> None:
+    advanced_normal_work_exclusions = {
+        "release tag",
+        "release list",
+        "release show",
+        "release changelog",
+        "storage move",
+        "sync git pull",
+        "sync git push",
+        "sync git sync",
+        "sync git hooks install",
+        "sync git hooks uninstall",
+        "ledger fork",
+        "ledger switch",
+        "ledger adopt",
+        "migrate status",
+        "migrate plan",
+        "migrate apply",
+        "repair lock",
+        "repair index",
+        "repair run",
+        "repair task",
+        "search",
+        "grep",
+        "symbols",
+        "deps",
+    }
+    assert advanced_normal_work_exclusions.isdisjoint(AGENT_GOLDEN_PATH_COMMANDS)
+
+    wrongly_primary = [
+        command
+        for command in advanced_normal_work_exclusions
+        if COMMAND_METADATA[command].surface == "primary"
+    ]
+    assert wrongly_primary == []
 
 
 def test_tier_values_are_valid() -> None:

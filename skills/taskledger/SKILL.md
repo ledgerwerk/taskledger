@@ -23,8 +23,29 @@ Use taskledger for staged coding work that needs a durable task record, reviewab
 - Do not inline large source files into taskledger records by default; use `@path` references.
 - Do not import or call `taskledger.storage.*`, `taskledger.services.*`, or `taskledger.domain.*` from ad-hoc Python during normal task work. Use CLI commands or public `taskledger.api.*` only.
 - Do not mutate archived tasks; unarchive first (`taskledger task unarchive TASK_ID --reason "..."`) unless the user explicitly requested read-only archived reporting.
-- Do not use repair commands (`repair lock`, `repair run`, `repair task`, `repair index`) in the normal lifecycle. Use them only after `doctor`/`lock show` proves there is stale or corrupted state. (`lock break` is a deprecated alias for `repair lock`.)
 - Do not pass approval escape hatches such as `--allow-empty-criteria`, `--allow-open-questions`, `--allow-empty-todos`, `--no-materialize-todos`, `--allow-lint-errors`, or `--allow-agent-approval` unless the user explicitly requested that bypass and gave a reason. All escape hatches require `--reason`.
+
+## Core agent command path
+
+Use this path first for routine work:
+
+```text
+actor whoami
+task active | task show | task create | task activate | task follow-up
+next-action | context | can
+plan start -> plan template -> plan upsert -> plan lint -> plan accept
+question add | question add-many | question answer | question answer-many | question status | question answers
+todo next | todo show | todo done | todo status
+implement start | implement resume | implement change | implement scan-changes | implement finish
+validate start | validate status | validate check | validate finish
+review record
+handoff create | handoff show | handoff claim | handoff close
+```
+
+Treat release, storage movement, branch-ledger changes, repair/migration,
+network sync wrappers, sync hooks, and source search helpers as advanced,
+human-oriented, repair, or beta support commands rather than normal lifecycle
+steps.
 
 ## Fresh context entry protocol
 
@@ -215,6 +236,10 @@ Rules for agents:
 | LLM/agent compiled export | `task export`                                       |
 | Fresh worker context      | `context` or durable `handoff show`                 |
 | Command audit             | `task transcript`                                   |
+
+`task dossier`, root `view`, and legacy `handoff *-context` renderers remain
+advanced/compatibility read surfaces. Prefer `context --for ...` and
+`handoff show` for new agent protocols.
 
 ## Validation protocol
 
