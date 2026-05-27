@@ -178,7 +178,7 @@ def _collect_raw_bundle_files(
                 rel = fp.relative_to(bundle_dir)
             except ValueError:
                 continue
-            raw_files.append((str(rel), fp))
+            raw_files.append((rel.as_posix(), fp))
 
     for rel_path, fp in raw_files:
         try:
@@ -287,7 +287,7 @@ def _collect_source_snapshots(
             continue
         try:
             rel = resolved.relative_to(workspace_root)
-            display = str(rel)
+            display = rel.as_posix()
         except ValueError:
             display = str(resolved)
         included.append(display)
