@@ -44,7 +44,7 @@ The broader command surface is organized as:
 
 **Context and decision-making:**
 
-- `intro`, `file`, `link`, `require`, `handoff`
+- `intro`, `file`, `link`, `require`, `handoff`, `config`
 
 **Operations and advanced overlays:**
 
@@ -113,6 +113,15 @@ taskledger --json plan guidance
 This guidance is advisory and cannot override lifecycle gates, user approval,
 validation requirements, lock rules, or higher-priority harness instructions.
 See `docs/usage.rst` for the full key reference and workflow details.
+
+Quick config inspection/edit examples:
+
+```bash
+taskledger config list
+taskledger config get prompt_profiles.planning.max_required_questions
+taskledger config set prompt_profiles.planning.max_required_questions 3
+taskledger config set prompt_profiles.planning.question_policy always_before_plan
+```
 
 ## Optional worker pipelines
 

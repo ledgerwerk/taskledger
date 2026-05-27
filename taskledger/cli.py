@@ -46,6 +46,7 @@ from taskledger.cli_common import (
     resolve_cli_task,
     resolve_workspace_root,
 )
+from taskledger.cli_config import register_config_commands
 from taskledger.cli_implement import register_implement_v2_commands
 from taskledger.cli_ledger import ledger_app
 from taskledger.cli_migrate import migrate_app
@@ -125,6 +126,10 @@ pipeline_app = typer.Typer(
     help="Inspect optional worker pipeline overlays.",
 )
 review_app = typer.Typer(add_completion=False, help="Record code review evidence.")
+config_app = typer.Typer(
+    add_completion=False,
+    help="Inspect and update project configuration.",
+)
 
 app.add_typer(task_app, name="task")
 app.add_typer(plan_app, name="plan")
@@ -150,6 +155,7 @@ app.add_typer(ledger_app, name="ledger")
 app.add_typer(report_app, name="report")
 app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(review_app, name="review")
+app.add_typer(config_app, name="config")
 
 register_task_v2_commands(task_app)
 register_plan_v2_commands(plan_app)
@@ -168,6 +174,7 @@ register_sync_commands(sync_app)
 register_report_commands(report_app)
 register_pipeline_commands(pipeline_app)
 register_review_commands(review_app)
+register_config_commands(config_app)
 
 
 def _optional_group_failure(

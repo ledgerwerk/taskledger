@@ -33,6 +33,7 @@ Use this path first for routine work:
 actor whoami
 task active | task show | task create | task activate | task follow-up
 next-action | context | can
+config list | config get | config set
 plan start -> plan template -> plan upsert -> plan lint -> plan accept
 question add | question add-many | question answer | question answer-many | question status | question answers
 todo next | todo show | todo done | todo status

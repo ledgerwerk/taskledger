@@ -10,7 +10,7 @@ Public surface
 Supported CLI entries
 ---------------------
 
-The command inventory tracks 41 top-level CLI entries. Some are groups and some
+The command inventory tracks 42 top-level CLI entries. Some are groups and some
 are root commands. The normal agent path is intentionally smaller than the full
 registered surface.
 
@@ -43,7 +43,7 @@ Top-level entry categories
 
 **Support entries** — auxiliary operations:
 
-- ``intro``, ``file``, ``link``, ``require``, ``lock``, ``actor``, ``harness``
+- ``intro``, ``file``, ``link``, ``require``, ``lock``, ``config``, ``actor``, ``harness``
 - ``export``, ``import``, ``snapshot``, ``pipeline``, ``can``, ``report``, ``commands``
 
 **Advanced entries** — power-user, storage, transfer, and project operations:

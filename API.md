@@ -298,6 +298,7 @@ The public task-first CLI surface is organized around these command groups:
 - `lock`
 - `storage`
 - `sync`
+- `config`
 - `context`
 - `handoff`
 - `repair`

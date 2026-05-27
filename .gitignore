@@ -216,6 +216,7 @@ context_taskledger.index.json
 workspace/
 .taskledger/
 .pi-lens/
+.code/
 todo.md
 uv.lock
 /plan.md

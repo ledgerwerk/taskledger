@@ -109,6 +109,7 @@ VALID_QUESTION_POLICY_VALUES = frozenset(
 VALID_TODO_GRANULARITY_VALUES = frozenset({"minimal", "implementation_steps", "atomic"})
 VALID_PLAN_BODY_DETAIL_VALUES = frozenset({"terse", "normal", "detailed"})
 MAX_EXTRA_GUIDANCE_CHARS = 4000
+CONFIG_KEY_SEGMENT_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 PROMPT_PROFILE_KEYS = frozenset(
     {
         "profile",
@@ -370,6 +371,40 @@ def update_taskledger_dir(config_path: Path, taskledger_dir: str) -> None:
     atomic_write_text(config_path, updated_text)
 
 
+def get_project_config_value(config_path: Path, dotted_key: str) -> object:
+    document = load_project_config_document(config_path)
+    segments = _parse_project_config_key_path(dotted_key)
+    return _read_project_config_path(document, segments)
+
+
+def set_project_config_value(config_path: Path, dotted_key: str, value: object) -> None:
+    if not config_path.exists():
+        raise LaunchError(f"Project config does not exist: {config_path}")
+    try:
+        current_text = config_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise LaunchError(f"Failed to read {config_path}: {exc}") from exc
+
+    existing_document = (
+        load_project_config_document(config_path) if current_text else {}
+    )
+    segments = _parse_project_config_key_path(dotted_key)
+    _ensure_mutable_project_config_key_path(segments)
+    updated_document = _copy_project_config_document(existing_document)
+    _set_project_config_path(updated_document, segments, value)
+    _validate_project_config_overrides(updated_document, config_path)
+
+    updated_text = _apply_project_config_value_patch(
+        current_text,
+        key_path=segments,
+        value=value,
+    )
+    from taskledger.storage.atomic import atomic_write_text
+
+    atomic_write_text(config_path, updated_text)
+    load_project_config_document(config_path)
+
+
 def load_project_config_overrides(paths: ProjectPaths) -> dict[str, object]:
     data = load_project_config_document(paths.config_path)
     return {key: value for key, value in data.items() if key in WORKFLOW_CONFIG_KEYS}
@@ -410,6 +445,254 @@ def _apply_taskledger_dir_patch(text: str, taskledger_dir: str) -> str:
             break
     new_lines.insert(insert_at, f"taskledger_dir = {rendered}")
     return _join_lines(new_lines)
+
+
+def _parse_project_config_key_path(dotted_key: str) -> tuple[str, ...]:
+    normalized = dotted_key.strip()
+    if not normalized:
+        raise LaunchError("Config key cannot be empty.")
+    segments = tuple(segment.strip() for segment in normalized.split("."))
+    if not all(segments):
+        raise LaunchError(f"Invalid config key path: {dotted_key!r}")
+    invalid = [
+        segment
+        for segment in segments
+        if not CONFIG_KEY_SEGMENT_PATTERN.fullmatch(segment)
+    ]
+    if invalid:
+        raise LaunchError(
+            "Config key segments may only contain letters, digits, '_', or '-'."
+        )
+    return segments
+
+
+def _ensure_mutable_project_config_key_path(path: tuple[str, ...]) -> None:
+    top_level_key = path[0]
+    reserved_keys = (
+        LOCATION_CONFIG_KEYS
+        | IDENTITY_CONFIG_KEYS
+        | PROJECT_METADATA_CONFIG_KEYS
+        | LEDGER_CONFIG_KEYS
+    )
+    if top_level_key not in reserved_keys:
+        return
+
+    key_path = ".".join(path)
+    if top_level_key == "taskledger_dir":
+        raise LaunchError(
+            "config set cannot edit taskledger_dir. Use `taskledger storage move`.",
+        )
+    if top_level_key in LEDGER_CONFIG_KEYS:
+        raise LaunchError(
+            "config set cannot edit ledger_* keys directly. "
+            "Use `taskledger ledger` commands.",
+        )
+    raise LaunchError(
+        f"config set cannot edit reserved project key: {key_path}",
+    )
+
+
+def _copy_project_config_document(document: dict[str, object]) -> dict[str, object]:
+    copied: dict[str, object] = {}
+    for key, value in document.items():
+        copied[key] = _copy_project_config_value(value)
+    return copied
+
+
+def _copy_project_config_value(value: object) -> object:
+    if isinstance(value, dict):
+        copied: dict[str, object] = {}
+        for key, nested in value.items():
+            if isinstance(key, str):
+                copied[key] = _copy_project_config_value(nested)
+        return copied
+    if isinstance(value, list):
+        return [_copy_project_config_value(item) for item in value]
+    return value
+
+
+def _read_project_config_path(
+    document: dict[str, object],
+    path: tuple[str, ...],
+) -> object:
+    current: object = document
+    traversed: list[str] = []
+    for segment in path:
+        traversed.append(segment)
+        if not isinstance(current, dict):
+            joined = ".".join(traversed[:-1])
+            raise LaunchError(f"Config key path is not a table: {joined}")
+        if segment not in current:
+            raise LaunchError(f"Config key not found: {'.'.join(path)}")
+        current = current[segment]
+    return current
+
+
+def _set_project_config_path(
+    document: dict[str, object],
+    path: tuple[str, ...],
+    value: object,
+) -> None:
+    current: dict[str, object] = document
+    traversed: list[str] = []
+    for segment in path[:-1]:
+        traversed.append(segment)
+        nested = current.get(segment)
+        if nested is None:
+            next_nested: dict[str, object] = {}
+            current[segment] = next_nested
+            current = next_nested
+            continue
+        if not isinstance(nested, dict):
+            raise LaunchError(f"Config key path is not a table: {'.'.join(traversed)}")
+        current = nested
+    current[path[-1]] = value
+
+
+def _apply_project_config_value_patch(
+    text: str,
+    *,
+    key_path: tuple[str, ...],
+    value: object,
+) -> str:
+    section = key_path[:-1]
+    key = key_path[-1]
+    value_text = _render_toml_value(value)
+    assignment = f"{_render_toml_key_segment(key)} = {value_text}"
+
+    lines = text.split("\n") if text else []
+    if not lines:
+        if section:
+            return _join_lines([f"[{_render_toml_section_path(section)}]", assignment])
+        return _join_lines([assignment])
+
+    current_section: tuple[str, ...] = ()
+    target_section_found = not section
+    replaced = False
+    section_end_idx: int | None = None
+    first_header_idx: int | None = None
+
+    for idx, line in enumerate(lines):
+        parsed = _parse_toml_table_header(line)
+        if parsed is not None:
+            if first_header_idx is None:
+                first_header_idx = idx
+            if section and current_section == section and section_end_idx is None:
+                section_end_idx = idx
+            current_section = parsed
+            if section and current_section == section:
+                target_section_found = True
+                section_end_idx = None
+            continue
+
+        if current_section == section and _toml_assignment_matches(line, key):
+            lines[idx] = assignment
+            replaced = True
+
+    if section and target_section_found and section_end_idx is None:
+        section_end_idx = len(lines)
+
+    if replaced:
+        return _join_lines(lines)
+
+    if section:
+        if target_section_found:
+            assert section_end_idx is not None
+            lines.insert(section_end_idx, assignment)
+            return _join_lines(lines)
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append(f"[{_render_toml_section_path(section)}]")
+        lines.append(assignment)
+        return _join_lines(lines)
+
+    insert_at = first_header_idx if first_header_idx is not None else len(lines)
+    lines.insert(insert_at, assignment)
+    return _join_lines(lines)
+
+
+def _parse_toml_table_header(line: str) -> tuple[str, ...] | None:
+    stripped = line.lstrip()
+    if not stripped.startswith("["):
+        return None
+    if stripped.startswith("[["):
+        return None
+    closing_idx = stripped.find("]")
+    if closing_idx <= 0:
+        return None
+    trailing = stripped[closing_idx + 1 :].strip()
+    if trailing and not trailing.startswith("#"):
+        return None
+    inner = stripped[1:closing_idx].strip()
+    if not inner:
+        return None
+    parts = [part.strip() for part in inner.split(".")]
+    segments: list[str] = []
+    for part in parts:
+        if not part:
+            return None
+        if len(part) >= 2 and (
+            (part.startswith('"') and part.endswith('"'))
+            or (part.startswith("'") and part.endswith("'"))
+        ):
+            segments.append(part[1:-1])
+        else:
+            segments.append(part)
+    return tuple(segments)
+
+
+def _toml_assignment_matches(line: str, key: str) -> bool:
+    stripped = line.strip()
+    if _is_toml_key_line(stripped, key):
+        return True
+    quoted = f'"{key}"'
+    return _is_toml_key_line(stripped, quoted)
+
+
+def _render_toml_section_path(path: tuple[str, ...]) -> str:
+    return ".".join(_render_toml_key_segment(segment) for segment in path)
+
+
+def _render_toml_key_segment(segment: str) -> str:
+    if CONFIG_KEY_SEGMENT_PATTERN.fullmatch(segment):
+        return segment
+    escaped = segment.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _render_toml_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, str):
+        escaped = (
+            value.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\n", "\\n")
+            .replace("\t", "\\t")
+        )
+        return f'"{escaped}"'
+    if isinstance(value, list):
+        rendered = ", ".join(_render_toml_value(item) for item in value)
+        return f"[{rendered}]"
+    if isinstance(value, tuple):
+        rendered = ", ".join(_render_toml_value(item) for item in value)
+        return f"[{rendered}]"
+    if isinstance(value, dict):
+        parts: list[str] = []
+        for key, nested in value.items():
+            if not isinstance(key, str):
+                raise LaunchError("Config table keys must be strings.")
+            parts.append(
+                f"{_render_toml_key_segment(key)} = {_render_toml_value(nested)}"
+            )
+        return "{ " + ", ".join(parts) + " }"
+    raise LaunchError(
+        "Config values must be TOML-compatible scalars, arrays, or inline tables."
+    )
 
 
 def load_project_config_document(path: Path) -> dict[str, object]:

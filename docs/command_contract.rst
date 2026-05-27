@@ -263,6 +263,28 @@ Rules:
   ``export``/``import`` commands.
 * ``sync git`` commands operate on a private external Git repository that stores
   full project taskledger state under ``<repo>/<project_path>``.
+
+Config commands
+---------------
+
+Project config inspection and edits are available under ``config``:
+
+.. code-block:: bash
+
+   taskledger config list
+   taskledger config show
+   taskledger config get prompt_profiles.planning.max_required_questions
+   taskledger config set prompt_profiles.planning.max_required_questions 3
+   taskledger config set prompt_profiles.planning.question_policy always_before_plan
+
+Rules:
+
+* dotted keys target nested TOML tables (for example
+  ``prompt_profiles.planning.max_required_questions``);
+* ``config set`` accepts TOML literals (numbers, booleans, arrays, inline
+  tables); when TOML parsing fails, the value is treated as a plain string;
+* invalid values are rejected using standard LaunchError JSON/human envelopes.
+
 ``next-action`` result contract
 -------------------------------
 
