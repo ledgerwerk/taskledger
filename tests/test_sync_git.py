@@ -396,6 +396,7 @@ def test_sync_git_pull_runs_git_pull_without_manual_cd(tmp_path: Path) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
     _git(sync_repo, "remote", "add", "origin", str(remote))
     _git(sync_repo, "push", "-u", "origin", "main")
+    _git(remote, "symbolic-ref", "HEAD", "refs/heads/main")
 
     other = tmp_path / "other-clone"
     _git(tmp_path, "clone", str(remote), str(other))
