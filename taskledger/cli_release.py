@@ -21,6 +21,9 @@ from taskledger.cli_common import (
     write_text_output,
 )
 from taskledger.errors import LaunchError
+from taskledger.services.releases import (
+    _normalize_included_statuses,
+)
 
 
 def register_release_commands(app: typer.Typer) -> None:
@@ -105,12 +108,24 @@ def register_release_commands(app: typer.Typer) -> None:
         version: Annotated[str, typer.Argument(..., help="Target release version.")],
         since_version: Annotated[str | None, typer.Option("--since")] = None,
         since_task: Annotated[str | None, typer.Option("--since-task")] = None,
+        from_task: Annotated[str | None, typer.Option("--from-task")] = None,
         until_task: Annotated[str | None, typer.Option("--until-task")] = None,
         format_name: Annotated[str, typer.Option("--format")] = "markdown",
         output: Annotated[Path | None, typer.Option("--output")] = None,
+        include_status: Annotated[
+            list[str] | None, typer.Option("--include-status")
+        ] = None,
+        fail_on_omitted: Annotated[bool, typer.Option("--fail-on-omitted")] = False,
+        target_changelog: Annotated[
+            str | None, typer.Option("--target-changelog")
+        ] = None,
+        release_date: Annotated[str | None, typer.Option("--release-date")] = None,
     ) -> None:
         state = cli_state_from_context(ctx)
         try:
+            normalized_statuses = _normalize_included_statuses(
+                tuple(include_status) if include_status is not None else None
+            )
             if state.json_output:
                 payload = cast(
                     dict[str, object],
@@ -119,8 +134,13 @@ def register_release_commands(app: typer.Typer) -> None:
                         version=version,
                         since_version=since_version,
                         since_task=since_task,
+                        from_task=from_task,
                         until_task=until_task,
                         format_name="json",
+                        include_statuses=normalized_statuses,
+                        fail_on_omitted=fail_on_omitted,
+                        target_changelog=target_changelog,
+                        release_date=release_date,
                     ),
                 )
                 if output is not None:
@@ -129,8 +149,13 @@ def register_release_commands(app: typer.Typer) -> None:
                         version=version,
                         since_version=since_version,
                         since_task=since_task,
+                        from_task=from_task,
                         until_task=until_task,
                         format_name=format_name,
+                        include_statuses=normalized_statuses,
+                        fail_on_omitted=fail_on_omitted,
+                        target_changelog=target_changelog,
+                        release_date=release_date,
                     )
                     output_text = (
                         rendered_output
@@ -146,8 +171,13 @@ def register_release_commands(app: typer.Typer) -> None:
                 version=version,
                 since_version=since_version,
                 since_task=since_task,
+                from_task=from_task,
                 until_task=until_task,
                 format_name=format_name,
+                include_statuses=normalized_statuses,
+                fail_on_omitted=fail_on_omitted,
+                target_changelog=target_changelog,
+                release_date=release_date,
             )
             output_text = (
                 rendered if isinstance(rendered, str) else render_json(rendered)

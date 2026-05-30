@@ -119,6 +119,10 @@ def test_skill_contains_strict_agent_protocol() -> None:
     assert "taskledger question add-many" in skill
     assert "taskledger plan guidance" in skill
     assert "Treat it as advisory" in skill
+    assert "taskledger --json task show task-0022" in skill
+    assert "task dossier" in skill
+    assert "Do not invent a release date" in skill
+    assert "Do not silently include omitted tasks" in skill
 
 
 def test_docs_define_agent_golden_path_and_advanced_surfaces() -> None:

@@ -16,6 +16,8 @@ from taskledger.errors import LaunchError
 from taskledger.services.actors import resolve_actor, resolve_harness
 from taskledger.storage.events import append_event, next_event_id
 from taskledger.storage.indexes import rebuild_v2_indexes
+from taskledger.storage.paths import load_project_locator
+from taskledger.storage.project_identity import project_name_or_default
 from taskledger.storage.task_store import (
     list_changes,
     list_plans,
@@ -29,6 +31,20 @@ from taskledger.storage.task_store import (
     save_release,
 )
 from taskledger.timeutils import utc_now_iso
+
+DEFAULT_CHANGELOG_STATUSES: tuple[str, ...] = ("done",)
+ALLOWED_CHANGELOG_STATUSES: frozenset[str] = frozenset(
+    {
+        "draft",
+        "planned",
+        "implementing",
+        "implemented",
+        "validating",
+        "failed_validation",
+        "done",
+        "cancelled",
+    }
+)
 
 
 def tag_release(
@@ -117,16 +133,29 @@ def build_changelog_context(
     version: str,
     since_version: str | None = None,
     since_task: str | None = None,
+    from_task: str | None = None,
     until_task: str | None = None,
     format_name: str = "markdown",
+    include_statuses: tuple[str, ...] = DEFAULT_CHANGELOG_STATUSES,
+    fail_on_omitted: bool = False,
+    target_changelog: str | None = None,
+    release_date: str | None = None,
 ) -> str | dict[str, object]:
-    if bool(since_version) == bool(since_task):
-        raise LaunchError("Provide exactly one of --since or --since-task.")
+    selectors = [
+        since_version is not None,
+        since_task is not None,
+        from_task is not None,
+    ]
+    if sum(selectors) != 1:
+        raise LaunchError(
+            "Provide exactly one of --since, --since-task, or --from-task."
+        )
 
-    lower_boundary, resolved_since_version = _resolve_lower_boundary(
+    lower_boundary, resolved_since_version, range_mode = _resolve_lower_boundary(
         workspace_root,
         since_version=since_version,
         since_task=since_task,
+        from_task=from_task,
     )
     upper_boundary = _resolve_upper_boundary(
         workspace_root,
@@ -137,19 +166,48 @@ def build_changelog_context(
         workspace_root,
         lower_boundary_task_id=lower_boundary.id,
         upper_boundary_task_id=upper_boundary.id,
+        include_statuses=include_statuses,
+        range_mode=range_mode,
     )
+    if fail_on_omitted and omitted:
+        task_ids = [str(item["task_id"]) for item in omitted]
+        task_list = ", ".join(task_ids)
+        raise LaunchError(
+            f"Omitted tasks found in range: {task_list}. "
+            f"Use --include-status to expand statuses or complete/validate these tasks."
+        )
+
+    warnings: list[str] = []
+    non_done_included = any(task.get("status_stage") != "done" for task in included)
+    if non_done_included:
+        warnings.append(
+            "This changelog context includes non-done tasks "
+            "and is suitable only for draft release notes."
+        )
+
+    project_name = _project_name(workspace_root)
     payload: dict[str, object] = {
         "kind": "release_changelog_context",
         "version": version,
+        "project_name": project_name,
         "ledger_ref": resolve_v2_paths(workspace_root).ledger_ref,
         "since_version": resolved_since_version,
         "since_task_id": lower_boundary.id,
         "until_task_id": upper_boundary.id,
+        "range_mode": range_mode,
+        "included_statuses": list(include_statuses),
         "task_count": len(included),
         "omitted_task_count": len(omitted),
         "tasks": included,
         "omitted_tasks": omitted,
+        "warnings": warnings,
     }
+    if from_task is not None:
+        payload["from_task_id"] = from_task
+    if target_changelog is not None:
+        payload["target_changelog"] = target_changelog
+    if release_date is not None:
+        payload["release_date"] = release_date
     if format_name == "json":
         return payload
     if format_name != "markdown":
@@ -188,19 +246,23 @@ def _resolve_lower_boundary(
     *,
     since_version: str | None,
     since_task: str | None,
-) -> tuple[TaskRecord, str | None]:
+    from_task: str | None,
+) -> tuple[TaskRecord, str | None, str]:
     if since_version is not None:
         release = resolve_release(workspace_root, since_version)
         task = resolve_task(workspace_root, release.boundary_task_id)
-        return task, release.version
-    assert since_task is not None
-    task = resolve_task(workspace_root, since_task)
-    if task.status_stage != "done":
-        raise LaunchError(
-            f"Bootstrap release boundary must point to a done task: {task.id} is "
-            f"{task.status_stage}."
-        )
-    return task, None
+        return task, release.version, "since_version"
+    if since_task is not None:
+        task = resolve_task(workspace_root, since_task)
+        if task.status_stage != "done":
+            raise LaunchError(
+                f"Bootstrap release boundary must point to a done task: {task.id} is "
+                f"{task.status_stage}."
+            )
+        return task, None, "since_task"
+    assert from_task is not None
+    task = resolve_task(workspace_root, from_task)
+    return task, None, "inclusive_task_range"
 
 
 def _resolve_upper_boundary(
@@ -232,19 +294,27 @@ def _collect_range_tasks(
     *,
     lower_boundary_task_id: str,
     upper_boundary_task_id: str,
+    include_statuses: tuple[str, ...],
+    range_mode: str,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     lower_number = _task_number(lower_boundary_task_id)
     upper_number = _task_number(upper_boundary_task_id)
+
+    def _in_range(n: int) -> bool:
+        if range_mode == "inclusive_task_range":
+            return lower_number <= n <= upper_number
+        return lower_number < n <= upper_number
+
     in_range = [
-        task
-        for task in list_tasks(workspace_root)
-        if lower_number < _task_number(task.id) <= upper_number
+        task for task in list_tasks(workspace_root) if _in_range(_task_number(task.id))
     ]
-    included = [
-        _task_context_payload(workspace_root, task)
-        for task in in_range
-        if task.status_stage == "done"
-    ]
+    included = []
+    for task in in_range:
+        if task.status_stage in include_statuses:
+            payload = _task_context_payload(workspace_root, task)
+            if task.status_stage != "done":
+                payload["release_readiness"] = "draft_only"
+            included.append(payload)
     omitted: list[dict[str, object]] = [
         {
             "task_id": task.id,
@@ -254,7 +324,7 @@ def _collect_range_tasks(
             "reason": f"omitted because status is `{task.status_stage}`",
         }
         for task in in_range
-        if task.status_stage != "done"
+        if task.status_stage not in include_statuses
     ]
     return included, omitted
 
@@ -378,17 +448,27 @@ def _task_summary_text(
     return _summary_line(task.body)
 
 
+def _project_name(workspace_root: Path) -> str:
+    locator = load_project_locator(workspace_root)
+    return project_name_or_default(
+        locator.config_path,
+        workspace_root=locator.workspace_root,
+    )
+
+
 def _render_markdown(payload: dict[str, object]) -> str:
     version = str(payload["version"])
+    project_name = str(payload.get("project_name") or "project")
     since_version = payload.get("since_version")
     since_task_id = str(payload["since_task_id"])
     until_task_id = str(payload["until_task_id"])
+    range_mode = str(payload.get("range_mode", "since_task"))
     lines = [
-        f"# Changelog source for taskledger {version}",
+        f"# Changelog source for {project_name} {version}",
         "",
         "## LLM instruction",
         "",
-        f"Write a concise human changelog for taskledger version {version}.",
+        f"Write a concise human changelog for {project_name} version {version}.",
         "Use only the taskledger data below. Do not invent changes.",
         (
             "Group entries under headings such as Added, Changed, Fixed, "
@@ -402,22 +482,63 @@ def _render_markdown(payload: dict[str, object]) -> str:
         "## Release range",
         "",
         f"- Version being prepared: {version}",
+        f"- Project: {project_name}",
     ]
     if since_version is not None:
         lines.append(f"- Previous release: {since_version}")
     else:
         lines.append("- Previous release: bootstrap via --since-task")
+    lines.append(f"- Range mode: {range_mode}")
+    if range_mode == "inclusive_task_range":
+        from_task_id = payload.get("from_task_id")
+        if from_task_id is not None:
+            lines.append(f"- Included from: {from_task_id}")
     lines.extend(
         [
             f"- Previous release boundary: {since_task_id}",
             f"- Included through: {until_task_id}",
-            f"- Included done tasks: {payload['task_count']}",
-            f"- Omitted tasks in range: {payload['omitted_task_count']}",
-            "",
-            "## Candidate changes",
-            "",
         ]
     )
+    included_statuses = payload.get("included_statuses")
+    if isinstance(included_statuses, list):
+        status_text = ", ".join(str(s) for s in included_statuses)
+        lines.append(f"- Included statuses: {status_text}")
+    lines.extend(
+        [
+            f"- Included done tasks: {payload['task_count']}",
+            f"- Omitted tasks in range: {payload['omitted_task_count']}",
+        ]
+    )
+    warnings = payload.get("warnings")
+    if isinstance(warnings, list) and warnings:
+        lines.append("")
+        lines.append("- Warnings:")
+        for warning in warnings:
+            lines.append(f"  - {warning}")
+
+    target_changelog = payload.get("target_changelog")
+    release_date = payload.get("release_date")
+    if target_changelog is not None or release_date is not None:
+        lines.append("")
+        lines.append("## Changelog edit guidance")
+        lines.append("")
+        if target_changelog is not None:
+            lines.append(f"- Target changelog: {target_changelog}")
+            lines.append(
+                "- Insert the final section below"
+                " `## Unreleased` and above the previous release."
+            )
+            lines.append("- Preserve existing release history.")
+        if release_date is not None:
+            lines.append(f"- Use release date: {release_date}")
+        else:
+            lines.append(
+                "- No release date was provided; do not invent a release date."
+            )
+
+    lines.append("")
+    lines.append("## Candidate changes")
+    lines.append("")
     tasks = payload.get("tasks")
     if not isinstance(tasks, list) or not tasks:
         lines.append("(none)")
@@ -442,6 +563,9 @@ def _render_markdown(payload: dict[str, object]) -> str:
 def _render_markdown_task(task: dict[str, object]) -> list[str]:
     lines = [f"### {task['task_id']} — {task['title']}", ""]
     lines.append(f"- Status: {task['status_stage']}")
+    release_readiness = task.get("release_readiness")
+    if isinstance(release_readiness, str) and release_readiness == "draft_only":
+        lines.append("- Release readiness: draft only; task is not done.")
     task_type = task.get("task_type")
     if isinstance(task_type, str) and task_type == "recorded":
         lines.append(f"- Type: {task_type}")
@@ -566,6 +690,18 @@ def _first_text(values: tuple[str, ...]) -> str | None:
         if value.strip():
             return value
     return None
+
+
+def _normalize_included_statuses(
+    values: tuple[str, ...] | None,
+) -> tuple[str, ...]:
+    statuses = tuple(values or DEFAULT_CHANGELOG_STATUSES)
+    unknown = sorted(set(statuses) - ALLOWED_CHANGELOG_STATUSES)
+    if unknown:
+        raise LaunchError(
+            f"Unsupported --include-status value(s): {', '.join(unknown)}"
+        )
+    return statuses
 
 
 __all__ = [

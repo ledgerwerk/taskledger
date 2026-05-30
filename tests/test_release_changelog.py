@@ -360,7 +360,9 @@ def test_release_changelog_markdown_includes_instruction_and_evidence(
         ],
     )
     assert result.exit_code == 0, result.stdout
-    assert "# Changelog source for taskledger 0.4.2" in result.stdout
+    assert f"# Changelog source for {tmp_path.name} 0.4.2" in result.stdout
+    expected_line = f"Write a concise human changelog for {tmp_path.name} version 0.4.2"
+    assert expected_line in result.stdout
     assert "## LLM instruction" in result.stdout
     assert "Improve dashboard refresh stability" in result.stdout
     assert "Implementation summary:" in result.stdout
@@ -401,3 +403,282 @@ def test_release_changelog_supports_bootstrap_since_task(tmp_path: Path) -> None
     assert payload["since_version"] is None
     assert payload["since_task_id"] == boundary
     assert payload["tasks"][0]["task_id"] == included
+
+
+def test_release_changelog_markdown_uses_project_name(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    boundary = _create_done_task(
+        tmp_path, title="Release boundary", slug="release-boundary"
+    )
+    included = _create_done_task(
+        tmp_path,
+        title="Improve dashboard refresh stability",
+        slug="dashboard-refresh-stability",
+        labels=("ui", "serve"),
+    )
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "release", "tag", "0.4.1", "--at-task", boundary],
+        ).exit_code
+        == 0
+    )
+
+    result = _json(
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(tmp_path),
+                "--json",
+                "release",
+                "changelog",
+                "0.4.2",
+                "--since",
+                "0.4.1",
+                "--until-task",
+                included,
+            ],
+        )
+    )
+    payload = result["result"]
+    assert payload["project_name"] == tmp_path.name
+
+
+def test_release_changelog_from_task_is_inclusive(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    first = _create_done_task(tmp_path, title="First task", slug="first-task")
+    second = _create_done_task(tmp_path, title="Second task", slug="second-task")
+
+    result = _json(
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(tmp_path),
+                "--json",
+                "release",
+                "changelog",
+                "0.4.2",
+                "--from-task",
+                first,
+                "--until-task",
+                second,
+            ],
+        )
+    )
+    payload = result["result"]
+    assert payload["range_mode"] == "inclusive_task_range"
+    assert payload["from_task_id"] == first
+    task_ids = [task["task_id"] for task in payload["tasks"]]
+    assert first in task_ids
+    assert second in task_ids
+
+
+def test_release_changelog_from_task_rejects_multiple_selectors(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "release",
+            "changelog",
+            "0.4.2",
+            "--since",
+            "0.4.1",
+            "--from-task",
+            "task-0001",
+        ],
+    )
+    assert result.exit_code != 0
+
+
+def test_release_changelog_fail_on_omitted(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    boundary = _create_done_task(
+        tmp_path, title="Release boundary", slug="release-boundary"
+    )
+    _create_done_task(tmp_path, title="Done task", slug="done-task")
+    failed = _create_failed_validation_task(
+        tmp_path, title="Failed task", slug="failed-task"
+    )
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "release", "tag", "0.4.1", "--at-task", boundary],
+        ).exit_code
+        == 0
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "release",
+            "changelog",
+            "0.4.2",
+            "--since",
+            "0.4.1",
+            "--until-task",
+            failed,
+            "--fail-on-omitted",
+        ],
+    )
+    assert result.exit_code != 0
+    omitted_text = (
+        result.stdout if "Omitted tasks found" in result.stdout else result.stderr
+    )
+    assert "Omitted tasks found" in omitted_text
+
+
+def test_release_changelog_include_status_implemented(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    boundary = _create_done_task(
+        tmp_path, title="Release boundary", slug="release-boundary"
+    )
+    _create_done_task(tmp_path, title="Done task", slug="done-task")
+    failed = _create_failed_validation_task(
+        tmp_path, title="Failed task", slug="failed-task"
+    )
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "release", "tag", "0.4.1", "--at-task", boundary],
+        ).exit_code
+        == 0
+    )
+
+    result = _json(
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(tmp_path),
+                "--json",
+                "release",
+                "changelog",
+                "0.4.2",
+                "--since",
+                "0.4.1",
+                "--until-task",
+                failed,
+                "--include-status",
+                "done",
+                "--include-status",
+                "failed_validation",
+            ],
+        )
+    )
+    payload = result["result"]
+    assert "failed_validation" in payload["included_statuses"]
+    task_ids = [task["task_id"] for task in payload["tasks"]]
+    assert failed in task_ids
+    assert payload["warnings"]
+
+
+def test_release_changelog_target_changelog_and_release_date(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    boundary = _create_done_task(
+        tmp_path, title="Release boundary", slug="release-boundary"
+    )
+    included = _create_done_task(
+        tmp_path,
+        title="Improve dashboard refresh stability",
+        slug="dashboard-refresh-stability",
+    )
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "release", "tag", "0.4.1", "--at-task", boundary],
+        ).exit_code
+        == 0
+    )
+
+    # Test with target changelog and release date in json mode
+    result = _json(
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(tmp_path),
+                "--json",
+                "release",
+                "changelog",
+                "0.4.2",
+                "--since",
+                "0.4.1",
+                "--until-task",
+                included,
+                "--target-changelog",
+                "CHANGELOG.md",
+                "--release-date",
+                "2026-05-30",
+            ],
+        )
+    )
+    payload = result["result"]
+    assert payload["target_changelog"] == "CHANGELOG.md"
+    assert payload["release_date"] == "2026-05-30"
+
+    # Test markdown output includes guidance
+    md_result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "release",
+            "changelog",
+            "0.4.2",
+            "--since",
+            "0.4.1",
+            "--until-task",
+            included,
+            "--target-changelog",
+            "CHANGELOG.md",
+            "--release-date",
+            "2026-05-30",
+        ],
+    )
+    assert md_result.exit_code == 0
+    assert "## Changelog edit guidance" in md_result.stdout
+    assert "Target changelog: CHANGELOG.md" in md_result.stdout
+    assert "Use release date: 2026-05-30" in md_result.stdout
+
+    # Test without release date says not to invent one
+    md_result2 = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "release",
+            "changelog",
+            "0.4.2",
+            "--since",
+            "0.4.1",
+            "--until-task",
+            included,
+        ],
+    )
+    assert md_result2.exit_code == 0
+    assert "## Changelog edit guidance" not in md_result2.stdout
+
+
+def test_release_changelog_include_status_rejects_unknown(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "release",
+            "changelog",
+            "0.4.2",
+            "--since",
+            "0.4.1",
+            "--include-status",
+            "not_a_status",
+        ],
+    )
+    assert result.exit_code != 0
