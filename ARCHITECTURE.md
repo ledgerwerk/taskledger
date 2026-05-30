@@ -1,7 +1,7 @@
 ---
 title: "Architecture Documentation"
-date: "2026-05-25"
-generator: "archledger 0.1.1.dev9+gd859d2276"
+date: "1980-01-01"
+generator: "archledger 0.1.1.dev13+g9edca5498"
 arc42_template_version: "9.0-EN"
 ---
 
@@ -390,16 +390,12 @@ The runtime view traces the main operational scenarios through the system:
 1. `sync git init` → Moves or copies `.taskledger/` content into a dedicated Git repository, updates `taskledger.toml` with `external_dir`
 2. `sync preflight` → Checks that no active locks would conflict with a sync operation
 3. `sync git commit --message "..."` → Commits current state to the sync repo
-4. `sync git pull` / `sync git push` → Convenience wrappers for repository pull/push from the source workspace
-5. `sync git export-local` / `sync git import-local` → Exchanges state between the sync repo and the project
-6. `sync git status` → Shows working tree status of the sync repo
-7. `sync git path` → Shows resolved paths for the sync repo and project
-8. `cd "$(taskledger sync git cd)"` → Opens a shell in the sync repo directory for advanced manual operations
+4. `sync git export-local` / `sync git import-local` → Exchanges state between the sync repo and the project
+5. `sync git status` → Shows working tree status of the sync repo
+6. `sync git paths` → Shows resolved paths for the sync repo and project
+7. `cd "$(taskledger sync git cd)"` → Opens a shell in the sync repo directory for manual Git operations
 
-**Result**: Taskledger state is stored in a separate Git repository. `sync git pull` and
-`sync git push` provide convenience wrappers for the configured sync repository.
-`sync git cd` remains available for advanced manual inspection and conflict
-resolution.
+**Result**: Taskledger state is stored in a separate Git repository that can be versioned and shared manually. The design intentionally avoids automated push/pull to prevent merge conflicts — users run `git push`/`git pull` directly in the sync repo.
 
 **Key source**: `taskledger/services/git_sync.py`, `taskledger/cli_sync.py`, `taskledger/api/sync.py`.
 
@@ -740,7 +736,7 @@ Known risks and areas of technical debt:
 | Storage scaling with many tasks            | medium   | medium      | Run reindex after bulk changes; consider task archival for completed work.                                 | Each task is a directory with multiple sidecar files. Projects with hundreds of tasks may see slowdowns in list/query operations due to file system scanning. Indexes help but are not always up to date. Mitigation: `reindex` after bulk changes; consider batching for very large projects.                                                                                                                                                                                                                                                                                              |
 | Migration surface between storage versions | medium   | medium      | Doctor checks detect version mismatches; migration checks flag incompatible records.                       | The storage layout has evolved through multiple versions (currently v3). Migration code in `taskledger/storage/migrations.py` adds complexity. Future format changes must maintain backward compatibility or provide migration paths. Mitigation: `doctor` checks detect version mismatches; migration checks in `doctor_checks/migration_checks.py`.                                                                                                                                                                                                                                       |
 | Service boundary erosion                   | medium   | medium      | test_service_boundaries.py whitelist tracks allowed cross-module imports and fails on violations.          | Some service modules (notably `tasks.py` at 3000+ lines) have grown large. The current long-function whitelist includes `taskledger/cli_sync.py::register_sync_commands` (700+ lines) and `taskledger/services/doctor_checks/task_checks.py::scan_task_integrity` (330+ lines). The service layer has no formal interface contracts — boundaries are enforced by convention and the `test_service_boundaries.py` whitelist. Mitigation: The whitelist in `docs/service_boundary_whitelist.rst` tracks allowed cross-module imports and function line budgets; the test fails on violations. |
-| Growing dependency count                   | medium   | medium      | Current set is small (typer, PyYAML, Jinja2, markdown-it-py, tomli); each justified by a specific feature. | Jinja2 is used only for HTML report templates (`task report`, `taskledger serve`). The dependency adds weight for users who only need the CLI. Mitigation: Current dependency set is small (typer, PyYAML, Jinja2, markdown-it-py, tomli); each is justified by a specific feature.                                                                                                                                                                                                                                                                                                         |
+| Growing dependency count                   | medium   | medium      | Current set is small (typer, PyYAML, Jinja2, markdown-it-py, tomli); each justified by a specific feature. | Jinja2 is used only for HTML report templates (`task report`, `taskledger serve`). `markdown-it-py` renders safe Markdown for those HTML views. The dependency set adds weight for users who only need the CLI. Mitigation: Current dependency set is small (typer, PyYAML, Jinja2, markdown-it-py, tomli); each is justified by a specific feature.                                                                                                                                                                                                                                        |
 
 # Glossary
 
