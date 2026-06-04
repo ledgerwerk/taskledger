@@ -2039,3 +2039,183 @@ def test_status_command_without_check_flag_fast(tmp_path: Path) -> None:
     assert payload["result"]["health"]["healthy"] is None
     assert "counts" in payload["result"]
     assert isinstance(payload["result"]["counts"]["tasks"], int)
+
+
+def _json_error(result) -> dict[str, object]:
+    payload = json.loads(result.stdout)
+    assert payload.get("ok") is False
+    return payload
+
+
+def _overwrite_holder_pid(
+    tmp_path: Path, task_id: str, *, pid: int | None, host: str | None = None
+) -> None:
+    """Rewrite the active lock holder fields for diagnostics tests."""
+    import os
+
+    from taskledger.storage.task_store import resolve_v2_paths, task_lock_path
+
+    paths = resolve_v2_paths(tmp_path)
+    lock_path = task_lock_path(paths, task_id)
+    data = yaml.safe_load(lock_path.read_text())
+    if pid is None:
+        data["holder"]["pid"] = None
+    else:
+        data["holder"]["pid"] = pid
+    if host is not None:
+        data["holder"]["host"] = host
+    else:
+        data["holder"]["host"] = os.uname().nodename.split(".")[0]
+    lock_path.write_text(yaml.safe_dump(data, sort_keys=False))
+
+
+def test_lock_show_human_reports_dead_holder_pid_and_next_commands(
+    tmp_path: Path,
+) -> None:
+    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
+    _overwrite_holder_pid(tmp_path, task_id, pid=999999)
+
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "lock", "show", "--task", task_id],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "LOCK task-0001" in result.stdout
+    assert "classification: active_dead_local_process" in result.stdout
+    assert "pid=999999" in result.stdout
+    assert (
+        "taskledger repair lock --task task-0001 --reason "
+        '"Holder PID 999999 is no longer running."'
+    ) in result.stdout
+    assert (
+        "taskledger implement resume --task task-0001 --reason "
+        '"Reacquire implementation lock after stale holder repair."'
+    ) in result.stdout
+    # Storage and lock file paths must be surfaced so agents do not probe.
+    assert "storage:" in result.stdout
+    assert "lock file:" in result.stdout
+
+
+def test_lock_show_json_payload_includes_diagnostics_and_storage_fields(
+    tmp_path: Path,
+) -> None:
+    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
+    _overwrite_holder_pid(tmp_path, task_id, pid=999999)
+
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "--json", "lock", "show", "--task", task_id],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    payload = _json(result)
+    result_data = payload["result"]
+    diagnostics = result_data["diagnostics"]
+    assert diagnostics["classification"] == "active_dead_local_process"
+    assert diagnostics["holder_pid_check"] == "dead"
+    assert "storage_root" in result_data
+    assert "inside_workspace" in result_data
+    assert isinstance(result_data["lock_file"], str)
+
+
+def test_implement_resume_with_active_dead_pid_lock_explains_repair_not_expired_resume(
+    tmp_path: Path,
+) -> None:
+    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
+    _overwrite_holder_pid(tmp_path, task_id, pid=999999)
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "implement",
+            "resume",
+            "--task",
+            task_id,
+            "--repair-expired-lock",
+            "--reason",
+            "Continue after stale holder.",
+        ],
+    )
+
+    assert result.exit_code != 0
+    payload = _json_error(result)
+    error = payload["error"]
+    message = error.get("message", "")
+    assert "non-expired" in message
+    assert "--repair-expired-lock only applies after the lock expires" in message
+    details = error.get("details", {})
+    diagnostics = details.get("diagnostics", {})
+    assert diagnostics.get("classification") == "active_dead_local_process"
+    remediation = error.get("remediation", [])
+    assert any(
+        "taskledger repair lock --task task-0001" in item for item in remediation
+    )
+    assert any(
+        "taskledger implement resume --task task-0001" in item for item in remediation
+    )
+
+
+def test_next_action_dead_pid_lock_routes_to_repair_lock(
+    tmp_path: Path,
+) -> None:
+    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
+    _overwrite_holder_pid(tmp_path, task_id, pid=999999)
+
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "--json", "next-action"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    payload = _json(result)
+    next_action = payload["result"]
+    assert next_action["action"] == "repair-lock"
+    lock_status = next_action["lock_status"]
+    assert lock_status["classification"] == "active_dead_local_process"
+    blockers = next_action["blocking"]
+    lock_blockers = [
+        b for b in blockers if isinstance(b, dict) and b.get("kind") == "lock"
+    ]
+    assert lock_blockers, blockers
+    blocker_diag = lock_blockers[0].get("diagnostics", {})
+    assert blocker_diag.get("classification") == "active_dead_local_process"
+    assert "is no longer running" in lock_blockers[0].get("message", "")
+
+
+def test_next_action_live_lock_keeps_todo_work_with_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A live holder PID must not be routed to repair-lock.
+
+    We simulate a live PID by reusing the current process PID; the default
+    pid checker will report it as alive.
+    """
+    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
+    import os
+
+    _overwrite_holder_pid(tmp_path, task_id, pid=os.getpid())
+
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "--json", "next-action"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    payload = _json(result)
+    next_action = payload["result"]
+    # Live lock on a different actor (no current_actor context here) must
+    # NOT route to repair-lock. todo-work stays as the action.
+    assert next_action["action"] != "repair-lock"
+    assert "lock_status" in next_action
+    classification = next_action["lock_status"]["classification"]
+    assert classification in {
+        "active_other_actor",
+        "active_live_local_process",
+        "active_same_actor",
+    }
+    # No repair-lock command should be the primary next_command.
+    assert "repair lock" not in (next_action.get("next_command") or "")

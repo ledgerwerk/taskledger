@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+from taskledger.domain.actor import ActorRef
 from taskledger.domain.states import EXIT_CODE_MISSING
 from taskledger.errors import LaunchError
 from taskledger.services.task_events import (
@@ -21,15 +22,34 @@ from taskledger.storage.task_store import (
 from taskledger.timeutils import utc_now_iso
 
 
-def show_lock(workspace_root: Path, task_ref: str) -> dict[str, object]:
+def show_lock(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    current_actor: ActorRef | None = None,
+) -> dict[str, object]:
+    from taskledger.services.lock_diagnostics import diagnose_lock
+    from taskledger.services.storage_locations import _is_within
+
     task = resolve_task(workspace_root, task_ref)
     paths = resolve_v2_paths(workspace_root)
-    lock = read_lock(task_lock_path(paths, task.id))
+    lock_path = task_lock_path(paths, task.id)
+    lock = read_lock(lock_path)
+    diagnostics = diagnose_lock(
+        lock,
+        task_id=task.id,
+        current_actor=current_actor,
+    )
+    lock_file_rel = lock_path.relative_to(paths.project_dir).as_posix()
     return {
         "kind": "task_lock",
         "task_id": task.id,
         "lock": lock.to_dict() if lock is not None else None,
         "status": lock_status(lock),
+        "diagnostics": diagnostics.to_dict(),
+        "storage_root": paths.project_dir.as_posix(),
+        "inside_workspace": _is_within(paths.project_dir, workspace_root),
+        "lock_file": lock_file_rel,
     }
 
 
@@ -86,8 +106,19 @@ def break_lock(
 
 
 def list_locks(workspace_root: Path) -> dict[str, object]:
+    from taskledger.services.lock_diagnostics import diagnose_lock
+
     locks = load_active_locks(workspace_root)
+    entries: list[dict[str, object]] = []
+    for lock in locks:
+        entries.append(
+            {
+                **lock.to_dict(),
+                "status": lock_status(lock),
+                "diagnostics": diagnose_lock(lock, task_id=lock.task_id).to_dict(),
+            }
+        )
     return {
         "kind": "task_lock_list",
-        "locks": [{**lock.to_dict(), "status": lock_status(lock)} for lock in locks],
+        "locks": entries,
     }

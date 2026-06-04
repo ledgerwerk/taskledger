@@ -3,8 +3,12 @@ from __future__ import annotations
 import shlex
 from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from taskledger.domain.models import ActorRef, HarnessRef, TaskRecord, TaskRunRecord
+
+if TYPE_CHECKING:
+    from taskledger.domain.lock import TaskLock
 from taskledger.domain.states import IMPLEMENTABLE_TASK_STAGES
 from taskledger.services import command_runner
 from taskledger.services import tasks as _tasks
@@ -17,6 +21,39 @@ from taskledger.storage.task_store import (
     save_task,
 )
 from taskledger.timeutils import utc_now_iso
+
+
+def _active_lock_blocks_resume_error(
+    task_id: str, lock: TaskLock
+) -> _tasks.LaunchError:
+    """Build a diagnostics-aware LaunchError for resume vs non-expired active lock."""
+    from taskledger.domain.lock import TaskLock
+    from taskledger.services.lock_diagnostics import diagnose_lock
+
+    assert isinstance(lock, TaskLock)
+    diagnostics = diagnose_lock(lock, task_id=task_id)
+    holder = lock.holder
+    pid_part = f" pid={holder.pid}" if holder.pid else ""
+    message = (
+        "Implementation resume requires no active lock. "
+        f"Task {task_id} has a non-expired {lock.stage} lock for "
+        f"{lock.run_id} held by {holder.actor_type}:{holder.actor_name}"
+        f"{pid_part}. "
+        "--repair-expired-lock only applies after the lock expires."
+    )
+    remediation = list(diagnostics.remediation) or [
+        f"taskledger lock show --task {task_id}",
+    ]
+    error = _tasks.LaunchError(message)
+    error.taskledger_exit_code = _tasks.EXIT_CODE_LOCK_CONFLICT
+    error.taskledger_error_code = "LOCK_CONFLICT"
+    error.taskledger_data = {
+        "task_id": task_id,
+        "lock": lock.to_dict(),
+        "diagnostics": diagnostics.to_dict(),
+    }
+    error.taskledger_remediation = remediation
+    return error
 
 
 def start_implementation(
@@ -252,10 +289,7 @@ def resume_implementation(
         elif _tasks.lock_is_expired(existing_lock):
             raise _tasks._stale_lock_error(task.id, existing_lock)
         else:
-            raise _tasks._cli_error(
-                "Implementation resume requires no active lock.",
-                _tasks.EXIT_CODE_LOCK_CONFLICT,
-            )
+            raise _active_lock_blocks_resume_error(task.id, existing_lock)
     _tasks._ensure_dependencies_done(workspace_root, task)
     resolved_actor = actor or _tasks._default_actor()
     lock = _tasks._acquire_lock(

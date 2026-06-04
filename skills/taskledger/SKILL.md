@@ -356,7 +356,19 @@ To receive work:
 ## Failure handling
 
 - If an implementation lock has expired between sessions and the run is still resumable, use `taskledger implement resume --repair-expired-lock --reason "..."`. This is the normal fresh-session continuation path for expired implementation locks.
-- If a lock is stale, inspect it first, then run `taskledger repair lock --reason "..."`. Use generic `repair lock` only when `doctor`/`lock show` confirms corrupted or orphaned state, not for normal expired implementation locks.
+- If a lock is stale, inspect it first with `taskledger lock show` or `taskledger next-action` (both return a `classification`), then run `taskledger repair lock --reason "..."` only when diagnostics prove corruption, expiry, or a dead local holder PID. Use generic `repair lock` only when `doctor`/`lock show` confirms corrupted or orphaned state, not for normal expired implementation locks.
+
+Lock recovery decision tree:
+
+1. Run `taskledger lock show --task TASK` or `taskledger next-action`.
+2. If there is no lock, follow `next-action`.
+3. If `classification` is `expired` and it is an implementation lock for a running run: run `taskledger implement resume --repair-expired-lock --task TASK --reason "..."`.
+4. If `classification` is `active_dead_local_process`: run `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`, then `taskledger implement resume --task TASK --reason "..."`.
+5. If `classification` is `active_live_local_process` or `active_other_actor`: do not repair; use a handoff or wait for the holder to release.
+6. If `classification` is `active_unverifiable_remote_or_unknown_process`: do not infer staleness from local process checks; inspect handoffs or ask the user before repairing.
+
+`--repair-expired-lock` is not a general stale-lock takeover flag. It only handles locks whose `expires_at` is in the past. For non-expired active locks, use the classification returned by `lock show` or `next-action`.
+
 - If breaking an implementation lock leaves a running implementation run behind, use `taskledger implement resume --reason "..."` instead of `implement start`.
 - If a cancelled task is restored with `task uncancel`, run `taskledger next-action` before starting work. If the task still has a running implementation run, resume that run instead of starting a new one.
 - If `taskledger next-action` recommends a command but `taskledger can <action>` rejects it, treat this as a lifecycle inconsistency. Run `taskledger doctor` and follow the repair guidance.

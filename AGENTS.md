@@ -256,7 +256,7 @@ Preserve:
 
 - one active stage per task
 - matching lock/run/stage semantics
-- explicit stale-lock break flow
+- explicit stale-lock break/repair flow with diagnostics on `lock show` and `next-action`
 - audit record for broken locks
 - no silent lock removal
 - doctor detection for lock/run inconsistencies

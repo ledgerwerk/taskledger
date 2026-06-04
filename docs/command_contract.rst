@@ -631,3 +631,37 @@ can be rebuilt with:
 
 A newer storage version than the installed taskledger supports is rejected with
 a clear error.
+
+Lock recovery contract
+--------------------
+
+Lock diagnostics are exposed through three surfaces:
+
+- ``taskledger lock show --task TASK`` returns a ``diagnostics`` object and
+  a structured human block. The ``classification`` field names the lock
+  state: ``none``, ``expired``, ``active_dead_local_process``,
+  ``active_live_local_process``, ``active_unverifiable_remote_or_unknown_process``,
+  ``active_no_pid``, ``active_same_actor``, or ``active_other_actor``.
+- ``taskledger --json next-action`` returns ``lock_status`` whenever a lock
+  exists, and sets ``action=repair-lock`` with a diagnostics blocker when the
+  active implementation lock has a dead local holder PID.
+- ``taskledger implement resume --repair-expired-lock`` returns a
+  ``LOCK_CONFLICT`` error (exit code 4) with diagnostics and remediation
+  commands when the existing lock is non-expired.
+
+``--repair-expired-lock`` is not a general stale-lock takeover flag. It only
+applies to locks whose ``expires_at`` is in the past. For non-expired active
+locks, follow the classification returned by ``lock show`` or ``next-action``.
+
+For non-expired active locks classified as ``active_dead_local_process``, the
+canonical recovery sequence is:
+
+.. code-block:: bash
+
+   taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."
+   taskledger implement resume --task TASK --reason "Reacquire implementation lock after stale holder repair."
+
+For ``active_live_local_process`` or ``active_other_actor``, do not repair;
+use a handoff or wait for the holder to release. For
+``active_unverifiable_remote_or_unknown_process``, do not infer staleness
+from local process checks; inspect handoffs or ask the user before repairing.

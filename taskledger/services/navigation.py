@@ -59,6 +59,8 @@ def next_action(workspace_root: Path, task_ref: str) -> dict[str, object]:
         lock=lock,
         runs=runs,
     )
+    lock_diagnostics_dict = _compute_lock_diagnostics_for_payload(lock, task.id)
+    lock_warning = _lock_warning_for_action(lock, lock_diagnostics_dict)
     action: str
     reason: str
     blockers: list[dict[str, object]] = []
@@ -205,6 +207,27 @@ def next_action(workspace_root: Path, task_ref: str) -> dict[str, object]:
             action = "repair-lock"
             reason = "A stale or broken lock must be repaired before work can continue."
             next_item = _lock_next_item(task, lock)
+    # If diagnostics prove an orphaned local holder, override the chosen
+    # action with an explicit repair-lock recommendation. This must run
+    # after the main branches so we don't drop blockers/progress they set.
+    if (
+        lock is not None
+        and isinstance(lock_diagnostics_dict, dict)
+        and lock_diagnostics_dict.get("classification") == "active_dead_local_process"
+    ):
+        action = "repair-lock"
+        reason = (
+            "Implementation lock is active but the recorded holder "
+            "process is not running."
+        )
+        blockers.append(
+            {
+                "kind": "lock",
+                "message": str(lock_diagnostics_dict.get("summary", "")),
+                "diagnostics": lock_diagnostics_dict,
+            }
+        )
+        next_item = _lock_next_item(task, lock)
     next_command = _primary_command_for_next_item(action, next_item)
     commands = _commands_for_next_item(action, next_item)
     guidance_command = _guidance_command(
@@ -228,6 +251,10 @@ def next_action(workspace_root: Path, task_ref: str) -> dict[str, object]:
         "commands": commands,
         "progress": progress,
     }
+    if lock_diagnostics_dict is not None:
+        payload["lock_status"] = lock_diagnostics_dict
+    if lock_warning is not None:
+        payload["lock_warning"] = lock_warning
     if guidance_command is not None:
         payload["commands"] = [
             _command(
@@ -873,6 +900,45 @@ def _lock_next_item(task: TaskRecord, lock: TaskLock) -> dict[str, object]:
         "run_id": lock.run_id,
         "expired": lock_is_expired(lock),
     }
+
+
+def _compute_lock_diagnostics_for_payload(
+    lock: TaskLock | None, task_id: str
+) -> dict[str, object] | None:
+    if lock is None:
+        return None
+    from taskledger.services.lock_diagnostics import diagnose_lock
+
+    return diagnose_lock(lock, task_id=task_id).to_dict()
+
+
+def _lock_warning_for_action(
+    lock: TaskLock | None,
+    diagnostics_dict: dict[str, object] | None,
+) -> str | None:
+    """One-line human warning for non-dead active locks.
+
+    The dead-PID case is handled by overriding the action to repair-lock;
+    we only need a warning for live or unverifiable holders.
+    """
+    if lock is None or diagnostics_dict is None:
+        return None
+    classification = diagnostics_dict.get("classification")
+    if classification in {
+        "active_dead_local_process",
+        "expired",
+        "active_same_actor",
+    }:
+        return None
+    holder = lock.holder
+    pid_part = f" pid={holder.pid}" if holder.pid else ""
+    host_part = f" host={holder.host}" if holder.host else ""
+    return (
+        f"Warning: task has an active lock held by "
+        f"{holder.actor_type}:{holder.actor_name}{host_part}{pid_part}. "
+        "Do not take over from another live holder; inspect with "
+        "taskledger lock show or use a handoff."
+    )
 
 
 def _command(

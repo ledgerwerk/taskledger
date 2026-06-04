@@ -2062,8 +2062,9 @@ def _lock_conflict_message(task_id: str, lock: TaskLock) -> str:
     if lock_is_expired(lock):
         return (
             f"Task {task_id} has an expired {lock.stage} lock from {lock.run_id}. "
-            "Break it explicitly with: "
-            f'taskledger lock break --task {task_id} --reason "..."'
+            "Recover it explicitly with: "
+            f'taskledger repair lock --task {task_id} --reason "recover stale '
+            f'{lock.stage} lock"'
         )
     return f"Task {task_id} is locked by {lock.run_id} for {lock.stage}."
 
@@ -2664,7 +2665,7 @@ def _stale_lock_error(task_id: str, lock: TaskLock) -> LaunchError:
     error.taskledger_error_type = "StaleLockRequiresBreak"
     error.taskledger_remediation = [
         (
-            f"taskledger lock break --task {task_id} "
+            f"taskledger repair lock --task {task_id} "
             f'--reason "recover stale {lock.stage} lock"'
         )
     ]

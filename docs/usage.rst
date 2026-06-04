@@ -331,9 +331,9 @@ includes the primary command hint. JSON output preserves the existing
 Agents should inspect ``next_item`` first, run ``next_command`` when it is safe,
 avoid inventing question answers, and only mark todos done after evidence exists.
 
-If ``next-action`` reports an orphaned implementation state, inspect the task and
-lock first, then resume the existing run instead of starting a new one or
-pretending the task is cancelled:
+If ``next-action`` reports an orphaned implementation state or an active lock
+recovery situation, inspect the task and lock first, then choose the recovery
+path that matches the lock state:
 
 .. code-block:: bash
 
@@ -341,8 +341,33 @@ pretending the task is cancelled:
    taskledger task show task-0001
    taskledger lock show
    taskledger doctor
-   taskledger lock break --reason "Recover stale implementation lock."
-   taskledger implement resume --reason "Reacquire implementation lock for existing running run."
+
+Lock recovery decision tree:
+
+1. Run ``taskledger lock show --task TASK``. ``lock show`` reports a
+   ``classification`` field that names the lock state.
+2. If there is no lock, run ``taskledger next-action``.
+3. If ``classification`` is ``expired`` and the lock is an implementation lock
+   for a running implementation run:
+   run
+   ``taskledger implement resume --repair-expired-lock --task TASK --reason "..."``.
+4. If ``classification`` is ``active_dead_local_process``:
+   run
+   ``taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."``,
+   then ``taskledger implement resume --task TASK --reason "..."``.
+5. If ``classification`` is ``active_live_local_process`` or
+   ``active_other_actor``:
+   do not repair; use a handoff or wait for the holder to release.
+6. If ``classification`` is ``active_unverifiable_remote_or_unknown_process``:
+   do not infer staleness from local process checks; inspect handoffs or ask
+   the user before repairing.
+7. ``next-action`` itself returns ``action=repair-lock`` with diagnostics and
+   the recommended command sequence when the active implementation lock has
+   a dead local holder PID.
+
+``--repair-expired-lock`` is not a general stale-lock takeover flag. It only
+handles locks whose ``expires_at`` is in the past. For non-expired active
+locks, use the decision tree above.
 
 If the task is actually ``cancelled`` and the user wants to continue, restore it
 with ``task uncancel`` first, then run ``next-action`` again. A restored task may
@@ -608,7 +633,7 @@ Integrity and recovery
    taskledger doctor
    taskledger doctor locks
    taskledger lock show
-   taskledger lock break --reason "recover stale planning lock"
+   taskledger repair lock --reason "recover stale planning lock"
    taskledger implement resume --reason "Reacquire implementation lock for existing running run."
    taskledger task uncancel --task TASK_REF --reason "Restore the task to a safe durable stage."
    taskledger next-action

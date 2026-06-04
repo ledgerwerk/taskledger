@@ -609,6 +609,88 @@ def _emit_link_list(ctx: typer.Context, task_ref: str | None) -> None:
     )
 
 
+def _render_lock_show(payload: dict[str, object]) -> str:
+    lock: dict[str, object] | None = payload.get("lock")  # type: ignore[assignment]
+    task_id = str(payload.get("task_id", ""))
+    if lock is None:
+        return f"LOCK {task_id}\nstatus: no lock"
+
+    diagnostics = payload.get("diagnostics") or {}
+    if not isinstance(diagnostics, dict):
+        diagnostics = {}
+    status_value = "active"
+    expired = bool(diagnostics.get("expired"))
+    if expired:
+        status_value = "expired"
+
+    lines: list[str] = []
+    lines.append(f"LOCK {task_id}")
+    lines.append(f"status: {status_value}")
+    classification = diagnostics.get("classification")
+    if classification:
+        lines.append(f"classification: {classification}")
+
+    def _str(field: str) -> str:
+        value = lock.get(field)
+        return "" if value is None else str(value)
+
+    lines.append(f"stage: {_str('stage')}")
+    lines.append(f"run: {_str('run_id')}")
+
+    holder = lock.get("holder")
+    if isinstance(holder, dict):
+        actor_type = holder.get("actor_type", "?")
+        actor_name = holder.get("actor_name", "?")
+        host = holder.get("host") or "-"
+        pid = holder.get("pid")
+        pid_part = f" pid={pid}" if pid else ""
+        lines.append(f"holder: {actor_type}:{actor_name} host={host}{pid_part}")
+
+    harness = lock.get("harness")
+    if isinstance(harness, dict):
+        harness_name = harness.get("name", "unknown")
+        harness_kind = harness.get("kind", "unknown")
+        lines.append(f"harness: {harness_name} ({harness_kind})")
+
+    lines.append(f"created: {_str('created_at')}")
+    expires_at = _str("expires_at")
+    expiry_label = diagnostics.get("expiry_label", "")
+    if expiry_label:
+        lines.append(f"expires: {expires_at} ({expiry_label})")
+    else:
+        lines.append(f"expires: {expires_at}")
+
+    reason = _str("reason")
+    if reason:
+        lines.append(f"reason: {reason}")
+
+    storage_root = payload.get("storage_root")
+    if isinstance(storage_root, str) and storage_root:
+        lines.append(f"storage: {storage_root}")
+    lock_file = payload.get("lock_file")
+    if isinstance(lock_file, str) and lock_file:
+        lines.append(f"lock file: {lock_file}")
+
+    summary = diagnostics.get("summary")
+    if summary:
+        lines.append("")
+        lines.append("Assessment:")
+        lines.append(str(summary))
+
+    remediation = diagnostics.get("remediation") or []
+    if isinstance(remediation, list | tuple) and remediation:
+        lines.append("")
+        lines.append("Next commands:")
+        for index, command in enumerate(remediation, start=1):
+            command_text = str(command)
+            if command_text.startswith("#"):
+                lines.append(f"- {command_text.lstrip('#').strip()}")
+            else:
+                lines.append(f"{index}. {command_text}")
+
+    return "\n".join(lines)
+
+
 def register_lock_v2_commands(app: typer.Typer) -> None:
     @app.command("show")
     def show_command(
@@ -622,7 +704,7 @@ def register_lock_v2_commands(app: typer.Typer) -> None:
         except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-        emit_payload(ctx, payload, human=str(payload["lock"]))
+        emit_payload(ctx, payload, human=_render_lock_show(payload))
 
     @app.command("break")
     def break_command(
