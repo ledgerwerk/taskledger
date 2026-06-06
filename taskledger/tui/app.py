@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -40,6 +41,26 @@ _STAGE_FILTERS: dict[str, tuple[str, tuple[str, ...]]] = {
     "f": ("failed_validation", ("failed_validation",)),
     "d": ("done", ("done",)),
     "c": ("cancelled", ("cancelled",)),
+}
+
+# Width (columns) below which ``--layout auto`` switches to compact mode.
+_COMPACT_WIDTH = 88
+_VALID_LAYOUTS = {"auto", "wide", "compact"}
+_COMPACT_VIEWS = {"list", "detail"}
+
+# Shortened stage labels for compact task list rows. Unknown stages fall back
+# to the first 5 characters of the raw status_stage.
+_STAGE_LABELS_SHORT: dict[str, str] = {
+    "plan_review": "plan",
+    "planning": "plan",
+    "implementing": "impl",
+    "implemented": "impld",
+    "validating": "val",
+    "failed_validation": "fail",
+    "done": "done",
+    "cancelled": "cncl",
+    "draft": "draft",
+    "approved": "appr",
 }
 
 
@@ -111,6 +132,8 @@ class HelpOverlay(Static):
             "  r / F5     refresh snapshot",
             "  /          focus search/filter input",
             "  Enter      open selected task",
+            "  b          compact mode: back to task list",
+            "  l          compact mode: toggle list/detail",
             "  Tab        cycle focus / tabs",
             "  1..9       jump to a tab",
             "  c          show command copy palette",
@@ -144,12 +167,21 @@ class TaskledgerTui(App[None]):
         layout: vertical;
     }
     #main { height: 1fr; }
-    #tasks-pane { width: 34; border-right: solid $primary; }
-    #detail-pane { width: 2fr; }
-    #summary { padding: 0 1; height: auto; max-height: 12; }
+    #tasks-pane { width: 34; height: 1fr; border-right: solid $primary; }
+    #detail-pane { width: 2fr; height: 1fr; }
     #filter-input { dock: top; margin: 0 0 1 0; }
+    #tabs { height: 1fr; }
+    .tab-scroll { height: 1fr; }
     #status-bar { dock: bottom; height: 1; background: $boost; color: $text; }
     ListView > ListItem { padding: 0 1; }
+
+    /* compact: full-width single-pane mode */
+    Screen.-compact #main { layout: vertical; }
+    Screen.-compact #tasks-pane { width: 1fr; height: 1fr; border-right: none; }
+    Screen.-compact #detail-pane { width: 1fr; height: 1fr; }
+    Screen.-compact.-list #detail-pane { display: none; }
+    Screen.-compact.-detail #tasks-pane { display: none; }
+    Screen.-compact Footer { display: none; }
     """
 
     BINDINGS = [
@@ -160,6 +192,8 @@ class TaskledgerTui(App[None]):
         Binding("c", "copy_command", "Copy cmd"),
         Binding("o", "open_report", "Open report"),
         Binding("t", "toggle_archived", "Toggle archived"),
+        Binding("b", "show_list", "Back", show=False),
+        Binding("l", "toggle_compact_view", "List/detail", show=False),
         Binding("question_mark", "help", "Help", show=False),
         Binding("escape", "dismiss_overlay", "Dismiss", show=False),
         Binding("1", "switch_tab('summary')", "Summary", show=False),
@@ -193,6 +227,7 @@ class TaskledgerTui(App[None]):
         task_ref: str | None = None,
         refresh_seconds: int | None = None,
         include_archived: bool = False,
+        layout: str = "auto",
     ) -> None:
         super().__init__()
         self.workspace_root = workspace_root
@@ -203,6 +238,12 @@ class TaskledgerTui(App[None]):
         self._stage_filter: tuple[str, ...] = ()  # empty = all
         self._filter_text = ""
         self._refresh_timer: Any = None
+        layout_mode = (layout or "auto").strip().lower()
+        if layout_mode not in _VALID_LAYOUTS:
+            layout_mode = "auto"
+        self.layout = layout_mode
+        # Initial compact pane: detail if a task_ref was provided, else list.
+        self._compact_view: str = "detail" if task_ref else "list"
 
     # ------------------------------------------------------------------
     # Layout
@@ -218,39 +259,133 @@ class TaskledgerTui(App[None]):
                 )
                 yield ListView(id="tasks")
             with Vertical(id="detail-pane"):
-                with VerticalScroll(id="summary-scroll"):
-                    yield Static(
-                        "Loading…\nPress r to refresh or q to quit.",
+                with TabbedContent(id="tabs"):
+                    yield TabPane(
+                        "Summary",
+                        VerticalScroll(
+                            Static(id="summary-tab"),
+                            classes="tab-scroll",
+                        ),
                         id="summary",
                     )
-                with TabbedContent(id="tabs"):
-                    yield TabPane("Summary", Static(id="summary-tab"), id="summary")
-                    yield TabPane("Plan", Static(id="plan-tab"), id="plan")
-                    yield TabPane("Todos", Static(id="todos-tab"), id="todos")
+                    yield TabPane(
+                        "Plan",
+                        VerticalScroll(
+                            Static(id="plan-tab"),
+                            classes="tab-scroll",
+                        ),
+                        id="plan",
+                    )
+                    yield TabPane(
+                        "Todos",
+                        VerticalScroll(
+                            Static(id="todos-tab"),
+                            classes="tab-scroll",
+                        ),
+                        id="todos",
+                    )
                     yield TabPane(
                         "Implementation",
-                        Static(id="implementation-tab"),
+                        VerticalScroll(
+                            Static(id="implementation-tab"),
+                            classes="tab-scroll",
+                        ),
                         id="implementation",
                     )
-                    yield TabPane("Reviews", Static(id="reviews-tab"), id="reviews")
+                    yield TabPane(
+                        "Reviews",
+                        VerticalScroll(
+                            Static(id="reviews-tab"),
+                            classes="tab-scroll",
+                        ),
+                        id="reviews",
+                    )
                     yield TabPane(
                         "Validation",
-                        Static(id="validation-tab"),
+                        VerticalScroll(
+                            Static(id="validation-tab"),
+                            classes="tab-scroll",
+                        ),
                         id="validation",
                     )
-                    yield TabPane("Files", Static(id="files-tab"), id="files")
-                    yield TabPane("Events", Static(id="events-tab"), id="events")
                     yield TabPane(
-                        "Raw Report", Static(id="raw-report-tab"), id="raw-report"
+                        "Files",
+                        VerticalScroll(
+                            Static(id="files-tab"),
+                            classes="tab-scroll",
+                        ),
+                        id="files",
+                    )
+                    yield TabPane(
+                        "Events",
+                        VerticalScroll(
+                            Static(id="events-tab"),
+                            classes="tab-scroll",
+                        ),
+                        id="events",
+                    )
+                    yield TabPane(
+                        "Raw Report",
+                        VerticalScroll(
+                            Static(id="raw-report-tab"),
+                            classes="tab-scroll",
+                        ),
+                        id="raw-report",
                     )
         yield Static("", id="status-bar")
         yield Footer()
 
     def on_mount(self) -> None:
+        self._sync_layout_classes()
         self.action_refresh()
         if self.refresh_seconds and self.refresh_seconds > 0:
             self._refresh_timer = self.set_interval(
                 self.refresh_seconds, self.action_refresh
+            )
+
+    def on_resize(self, event: events.Resize) -> None:  # noqa: ARG002
+        # Re-evaluate auto layout. Wide/compact are explicit and unaffected by
+        # resize, but _sync_layout_classes still keeps the screen classes
+        # consistent if future state changes occur.
+        self._sync_layout_classes()
+
+    # ------------------------------------------------------------------
+    # Compact layout helpers
+    # ------------------------------------------------------------------
+
+    def _is_compact_layout(self) -> bool:
+        if self.layout == "compact":
+            return True
+        if self.layout == "wide":
+            return False
+        return self.size.width < _COMPACT_WIDTH
+
+    def _set_screen_class(self, class_name: str, enabled: bool) -> None:
+        # The screen may not exist yet during early compose; skip silently.
+        screen = getattr(self, "screen", None)
+        if screen is None:
+            return
+        try:
+            if enabled:
+                screen.add_class(class_name)
+            else:
+                screen.remove_class(class_name)
+        except Exception:
+            # Defensive: avoid crashing the app over stale class state during
+            # shutdown/teardown. This is not expected to fire in normal use.
+            pass
+
+    def _sync_layout_classes(self) -> None:
+        compact = self._is_compact_layout()
+        view = self._compact_view if self._compact_view in _COMPACT_VIEWS else "list"
+        self._compact_view = view
+        for class_name in ("-compact", "-wide", "-list", "-detail"):
+            self._set_screen_class(class_name, False)
+        self._set_screen_class("-compact" if compact else "-wide", True)
+        if compact:
+            self._set_screen_class(
+                "-detail" if view == "detail" else "-list",
+                True,
             )
 
     # ------------------------------------------------------------------
@@ -279,17 +414,26 @@ class TaskledgerTui(App[None]):
         self._set_status(self._render_status_text())
 
     def _render_status_text(self) -> str:
+        parts: list[str] = []
+        if self._is_compact_layout():
+            parts.append(f"compact:{self._compact_view}")
         selected = self.snapshot.get("selected")
-        if not isinstance(selected, dict):
-            return "no task selected"
-        task_raw = selected.get("task")
-        task: dict[str, Any] = task_raw if isinstance(task_raw, dict) else {}
-        na_raw = selected.get("next_action")
-        next_action: dict[str, Any] = na_raw if isinstance(na_raw, dict) else {}
-        parts = [
-            str(task.get("id", "")),
-            str(task.get("status_stage", "")),
-        ]
+        task_raw = None
+        next_action: dict[str, Any] = {}
+        if isinstance(selected, dict):
+            raw = selected.get("task")
+            task_raw = raw if isinstance(raw, dict) else None
+            na_raw = selected.get("next_action")
+            next_action = na_raw if isinstance(na_raw, dict) else {}
+        if task_raw is not None:
+            parts.append(str(task_raw.get("id", "")))
+            status = str(task_raw.get("status_stage", ""))
+            if self._is_compact_layout():
+                status = _STAGE_LABELS_SHORT.get(status, status[:5])
+            if status:
+                parts.append(status)
+        else:
+            parts.append("no task selected")
         if next_action.get("action"):
             parts.append(f"next: {next_action.get('action')}")
         if self._stage_filter:
@@ -297,6 +441,11 @@ class TaskledgerTui(App[None]):
             parts.append(f"filter: {label}")
         if self._filter_text:
             parts.append(f"search: {self._filter_text}")
+        if self._is_compact_layout():
+            if self._compact_view == "list":
+                parts.append("Enter=open")
+            else:
+                parts.append("b=list")
         return " | ".join(part for part in parts if part)
 
     def _set_status(self, text: str) -> None:
@@ -332,6 +481,19 @@ class TaskledgerTui(App[None]):
                 return False
         return True
 
+    def _task_label(self, task: dict[str, Any], active_task_id: str) -> str:
+        marker = "*" if task.get("id") == active_task_id else " "
+        task_id = str(task.get("id", ""))
+        title = str(task.get("title", ""))
+        status_raw = str(task.get("status_stage") or "")
+        archived_flag = bool(task.get("archived"))
+        if self._is_compact_layout():
+            status = _STAGE_LABELS_SHORT.get(status_raw, status_raw[:5])
+            archived = " A" if archived_flag else ""
+            return f"{marker} {task_id} [{status}]{archived} {title}"
+        archived = " (archived)" if archived_flag else ""
+        return f"{marker} {task_id} [{status_raw}]{archived} {title}"
+
     def _render_task_list(self) -> None:
         task_list = _safe_query_one(self, "#tasks", ListView)
         if task_list is None:
@@ -345,13 +507,7 @@ class TaskledgerTui(App[None]):
         for task in self._iter_candidate_tasks():
             if not self._matches_filters(task):
                 continue
-            marker = "*" if task.get("id") == active_task_id else " "
-            archived = " (archived)" if task.get("archived") else ""
-            label = (
-                f"{marker} {task.get('id', '')} "
-                f"[{task.get('status_stage', '')}]"
-                f"{archived} {task.get('title', '')}"
-            )
+            label = self._task_label(task, active_task_id)
             task_list.append(ListItem(Static(label)))
 
     def _render_detail(self) -> None:
@@ -407,6 +563,7 @@ class TaskledgerTui(App[None]):
         if len(parts) >= 2:
             self.task_ref = parts[1]
             self.action_refresh()
+            self.action_show_detail()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id != "filter-input":
@@ -420,6 +577,8 @@ class TaskledgerTui(App[None]):
     # ------------------------------------------------------------------
 
     def action_focus_filter(self) -> None:
+        if self._is_compact_layout():
+            self.action_show_list()
         widget = _safe_query_one(self, "#filter-input", Input)
         if widget is not None:
             widget.focus()
@@ -504,20 +663,59 @@ class TaskledgerTui(App[None]):
         self._set_status(f"static report written to {target}")
 
     def action_dismiss_overlay(self) -> None:
-        # Textual's pop_screen handles the modal screen; if no modal screen is
-        # active this raises ScreenStackError, which we ignore.
+        # Textual's pop_screen handles modal screens. If no modal is open,
+        # ScreenStackError is raised; in compact detail mode we then return
+        # to the list view so Esc works as a back button.
         try:
             self.pop_screen()
         except self._ScreenStackError:
+            if self._is_compact_layout() and self._compact_view == "detail":
+                self.action_show_list()
             return
 
     def action_switch_tab(self, tab_id: str) -> None:
         tabs = _safe_query_one(self, "#tabs", TabbedContent)
         if tabs is not None:
             tabs.active = tab_id
+        if self._is_compact_layout() and self._compact_view != "detail":
+            # Tab switch from compact list view should reveal the detail pane.
+            self.action_show_detail()
 
     def action_help(self) -> None:
         self.push_screen(_HelpScreen())  # type: ignore[call-overload]
+
+    # ------------------------------------------------------------------
+    # Compact navigation actions
+    # ------------------------------------------------------------------
+
+    def action_show_list(self) -> None:
+        self._compact_view = "list"
+        self._sync_layout_classes()
+        self._set_status(self._render_status_text())
+        tasks = _safe_query_one(self, "#tasks", ListView)
+        if tasks is not None:
+            tasks.focus()
+
+    def action_show_detail(self) -> None:
+        selected = self.snapshot.get("selected")
+        if not isinstance(selected, dict):
+            self._set_status("no task selected")
+            return
+        self._compact_view = "detail"
+        self._sync_layout_classes()
+        self._set_status(self._render_status_text())
+        # Focus the tabbed content so 1..9 bindings land on tabs immediately.
+        tabs = _safe_query_one(self, "#tabs", TabbedContent)
+        if tabs is not None:
+            tabs.focus()
+
+    def action_toggle_compact_view(self) -> None:
+        if not self._is_compact_layout():
+            return
+        if self._compact_view == "detail":
+            self.action_show_list()
+        else:
+            self.action_show_detail()
 
     # Alias for the ScreenStackError type without forcing callers to import it.
     from textual.app import ScreenStackError as _ScreenStackError
@@ -542,6 +740,7 @@ def run_tui(
     task_ref: str | None = None,
     refresh_seconds: int | None = None,
     include_archived: bool = False,
+    layout: str = "auto",
 ) -> None:
     """Launch the Textual app. Blocking; returns when the user quits."""
 
@@ -550,5 +749,6 @@ def run_tui(
         task_ref=task_ref,
         refresh_seconds=refresh_seconds,
         include_archived=include_archived,
+        layout=layout,
     )
     app_instance.run()

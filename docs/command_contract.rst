@@ -471,7 +471,7 @@ It requires the optional textual dependency:
 
 .. code-block:: bash
 
-   taskledger tui [TASK_REF] [--task TASK_REF] [--refresh-seconds N] [--no-refresh] [--include-archived]
+   taskledger tui [TASK_REF] [--task TASK_REF] [--layout auto|wide|compact] [--refresh-seconds N] [--no-refresh] [--include-archived]
 
 Rules:
 
@@ -481,6 +481,13 @@ Rules:
 * when textual is missing, the command fails fast with
   ``OPTIONAL_DEPENDENCY_MISSING`` (exit code 2) and an install remediation;
 * the command rejects conflicting ``TASK_REF`` and ``--task`` values;
+* the command rejects conflicting ``TASK_REF`` and ``--task`` values;
+* ``--layout`` selects the presentation layout: ``auto`` (default, switches to
+  compact below ~88 columns), ``wide`` (force two-pane), or ``compact`` (force
+  single-pane). Invalid values exit ``USAGE_ERROR`` (exit code 2) before the
+  textual import guard fires;
+* layout selection is presentation-only. It must not change the read-model
+  payload, selected task resolution, or ledger state;
 * agents should keep using JSON commands for automation.
 
 Focused context and handoff options

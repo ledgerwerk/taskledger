@@ -39,6 +39,7 @@ def test_tui_help_is_available_without_importing_textual() -> None:
     assert "--refresh-seconds" in result.stdout
     assert "--no-refresh" in result.stdout
     assert "--include-archived" in result.stdout
+    assert "--layout" in result.stdout
     assert "TASK_ARG" in result.stdout or "task_arg" in result.stdout
     # --help must not have pulled textual into the process.
     assert after_textual == before_textual, (
@@ -125,6 +126,36 @@ def test_tui_rejects_conflicting_task_ref_and_option(tmp_path: Path) -> None:
     assert "--task" in payload["error"]["message"]
 
 
+def test_tui_rejects_invalid_layout(tmp_path: Path) -> None:
+    """Invalid --layout values exit USAGE_ERROR before textual is imported."""
+    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+
+    before_textual = {
+        name for name in sys.modules if name == "textual" or name.startswith("textual.")
+    }
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "tui",
+            "--layout",
+            "tiny",
+        ],
+    )
+    after_textual = {
+        name for name in sys.modules if name == "textual" or name.startswith("textual.")
+    }
+    assert result.exit_code == 2, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "USAGE_ERROR"
+    assert "--layout" in payload["error"]["message"]
+    # Validation must fire before the textual import guard.
+    assert after_textual == before_textual
+
+
 def test_tui_app_boots_with_pilot(tmp_path: Path) -> None:
     """Smoke test: the Textual app starts, renders, refreshes, and exercises
     phase-2 navigation without raising.
@@ -174,3 +205,107 @@ def _create_task_via_runner(tmp_path: Path, title: str) -> None:
         ["--cwd", str(tmp_path), "task", "create", title],
     )
     assert res.exit_code == 0, res.stdout
+
+
+def _activate_task_via_runner(tmp_path: Path, task_ref: str) -> None:
+    """Activate a task so the TUI read model resolves a selected task."""
+    res = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "task", "activate", task_ref],
+    )
+    assert res.exit_code == 0, res.stdout
+
+
+def test_tui_compact_mode_switches_between_list_and_detail(tmp_path: Path) -> None:
+    """Compact layout shows one pane at a time and toggles list<->detail.
+
+    Skipped automatically when textual is not installed.
+    """
+    pytest = __import__("pytest")
+    pytest.importorskip("textual")
+
+    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    _create_task_via_runner(tmp_path, "Compact smoke")
+    _activate_task_via_runner(tmp_path, "task-0001")
+
+    import asyncio
+
+    from taskledger.tui.app import TaskledgerTui
+
+    tui_app = TaskledgerTui(workspace_root=tmp_path, layout="compact")
+
+    async def _drive() -> None:
+        async with tui_app.run_test() as pilot:
+            await pilot.pause()
+            classes = set(tui_app.screen.classes)
+            # No explicit task_ref -> compact starts in list view.
+            assert "-compact" in classes
+            assert "-list" in classes
+
+            tui_app.action_show_detail()
+            await pilot.pause()
+            classes = set(tui_app.screen.classes)
+            assert "-detail" in classes
+            assert "-list" not in classes
+
+            tui_app.action_show_list()
+            await pilot.pause()
+            classes = set(tui_app.screen.classes)
+            assert "-list" in classes
+            assert "-detail" not in classes
+
+    asyncio.run(_drive())
+
+
+def test_tui_compact_mode_starts_in_detail_with_task_ref(tmp_path: Path) -> None:
+    """Launching with an explicit task_ref opens the detail pane in compact mode."""
+    pytest = __import__("pytest")
+    pytest.importorskip("textual")
+
+    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    _create_task_via_runner(tmp_path, "Compact detail smoke")
+    _activate_task_via_runner(tmp_path, "task-0001")
+
+    import asyncio
+
+    from taskledger.tui.app import TaskledgerTui
+
+    tui_app = TaskledgerTui(
+        workspace_root=tmp_path,
+        layout="compact",
+        task_ref="task-0001",
+    )
+
+    async def _drive() -> None:
+        async with tui_app.run_test() as pilot:
+            await pilot.pause()
+            classes = set(tui_app.screen.classes)
+            assert "-compact" in classes
+            assert "-detail" in classes
+            assert "-list" not in classes
+
+    asyncio.run(_drive())
+
+
+def test_tui_wide_mode_never_sets_compact_class(tmp_path: Path) -> None:
+    """--layout wide forces the two-pane layout regardless of width."""
+    pytest = __import__("pytest")
+    pytest.importorskip("textual")
+
+    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    _create_task_via_runner(tmp_path, "Wide smoke")
+
+    import asyncio
+
+    from taskledger.tui.app import TaskledgerTui
+
+    tui_app = TaskledgerTui(workspace_root=tmp_path, layout="wide")
+
+    async def _drive() -> None:
+        async with tui_app.run_test() as pilot:
+            await pilot.pause()
+            classes = set(tui_app.screen.classes)
+            assert "-wide" in classes
+            assert "-compact" not in classes
+
+    asyncio.run(_drive())

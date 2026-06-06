@@ -433,7 +433,10 @@ python -m pip install -e '.[tui]'
 taskledger tui
 taskledger tui task-0040
 taskledger tui --refresh-seconds 5
+taskledger tui --layout compact
 ```
+
+Terminal navigator: `taskledger tui --layout compact` for phone/Termux screens
 
 The TUI is a read-only navigator over the same read models as `view` and
 `serve`: task list, summary, plan review, todos, implementation, code
@@ -442,7 +445,6 @@ inside the TUI for key bindings, `r` to refresh, `/` to filter, `c` to copy
 the next-command hint, and `o` to write a static HTML report for the
 selected task. Agents should keep using `next-action`, `todo next`, and
 `--json` for routine work; the TUI is a human-oriented presentation layer.
-
 
 Agents should keep using `taskledger next-action`, `taskledger todo next`, and
 `--json` commands as the canonical automation interface for routine same-session

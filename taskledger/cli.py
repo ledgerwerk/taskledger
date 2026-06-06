@@ -775,10 +775,29 @@ def tui_command(
             help="Show archived tasks alongside visible ones.",
         ),
     ] = False,
+    layout: Annotated[
+        str,
+        typer.Option(
+            "--layout",
+            help=(
+                "TUI layout: auto (default, switches below ~88 cols), "
+                "wide (force two-pane), or compact (force single-pane)."
+            ),
+        ),
+    ] = "auto",
 ) -> None:
     """Launch the optional Textual TUI navigator (read-only)."""
     state = ctx.obj
     assert isinstance(state, CLIState)
+    layout_mode = (layout or "").strip().lower()
+    if layout_mode not in {"auto", "wide", "compact"}:
+        error = LaunchError(
+            "taskledger tui --layout must be one of: auto, wide, compact.",
+            code="USAGE_ERROR",
+            exit_code=2,
+        )
+        emit_error(ctx, error)
+        raise typer.Exit(code=launch_error_exit_code(error))
     if task_arg and task_ref and task_arg != task_ref:
         error = LaunchError(
             "taskledger tui received both TASK_REF and --task. Use only one.",
@@ -813,6 +832,7 @@ def tui_command(
         task_ref=selected_task_ref,
         refresh_seconds=refresh_seconds,
         include_archived=include_archived,
+        layout=layout_mode,
     )
 
 

@@ -262,21 +262,21 @@ Rules for agents:
 
 ## Which read command to use
 
-| Need                      | Command                                             |
-| ------------------------- | --------------------------------------------------- |
-| Next step                 | `next-action`                                       |
-| Next implementation item  | `todo next`                                         |
-| Active task summary       | `task show`                                         |
-| Specific task summary     | `task show TASK_REF` or `task show --task TASK_REF` |
-| Project/ledger overview   | `status`, `tree`                                    |
-| Storage location          | `storage where`                                     |
-| Sync safety check         | `sync preflight`                                    |
-| Human dashboard           | `serve`                                             |
+| Need                      | Command                                              |
+| ------------------------- | ---------------------------------------------------- |
+| Next step                 | `next-action`                                        |
+| Next implementation item  | `todo next`                                          |
+| Active task summary       | `task show`                                          |
+| Specific task summary     | `task show TASK_REF` or `task show --task TASK_REF`  |
+| Project/ledger overview   | `status`, `tree`                                     |
+| Storage location          | `storage where`                                      |
+| Sync safety check         | `sync preflight`                                     |
+| Human dashboard           | `serve`                                              |
 | Terminal navigator        | `tui` (optional, requires `pip install -e '.[tui]'`) |
-| Reviewable report         | `task report` or `report html`                      |
-| LLM/agent compiled export | `task export`                                       |
-| Fresh worker context      | `context` or durable `handoff show`                 |
-| Command audit             | `task transcript`                                   |
+| Reviewable report         | `task report` or `report html`                       |
+| LLM/agent compiled export | `task export`                                        |
+| Fresh worker context      | `context` or durable `handoff show`                  |
+| Command audit             | `task transcript`                                    |
 
 `task dossier`, root `view`, and legacy `handoff *-context` renderers remain
 advanced/compatibility read surfaces. Prefer `context --for ...` and

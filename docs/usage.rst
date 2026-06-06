@@ -434,6 +434,9 @@ want to browse tasks inside the terminal. It depends on the optional
    taskledger tui task-0040
    taskledger tui --refresh-seconds 5
    taskledger tui --include-archived
+   taskledger tui --layout compact
+   taskledger tui --layout wide
+   taskledger tui --layout auto
 
 The TUI shows the same read models as ``view`` and ``serve``: task list,
 summary, plan review, todos, implementation, code reviews, validation,
@@ -446,6 +449,13 @@ files, events, and a raw Markdown report. Key bindings:
    /          focus search/filter input
    Enter      open selected task
    Tab        cycle focus / tabs
+   q          quit
+   r / F5     refresh snapshot
+   /          focus search/filter input
+   Enter      open selected task
+   b          compact mode: back to task list
+   l          compact mode: toggle list/detail
+   Tab        cycle focus / tabs
    1..9       jump to a tab
    c          show command copy palette
    o          write a static HTML report for the selected task
@@ -456,6 +466,14 @@ files, events, and a raw Markdown report. Key bindings:
 The TUI is read-only. Mutating actions still require the CLI. When textual
 is missing, ``taskledger tui`` fails fast with an
 ``OPTIONAL_DEPENDENCY_MISSING`` error and an install hint.
+
+On narrow terminals such as Termux, use ``taskledger tui --layout compact``,
+or leave ``--layout auto`` (the default) to switch to compact mode below the
+configured width threshold (~88 columns). Compact mode shows one full-width
+pane at a time: the task list, or the detail view for the selected task.
+``--layout wide`` forces the current two-pane layout. Layout selection is
+presentation-only; it does not change the read-model payload, the selected
+task resolution, or ledger state.
 
 ``task report`` generates a human-readable Markdown report for a single task.
 It is for humans who want to review, archive, or share a task outside the terminal.
