@@ -309,3 +309,73 @@ def test_tui_wide_mode_never_sets_compact_class(tmp_path: Path) -> None:
             assert "-compact" not in classes
 
     asyncio.run(_drive())
+
+
+def test_tui_renders_bracket_content_without_markup_error(tmp_path: Path) -> None:
+    """Completed todo markers like [x] must render as literal text.
+
+    Regression: Textual's Static widget parses Rich markup by default,
+    so bracket-bearing content (e.g. ``[x] done item``) raised
+    ``MarkupError`` before ``markup=False`` was added.
+    Skipped automatically when textual is not installed.
+    """
+    pytest = __import__("pytest")
+    pytest.importorskip("textual")
+
+    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    _create_task_via_runner(tmp_path, "Bracket [x] test")
+    _activate_task_via_runner(tmp_path, "task-0001")
+
+    # Build a plan with two todos so one can be marked done.
+    plan_content = (
+        "---\n"
+        "goal: >\n  Prevent bracket-bearing todo content from crashing the TUI.\n"
+        "acceptance_criteria:\n"
+        "- id: ac-0001\n"
+        "  text: Todo markers render without error\n"
+        "todos:\n"
+        "- text: Set markup=False on Static widgets in taskledger/tui/app.py\n"
+        "  mandatory: true\n"
+        "- text: Add regression test in tests/test_tui_cli.py\n"
+        "  mandatory: true\n"
+        "---\n"
+        "# Plan\n"
+        "Fix bracket rendering.\n"
+    )
+    plan_file = tmp_path / "plan.md"
+    plan_file.write_text(plan_content, encoding="utf-8")
+
+    def _cmd(*args: str) -> None:
+        res = runner.invoke(app, ["--cwd", str(tmp_path), *args])
+        assert res.exit_code == 0, res.stdout
+
+    _cmd("plan", "start")
+    _cmd("plan", "upsert", "--file", str(plan_file))
+    _cmd("plan", "accept", "--version", "1", "--note", "test")
+    _cmd("implement", "start")
+    _cmd("todo", "done", "todo-0001", "--evidence", "verified")
+
+    import asyncio
+
+    from taskledger.tui.app import TaskledgerTui
+
+    tui_app = TaskledgerTui(
+        workspace_root=tmp_path,
+        task_ref="task-0001",
+        layout="wide",
+    )
+
+    async def _drive() -> None:
+        async with tui_app.run_test() as pilot:
+            # Refresh loads the snapshot with completed todos.
+            await pilot.pause()
+            await pilot.press("r")
+            await pilot.press("3")  # switch to Todos tab
+            await pilot.pause()
+            # If markup=False is missing, the [x] marker in the rendered
+            # todos content raises Textual MarkupError here.
+            await pilot.press("1")  # back to Summary
+            await pilot.pause()
+            await pilot.press("q")
+
+    asyncio.run(_drive())

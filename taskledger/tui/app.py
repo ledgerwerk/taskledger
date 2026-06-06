@@ -263,7 +263,7 @@ class TaskledgerTui(App[None]):
                     yield TabPane(
                         "Summary",
                         VerticalScroll(
-                            Static(id="summary-tab"),
+                            Static(id="summary-tab", markup=False),
                             classes="tab-scroll",
                         ),
                         id="summary",
@@ -271,7 +271,7 @@ class TaskledgerTui(App[None]):
                     yield TabPane(
                         "Plan",
                         VerticalScroll(
-                            Static(id="plan-tab"),
+                            Static(id="plan-tab", markup=False),
                             classes="tab-scroll",
                         ),
                         id="plan",
@@ -279,7 +279,7 @@ class TaskledgerTui(App[None]):
                     yield TabPane(
                         "Todos",
                         VerticalScroll(
-                            Static(id="todos-tab"),
+                            Static(id="todos-tab", markup=False),
                             classes="tab-scroll",
                         ),
                         id="todos",
@@ -287,7 +287,7 @@ class TaskledgerTui(App[None]):
                     yield TabPane(
                         "Implementation",
                         VerticalScroll(
-                            Static(id="implementation-tab"),
+                            Static(id="implementation-tab", markup=False),
                             classes="tab-scroll",
                         ),
                         id="implementation",
@@ -295,7 +295,7 @@ class TaskledgerTui(App[None]):
                     yield TabPane(
                         "Reviews",
                         VerticalScroll(
-                            Static(id="reviews-tab"),
+                            Static(id="reviews-tab", markup=False),
                             classes="tab-scroll",
                         ),
                         id="reviews",
@@ -303,7 +303,7 @@ class TaskledgerTui(App[None]):
                     yield TabPane(
                         "Validation",
                         VerticalScroll(
-                            Static(id="validation-tab"),
+                            Static(id="validation-tab", markup=False),
                             classes="tab-scroll",
                         ),
                         id="validation",
@@ -311,7 +311,7 @@ class TaskledgerTui(App[None]):
                     yield TabPane(
                         "Files",
                         VerticalScroll(
-                            Static(id="files-tab"),
+                            Static(id="files-tab", markup=False),
                             classes="tab-scroll",
                         ),
                         id="files",
@@ -319,7 +319,7 @@ class TaskledgerTui(App[None]):
                     yield TabPane(
                         "Events",
                         VerticalScroll(
-                            Static(id="events-tab"),
+                            Static(id="events-tab", markup=False),
                             classes="tab-scroll",
                         ),
                         id="events",
@@ -327,12 +327,12 @@ class TaskledgerTui(App[None]):
                     yield TabPane(
                         "Raw Report",
                         VerticalScroll(
-                            Static(id="raw-report-tab"),
+                            Static(id="raw-report-tab", markup=False),
                             classes="tab-scroll",
                         ),
                         id="raw-report",
                     )
-        yield Static("", id="status-bar")
+        yield Static("", id="status-bar", markup=False)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -508,7 +508,7 @@ class TaskledgerTui(App[None]):
             if not self._matches_filters(task):
                 continue
             label = self._task_label(task, active_task_id)
-            task_list.append(ListItem(Static(label)))
+            task_list.append(ListItem(Static(label, markup=False)))
 
     def _render_detail(self) -> None:
         selected = self.snapshot.get("selected")
