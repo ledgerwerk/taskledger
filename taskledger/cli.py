@@ -79,6 +79,7 @@ from taskledger.cli_storage import register_storage_commands
 from taskledger.cli_sync import register_sync_commands
 from taskledger.cli_task import register_task_v2_commands
 from taskledger.cli_validate import register_validate_v2_commands
+from taskledger.cli_bdd import register_bdd_commands
 from taskledger.command_inventory import COMMAND_METADATA
 from taskledger.errors import LaunchError, OptionalCommandGroupUnavailable
 from taskledger.services.dashboard import dashboard, render_dashboard_text
@@ -134,6 +135,10 @@ config_app = typer.Typer(
     add_completion=False,
     help="Inspect and update project configuration.",
 )
+bdd_app = typer.Typer(
+    add_completion=False,
+    help="Manage BDD rules, examples, and Gherkin export.",
+)
 
 app.add_typer(task_app, name="task")
 app.add_typer(plan_app, name="plan")
@@ -160,6 +165,7 @@ app.add_typer(report_app, name="report")
 app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(review_app, name="review")
 app.add_typer(config_app, name="config")
+app.add_typer(bdd_app, name="bdd")
 
 register_task_v2_commands(task_app)
 register_plan_v2_commands(plan_app)
@@ -179,6 +185,7 @@ register_report_commands(report_app)
 register_pipeline_commands(pipeline_app)
 register_review_commands(review_app)
 register_config_commands(config_app)
+register_bdd_commands(bdd_app)
 
 
 def _optional_group_failure(

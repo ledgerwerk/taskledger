@@ -28,6 +28,13 @@ from taskledger.domain.sidecars import (
     TodoCollection,
     ValidationCheck,
 )
+from taskledger.domain.bdd import (
+    BddAutomationRef,
+    BddExampleRecord,
+    BddFeatureRecord,
+    BddReportRecord,
+    BddRuleRecord,
+)
 
 # Compatibility facade: re-export domain record types and selected state symbols.
 # ruff: noqa: F401
