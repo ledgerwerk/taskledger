@@ -34,4 +34,6 @@ def run_command(argv: tuple[str, ...], *, cwd: Path) -> CommandResult:
         return CommandResult(127, "", f"command not found: {argv[0]}" if argv else "")
     except OSError as exc:
         return CommandResult(1, "", str(exc))
+    except KeyboardInterrupt:
+        return CommandResult(130, "", "interrupted")
     return CommandResult(completed.returncode, completed.stdout, completed.stderr)
