@@ -1,7 +1,7 @@
 ---
 title: "Architecture Documentation"
-date: "2026-06-07"
-generator: "archledger 0.2.1.dev3+gaf0af85a8.d20260606"
+date: "1980-01-01"
+generator: "archledger 0.1.1.dev13+g9edca5498"
 arc42_template_version: "9.0-EN"
 ---
 
@@ -467,12 +467,14 @@ The runtime view traces the main operational scenarios through the system:
 
 ## BDD example to validation evidence
 
-1. An actor initializes a BDD feature for a managed task and adds rules and Given/When/Then examples.
+1. An actor initializes task-local BDD/example records for a managed task.
 2. Each example links to acceptance-criterion IDs and may link to Archledger records.
-3. `bdd gherkin-export` emits a `.feature` artifact with stable traceability tags.
-4. An external BDD runner executes the artifact; taskledger does not run that tool.
-5. `validate import-bdd-report` reads Cucumber JSON or JUnit XML, matches scenarios by stable tags, and stores a durable report.
-6. Matched results become validation evidence; normal latest-check-wins and mandatory-criterion gates still decide completion.
+3. Canonical behavior specs live outside Taskledger under `specs/behavior/features/<area>/<feature>.feature`, owned by SpecWeave.
+4. Plain pytest files under `tests/test_<area>_<feature>.py` enforce the behavior and may emit JUnit XML under `reports/behavior/`.
+5. `bdd example link-automation` records metadata that links a task-local example to the external feature file, scenario tag/title, and pytest node id.
+6. `validate import-bdd-report` imports JUnit XML or Cucumber-compatible JSON evidence and matches it back to task-local examples.
+7. Matched results become validation evidence through normal validation checks; normal latest-check-wins and mandatory-criterion gates still decide completion.
+8. `bdd gherkin-export` remains a derived exchange/export command. It must not be presented as the canonical source of executable behavior.
 
 # Deployment View
 

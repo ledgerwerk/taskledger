@@ -58,7 +58,7 @@ def _register_bdd_root_commands(app: typer.Typer) -> None:
         try:
             task_rec = resolve_cli_task(state.cwd, task)
             payload = bdd_init(state.cwd, task_rec.id, feature, description)
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_init(payload))
@@ -73,7 +73,7 @@ def _register_bdd_root_commands(app: typer.Typer) -> None:
         try:
             task_rec = resolve_cli_task(state.cwd, task)
             payload = bdd_status(state.cwd, task_rec.id)
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_status(payload))
@@ -103,7 +103,7 @@ def _register_bdd_rule_commands(app: typer.Typer) -> None:
             payload = bdd_rule_add(
                 state.cwd, task_rec.id, title, description, feature_id
             )
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_rule(payload))
@@ -118,7 +118,7 @@ def _register_bdd_rule_commands(app: typer.Typer) -> None:
         try:
             task_rec = resolve_cli_task(state.cwd, task)
             payload = bdd_rule_list(state.cwd, task_rec.id)
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_rule_list(payload))
@@ -134,7 +134,7 @@ def _register_bdd_rule_commands(app: typer.Typer) -> None:
         try:
             task_rec = resolve_cli_task(state.cwd, task)
             payload = bdd_rule_show(state.cwd, task_rec.id, rule_id)
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_rule(payload))
@@ -183,7 +183,7 @@ def _register_bdd_example_commands(app: typer.Typer) -> None:
                 then=tuple(then or ()),
                 acceptance_criteria=tuple(acceptance_criterion or ()),
             )
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_example(payload))
@@ -198,7 +198,7 @@ def _register_bdd_example_commands(app: typer.Typer) -> None:
         try:
             task_rec = resolve_cli_task(state.cwd, task)
             payload = bdd_example_list(state.cwd, task_rec.id)
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_example_list(payload))
@@ -214,7 +214,7 @@ def _register_bdd_example_commands(app: typer.Typer) -> None:
         try:
             task_rec = resolve_cli_task(state.cwd, task)
             payload = bdd_example_show(state.cwd, task_rec.id, example_id)
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_example(payload))
@@ -235,7 +235,7 @@ def _register_bdd_example_commands(app: typer.Typer) -> None:
             payload = bdd_example_link_ac(
                 state.cwd, task_rec.id, example_id, criterion_id
             )
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_example(payload))
@@ -254,7 +254,7 @@ def _register_bdd_example_commands(app: typer.Typer) -> None:
             payload = bdd_example_link_archledger(
                 state.cwd, task_rec.id, example_id, archledger_ref
             )
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_example(payload))
@@ -316,7 +316,7 @@ def _register_bdd_example_commands(app: typer.Typer) -> None:
                 acceptance_criteria=tuple(acceptance_criterion or ()),
                 allow_missing=allow_missing,
             )
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_bdd_example(payload))
@@ -340,7 +340,7 @@ def _register_bdd_export_commands(app: typer.Typer) -> None:
         try:
             task_rec = resolve_cli_task(state.cwd, task)
             payload = bdd_gherkin_export(state.cwd, task_rec.id, out)
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_gherkin_export(payload))
@@ -356,7 +356,7 @@ def _register_bdd_export_commands(app: typer.Typer) -> None:
         try:
             task_rec = resolve_cli_task(state.cwd, task)
             payload = bdd_export_json(state.cwd, task_rec.id, out)
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_export_json(payload))
@@ -377,7 +377,7 @@ def _register_bdd_archledger_commands(app: typer.Typer) -> None:
         try:
             task_rec = resolve_cli_task(state.cwd, task)
             payload = bdd_archledger_candidate(state.cwd, task_rec.id, example_id, out)
-        except (LaunchError, Exception) as exc:
+        except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=_render_archledger_candidate(payload))

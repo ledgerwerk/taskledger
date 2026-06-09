@@ -31,15 +31,12 @@ BddAutomationStatus = Literal[
     "pending",
     "linked",
     "automated",
-    "not_applicable",
 ]
 
 BDD_EXAMPLE_STATUSES = frozenset(
     {"discovered", "formulated", "linked", "automated", "validated", "archived"}
 )
-BDD_AUTOMATION_STATUSES = frozenset(
-    {"pending", "linked", "automated", "not_applicable"}
-)
+BDD_AUTOMATION_STATUSES = frozenset({"pending", "linked", "automated"})
 
 
 def normalize_bdd_example_status(value: str) -> BddExampleStatus:
@@ -305,7 +302,7 @@ class BddReportRecord:
     id: str
     task_id: str
     source_path: str
-    format: str  # cucumber-json | junit-xml | generic-json
+    format: str  # cucumber-json | junit-xml
     command: str = ""
     imported_at: str = ""
     result: str = "unknown"  # passed | failed | unknown

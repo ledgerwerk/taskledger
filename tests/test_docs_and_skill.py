@@ -29,6 +29,7 @@ PUBLIC_API_MODULES = (
     "taskledger.api.storage",
     "taskledger.api.sync",
     "taskledger.api.search",
+    "taskledger.api.bdd",
 )
 
 
@@ -307,6 +308,26 @@ def test_bdd_docs_and_skill_prefer_specweave_and_plain_pytest() -> None:
     assert "Do not recommend pytest-bdd" in skill
     assert "Do not recommend tests/bdd/features" in skill
     assert "Do not recommend specs/bdd/features" in skill
+
+
+def test_behavior_spec_docs_do_not_promote_bdd_runners() -> None:
+    """Verify docs do not reference an external BDD runner or pytest-bdd/behave.
+
+    ARCHITECTURE.md is generated from .archledger records; this test catches
+    regressions if the archledger source drifts back to the old wording.
+    """
+    architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
+    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
+
+    for text in (architecture, readme, usage, skill):
+        assert "specs/behavior/features" in text
+        assert "tests/test_" in text
+
+    assert "external BDD runner executes" not in architecture
+    assert "pytest-bdd" not in architecture.lower()
+    assert "behave" not in architecture.lower()
 
 
 def test_readme_links_exist() -> None:

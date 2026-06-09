@@ -2,10 +2,30 @@
 
 from __future__ import annotations
 
+__all__ = [
+    "bdd_archledger_candidate",
+    "bdd_example_add",
+    "bdd_example_link_ac",
+    "bdd_example_link_archledger",
+    "bdd_example_link_automation",
+    "bdd_example_list",
+    "bdd_example_show",
+    "bdd_export_json",
+    "bdd_gherkin_export",
+    "bdd_init",
+    "bdd_rule_add",
+    "bdd_rule_list",
+    "bdd_rule_show",
+    "bdd_status",
+    "import_bdd_report",
+]
+
 import json
 import re
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from taskledger.domain.bdd import (
     BddAutomationRef,
@@ -589,65 +609,60 @@ def bdd_archledger_candidate(
     ):
         suggested_type = "runtime_scenario"
 
-    # Build candidate content with YAML front matter
-    lines = [
-        "---",
-        f"type: {suggested_type}",
-        "status: proposed",
-        f"title: {example.title}",
-    ]
+    # Build candidate content with YAML front matter using safe_dump
+    front_matter: dict[str, object] = {
+        "type": suggested_type,
+        "status": "proposed",
+        "title": example.title,
+    }
     if example.automation.feature_file:
-        lines.append("source_refs:")
-        lines.append(f"  - path: {example.automation.feature_file}")
-        lines.append("    role: documents")
+        front_matter["source_refs"] = [
+            {"path": example.automation.feature_file, "role": "documents"}
+        ]
     if example.automation.pytest_path:
-        lines.append("test_refs:")
-        lines.append(f"  - path: {example.automation.pytest_path}")
-        lines.append("    kind: pytest")
+        test_ref_entry: dict[str, object] = {
+            "path": example.automation.pytest_path,
+            "kind": "pytest",
+        }
         if example.automation.pytest_nodeid:
-            lines.append(f"    nodeid: {example.automation.pytest_nodeid}")
-    lines.append("bdd:")
+            test_ref_entry["nodeid"] = example.automation.pytest_nodeid
+        front_matter["test_refs"] = [test_ref_entry]
+    bdd_section: dict[str, object] = {}
     feature_rec = load_bdd_feature(workspace_root, task_id)
-    lines.append(f"  feature: {feature_rec.title if feature_rec else ''}")
+    if feature_rec:
+        bdd_section["feature"] = feature_rec.title
     rule = None
     if example.rule_id:
         rule = resolve_bdd_rule(workspace_root, task_id, example.rule_id)
     if rule:
-        lines.append(f"  rule: {rule.title}")
-    lines.append(f"  scenario: {example.title}")
-    lines.append("  tags:")
-    lines.append(f"    - {task_id}")
-    lines.append(f"    - {example.id}")
-    lines.append("  task_refs:")
-    lines.append(f"    - {task_id}")
+        bdd_section["rule"] = rule.title
+    bdd_section["scenario"] = example.title
+    bdd_section["tags"] = [task_id, example.id]
+    bdd_section["task_refs"] = [task_id]
     if example.acceptance_criteria:
-        lines.append("  acceptance_criteria:")
-        for ac in example.acceptance_criteria:
-            lines.append(f"    - {ac}")
+        bdd_section["acceptance_criteria"] = list(example.acceptance_criteria)
     if example.given:
-        lines.append("  given:")
-        for step in example.given:
-            lines.append(f"    - {step}")
+        bdd_section["given"] = list(example.given)
     if example.when:
-        lines.append("  when:")
-        for step in example.when:
-            lines.append(f"    - {step}")
+        bdd_section["when"] = list(example.when)
     if example.then:
-        lines.append("  then:")
-        for step in example.then:
-            lines.append(f"    - {step}")
+        bdd_section["then"] = list(example.then)
     if example.automation.feature_file:
-        lines.append("  automation:")
-        lines.append(f"    status: {example.automation.status}")
-        lines.append(f"    feature_file: {example.automation.feature_file}")
-        lines.append(f"    scenario: {example.automation.scenario or example.title}")
+        automation_dict: dict[str, object] = {
+            "status": example.automation.status,
+            "feature_file": example.automation.feature_file,
+            "scenario": example.automation.scenario or example.title,
+        }
         if example.automation.pytest_path:
-            lines.append(f"    pytest_path: {example.automation.pytest_path}")
+            automation_dict["pytest_path"] = example.automation.pytest_path
         if example.automation.pytest_nodeid:
-            lines.append(f"    pytest_nodeid: {example.automation.pytest_nodeid}")
-    lines.append("---")
-
-    content = "\n".join(lines)
+            automation_dict["pytest_nodeid"] = example.automation.pytest_nodeid
+        bdd_section["automation"] = automation_dict
+    front_matter["bdd"] = bdd_section
+    front_matter_str = yaml.safe_dump(
+        front_matter, sort_keys=False, allow_unicode=True
+    ).strip()
+    content = "---\n" + front_matter_str + "\n---"
 
     # Write to file if out is specified
     if out:
