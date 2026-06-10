@@ -53,9 +53,6 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     "taskledger/cli_common.py:taskledger.services.agent_logging": (
         "CLI common emits recorder task/payload/error notes."
     ),
-    "taskledger/cli_implement.py:taskledger.services.actors": (
-        "Implementation commands resolve actor/harness context."
-    ),
     "taskledger/cli_implement.py:taskledger.services.agent_logging": (
         "Implement command wrapper records managed-shell command failures."
     ),
