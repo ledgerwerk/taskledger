@@ -13,7 +13,6 @@ from taskledger.command_inventory import (
     EFFECT_WRITE,
     EXTERNAL_FILE_WRITE,
     EXTERNAL_PROCESS_EXEC,
-    EXTERNAL_SERVER_SOCKET,
     HUMAN_ORIENTED,
     MIGRATION,
     REPAIR,
@@ -64,7 +63,8 @@ def test_inventory_marks_core_and_repair_commands() -> None:
     assert COMMAND_METADATA["implement restart"].audience == STABLE_FOR_AGENTS
     assert COMMAND_METADATA["implement resume"].audience == STABLE_FOR_AGENTS
     assert COMMAND_METADATA["task uncancel"].audience == STABLE_FOR_AGENTS
-    assert COMMAND_METADATA["serve"].audience == HUMAN_ORIENTED
+    assert COMMAND_METADATA["usage"].audience == STABLE_FOR_AGENTS
+    assert COMMAND_METADATA["monitor"].audience == HUMAN_ORIENTED
     assert COMMAND_METADATA["lock break"].audience == REPAIR
     assert COMMAND_METADATA["doctor"].audience == REPAIR
 
@@ -192,10 +192,12 @@ def test_process_exec_commands() -> None:
     assert "plan command" in process_cmds
 
 
-def test_server_socket_commands() -> None:
-    spec = COMMAND_METADATA["serve"]
-    assert spec.external_effect == EXTERNAL_SERVER_SOCKET
-    assert spec.agent_safe is False
+def test_monitor_and_file_commands_have_expected_metadata() -> None:
+    assert COMMAND_METADATA["monitor"].agent_safe is False
+    assert COMMAND_METADATA["usage"].targeting == TARGETING_POSITIONAL_OR_ACTIVE
+    assert COMMAND_METADATA["file link"].targeting == TARGETING_EXPLICIT_REQUIRED
+    assert COMMAND_METADATA["file status"].targeting == TARGETING_EXPLICIT_REQUIRED
+    assert COMMAND_METADATA["file refresh"].targeting == TARGETING_EXPLICIT_REQUIRED
 
 
 def test_file_write_commands() -> None:

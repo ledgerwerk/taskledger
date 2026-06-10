@@ -33,7 +33,7 @@ def _git(
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["git", *args],
+        ["git", "-c", "safe.bareRepository=all", *args],
         cwd=cwd,
         capture_output=True,
         text=True,

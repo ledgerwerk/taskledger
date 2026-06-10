@@ -65,8 +65,10 @@ Task API
 - ``remove_requirement``
 - ``waive_requirement``
 - ``add_file_link``
+- ``file_status``
 - ``remove_file_link``
 - ``list_file_links``
+- ``refresh_file_baseline``
 - ``add_todo``
 - ``set_todo_done``
 - ``show_todo``

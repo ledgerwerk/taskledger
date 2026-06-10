@@ -425,81 +425,54 @@ Rules for agents:
 * Record concise evidence with ``todo done``.
 * Do not create handoffs or context bundles unless the user asked to switch harness or session.
 
-Human monitoring UI
--------------------
+Fresh-session startup and monitoring
+------------------------------------
 
-``taskledger serve`` starts a read-only localhost server-rendered HTML
-dashboard for a human operator. It re-renders HTML on each request and can add
-meta refresh when requested.
-
-.. code-block:: bash
-
-   taskledger report html task-0040 --output task-0040.html
-   taskledger report html --active --output active-task.html
-   taskledger report site --output .taskledger-report/
-   taskledger serve --refresh-seconds 2
-   taskledger serve --open
-   taskledger serve --task task-0040 --refresh-seconds 2
-
-Agents should continue to use ``next-action``, ``todo next``, and ``--json`` as
-the canonical machine interface for routine same-session work. Reach for
-``context`` or handoffs when the task actually needs broader fresh-context
-transfer.
-
-Terminal TUI
-~~~~~~~~~~~~
-
-``taskledger tui`` is an optional read-only Textual navigator for humans who
-want to browse tasks inside the terminal. It depends on the optional
-``[tui]`` extra:
+Use ``taskledger usage`` as the compact startup command for a fresh coding-agent
+session:
 
 .. code-block:: bash
 
-   python -m pip install -e ".[tui]"
-   taskledger tui
-   taskledger tui --task task-0040
-   taskledger tui --refresh-seconds 5
-   taskledger tui --include-archived
-   taskledger tui --layout compact
-   taskledger tui --layout wide
-   taskledger tui --layout auto
+   taskledger usage
+   taskledger --json usage
+   taskledger usage -q
+   taskledger usage --task task-0040
 
-The TUI shows the same read models as ``view`` and ``serve``: task list,
-summary, plan review, todos, implementation, code reviews, validation,
-files, events, and a raw Markdown report. Key bindings:
+``usage`` is read-only. It summarizes actor/harness identity, active work,
+claimable handoffs, review-ready items, stale locks, open questions, and ready
+tasks. JSON output preserves the existing envelope and returns
+``result.kind == "usage"``.
 
-.. code-block:: text
+``taskledger monitor`` replaces the removed browser/TUI surfaces with a
+dependency-free terminal snapshot:
 
-   q          quit
-   r / F5     refresh snapshot
-   /          focus search/filter input
-   Enter      open selected task
-   Tab        cycle focus / tabs
-   q          quit
-   r / F5     refresh snapshot
-   /          focus search/filter input
-   Enter      open selected task
-   b          compact mode: back to task list
-   l          compact mode: toggle list/detail
-   Tab        cycle focus / tabs
-   1..9       jump to a tab
-   c          show command copy palette
-   o          write a static HTML report for the selected task
-   a n p i m v f d c   stage filters
-   t          toggle archived tasks
-   ?          this help
+.. code-block:: bash
 
-The TUI is read-only. Mutating actions still require the CLI. When textual
-is missing, ``taskledger tui`` fails fast with an
-``OPTIONAL_DEPENDENCY_MISSING`` error and an install hint.
+   taskledger monitor --once
+   taskledger monitor --refresh-seconds 2
+   taskledger monitor --task task-0040
+   taskledger --json monitor --once
 
-On narrow terminals such as Termux, use ``taskledger tui --layout compact``,
-or leave ``--layout auto`` (the default) to switch to compact mode below the
-configured width threshold (~88 columns). Compact mode shows one full-width
-pane at a time: the task list, or the detail view for the selected task.
-``--layout wide`` forces the current two-pane layout. Layout selection is
-presentation-only; it does not change the read-model payload, the selected
-task resolution, or ledger state.
+``monitor`` is read-only, works on narrow terminals such as Termux, and keeps
+using taskledger's normal read models instead of introducing a separate UI
+stack. Agents should continue to use ``next-action``, ``todo next``, and
+``--json`` as the canonical machine interface for routine same-session work.
+
+Linked file baselines and drift
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Linked files can now capture a baseline snapshot and later report drift:
+
+.. code-block:: bash
+
+   taskledger file link task-0040 src/foo.py --kind code --snapshot
+   taskledger file status task-0040
+   taskledger file refresh task-0040 src/foo.py --reason "Rebaseline after accepted implementation"
+
+``file status`` reports ``new``, ``modified``, ``deleted``, ``unchanged``, and
+``unbaselined`` states. It also keeps ``context``: canonical fresh continuation
+context and ``handoff show`` as the richer advanced/compatibility read
+surfaces when broader state transfer is needed.
 
 ``task report`` generates a human-readable Markdown report for a single task.
 It is for humans who want to review, archive, or share a task outside the terminal.

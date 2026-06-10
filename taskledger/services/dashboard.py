@@ -244,8 +244,6 @@ def render_dashboard_text(payload: dict[str, object]) -> str:  # noqa: C901
     assert isinstance(f, dict)
     lines.append(f"Files: {f.get('total', 0)} linked")
 
-    lines.append("")
-
     # runs
     runs = payload.get("runs")
     if isinstance(runs, list | tuple) and len(runs) > 0:
@@ -322,8 +320,6 @@ def render_dashboard_text(payload: dict[str, object]) -> str:  # noqa: C901
                 lines.append(f"    {csum}")
     else:
         lines.append("Changes: none")
-
-    lines.append("")
 
     # bdd
     from typing import cast

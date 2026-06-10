@@ -123,6 +123,8 @@ EventName = Literal[
     "doctor.reindexed",
     "task.recorded",
     "code_review.recorded",
+    "file.linked",
+    "file.baseline_refreshed",
 ]
 
 ACTIVE_TASK_STAGES = frozenset({"planning", "implementing", "validating"})

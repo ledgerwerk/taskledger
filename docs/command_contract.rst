@@ -43,20 +43,13 @@ Task-resource commands accept the task as their direct positional resource:
    taskledger task unarchive task-0001 --reason "Restore task"
    taskledger task report task-0001
 
-Root reporting commands render standalone HTML:
+Fresh-session and monitoring commands are top-level read surfaces:
 
 .. code-block:: bash
 
-   taskledger report html task-0040 --output task-0040.html
-   taskledger report html --active --output active-task.html
-   taskledger report site --output .taskledger-report/
-
-Serve supports optional positional task selection and refresh in seconds:
-
-.. code-block:: bash
-
-   taskledger serve --refresh-seconds 2
-   taskledger serve --task task-0040 --refresh-seconds 2
+   taskledger usage [TASK_REF] [--task TASK_REF] [-q]
+   taskledger --json usage
+   taskledger monitor [TASK_REF] [--task TASK_REF] [--refresh-seconds 2] [--once] [--max-events 10] [--max-ready 10] [--plain] [--no-clear]
 
 Optional positional task refs are not supported for workflow commands.
 
@@ -483,43 +476,38 @@ the parent task terminal.
 Human monitoring UI
 -------------------
 
-``taskledger serve`` is a top-level human-oriented monitoring command:
+``taskledger usage`` is the compact fresh-session startup command:
 
 .. code-block:: bash
 
-   taskledger serve [TASK_REF] [--host 127.0.0.1] [--port 8765] [--refresh-seconds 2] [--open/--no-open]
+   taskledger usage [TASK_REF] [--task TASK_REF] [-q]
+   taskledger --json usage
 
 Rules:
 
-* the MVP binds only to localhost;
-* it serves read-only server-rendered HTML pages;
-* browser actions are not part of the MVP;
-* agents should continue to use ``next-action``, ``context``, ``view``, and
-  ``--json`` commands as the canonical automation interface.
+* it is read-only and must not claim handoffs, repair locks, or mutate task
+  state;
+* root ``--json`` returns the standard CLI envelope with ``result.kind ==
+  "usage"``;
+* it summarizes actor, harness, active work, inbox items, and ready tasks;
+* agents should continue to use ``next-action``, ``todo next``, and other JSON
+  commands as the canonical same-session automation interface.
 
-``taskledger tui`` is an optional top-level human-oriented terminal navigator.
-It requires the optional textual dependency:
+``taskledger monitor`` is the dependency-free human-oriented terminal monitor:
 
 .. code-block:: bash
 
-   taskledger tui [TASK_REF] [--task TASK_REF] [--layout auto|wide|compact] [--refresh-seconds N] [--no-refresh] [--include-archived]
+   taskledger monitor [TASK_REF] [--task TASK_REF] [--refresh-seconds 2] [--once] [--max-events 10] [--max-ready 10] [--plain] [--no-clear]
 
 Rules:
 
-* the TUI is read-only and never mutates ``.taskledger/`` state;
-* ``taskledger --help`` and ``taskledger tui --help`` must work without textual
-  installed (the import is deferred to ``run_tui``);
-* when textual is missing, the command fails fast with
-  ``OPTIONAL_DEPENDENCY_MISSING`` (exit code 2) and an install remediation;
-* the command rejects conflicting ``TASK_REF`` and ``--task`` values;
-* the command rejects conflicting ``TASK_REF`` and ``--task`` values;
-* ``--layout`` selects the presentation layout: ``auto`` (default, switches to
-  compact below ~88 columns), ``wide`` (force two-pane), or ``compact`` (force
-  single-pane). Invalid values exit ``USAGE_ERROR`` (exit code 2) before the
-  textual import guard fires;
-* layout selection is presentation-only. It must not change the read-model
-  payload, selected task resolution, or ledger state;
-* agents should keep using JSON commands for automation.
+* it is read-only and never mutates ``.taskledger/`` state;
+* root ``--json`` prints a single ``monitor_snapshot`` payload and exits;
+* non-JSON mode refreshes on a timer until interrupted;
+* ``--plain`` disables styling and ``--no-clear`` appends snapshots instead of
+  clearing the terminal;
+* it replaces the removed server/TUI surface; agents should keep using JSON
+  commands for automation.
 
 Focused context and handoff options
 -----------------------------------
@@ -583,7 +571,6 @@ These aliases are intentionally not registered:
 * ``task clear-active``
 * ``implement add-change``
 * ``validate add-check``
-* ``file link``
 * ``file unlink``
 * ``link link``
 * ``link unlink``

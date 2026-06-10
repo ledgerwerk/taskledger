@@ -79,7 +79,6 @@ _FORBIDDEN = [
     "taskledger task clear-active",
     "taskledger implement add-change",
     "taskledger validate add-check",
-    "taskledger file link",
     "taskledger file unlink",
     "taskledger link link",
     "taskledger link unlink",

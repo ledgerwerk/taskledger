@@ -43,8 +43,8 @@ Top-level entry categories
 
 **Support entries** — auxiliary operations:
 
-- ``intro``, ``file``, ``link``, ``require``, ``lock``, ``config``, ``actor``, ``harness``
-- ``export``, ``import``, ``snapshot``, ``pipeline``, ``can``, ``report``, ``commands``
+- ``intro``, ``file``, ``link``, ``require``, ``lock``, ``config``, ``actor``, ``harness``, ``usage``
+- ``export``, ``import``, ``snapshot``, ``pipeline``, ``can``, ``commands``
 
 **Advanced entries** — power-user, storage, transfer, and project operations:
 
@@ -52,19 +52,19 @@ Top-level entry categories
 
 **Human-oriented entries** — interactive inspection and reporting:
 
-- ``status``, ``view``, ``serve``, ``tree``, ``tui``, ``search``, ``grep``, ``symbols``, ``deps``
+- ``status``, ``view``, ``monitor``, ``tree``, ``search``, ``grep``, ``symbols``, ``deps``
 
 **Repair and migration groups** — exceptional recovery:
 
 - ``doctor``, ``repair``, ``reindex``, ``migrate``
 
-``serve`` is a human-oriented, read-only localhost dashboard. Agents should
-keep using the CLI and JSON command surface for automation.
+``usage`` is the compact fresh-session startup command. It summarizes actor,
+harness, active work, inbox items, and ready tasks without mutating ledger
+state.
 
-``tui`` is an optional, read-only Textual navigator for terminal users
-(``pip install -e '.[tui]'``). It is human-oriented and not agent-facing:
-the command fails with ``OPTIONAL_DEPENDENCY_MISSING`` when textual is not
-installed.
+``monitor`` is the human-oriented, read-only terminal monitor. It replaces the
+old browser/TUI surfaces with a dependency-free snapshot view that keeps using
+the same underlying taskledger read models.
 
 The supported implementation lifecycle includes ``implement restart --summary
 "..."`` when a task is in ``failed_validation`` and ``implement resume --reason
@@ -119,6 +119,13 @@ todo subcommands
 
 - ``todo add``, ``todo list``, ``todo done``, ``todo show``, ``todo status``, ``todo next``
 - Todo source is inferred from active lock: ``implementer`` during implementation, ``planner`` during planning, ``user`` otherwise.
+
+file subcommands
+----------------
+
+- ``file add``, ``file link``, ``file remove``, ``file list``, ``file status``, ``file refresh``
+- ``file link`` records or updates a task-linked file with an optional baseline snapshot.
+- ``file status`` reports ``new``, ``modified``, ``deleted``, ``unchanged``, and ``unbaselined`` drift states.
 
 storage and sync subcommands
 ----------------------------

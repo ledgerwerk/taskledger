@@ -36,6 +36,15 @@ from taskledger.domain.states import (
 )
 from taskledger.ids import next_project_id
 from taskledger.services import tasks as _tasks
+from taskledger.services.file_links import (
+    file_status as build_file_status,
+)
+from taskledger.services.file_links import (
+    refresh_file_baseline as refresh_file_link_baseline,
+)
+from taskledger.services.file_links import (
+    with_baseline,
+)
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     list_introductions,
@@ -263,6 +272,7 @@ def add_file_link(
     kind: str,
     label: str | None = None,
     required_for_validation: bool = False,
+    snapshot: bool | None = None,
 ) -> TaskRecord:
     task = _tasks._task_with_sidecars(
         workspace_root, resolve_task(workspace_root, task_ref)
@@ -270,12 +280,25 @@ def add_file_link(
     _tasks._ensure_not_archived(task, operation="add file link to")
     links = list(task.file_links)
     existing = next((item for item in links if item.path == path), None)
-    new_link = FileLink(
-        path=path,
-        kind=normalize_file_link_kind(kind),
-        label=label,
-        required_for_validation=required_for_validation,
-    )
+    if existing is None:
+        new_link = FileLink(
+            path=path,
+            kind=normalize_file_link_kind(kind),
+            label=label,
+            required_for_validation=required_for_validation,
+        )
+        if snapshot is not False:
+            new_link = with_baseline(new_link, workspace_root)
+    else:
+        new_link = replace(
+            existing,
+            kind=normalize_file_link_kind(kind),
+            label=label,
+            required_for_validation=required_for_validation,
+            updated_at=utc_now_iso(),
+        )
+        if snapshot is True:
+            new_link = with_baseline(new_link, workspace_root)
     if existing is not None:
         links = [item for item in links if item.path != path]
     links.append(new_link)
@@ -288,6 +311,17 @@ def add_file_link(
         workspace_root, LinkCollection(task_id=updated.id, links=updated.file_links)
     )
     save_task(workspace_root, updated)
+    _tasks._append_event(
+        workspace_root,
+        updated.id,
+        "file.linked",
+        {
+            "path": path,
+            "kind": kind,
+            "snapshot": snapshot,
+            "target_type": new_link.target_type,
+        },
+    )
     rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return updated
 
@@ -318,6 +352,25 @@ def list_file_links(workspace_root: Path, task_ref: str) -> dict[str, object]:
         "task_id": task.id,
         "file_links": [item.to_dict() for item in task.file_links],
     }
+
+
+def file_status(workspace_root: Path, task_ref: str) -> dict[str, object]:
+    return build_file_status(workspace_root, task_ref)
+
+
+def refresh_file_baseline(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    path: str,
+    reason: str,
+) -> dict[str, object]:
+    return refresh_file_link_baseline(
+        workspace_root,
+        task_ref,
+        path,
+        reason=reason,
+    )
 
 
 # ---------------------------------------------------------------------------

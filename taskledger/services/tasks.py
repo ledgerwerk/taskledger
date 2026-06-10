@@ -388,6 +388,22 @@ def list_file_links(*args, **kwargs):  # type: ignore[no-untyped-def]
     return _impl(*args, **kwargs)
 
 
+def file_status(*args, **kwargs):  # type: ignore[no-untyped-def]
+    from taskledger.services.task_collections import (
+        file_status as _impl,
+    )
+
+    return _impl(*args, **kwargs)
+
+
+def refresh_file_baseline(*args, **kwargs):  # type: ignore[no-untyped-def]
+    from taskledger.services.task_collections import (
+        refresh_file_baseline as _impl,
+    )
+
+    return _impl(*args, **kwargs)
+
+
 def add_todo(*args, **kwargs):  # type: ignore[no-untyped-def]
     from taskledger.services.task_collections import (
         add_todo as _impl,

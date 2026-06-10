@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import importlib
-import math
 import re
+import shutil
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, cast
@@ -76,7 +77,6 @@ from taskledger.cli_misc import (
 from taskledger.cli_pipeline import register_pipeline_commands
 from taskledger.cli_plan import register_plan_v2_commands
 from taskledger.cli_question import register_question_v2_commands
-from taskledger.cli_report import register_report_commands
 from taskledger.cli_review import register_review_commands
 from taskledger.cli_storage import register_storage_commands
 from taskledger.cli_sync import register_sync_commands
@@ -86,6 +86,8 @@ from taskledger.cli_validate import register_validate_v2_commands
 from taskledger.command_inventory import COMMAND_METADATA
 from taskledger.errors import LaunchError, OptionalCommandGroupUnavailable
 from taskledger.services.dashboard import dashboard, render_dashboard_text
+from taskledger.services.monitor import monitor_snapshot, render_monitor_text
+from taskledger.services.usage import render_usage_text, usage_payload
 
 
 def _version_callback(value: bool) -> None:
@@ -128,7 +130,6 @@ doctor_app = typer.Typer(
     help="Inspect taskledger integrity.",
     invoke_without_command=True,
 )
-report_app = typer.Typer(add_completion=False, help="Render HTML reports.")
 pipeline_app = typer.Typer(
     add_completion=False,
     help="Inspect optional worker pipeline overlays.",
@@ -164,7 +165,6 @@ app.add_typer(migrate_app, name="migrate")
 app.add_typer(actors_app, name="actor")
 app.add_typer(harness_app, name="harness")
 app.add_typer(ledger_app, name="ledger")
-app.add_typer(report_app, name="report")
 app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(review_app, name="review")
 app.add_typer(config_app, name="config")
@@ -184,7 +184,6 @@ register_lock_v2_commands(lock_app)
 register_handoff_v2_commands(handoff_app)
 register_storage_commands(storage_app)
 register_sync_commands(sync_app)
-register_report_commands(report_app)
 register_pipeline_commands(pipeline_app)
 register_review_commands(review_app)
 register_config_commands(config_app)
@@ -569,15 +568,15 @@ def main(
         "grep",
         "import",
         "init",
+        "monitor",
         "next-action",
         "reindex",
         "search",
-        "serve",
         "snapshot",
         "status",
         "symbols",
         "tree",
-        "tui",
+        "usage",
         "view",
         "task",
         "plan",
@@ -756,95 +755,110 @@ def view_command(
     emit_payload(ctx, payload, human=human)
 
 
-@app.command("tui")
-def tui_command(
+def _selected_task_ref(
+    task_arg: str | None,
+    task_ref: str | None,
+    *,
+    command_name: str,
+) -> str | None:
+    if task_arg and task_ref and task_arg != task_ref:
+        raise LaunchError(
+            (
+                f"taskledger {command_name} received both TASK_REF and --task. "
+                "Use only one."
+            ),
+            code="USAGE_ERROR",
+            exit_code=2,
+        )
+    return task_arg or task_ref
+
+
+@app.command("usage")
+def usage_command(
     ctx: typer.Context,
     task_arg: TaskRefArgument = None,
     task_ref: Annotated[
         str | None,
-        typer.Option("--task", hidden=True),
+        typer.Option("--task"),
     ] = None,
-    refresh_seconds: Annotated[
-        int | None,
-        typer.Option(
-            "--refresh-seconds",
-            help="Auto-refresh the snapshot every N seconds. "
-            "Defaults to no auto-refresh.",
-        ),
-    ] = None,
-    no_refresh: Annotated[
-        bool,
-        typer.Option(
-            "--no-refresh",
-            help="Disable auto-refresh explicitly (default behavior).",
-        ),
-    ] = False,
-    include_archived: Annotated[
-        bool,
-        typer.Option(
-            "--include-archived",
-            help="Show archived tasks alongside visible ones.",
-        ),
-    ] = False,
-    layout: Annotated[
-        str,
-        typer.Option(
-            "--layout",
-            help=(
-                "TUI layout: auto (default, switches below ~88 cols), "
-                "wide (force two-pane), or compact (force single-pane)."
-            ),
-        ),
-    ] = "auto",
+    quiet: Annotated[bool, typer.Option("-q", "--quiet")] = False,
 ) -> None:
-    """Launch the optional Textual TUI navigator (read-only)."""
     state = ctx.obj
     assert isinstance(state, CLIState)
-    layout_mode = (layout or "").strip().lower()
-    if layout_mode not in {"auto", "wide", "compact"}:
-        error = LaunchError(
-            "taskledger tui --layout must be one of: auto, wide, compact.",
-            code="USAGE_ERROR",
-            exit_code=2,
-        )
-        emit_error(ctx, error)
-        raise typer.Exit(code=launch_error_exit_code(error))
-    if task_arg and task_ref and task_arg != task_ref:
-        error = LaunchError(
-            "taskledger tui received both TASK_REF and --task. Use only one.",
-            code="USAGE_ERROR",
-            exit_code=2,
-        )
-        emit_error(ctx, error)
-        raise typer.Exit(code=launch_error_exit_code(error))
-    if no_refresh:
-        refresh_seconds = None
-    selected_task_ref = task_arg or task_ref
     try:
-        from taskledger.tui.app import run_tui
-    except ImportError as exc:
-        error = LaunchError(
-            "taskledger tui requires the optional Textual dependency. "
-            "Install with: python -m pip install -e '.[tui]'",
-            code="OPTIONAL_DEPENDENCY_MISSING",
-            exit_code=2,
-            remediation=[
-                "Run: python -m pip install -e '.[tui]'",
-            ],
-            details={
-                "command_group": "tui",
-                "exception_type": type(exc).__name__,
-            },
+        payload = usage_payload(
+            state.cwd,
+            task_ref=_selected_task_ref(task_arg, task_ref, command_name="usage"),
+            quiet=quiet,
         )
-        emit_error(ctx, error)
-        raise typer.Exit(code=launch_error_exit_code(error)) from exc
-    run_tui(
-        workspace_root=state.cwd,
-        task_ref=selected_task_ref,
-        refresh_seconds=refresh_seconds,
-        include_archived=include_archived,
-        layout=layout_mode,
-    )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    emit_payload(ctx, payload, human=render_usage_text(payload, quiet=quiet))
+
+
+@app.command("monitor")
+def monitor_command(
+    ctx: typer.Context,
+    task_arg: TaskRefArgument = None,
+    task_ref: Annotated[
+        str | None,
+        typer.Option("--task"),
+    ] = None,
+    refresh_seconds: Annotated[
+        int,
+        typer.Option("--refresh-seconds"),
+    ] = 2,
+    once: Annotated[bool, typer.Option("--once")] = False,
+    max_events: Annotated[int, typer.Option("--max-events")] = 10,
+    max_ready: Annotated[int, typer.Option("--max-ready")] = 10,
+    plain: Annotated[bool, typer.Option("--plain")] = False,
+    no_clear: Annotated[bool, typer.Option("--no-clear")] = False,
+) -> None:
+    state = ctx.obj
+    assert isinstance(state, CLIState)
+    try:
+        selected_task_ref = _selected_task_ref(
+            task_arg,
+            task_ref,
+            command_name="monitor",
+        )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+
+    def _snapshot() -> dict[str, object]:
+        return monitor_snapshot(
+            state.cwd,
+            task_ref=selected_task_ref,
+            max_events=max_events,
+            max_ready=max_ready,
+        )
+
+    if state.json_output:
+        emit_payload(ctx, _snapshot())
+        return
+
+    try:
+        while True:
+            payload = _snapshot()
+            width, height = shutil.get_terminal_size(fallback=(100, 30))
+            rendered = render_monitor_text(
+                payload,
+                width=width,
+                height=height,
+                plain=plain,
+            )
+            if not no_clear:
+                typer.echo("\x1b[2J\x1b[H", nl=False)
+            elif not once:
+                typer.echo("")
+            typer.echo(rendered)
+            if once:
+                return
+            time.sleep(max(1, refresh_seconds))
+    except KeyboardInterrupt:
+        raise typer.Exit(code=0) from None
 
 
 @app.command("commands")
@@ -983,97 +997,6 @@ def commands_command(
                 f"{cmd_info['tier']:<{max_tier}}  "
                 f"{cmd_info['targeting']:<{max_target}}"
             )
-
-
-@app.command("serve")
-def serve_command(
-    ctx: typer.Context,
-    task_arg: TaskRefArgument = None,
-    task_ref: Annotated[
-        str | None,
-        typer.Option("--task", hidden=True),
-    ] = None,
-    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
-    port: Annotated[int, typer.Option("--port")] = 8765,
-    refresh_seconds: Annotated[
-        int | None,
-        typer.Option("--refresh-seconds"),
-    ] = 2,
-    refresh_ms: Annotated[
-        int | None,
-        typer.Option("--refresh-ms", hidden=True),
-    ] = None,
-    open_browser: Annotated[bool, typer.Option("--open/--no-open")] = False,
-) -> None:
-    state = ctx.obj
-    assert isinstance(state, CLIState)
-    try:
-        from taskledger.services.web_dashboard import (
-            DashboardServerConfig,
-            launch_dashboard_server,
-        )
-    except Exception as exc:
-        error = _optional_group_failure(
-            group_name="serve",
-            module_name="taskledger.services.web_dashboard",
-            exc=exc,
-        )
-        emit_error(ctx, error)
-        raise typer.Exit(code=launch_error_exit_code(error)) from error
-    try:
-        selected_task_ref: str | None = None
-        if task_arg and task_ref and task_arg != task_ref:
-            raise LaunchError(
-                "taskledger serve received both TASK_REF and --task. Use only one.",
-                code="USAGE_ERROR",
-                exit_code=2,
-            )
-        selected_task_ref = task_arg or task_ref
-
-        warnings: list[str] = []
-        if refresh_ms is not None:
-            if refresh_seconds is not None and refresh_seconds != 2:
-                raise LaunchError(
-                    "Use either --refresh-seconds or --refresh-ms, not both.",
-                    code="USAGE_ERROR",
-                    exit_code=2,
-                )
-            refresh_seconds = max(1, math.ceil(refresh_ms / 1000))
-            warnings.append(
-                "--refresh-ms is deprecated; use --refresh-seconds instead."
-            )
-
-        handle = launch_dashboard_server(
-            DashboardServerConfig(
-                workspace_root=state.cwd,
-                host=host,
-                port=port,
-                task_ref=selected_task_ref,
-                refresh_seconds=refresh_seconds,
-                open_browser=open_browser,
-            )
-        )
-    except LaunchError as exc:
-        emit_error(ctx, exc)
-        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-    emit_payload(
-        ctx,
-        {
-            "kind": "serve_started",
-            "url": handle.url,
-            "host": handle.host,
-            "port": handle.port,
-            "refresh_seconds": refresh_seconds,
-        },
-        human=f"Serving taskledger HTML reports at {handle.url}\nPress Ctrl-C to stop.",
-        warnings=warnings if warnings else None,
-    )
-    try:
-        handle.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        handle.close()
 
 
 @doctor_app.callback()

@@ -85,8 +85,10 @@ from taskledger.errors import (
 - `remove_requirement`
 - `waive_requirement`
 - `add_file_link`
+- `file_status`
 - `remove_file_link`
 - `list_file_links`
+- `refresh_file_baseline`
 - `add_todo`
 - `set_todo_done`
 - `show_todo`
@@ -331,7 +333,8 @@ Top-level commands that are part of the supported surface are:
 
 - `init`
 - `status`
-- `serve`
+- `usage`
+- `monitor`
 - `next-action`
 - `can`
 - `reindex`
@@ -371,5 +374,6 @@ Workflow additions:
 - `todo done` records evidence with `--evidence`, `--artifact`, and `--change`.
 - `handoff create|list|show|claim|close|cancel` are available on the main
   task-first handoff command group.
-- `serve` is a human-oriented, read-only localhost dashboard. Agents should keep
-  using `next-action`, `context`, `view`, and JSON commands for automation.
+- `usage` is the compact fresh-session read command for agents and scripts.
+- `monitor` is the lightweight read-only terminal dashboard for humans.
+- `file link`, `file status`, and `file refresh` support baseline-aware linked-file tracking.

@@ -61,10 +61,10 @@ Current sanctioned imports:
   lives in services/tree.py.
 * ``taskledger/cli.py:taskledger.services.doctor`` — Repair command uses
   doctor cleanup helper pending API wrapper.
-* ``taskledger/cli.py:taskledger.services.web_dashboard`` — Serve command
-  starts the optional web dashboard service.
-* ``taskledger/cli_report.py:taskledger.services.html_reports`` — Root report
-  commands render HTML reports via the html_reports service.
+* ``taskledger/cli.py:taskledger.services.monitor`` — Root monitor command
+  renders the terminal monitor read model.
+* ``taskledger/cli.py:taskledger.services.usage`` — Root usage command renders
+  the fresh-session startup read model.
 * ``taskledger/cli_actor.py:taskledger.services.actors`` — Actor and harness
   resolution currently lives in services/actors.py.
 * ``taskledger/cli_common.py:taskledger.services.agent_logging`` — CLI common
@@ -105,6 +105,8 @@ Current sanctioned imports:
   service for compiled LLM-ready Markdown.
 * ``taskledger/cli_task.py:taskledger.services.tasks`` — Task events read
   model and lifecycle mutations.
+* ``taskledger/cli_trace.py:taskledger.services.trace`` — Trace CLI delegates
+  to the trace service.
 * ``taskledger/cli_release.py:taskledger.services.releases`` — Release
   commands delegate to the releases service.
 

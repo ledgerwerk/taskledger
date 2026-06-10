@@ -24,9 +24,9 @@ def test_cli_command_tree_matches_task_first_contract(tmp_path: Path) -> None:
     assert result.exit_code == 0
     for name in (
         "init",
+        "usage",
+        "monitor",
         "status",
-        "serve",
-        "report",
         "doctor",
         "export",
         "import",
@@ -122,7 +122,7 @@ def test_task_first_subcommands_are_registered(tmp_path: Path) -> None:
         ),
         "validate": ("start", "check", "show", "finish"),
         "todo": ("add", "list", "show", "done", "undone"),
-        "file": ("add", "remove", "list"),
+        "file": ("add", "link", "remove", "list", "status", "refresh"),
         "link": ("add", "remove", "list"),
         "require": ("add", "list", "remove", "waive"),
         "release": ("tag", "list", "show", "changelog"),

@@ -6,6 +6,7 @@ from taskledger.domain._model_utils import (
     _dict_list,
     _int_or_default,
     _int_value,
+    _optional_int,
     _optional_string,
     _require_contract,
     _require_sidecar_contract,
@@ -58,6 +59,10 @@ class FileLink:
     id: str | None = None
     task_id: str | None = None
     target_type: str | None = None
+    baseline_hash: str | None = None
+    baseline_size: int | None = None
+    baseline_mtime: str | None = None
+    baseline_exists: bool | None = None
     file_version: str = TASKLEDGER_V2_FILE_VERSION
     schema_version: int = TASKLEDGER_SCHEMA_VERSION
     object_type: str = "link"
@@ -73,6 +78,10 @@ class FileLink:
             "label": self.label,
             "required_for_validation": self.required_for_validation,
             "target_type": self.target_type,
+            "baseline_hash": self.baseline_hash,
+            "baseline_size": self.baseline_size,
+            "baseline_mtime": self.baseline_mtime,
+            "baseline_exists": self.baseline_exists,
             "file_version": self.file_version,
             "schema_version": self.schema_version,
             "object_type": self.object_type,
@@ -93,6 +102,14 @@ class FileLink:
             label=_optional_string(data.get("label")),
             required_for_validation=bool(data.get("required_for_validation", False)),
             target_type=_optional_string(data.get("target_type")),
+            baseline_hash=_optional_string(data.get("baseline_hash")),
+            baseline_size=_optional_int(data.get("baseline_size")),
+            baseline_mtime=_optional_string(data.get("baseline_mtime")),
+            baseline_exists=(
+                bool(data["baseline_exists"])
+                if data.get("baseline_exists") is not None
+                else None
+            ),
             file_version=_optional_string(data.get("file_version"))
             or TASKLEDGER_V2_FILE_VERSION,
             schema_version=_int_or_default(

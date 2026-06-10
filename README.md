@@ -48,7 +48,7 @@ The broader command surface is organized as:
 
 **Operations and advanced overlays:**
 
-- `context`, `pipeline`, `next-action`, `can`, `search`, `grep`, `symbols`, `deps`, `actor`, `view`, `serve`, `storage`, `sync`
+- `context`, `pipeline`, `next-action`, `can`, `search`, `grep`, `symbols`, `deps`, `actor`, `view`, `usage`, `monitor`, `storage`, `sync`
 
 **Repair and inspection:**
 
@@ -96,11 +96,12 @@ Taskledger should not promote `tests/bdd/features`, `specs/bdd/features`,
 | -------------------------- | --------------------------------------------------- |
 | Next step                  | `next-action`                                       |
 | Next implementation item   | `todo next`                                         |
+| Fresh session summary      | `usage`                                             |
 | Active task summary        | `task show`                                         |
 | Specific task summary      | `task show TASK_REF` or `task show --task TASK_REF` |
 | Project/ledger overview    | `status`, `tree`                                    |
-| Human dashboard            | `serve`                                             |
-| Terminal navigator         | `tui` (optional, `pip install -e '.[tui]'`)         |
+| Human monitor              | `monitor`                                           |
+| Linked-file drift check    | `file status TASK_REF`                              |
 | Reviewable markdown report | `task report`                                       |
 | LLM/agent compiled export  | `task export`                                       |
 | Fresh worker context       | `context` or durable `handoff show`                 |
@@ -220,12 +221,6 @@ taskledger plan template --with-worker-pipeline --file ./plan.md
 ```bash
 python -m pip install -e .
 python -m pip install -e ".[dev]"
-```
-
-For the optional terminal navigator:
-
-```bash
-python -m pip install -e ".[tui]"
 ```
 
 ### Shell completion
@@ -439,41 +434,33 @@ Rules for agents:
 - Record concise evidence with `todo done`.
 - Do not create handoffs or context bundles unless the user asked to switch harness or session.
 
-## Human monitoring UI
+## Fresh-session startup and human monitoring
 
-`taskledger serve` starts a read-only local server-rendered HTML dashboard for
-human monitoring. It emphasizes the active task, next action, progress, and
-task browsing while staying local-only and read-only.
-
-```bash
-taskledger report html task-0040 --output task-0040.html
-taskledger report html --active --output active-task.html
-taskledger report site --output .taskledger-report/
-
-taskledger serve --refresh-seconds 2
-taskledger serve --open
-taskledger serve --task task-0040 --refresh-seconds 2
-```
-
-Install the optional Textual dependency to use the terminal navigator:
+Use `taskledger usage` as the compact fresh-session startup command for agents
+and `taskledger monitor` as the lightweight human terminal dashboard.
 
 ```bash
-python -m pip install -e '.[tui]'
-taskledger tui
-taskledger tui --task task-0040
-taskledger tui --refresh-seconds 5
-taskledger tui --layout compact
+taskledger usage
+taskledger --json usage
+taskledger usage -q
+taskledger usage --task task-0040
+
+taskledger monitor --once
+taskledger monitor --refresh-seconds 2
+taskledger monitor --task task-0040
 ```
 
-Terminal navigator: `taskledger tui --layout compact` for phone/Termux screens
+`monitor` is dependency-free, read-only, and suitable for narrow terminals such
+as Termux. Agents should keep using `next-action`, `todo next`, and `--json`
+for routine automation; `monitor` is the human observation surface.
 
-The TUI is a read-only navigator over the same read models as `view` and
-`serve`: task list, summary, plan review, todos, implementation, code
-reviews, validation, files, events, and a raw Markdown report. Press `?`
-inside the TUI for key bindings, `r` to refresh, `/` to filter, `c` to copy
-the next-command hint, and `o` to write a static HTML report for the
-selected task. Agents should keep using `next-action`, `todo next`, and
-`--json` for routine work; the TUI is a human-oriented presentation layer.
+File links can now capture a baseline snapshot and later report drift:
+
+```bash
+taskledger file link task-0040 src/foo.py --kind code --snapshot
+taskledger file status task-0040
+taskledger file refresh task-0040 src/foo.py --reason "Rebaseline after accepted implementation"
+```
 
 Agents should keep using `taskledger next-action`, `taskledger todo next`, and
 `--json` commands as the canonical automation interface for routine same-session
@@ -649,7 +636,7 @@ taskledger context --for implementation --format markdown
 taskledger context --for validation --format json
 taskledger task report --task task-0030 -o task30.md
 taskledger task export task-0030 -o task-0030.llm.md
-taskledger report html task-0030 --output task30.html
+taskledger usage --task task-0030
 taskledger handoff create --mode implementation --intended-actor agent --intended-harness codex
 taskledger handoff claim handoff-0001
 taskledger handoff close handoff-0001 --reason "Implementation started."

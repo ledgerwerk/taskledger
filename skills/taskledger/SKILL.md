@@ -30,6 +30,7 @@ Use taskledger for staged coding work that needs a durable task record, reviewab
 Use this path first for routine work:
 
 ```text
+usage
 actor whoami
 task active | task show | task create | task activate | task follow-up
 next-action | context | can
@@ -44,29 +45,31 @@ handoff create | handoff show | handoff claim | handoff close
 ```
 
 Treat release, storage movement, branch-ledger changes, repair/migration,
-network sync wrappers, sync hooks, `tui` (interactive terminal navigator),
+network sync wrappers, sync hooks, `monitor` (human-only terminal observer),
 and source search helpers as advanced,
 human-oriented, repair, or beta support commands rather than normal lifecycle
 steps.
 
 ## Fresh context entry protocol
 
-1. Run `taskledger actor whoami`.
-2. Run `taskledger task active`.
-3. Run `taskledger next-action`.
+1. Run `taskledger usage`.
+2. Run `taskledger actor whoami`.
+3. Run `taskledger task active`.
+4. Run `taskledger next-action`.
    - Treat this as the preferred fresh-context entrypoint.
    - Inspect `next_item` before parsing prose.
    - Run `next_command` when it is safe and appropriate.
    - Do not invent question answers, evidence, or approval notes.
-4. Run `taskledger context --for planning|implementation|validation --format markdown`.
-5. Inspect `taskledger lock show` before active work.
-6. Use `taskledger can implement` or `taskledger can validate` before those stages.
+5. Run `taskledger todo next`.
+6. Run `taskledger context --for planning|implementation|validation --format markdown`.
+7. Inspect `taskledger lock show` before active work.
+8. Use `taskledger can implement` or `taskledger can validate` before those stages.
    - Use `taskledger can implement-resume` when `next-action` recommends resuming an existing implementation run.
-7. If a durable handoff exists, claim it with `taskledger handoff claim handoff-0001` before continuing and close it after the intended next action starts.
-8. After `taskledger import ... --replace`, assume imported locks are non-portable by default. Run `taskledger next-action`; if it reports `implement-resume`, use `taskledger implement resume --reason "Continue imported implementation."`.
+9. If a durable handoff exists, claim it with `taskledger handoff claim handoff-0001` before continuing and close it after the intended next action starts.
+10. After `taskledger import ... --replace`, assume imported locks are non-portable by default. Run `taskledger next-action`; if it reports `implement-resume`, use `taskledger implement resume --reason "Continue imported implementation."`.
 
-9. Mutation commands (`todo add`, `todo done`, `todo undone`, `implement finish`) emit compact acknowledgements. For full task or todo detail, use `task show TASK_REF`, `task show` for the active task, `status`, `next-action`, or `todo show`.
-   Example human output:
+11. Mutation commands (`todo add`, `todo done`, `todo undone`, `implement finish`) emit compact acknowledgements. For full task or todo detail, use `task show TASK_REF`, `task show` for the active task, `status`, `next-action`, or `todo show`.
+    Example human output:
 
 ```text
 todo-work: Implementation is in progress; 1 todos remain.
@@ -290,25 +293,26 @@ Rules for agents:
 
 ## Which read command to use
 
-| Need                      | Command                                              |
-| ------------------------- | ---------------------------------------------------- |
-| Next step                 | `next-action`                                        |
-| Next implementation item  | `todo next`                                          |
-| Active task summary       | `task show`                                          |
-| Specific task summary     | `task show TASK_REF` or `task show --task TASK_REF`  |
-| Project/ledger overview   | `status`, `tree`                                     |
-| Storage location          | `storage where`                                      |
-| Sync safety check         | `sync preflight`                                     |
-| Human dashboard           | `serve`                                              |
-| Terminal navigator        | `tui` (optional, requires `pip install -e '.[tui]'`) |
-| Reviewable report         | `task report` or `report html`                       |
-| LLM/agent compiled export | `task export`                                        |
-| Fresh worker context      | `context` or durable `handoff show`                  |
-| Command audit             | `task transcript`                                    |
+| Need                      | Command                                             |
+| ------------------------- | --------------------------------------------------- |
+| Fresh session summary     | `usage`                                             |
+| Next step                 | `next-action`                                       |
+| Next implementation item  | `todo next`                                         |
+| Active task summary       | `task show`                                         |
+| Specific task summary     | `task show TASK_REF` or `task show --task TASK_REF` |
+| Project/ledger overview   | `status`, `tree`                                    |
+| Storage location          | `storage where`                                     |
+| Sync safety check         | `sync preflight`                                    |
+| Human dashboard           | `monitor`                                           |
+| Reviewable report         | `task report`                                       |
+| LLM/agent compiled export | `task export`                                       |
+| Fresh worker context      | `context` or durable `handoff show`                 |
+| Command audit             | `task transcript`                                   |
 
 `task dossier`, root `view`, and legacy `handoff *-context` renderers remain
 advanced/compatibility read surfaces. Prefer `context --for ...` and
-`handoff show` for new agent protocols.
+`handoff show` for new agent protocols. Use `file status TASK_REF` when you need
+linked-file drift checks.
 
 ## Validation protocol
 

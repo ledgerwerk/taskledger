@@ -13,7 +13,6 @@ REMOVED_COMMANDS = {
     "task clear-active",
     "implement add-change",
     "validate add-check",
-    "file link",
     "file unlink",
     "link link",
     "link unlink",

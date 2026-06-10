@@ -38,11 +38,11 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     "taskledger/cli.py:taskledger.services.doctor": (
         "Repair command uses doctor cleanup helper pending API wrapper."
     ),
-    "taskledger/cli.py:taskledger.services.web_dashboard": (
-        "Serve command starts the optional web dashboard service."
+    "taskledger/cli.py:taskledger.services.monitor": (
+        "Root monitor command renders the terminal monitor read model."
     ),
-    "taskledger/cli_report.py:taskledger.services.html_reports": (
-        "Root report commands render HTML reports via the html_reports service."
+    "taskledger/cli.py:taskledger.services.usage": (
+        "Root usage command renders the fresh-session usage read model."
     ),
     "taskledger/cli_actor.py:taskledger.services.actors": (
         "Actor and harness resolution currently lives in services/actors.py."
@@ -104,16 +104,16 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     "taskledger/cli_task.py:taskledger.services.tasks": (
         "Task events read path still uses services.tasks list_events helper."
     ),
+    "taskledger/cli_trace.py:taskledger.services.trace": (
+        "Trace CLI delegates to the trace service."
+    ),
     "taskledger/cli_release.py:taskledger.services.releases": (
         "Release commands delegate to the releases service."
     ),
 }
 EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
-    "taskledger/cli.py:263": (
+    "taskledger/cli.py:266": (
         "Optional command group import fallback reports missing modules gracefully."
-    ),
-    "taskledger/cli.py:1011": (
-        "Serve command optional import fallback reports missing dashboard gracefully."
     ),
     "taskledger/storage/project_config.py:709": (
         "Project config TOML parsing wraps all parse failures as LaunchError."
@@ -184,9 +184,6 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/storage/task_store.py:1068": (
         "list_handoffs_with_errors tolerates malformed handoff records "
         "and continues scanning."
-    ),
-    "taskledger/tui/app.py:373": (
-        "TUI app fallback wraps unexpected render errors gracefully."
     ),
 }
 
