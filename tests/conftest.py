@@ -81,8 +81,16 @@ _TyperCliRunner.invoke = _invoke_with_cached_click_command  # type: ignore[assig
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Remove local pytest/Python cache artifacts from repository test runs."""
+    """Remove local pytest/Python cache artifacts when explicitly requested."""
     if hasattr(session.config, "workerinput"):
+        return
+    if exitstatus == pytest.ExitCode.INTERRUPTED:
+        return
+    if os.environ.get("TASKLEDGER_TEST_CLEAN_PYCACHE", "").lower() not in {
+        "1",
+        "true",
+        "yes",
+    }:
         return
     shutil.rmtree(ROOT / ".pytest_cache", ignore_errors=True)
     cache_roots = [
