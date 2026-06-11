@@ -6,8 +6,6 @@ from typing import Any, cast
 from taskledger.domain.models import TaskRecord, TaskRunRecord, ValidationCheck
 from taskledger.services.task_queries import dependency_blockers, optional_run
 from taskledger.storage.task_store import (
-    load_bdd_examples,
-    load_bdd_reports,
     load_todos,
     resolve_plan,
 )
@@ -119,10 +117,7 @@ def build_validation_gate_report(
             }
             cast(list[dict[str, object]], report["criteria"]).append(criterion_report)
 
-    report["behavior_evidence"] = _build_behavior_evidence_report(
-        bdd_examples=load_bdd_examples(workspace_root, task.id),
-        bdd_reports=load_bdd_reports(workspace_root, task.id),
-    )
+    report["behavior_evidence"] = {}
     report["todos"] = {"open_mandatory": []}
     todos = load_todos(workspace_root, task.id).todos
     open_todos = [todo.id for todo in todos if todo.mandatory and not todo.done]
@@ -221,52 +216,6 @@ def build_validation_gate_report(
     report["can_finish_passed"] = len(blockers) == 0
 
     return report
-
-
-def _build_behavior_evidence_report(
-    *,
-    bdd_examples: list[Any],
-    bdd_reports: list[Any],
-) -> dict[str, object]:
-    linked_examples = [
-        example for example in bdd_examples if example.acceptance_criteria
-    ]
-    report_results = {
-        str(result.get("example_id") or result.get("scenario") or ""): result
-        for report in bdd_reports
-        for result in report.example_results
-        if isinstance(result, dict)
-    }
-    states: dict[str, str] = {}
-    for example in linked_examples:
-        result = report_results.get(example.id)
-        if result is None:
-            states[example.id] = "missing evidence"
-            continue
-        status = str(result.get("status", "unknown"))
-        if status == "passed":
-            states[example.id] = "passed evidence"
-        elif status in {"skipped", "pending", "undefined"}:
-            states[example.id] = "skipped evidence"
-        elif status in {"failed", "error"}:
-            states[example.id] = "failed evidence"
-        else:
-            states[example.id] = "stale evidence"
-    return {
-        "linked_examples": sorted(example.id for example in linked_examples),
-        "reports": [
-            {
-                "id": report.id,
-                "source_path": report.source_path,
-                "command": report.command,
-                "imported_at": report.imported_at,
-                "result": report.result,
-                "validation_check_refs": list(report.validation_check_refs),
-            }
-            for report in bdd_reports
-        ],
-        "states": dict(sorted(states.items())),
-    }
 
 
 def _criterion_has_user_waiver(check: ValidationCheck) -> bool:

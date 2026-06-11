@@ -351,3 +351,29 @@ def test_version_flag_displays_version() -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert "taskledger, version" in result.stdout
+
+
+# ── Ledger isolation tests ──────────────────────────────────────
+
+
+def test_bdd_group_is_not_registered() -> None:
+    result = runner.invoke(app, ["bdd", "--help"])
+    assert result.exit_code != 0
+    assert (
+        "No such command" in result.output
+        or "Got unexpected extra argument" in result.output
+    )
+
+
+def test_validate_import_bdd_report_is_not_registered() -> None:
+    result = runner.invoke(app, ["validate", "import-bdd-report", "report.xml"])
+    assert result.exit_code != 0
+
+
+def test_task_bundle_does_not_create_bdd_directory(tmp_path: Path) -> None:
+    from tests.support.builders import init_workspace
+
+    init_workspace(tmp_path)
+    result = runner.invoke(app, ["--cwd", str(tmp_path), "task", "create", "Example"])
+    assert result.exit_code == 0
+    assert not list(tmp_path.glob(".taskledger/**/tasks/task-*/bdd"))

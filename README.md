@@ -66,29 +66,18 @@ ledger for staged coding work. Optional reporting, sync, search, and worker
 pipeline features must not change the default task-first lifecycle unless a
 project explicitly opts in.
 
-## Optional behavior-spec overlay
+## Opaque links and external artifacts
 
-Taskledger can track task-local BDD/example records, but canonical behavior
-specs and executable enforcement live outside Taskledger:
-
-```text
-specs/behavior/features/<area>/<feature>.feature
-tests/test_<area>_<feature>.py
-reports/behavior/<area>-<feature>-junit.xml
-```
-
-Treat `taskledger bdd gherkin-export` output as derived text, not as the
-canonical source of truth. Prefer plain pytest for enforcement and JUnit XML for
-imported validation evidence.
+Taskledger stores task-local work state and opaque links. Cross-ledger
+semantics belong to an organizer such as ledgerdeck. Use `taskledger link` or
+`taskledger file` for references to external artifacts; taskledger does not
+interpret those references.
 
 ```bash
-taskledger bdd example link-automation bdd-0001 --feature-file specs/behavior/features/task-management/plan-gates.feature --scenario @bdd-implementation-blocked-before-plan-acceptance --pytest tests/test_task_management_plan_gates.py::test_agent_cannot_start_implementation_before_plan_approval
-taskledger bdd export-json --out .specweave/mappings/taskledger/task-0001.bdd.json
-taskledger validate import-bdd-report reports/behavior/task-management-plan-gates-junit.xml --format junit-xml --command "pytest tests/test_task_management_plan_gates.py --junitxml=reports/behavior/task-management-plan-gates-junit.xml"
+taskledger link add --url specs/behavior/features/checkout/payment.feature --label "behavior spec"
+taskledger file link specs/behavior/features/checkout/payment.feature --kind doc --label "behavior spec"
+taskledger validate check --criterion ac-0001 --status pass --evidence "pytest tests/test_checkout_payment.py::test_payment_flow"
 ```
-
-Taskledger should not promote `tests/bdd/features`, `specs/bdd/features`,
-`tests/behavior/`, or pytest-bdd-style step-module layouts.
 
 ### Which read command to use
 
@@ -795,10 +784,8 @@ make release-check
 
 Taskledger owns temporal work truth: tasks, plans, acceptance criteria,
 implementation changes, validation checks, reviews, locks, and handoffs.
-SpecWeave owns executable behavior truth. Archledger owns durable architecture
-and specification truth. Cross-ledger links are explicit file or ID references.
+Cross-ledger links are opaque file or ID references.
 
-Run `taskledger trace TASK --format json` for a read-only `combi.trace.v1`
-bundle that links task history, accepted AC IDs, task-local BDD mappings,
-imported evidence, source/test refs, reviews, and Archledger provenance. Missing
-BDD mappings or missing evidence are trace gaps, not passing validation.
+Run `taskledger trace TASK --format json` for a read-only `taskledger.trace.v1`
+bundle that links task history, accepted AC IDs, opaque link refs,
+source refs, evidence refs, reviews, and handoffs.

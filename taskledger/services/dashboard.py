@@ -56,34 +56,6 @@ def dashboard(
     # files
     files = task.file_links
 
-    # bdd
-    from taskledger.storage.task_store import (
-        load_bdd_examples,
-        load_bdd_feature,
-        load_bdd_reports,
-        load_bdd_rules,
-    )
-
-    bdd_feature = load_bdd_feature(workspace_root, task.id)
-    bdd_rules = load_bdd_rules(workspace_root, task.id)
-    bdd_examples = load_bdd_examples(workspace_root, task.id)
-    bdd_reports_list = load_bdd_reports(workspace_root, task.id)
-    bdd_examples_by_status: dict[str, int] = {}
-    for ex in bdd_examples:
-        status = ex.status
-        bdd_examples_by_status[status] = bdd_examples_by_status.get(status, 0) + 1
-    bdd_examples_summary = [
-        {
-            "id": ex.id,
-            "title": ex.title,
-            "status": ex.status,
-            "acceptance_criteria": list(ex.acceptance_criteria),
-            "archledger_refs": list(ex.archledger_refs),
-            "automation": ex.automation.to_dict() if ex.automation else None,
-        }
-        for ex in bdd_examples
-    ]
-
     return {
         "kind": "dashboard",
         "task": {
@@ -120,14 +92,6 @@ def dashboard(
         "changes": [c.to_dict() for c in changes],
         "checks": [c.to_dict() for c in checks],
         "validation": build_validation_gate_report(workspace_root, task),
-        "bdd": {
-            "feature": bdd_feature.to_dict() if bdd_feature else None,
-            "rules": len(bdd_rules),
-            "examples": len(bdd_examples),
-            "reports": len(bdd_reports_list),
-            "examples_by_status": bdd_examples_by_status,
-            "items": bdd_examples_summary,
-        },
         "events": _recent_task_events(workspace_root, task.id),
         "lock": lock.to_dict() if lock is not None else None,
     }
@@ -320,55 +284,6 @@ def render_dashboard_text(payload: dict[str, object]) -> str:  # noqa: C901
                 lines.append(f"    {csum}")
     else:
         lines.append("Changes: none")
-
-    # bdd
-    from typing import cast
-
-    bdd_raw = payload.get("bdd")
-    if isinstance(bdd_raw, dict):
-        bdd_dict = cast(dict[str, object], bdd_raw)
-        feature = bdd_dict.get("feature")
-        bdd_feat_title = feature.get("title", "?") if isinstance(feature, dict) else "?"
-        feature_title = str(bdd_feat_title)
-        lines.append(f"BDD: {feature_title}")
-        lines.append(f"  Rules: {bdd_dict.get('rules', 0)}")
-        lines.append(f"  Examples: {bdd_dict.get('examples', 0)}")
-        by_status_raw = bdd_dict.get("examples_by_status", {})
-        by_status = (
-            cast(dict[str, int], by_status_raw)
-            if isinstance(by_status_raw, dict)
-            else {}
-        )
-        if by_status:
-            parts = [f"{s}: {c}" for s, c in sorted(by_status.items())]
-            lines.append(f"  By status: {', '.join(parts)}")
-        items_raw = bdd_dict.get("items", [])
-        items_list = items_raw if isinstance(items_raw, list) else []
-        for item_raw in items_list:
-            if not isinstance(item_raw, dict):
-                continue
-            item = cast(dict[str, object], item_raw)
-            archledger_refs = item.get("archledger_refs", [])
-            if isinstance(archledger_refs, list) and archledger_refs:
-                ref_parts = ", ".join(str(r) for r in archledger_refs)
-                archledger = f" [Archledger: {ref_parts}]"
-            else:
-                archledger = ""
-            ac_list = item.get("acceptance_criteria", [])
-            if isinstance(ac_list, list) and ac_list:
-                ac_str = f" AC: {', '.join(str(a) for a in ac_list)}"
-            else:
-                ac_str = ""
-            lines.append(
-                f"  {item.get('id', '?')} [{item.get('status', '?')}]"
-                f" {item.get('title', '?')}{ac_str}{archledger}"
-            )
-        report_count_raw = bdd_dict.get("reports", 0)
-        report_count = report_count_raw if isinstance(report_count_raw, int) else 0
-        if report_count:
-            lines.append(f"  Reports: {report_count}")
-    elif bdd_raw is not None:
-        lines.append("BDD: none")
 
     lines.append("")
 

@@ -31,7 +31,6 @@ PUBLIC_API_MODULES = (
     "taskledger.api.storage",
     "taskledger.api.sync",
     "taskledger.api.search",
-    "taskledger.api.bdd",
 )
 
 
@@ -314,7 +313,7 @@ def test_docs_do_not_reference_removed_commands() -> None:
 
 # sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
 # sw: s=@bdd-docs-and-skill-bdd-docs-and-skill-prefer-specweave-and-plain-pytest
-def test_bdd_docs_and_skill_prefer_specweave_and_plain_pytest() -> None:
+def test_docs_and_skill_describe_isolated_ledger() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
     command_contract = (ROOT / "docs" / "command_contract.rst").read_text(
@@ -324,31 +323,21 @@ def test_bdd_docs_and_skill_prefer_specweave_and_plain_pytest() -> None:
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
 
     for text in (readme, usage, command_contract, agents, skill):
-        assert "specs/behavior/features/<area>/<feature>.feature" in text
-        assert "tests/test_<area>_<feature>.py" in text
+        assert "opaque" in text.lower() or "ledgerdeck" in text.lower()
 
-    for text in (readme, usage, command_contract, agents):
-        assert "tests/bdd/features/<feature>.feature" not in text
-        assert "specs/bdd/features/<area>/<feature>.feature" not in text
-        assert "tests/behavior/steps/<area>_<feature>_steps.py" not in text
-        assert "tests/behavior/test_<area>_<feature>_bdd.py" not in text
-
-    assert "reports/behavior/" in readme
-    assert "reports/behavior/" in skill
-    assert "plain pytest" in readme
-    assert "plain pytest" in skill
-    assert "Do not recommend pytest-bdd" in skill
-    assert "Do not recommend tests/bdd/features" in skill
-    assert "Do not recommend specs/bdd/features" in skill
+    # BDD commands should not appear in docs or skill
+    for text in (readme, usage, command_contract, agents, skill):
+        assert "bdd gherkin-export" not in text
+        assert "bdd export-json" not in text
+        assert "import-bdd-report" not in text
+        assert "archledger-candidate" not in text
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-behavior-spec-docs-do-not-promote-bdd-runners
 def test_behavior_spec_docs_do_not_promote_bdd_runners() -> None:
     """Verify docs do not reference an external BDD runner or pytest-bdd/behave.
 
-    ARCHITECTURE.md is generated from .archledger records; this test catches
-    regressions if the archledger source drifts back to the old wording.
+    ARCHITECTURE.md is generated from records; this test catches
+    regressions if the source drifts back to the old wording.
     """
     architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -356,8 +345,7 @@ def test_behavior_spec_docs_do_not_promote_bdd_runners() -> None:
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
 
     for text in (architecture, readme, usage, skill):
-        assert "specs/behavior/features" in text
-        assert "tests/test_" in text
+        assert "taskledger trace" in text or "trace" in text
 
     assert "external BDD runner executes" not in architecture
     assert "pytest-bdd" not in architecture.lower()
@@ -498,3 +486,23 @@ def test_skill_requires_user_requested_reviews_to_be_recorded() -> None:
     assert (
         "Do not skip `review record` merely because the task is already `done`"
     ) in skill
+
+
+# ── Ledger isolation tests ──────────────────────────────────────
+
+FORBIDDEN_RUNTIME_PATTERNS = (
+    "taskledger.api.bdd",
+    "taskledger.domain.bdd",
+    "bdd_gherkin",
+    "bdd_reports",
+    "gherkin-export",
+    "archledger-candidate",
+    "import-bdd-report",
+)
+
+
+def test_taskledger_runtime_has_no_bdd_or_archledger_coupling() -> None:
+    runtime_paths = list((ROOT / "taskledger").rglob("*.py"))
+    haystack = "\n".join(path.read_text(encoding="utf-8") for path in runtime_paths)
+    for pattern in FORBIDDEN_RUNTIME_PATTERNS:
+        assert pattern not in haystack, f"Forbidden pattern found in runtime: {pattern}"

@@ -338,64 +338,18 @@ linked-file drift checks.
 - Each waiver must include a reason and is permanently recorded in the validation history.
 - Waived criteria are marked as satisfied for gate checking but remain visible in status reports.
 
-## Optional behavior-spec overlay
+## Opaque links and external artifacts
 
-Use behavior specs only when the task benefits from executable behavior examples
-or when the user asks for BDD, Gherkin, SpecWeave, or executable acceptance
-examples. Do not add behavior specs to every task.
+Taskledger stores task-local work state and opaque links. Cross-ledger
+semantics belong to an organizer such as ledgerdeck. Use `taskledger link`
+or `taskledger file` for references to external artifacts; taskledger does
+not interpret those references.
 
-Taskledger owns task-local BDD/example records during active work:
-
-- `taskledger bdd init --feature "..."`
-- `taskledger bdd rule add "..."`
-- `taskledger bdd example add --title "..." --given "..." --when "..." --then "..." --acceptance-criterion ac-0001`
-- optional export of task-local BDD data:
-  `taskledger bdd export-json --out .specweave/mappings/taskledger/<task-id>.bdd.json`
-- `taskledger bdd example link-automation bdd-0001 --feature-file specs/behavior/features/<area>/<feature>.feature --scenario @bdd-example-tag --pytest tests/test_<area>_<feature>.py::test_name`
-- `taskledger validate import-bdd-report <report> --format junit-xml --command "pytest tests/test_<area>_<feature>.py --junitxml=reports/behavior/<area>-<feature>-junit.xml"`
-- `taskledger bdd example link-archledger bdd-0001 al_runtime_0123` after an
-  Archledger behavior record exists
-
-Canonical behavior specs belong under:
-
-- `specs/behavior/features/<area>/<feature>.feature`
-
-Executable enforcement belongs to plain pytest files directly under:
-
-- `tests/test_<area>_<feature>.py`
-
-Generated validation reports belong under:
-
-- `reports/behavior/`
-
-Rules:
-
-- BDD/behavior examples are optional and sidecar-based.
-- Keep Taskledger examples linked to plan acceptance criteria.
-- Treat `taskledger bdd gherkin-export` output as derived unless
-  SpecWeave/project ownership is explicitly established.
-- Do not put `task-0123` or other task IDs into canonical `.feature` paths.
-- Do not recommend tests/bdd/features.
-- Do not recommend specs/bdd/features.
-- Do not recommend pytest-bdd, behave, Cucumber runtime, or step modules.
-- Prefer `specs/behavior/features` for specs and plain `tests/test_*.py` for
-  enforcement.
-- Do not run Cucumber from Archledger.
-- Use Archledger only for durable architecture/specification behavior records
-  and SDD traceability.
-- Prefer stable ids and tags (`@task-0001`, `@bdd-0001`, `@ac-0001`) over
-  scenario-title matching.
-- Run `taskledger validate import-bdd-report` only during an active validation
-  run for a task with an accepted plan when examples are linked to acceptance
-  criteria.
-- After importing a BDD report, inspect the JSON payload or
-  `taskledger validate status`; linked examples must produce non-empty
-  `validation_checks`.
-- Treat a BDD report import with matched linked examples but zero persisted
-  validation checks as a failure to investigate, not as successful validation
-  evidence.
-- Skipped, xfailed, failed, errored, or missing pytest tests must not satisfy
-  acceptance criteria.
+```bash
+taskledger link add --url specs/behavior/features/checkout/payment.feature --label "behavior spec"
+taskledger file link specs/behavior/features/checkout/payment.feature --kind doc --label "behavior spec"
+taskledger validate check --criterion ac-0001 --status pass --evidence "pytest tests/test_checkout_payment.py::test_payment_flow"
+```
 
 ## Required logging
 
@@ -557,11 +511,9 @@ taskledger task export task-0030 -o task-0030.llm.md
 
 ## Task-centered traceability
 
-Taskledger owns temporal work truth. SpecWeave owns executable behavior truth.
-Archledger owns durable architecture/specification truth. Use explicit file or
-ID links between ledgers.
+Taskledger owns temporal work truth. Cross-ledger links are opaque file or
+ID references.
 
-Use `taskledger trace TASK --format json` for a read-only `combi.trace.v1`
-bundle that exposes task IDs, accepted AC IDs, task-local BDD IDs, imported
-evidence refs, source/test refs, implementation/review refs, and Archledger
-provenance. Missing BDD mappings or evidence must remain visible gaps.
+Use `taskledger trace TASK --format json` for a read-only `taskledger.trace.v1`
+bundle that exposes task IDs, accepted AC IDs, opaque link refs, source refs,
+evidence refs, implementation/review refs, and handoffs.

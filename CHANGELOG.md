@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Removed BDD/Gherkin/Archledger command surface from taskledger. The `bdd` command group, `validate import-bdd-report`, and related APIs, domain models, storage, and services have been removed. Taskledger now owns only task-work truth with opaque links. Cross-ledger behavior/spec orchestration will be handled by an external organizer (ledgerdeck).
+- Replaced `combi.trace.v1` with `taskledger.trace.v1` schema in the `trace` command.
+
+### Migration notes
+
+- Old `.taskledger/.../bdd/` directories are preserved but ignored by taskledger.
+- Use `taskledger validate check --criterion ... --status ... --evidence ...` for validation evidence.
+- Use `taskledger link add` or `taskledger file link` for references to external artifacts.
+
+## v0.4.3 - 2026-06-09
+
 ## v0.4.3 - 2026-06-09
 
 ### Added

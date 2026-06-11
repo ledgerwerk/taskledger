@@ -77,31 +77,19 @@ Task-first workflow
    taskledger plan lint --version 1
    taskledger plan accept --version 1 --note "Ready."
 
-Optional behavior-spec overlay
-------------------------------
+Opaque links and external artifacts
+-------------------------------
 
-Use behavior specs only when the task benefits from executable examples. Keep
-canonical specs and plain pytest enforcement outside Taskledger:
-
-.. code-block:: text
-
-   specs/behavior/features/<area>/<feature>.feature
-   tests/test_<area>_<feature>.py
-   reports/behavior/<area>-<feature>-junit.xml
-
-Taskledger may store task-local BDD/example records, link them to external
-specs and pytest node ids, and export derived JSON exchange data:
+Taskledger stores task-local work state and opaque links.
+Cross-ledger semantics belong to an organizer such as ledgerdeck.
+Use ``taskledger link`` or ``taskledger file`` for references to external artifacts;
+Taskledger treats those references as opaque and does not interpret them.
 
 .. code-block:: bash
 
-   taskledger bdd example link-automation bdd-0001 --feature-file specs/behavior/features/task-management/plan-gates.feature --scenario @bdd-implementation-blocked-before-plan-acceptance --pytest tests/test_task_management_plan_gates.py::test_agent_cannot_start_implementation_before_plan_approval
-   taskledger bdd export-json --out .specweave/mappings/taskledger/task-0001.bdd.json
-   taskledger validate import-bdd-report reports/behavior/task-management-plan-gates-junit.xml --format junit-xml --command "pytest tests/test_task_management_plan_gates.py --junitxml=reports/behavior/task-management-plan-gates-junit.xml"
-
-``taskledger bdd gherkin-export`` remains available for derived `.feature`
-output, but taskledger should not promote ``tests/bdd/features``,
-``specs/bdd/features``, ``tests/behavior/``, or pytest-bdd step modules as the
-canonical layout.
+   taskledger link add --url specs/behavior/features/checkout/payment.feature --label "behavior spec"
+   taskledger file link specs/behavior/features/checkout/payment.feature --kind doc --label "behavior spec"
+   taskledger validate check --criterion ac-0001 --status pass --evidence "pytest tests/test_checkout_payment.py::test_payment_flow"
 
 Planning guidance profiles
 --------------------------
@@ -774,17 +762,11 @@ Task-centered traceability
 
 Taskledger owns temporal work truth: task history, plans, acceptance criteria,
 implementation changes, validation checks, reviews, locks, and handoffs.
-SpecWeave owns executable behavior truth under ``specs/behavior/features`` and
-plain pytest enforcement. Archledger owns durable architecture and specification
-truth. Cross-ledger integration is explicit and file or ID based.
+Cross-ledger links are opaque file or ID references.
 
 Use ``taskledger trace TASK --format json`` to emit a read-only
-``combi.trace.v1`` task bundle. The bundle links task IDs, accepted AC IDs,
-task-local BDD IDs, imported evidence refs, source/test refs, implementation
-changes, review refs, and Archledger provenance refs. Missing BDD mappings or
-missing evidence are reported as trace gaps, not crashes or passing evidence.
+``taskledger.trace.v1`` task bundle. The bundle links task IDs, accepted AC IDs,
+opaque link refs, source refs, evidence refs, changes, reviews, and handoffs.
 
-Evidence import is explicit and auditable through commands such as
-``taskledger validate import-bdd-report reports/behavior/<file>.xml --format junit-xml --command "pytest ..."``.
-Taskledger records the report path, command, import timestamp, linked BDD IDs,
-and linked AC IDs where available.
+Evidence import is explicit and auditable through
+``taskledger validate check --criterion ... --status ... --evidence ...``.

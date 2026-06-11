@@ -168,17 +168,11 @@ Task-centered traceability
 
 Taskledger owns temporal work truth: task history, plans, acceptance criteria,
 implementation changes, validation checks, reviews, locks, and handoffs.
-SpecWeave owns executable behavior truth under ``specs/behavior/features`` and
-plain pytest enforcement. Archledger owns durable architecture and specification
-truth. Cross-ledger integration is explicit and file or ID based.
+Cross-ledger links are opaque file or ID references.
 
 Use ``taskledger trace TASK --format json`` to emit a read-only
-``combi.trace.v1`` task bundle. The bundle links task IDs, accepted AC IDs,
-task-local BDD IDs, imported evidence refs, source/test refs, implementation
-changes, review refs, and Archledger provenance refs. Missing BDD mappings or
-missing evidence are reported as trace gaps, not crashes or passing evidence.
+``taskledger.trace.v1`` task bundle. The bundle links task IDs, accepted AC IDs,
+opaque link refs, source refs, evidence refs, changes, reviews, and handoffs.
 
-Evidence import is explicit and auditable through commands such as
-``taskledger validate import-bdd-report reports/behavior/<file>.xml --format junit-xml --command "pytest ..."``.
-Taskledger records the report path, command, import timestamp, linked BDD IDs,
-and linked AC IDs where available.
+Evidence import is explicit and auditable through
+``taskledger validate check --criterion ... --status ... --evidence ...``.

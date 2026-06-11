@@ -29,10 +29,6 @@ OBJECT_TYPES = frozenset(
         "requirements",
         "handoff",
         "release",
-        "bdd_feature",
-        "bdd_rule",
-        "bdd_example",
-        "bdd_report",
     }
 )
 

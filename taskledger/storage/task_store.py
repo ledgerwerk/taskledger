@@ -17,12 +17,6 @@ from typing import Literal, TypeVar
 
 import yaml
 
-from taskledger.domain.bdd import (
-    BddExampleRecord,
-    BddFeatureRecord,
-    BddReportRecord,
-    BddRuleRecord,
-)
 from taskledger.domain.models import (
     ActiveActorState,
     ActiveHarnessState,
@@ -905,46 +899,6 @@ def handoff_markdown_path(paths: V2Paths, task_id: str, handoff_id: str) -> Path
     return task_handoffs_dir(paths, task_id) / f"{handoff_id}.md"
 
 
-def task_bdd_dir(paths: V2Paths, task_id: str) -> Path:
-    """Return the BDD root directory for a task."""
-    return task_dir(paths, task_id) / "bdd"
-
-
-def bdd_rules_dir(paths: V2Paths, task_id: str) -> Path:
-    """Return the BDD rules directory for a task."""
-    return task_bdd_dir(paths, task_id) / "rules"
-
-
-def bdd_examples_dir(paths: V2Paths, task_id: str) -> Path:
-    """Return the BDD examples directory for a task."""
-    return task_bdd_dir(paths, task_id) / "examples"
-
-
-def bdd_reports_dir(paths: V2Paths, task_id: str) -> Path:
-    """Return the BDD reports directory for a task."""
-    return task_bdd_dir(paths, task_id) / "reports"
-
-
-def bdd_feature_path(paths: V2Paths, task_id: str) -> Path:
-    """Return the BDD feature file path for a task."""
-    return task_bdd_dir(paths, task_id) / "feature.md"
-
-
-def bdd_rule_markdown_path(paths: V2Paths, task_id: str, rule_id: str) -> Path:
-    """Return the markdown path for a BDD rule."""
-    return bdd_rules_dir(paths, task_id) / f"{rule_id}.md"
-
-
-def bdd_example_markdown_path(paths: V2Paths, task_id: str, example_id: str) -> Path:
-    """Return the markdown path for a BDD example."""
-    return bdd_examples_dir(paths, task_id) / f"{example_id}.md"
-
-
-def bdd_report_markdown_path(paths: V2Paths, task_id: str, report_id: str) -> Path:
-    """Return the markdown path for a BDD report."""
-    return bdd_reports_dir(paths, task_id) / f"{report_id}.md"
-
-
 def release_filename(version: str) -> str:
     normalized = version.strip()
     if not normalized:
@@ -1073,10 +1027,6 @@ def _ensure_task_bundle(paths: V2Paths, task_id: str) -> None:
         task_artifacts_dir(paths, task_id),
         task_audit_dir(paths, task_id),
         task_handoffs_dir(paths, task_id),
-        task_bdd_dir(paths, task_id),
-        bdd_rules_dir(paths, task_id),
-        bdd_examples_dir(paths, task_id),
-        bdd_reports_dir(paths, task_id),
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
@@ -1224,133 +1174,3 @@ def save_lock(workspace_root: Path, task_id: str, lock: TaskLock) -> Path:
             exc_info=True,
         )
     return lock_path
-
-
-# ── BDD sidecar storage ───────────────────────────────────────────
-
-
-def load_bdd_feature(workspace_root: Path, task_id: str) -> BddFeatureRecord | None:
-    """Load the BDD feature record for a task, or None if not initialized."""
-    paths = ensure_v2_layout(workspace_root)
-    path = bdd_feature_path(paths, task_id)
-    if not path.exists():
-        return None
-    return _load_record(path, BddFeatureRecord.from_dict)
-
-
-def save_bdd_feature(
-    workspace_root: Path, feature: BddFeatureRecord
-) -> BddFeatureRecord:
-    """Save a BDD feature record."""
-    paths = ensure_v2_layout(workspace_root)
-    _ensure_task_bundle(paths, feature.task_id)
-    path = bdd_feature_path(paths, feature.task_id)
-    _write_markdown_record(path, feature.to_dict(), feature.description)
-    return feature
-
-
-def load_bdd_rules(workspace_root: Path, task_id: str) -> list[BddRuleRecord]:
-    """Load all BDD rules for a task."""
-    paths = ensure_v2_layout(workspace_root)
-    directory = bdd_rules_dir(paths, task_id)
-    if not directory.exists():
-        return []
-    return sorted(
-        [_load_record(p, BddRuleRecord.from_dict) for p in directory.glob("rule-*.md")],
-        key=lambda r: r.id,
-    )
-
-
-def save_bdd_rule(workspace_root: Path, rule: BddRuleRecord) -> BddRuleRecord:
-    """Save a BDD rule record."""
-    paths = ensure_v2_layout(workspace_root)
-    _ensure_task_bundle(paths, rule.task_id)
-    path = bdd_rule_markdown_path(paths, rule.task_id, rule.id)
-    _write_markdown_record(path, rule.to_dict(), rule.description)
-    return rule
-
-
-def resolve_bdd_rule(
-    workspace_root: Path, task_id: str, rule_ref: str
-) -> BddRuleRecord:
-    """Resolve a BDD rule by ID."""
-    normalized_id = _normalize_numeric_ref(rule_ref, "rule")
-    for rule in load_bdd_rules(workspace_root, task_id):
-        if rule.id == rule_ref or rule.id == normalized_id:
-            return rule
-    raise LaunchError(f"BDD rule not found: {rule_ref}")
-
-
-def load_bdd_examples(workspace_root: Path, task_id: str) -> list[BddExampleRecord]:
-    """Load all BDD examples for a task."""
-    paths = ensure_v2_layout(workspace_root)
-    directory = bdd_examples_dir(paths, task_id)
-    if not directory.exists():
-        return []
-    return sorted(
-        [
-            _load_record(p, BddExampleRecord.from_dict)
-            for p in directory.glob("bdd-*.md")
-        ],
-        key=lambda e: e.id,
-    )
-
-
-def save_bdd_example(
-    workspace_root: Path, example: BddExampleRecord
-) -> BddExampleRecord:
-    """Save a BDD example record."""
-    paths = ensure_v2_layout(workspace_root)
-    _ensure_task_bundle(paths, example.task_id)
-    path = bdd_example_markdown_path(paths, example.task_id, example.id)
-    body_parts: list[str] = []
-    if example.given:
-        body_parts.append("## Given")
-        for step in example.given:
-            body_parts.append(f"- {step}")
-    if example.when:
-        body_parts.append("## When")
-        for step in example.when:
-            body_parts.append(f"- {step}")
-    if example.then:
-        body_parts.append("## Then")
-        for step in example.then:
-            body_parts.append(f"- {step}")
-    body = "\n".join(body_parts)
-    _write_markdown_record(path, example.to_dict(), body)
-    return example
-
-
-def resolve_bdd_example(
-    workspace_root: Path, task_id: str, example_ref: str
-) -> BddExampleRecord:
-    """Resolve a BDD example by ID."""
-    normalized_id = _normalize_numeric_ref(example_ref, "bdd")
-    for example in load_bdd_examples(workspace_root, task_id):
-        if example.id == example_ref or example.id == normalized_id:
-            return example
-    raise LaunchError(f"BDD example not found: {example_ref}")
-
-
-def load_bdd_reports(workspace_root: Path, task_id: str) -> list[BddReportRecord]:
-    """Load all BDD reports for a task."""
-    paths = ensure_v2_layout(workspace_root)
-    directory = bdd_reports_dir(paths, task_id)
-    if not directory.exists():
-        return []
-    return sorted(
-        [
-            _load_record(p, BddReportRecord.from_dict)
-            for p in directory.glob("bdd-report-*.md")
-        ],
-        key=lambda r: r.id,
-    )
-
-
-def save_bdd_report(workspace_root: Path, report: BddReportRecord) -> BddReportRecord:
-    """Save a BDD report record."""
-    paths = ensure_v2_layout(workspace_root)
-    _ensure_task_bundle(paths, report.task_id)
-    path = bdd_report_markdown_path(paths, report.task_id, report.id)
-    _write_markdown_record(path, report.to_dict(), "")
-    return report

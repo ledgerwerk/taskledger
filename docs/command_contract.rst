@@ -109,36 +109,21 @@ Rules:
 * renders Markdown by default and can emit JSON-formatted content with ``--format json``;
 * when ``-o/--output`` is provided, writes rendered content to a file path.
 
-Behavior-spec overlay commands
-------------------------------
+Taskledger stores task-local work state and opaque links. Cross-ledger
+semantics belong to an organizer such as ledgerdeck.
 
-Taskledger keeps BDD command names for compatibility, but canonical behavior
-specs and executable enforcement follow the plain-pytest layout:
-
-.. code-block:: text
-
-   specs/behavior/features/<area>/<feature>.feature
-   tests/test_<area>_<feature>.py
-   reports/behavior/<area>-<feature>-junit.xml
-
-Relevant commands:
+Relevant commands for external artifact references:
 
 .. code-block:: bash
 
-   taskledger bdd gherkin-export --out ./derived/plan-gates.feature
-   taskledger bdd export-json --out .specweave/mappings/taskledger/task-0001.bdd.json
-   taskledger bdd example link-automation bdd-0001 --feature-file specs/behavior/features/task-management/plan-gates.feature --scenario @bdd-implementation-blocked-before-plan-acceptance --pytest tests/test_task_management_plan_gates.py::test_agent_cannot_start_implementation_before_plan_approval
-   taskledger validate import-bdd-report reports/behavior/task-management-plan-gates-junit.xml --format junit-xml --command "pytest tests/test_task_management_plan_gates.py --junitxml=reports/behavior/task-management-plan-gates-junit.xml"
+   taskledger link add --url specs/behavior/features/checkout/payment.feature --label "behavior spec"
+   taskledger file link specs/behavior/features/checkout/payment.feature --kind doc --label "behavior spec"
+   taskledger validate check --criterion ac-0001 --status pass --evidence "pytest tests/test_checkout_payment.py::test_payment_flow"
 
 Rules:
 
-* ``bdd gherkin-export`` writes derived output only; it does not claim canonical
-  ownership of the resulting ``.feature`` file.
-* ``bdd example link-automation`` stores metadata references to external
-  behavior specs and plain pytest tests; it does not copy canonical file
-  contents into taskledger records.
-* canonical docs/examples should not promote ``tests/bdd/features``,
-  ``specs/bdd/features``, or ``tests/behavior/`` layouts.
+* Links are opaque. Taskledger does not parse or interpret linked files.
+* Validation evidence is recorded through generic ``validate check``.
 
 Archive import lock policy
 --------------------------

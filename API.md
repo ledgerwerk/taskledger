@@ -16,7 +16,6 @@ This repository exposes a task-first public API. The supported modules are:
 - `taskledger.api.storage`
 - `taskledger.api.sync`
 - `taskledger.api.search`
-- `taskledger.api.bdd`
 
 ## Import boundary
 
@@ -281,28 +280,6 @@ details in JSON context payloads.
 - `sync_git_hooks_install`
 - `sync_git_hooks_status`
 - `sync_git_hooks_uninstall`
-
-### `taskledger.api.bdd`
-
-Task-local behavior mapping APIs. These are task-local BDD/example overlay records.
-Taskledger is not the canonical spec owner — canonical behavior specs live under
-`specs/behavior/features/` (SpecWeave-owned).
-
-- `bdd_init`
-- `bdd_status`
-- `bdd_rule_add`
-- `bdd_rule_list`
-- `bdd_rule_show`
-- `bdd_example_add`
-- `bdd_example_list`
-- `bdd_example_show`
-- `bdd_example_link_ac`
-- `bdd_example_link_archledger`
-- `bdd_example_link_automation`
-- `bdd_gherkin_export`
-- `bdd_export_json`
-- `bdd_archledger_candidate`
-- `import_bdd_report`
 
 ## CLI command groups
 
