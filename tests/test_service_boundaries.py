@@ -108,7 +108,7 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     ),
 }
 EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
-    "taskledger/cli.py:265": (
+    "taskledger/cli.py:268": (
         "Optional command group import fallback reports missing modules gracefully."
     ),
     "taskledger/storage/project_config.py:724": (
@@ -177,36 +177,36 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
         "Path probe falls back when environment inspection raises platform-"
         "specific errors."
     ),
-    "taskledger/storage/task_store.py:350": (
+    "taskledger/storage/task_store.py:351": (
         "save_task write-through index update degrades gracefully on failure."
     ),
-    "taskledger/storage/task_store.py:425": (
+    "taskledger/storage/task_store.py:426": (
         "rewrite_task_refs falls back to plain string replacement when "
         "front matter parsing fails."
     ),
-    "taskledger/storage/task_store.py:509": (
+    "taskledger/storage/task_store.py:510": (
         "save_question write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py:545": (
+    "taskledger/storage/task_store.py:546": (
         "save_run write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py:637": (
+    "taskledger/storage/task_store.py:638": (
         "save_code_review write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py:706": (
+    "taskledger/storage/task_store.py:707": (
         "save_todos write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py:1009": (
+    "taskledger/storage/task_store.py:1003": (
         "_task_latest_impl_run returns None when task resolution fails."
     ),
-    "taskledger/storage/task_store.py:1109": (
+    "taskledger/storage/task_store.py:1103": (
         "list_handoffs_with_errors tolerates malformed handoff records "
         "and continues scanning."
     ),
-    "taskledger/storage/task_store.py:1151": (
+    "taskledger/storage/task_store.py:1145": (
         "save_handoff write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py:1180": (
+    "taskledger/storage/task_store.py:1174": (
         "save_lock write-through sidecar index update degrades gracefully."
     ),
     "taskledger/storage/project_config.py:898": (
