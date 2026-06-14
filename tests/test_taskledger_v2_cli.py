@@ -2223,8 +2223,7 @@ def _overwrite_holder_pid(
     tmp_path: Path, task_id: str, *, pid: int | None, host: str | None = None
 ) -> None:
     """Rewrite the active lock holder fields for diagnostics tests."""
-    import os
-
+    from taskledger.services.lock_diagnostics import current_host_name
     from taskledger.storage.task_store import resolve_v2_paths, task_lock_path
 
     paths = resolve_v2_paths(tmp_path)
@@ -2237,7 +2236,7 @@ def _overwrite_holder_pid(
     if host is not None:
         data["holder"]["host"] = host
     else:
-        data["holder"]["host"] = os.uname().nodename.split(".")[0]
+        data["holder"]["host"] = current_host_name()
     lock_path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 

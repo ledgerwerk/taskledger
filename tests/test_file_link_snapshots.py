@@ -49,7 +49,7 @@ def test_new_links_record_baseline_fields(tmp_path: Path) -> None:
     task = create_task(ws, title="Link task", slug="link-task", description="x")
     source = ws / "src" / "foo.py"
     source.parent.mkdir(parents=True, exist_ok=True)
-    source.write_text("print('hi')\n", encoding="utf-8")
+    source.write_bytes(b"print('hi')\n")
 
     result = runner.invoke(
         app,
