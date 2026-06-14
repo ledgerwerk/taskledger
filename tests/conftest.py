@@ -28,6 +28,20 @@ from typer import Typer  # noqa: E402
 from typer.main import get_command as _typer_get_command  # noqa: E402
 from typer.testing import CliRunner as _TyperCliRunner  # noqa: E402
 
+# Click 8.2+ removed ``mix_stderr`` from CliRunner.__init__.  Typer's
+# CliRunner inherits from Click, so passing ``mix_stderr=False`` raises
+# TypeError/AttributeError on modern Click.  Patch __init__ to silently
+# accept and discard the parameter so every test file keeps working.
+_original_cli_runner_init = _TyperCliRunner.__init__
+
+
+def _patched_cli_runner_init(self: _TyperCliRunner, **kwargs: Any) -> None:
+    kwargs.pop("mix_stderr", None)
+    _original_cli_runner_init(self, **kwargs)
+
+
+_TyperCliRunner.__init__ = _patched_cli_runner_init  # type: ignore[assignment]
+
 from tests.support.builders import (  # noqa: E402
     create_approved_task,
     create_done_task,
