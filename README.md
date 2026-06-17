@@ -127,7 +127,7 @@ taskledger --json plan guidance
 
 This guidance is advisory and cannot override lifecycle gates, user approval,
 validation requirements, lock rules, or higher-priority harness instructions.
-See `docs/usage.rst` for the full key reference and workflow details.
+See `docs/usage.md` for the full key reference and workflow details.
 
 Quick config inspection/edit examples:
 
@@ -557,7 +557,7 @@ taskledger sync git push
 taskledger sync git push --message "Sync project-a taskledger state"
 ```
 
-See `docs/sync.rst` for the full second-PC bootstrap, daily sync protocol, and
+See `docs/sync.md` for the full second-PC bootstrap, daily sync protocol, and
 Syncthing/rclone caveats.
 
 ## JSON output
@@ -688,7 +688,7 @@ $ taskledger handoff show handoff-0001 --task task-0001 --format text
 $ taskledger handoff close handoff-0001 --task task-0001 --reason "Continued."
 ```
 
-See [docs/usage.rst](docs/usage.rst) and
+See [docs/usage.md](docs/usage.md) and
 [skills/taskledger/SKILL.md](skills/taskledger/SKILL.md)
 for task-first handoff guidance.
 

@@ -14,7 +14,7 @@ DOC_PATHS = [
     ROOT / "README.md",
     ROOT / "API.md",
     ROOT / "AGENTS.md",
-    *sorted((ROOT / "docs").glob("*.rst")),
+    *sorted((ROOT / "docs").glob("*.md")),
     ROOT / "skills" / "taskledger" / "SKILL.md",
 ]
 PUBLIC_API_MODULES = (
@@ -40,8 +40,8 @@ def test_skill_is_single_file_without_examples_dir() -> None:
     assert not (skill_dir / "examples").exists()
 
 
-def test_docs_directory_uses_rst_only() -> None:
-    assert not list((ROOT / "docs").glob("*.md"))
+def test_docs_directory_uses_markdown_only() -> None:
+    assert not list((ROOT / "docs").glob("*.rst"))
 
 
 # sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
@@ -80,18 +80,16 @@ def test_api_docs_mentions_all_task_first_command_groups() -> None:
 # sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
 # sw: s=@bdd-docs-and-skill-public-api-docs-match-module-exports
 def test_public_api_docs_match_module_exports() -> None:
-    api_md = (ROOT / "API.md").read_text(encoding="utf-8")
-    api_rst = (ROOT / "docs" / "api.rst").read_text(encoding="utf-8")
+    api_text = (ROOT / "API.md").read_text(encoding="utf-8")
+    api_md = (ROOT / "docs" / "api.md").read_text(encoding="utf-8")
     for module_name in PUBLIC_API_MODULES:
         module = importlib.import_module(module_name)
         exported = getattr(module, "__all__", None)
         assert isinstance(exported, list), module_name
         assert all(isinstance(name, str) for name in exported), module_name
         for name in exported:
-            assert f"`{name}`" in api_md, f"API.md missing {module_name}.{name}"
-            assert f"``{name}``" in api_rst, (
-                f"docs/api.rst missing {module_name}.{name}"
-            )
+            assert f"`{name}`" in api_text, f"API.md missing {module_name}.{name}"
+            assert f"`{name}`" in api_md, f"docs/api.md missing {module_name}.{name}"
 
 
 # sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
@@ -140,7 +138,7 @@ def test_skill_contains_strict_agent_protocol() -> None:
 # sw: s=@bdd-docs-and-skill-docs-define-agent-golden-path-and-advanced-surfaces
 def test_docs_define_agent_golden_path_and_advanced_surfaces() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    public_surface = (ROOT / "docs" / "public_surface.rst").read_text(encoding="utf-8")
+    public_surface = (ROOT / "docs" / "public_surface.md").read_text(encoding="utf-8")
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
 
     normal_plan_path = (
@@ -155,7 +153,7 @@ def test_docs_define_agent_golden_path_and_advanced_surfaces() -> None:
     assert "44 top-level CLI entries" in public_surface
     assert "41 registered command groups" not in public_surface
     assert "ledger fork/switch/adopt" in public_surface
-    assert "search``/``grep``/``symbols``/``deps``" in public_surface
+    assert "search`/`grep`/`symbols`/`deps`" in public_surface
     assert "## Non-goals" in readme
 
 
@@ -168,8 +166,8 @@ def test_skill_has_single_repair_warning() -> None:
 # sw: s=@bdd-docs-and-skill-read-report-export-terminology-is-consolidated
 def test_read_report_export_terminology_is_consolidated() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
-    public_surface = (ROOT / "docs" / "public_surface.rst").read_text(encoding="utf-8")
+    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    public_surface = (ROOT / "docs" / "public_surface.md").read_text(encoding="utf-8")
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
 
     for text in (readme, usage, public_surface, skill):
@@ -178,7 +176,7 @@ def test_read_report_export_terminology_is_consolidated() -> None:
         assert "context" in text
         assert "handoff show" in text
 
-    assert "context``: canonical fresh continuation context" in usage
+    assert "context`: canonical fresh continuation context" in usage
     assert "task export" in public_surface
     assert "task transcript" in public_surface
 
@@ -187,12 +185,11 @@ def test_read_report_export_terminology_is_consolidated() -> None:
 # sw: s=@bdd-docs-and-skill-planning-guidance-docs-are-present
 def test_planning_guidance_docs_are_present() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
-    command_contract = (ROOT / "docs" / "command_contract.rst").read_text(
+    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    command_contract = (ROOT / "docs" / "command_contract.md").read_text(
         encoding="utf-8"
     )
-    api_md = (ROOT / "API.md").read_text(encoding="utf-8")
-    api_rst = (ROOT / "docs" / "api.rst").read_text(encoding="utf-8")
+    api_md = (ROOT / "docs" / "api.md").read_text(encoding="utf-8")
 
     assert "prompt_profiles.planning" in readme
     assert "taskledger plan guidance" in usage
@@ -200,15 +197,15 @@ def test_planning_guidance_docs_are_present() -> None:
     assert "Plan guidance command" in command_contract
     assert "has_project_guidance" in command_contract
     assert 'plan_guidance(Path.cwd(), "task-0001")' in api_md
-    assert 'plan_guidance(Path.cwd(), "task-0001")' in api_rst
+    assert 'plan_guidance(Path.cwd(), "task-0001")' in api_md
 
 
 # sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
 # sw: s=@bdd-docs-and-skill-plan-revision-docs-and-skill-rules-are-present
 def test_plan_revision_docs_and_skill_rules_are_present() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
-    command_contract = (ROOT / "docs" / "command_contract.rst").read_text(
+    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    command_contract = (ROOT / "docs" / "command_contract.md").read_text(
         encoding="utf-8"
     )
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
@@ -233,8 +230,8 @@ def test_plan_revision_docs_and_skill_rules_are_present() -> None:
 )
 def test_worker_pipeline_docs_cover_guided_next_action_and_worker_refs() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
-    command_contract = (ROOT / "docs" / "command_contract.rst").read_text(
+    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    command_contract = (ROOT / "docs" / "command_contract.md").read_text(
         encoding="utf-8"
     )
     api_md = (ROOT / "API.md").read_text(encoding="utf-8")
@@ -253,11 +250,11 @@ def test_worker_pipeline_docs_cover_guided_next_action_and_worker_refs() -> None
 # sw: s=@bdd-docs-and-skill-transfer-docs-cover-project-identity-and-dry-run
 def test_transfer_docs_cover_project_identity_and_dry_run() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
-    command_contract = (ROOT / "docs" / "command_contract.rst").read_text(
+    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    command_contract = (ROOT / "docs" / "command_contract.md").read_text(
         encoding="utf-8"
     )
-    transfer = (ROOT / "docs" / "transfer.rst").read_text(encoding="utf-8")
+    transfer = (ROOT / "docs" / "transfer.md").read_text(encoding="utf-8")
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
 
     assert "project_name" in readme
@@ -274,8 +271,8 @@ def test_transfer_docs_cover_project_identity_and_dry_run() -> None:
 # sw: s=@bdd-docs-and-skill-sync-docs-promote-git-pull-push-convenience-commands
 def test_sync_docs_promote_git_pull_push_convenience_commands() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
-    sync_doc = (ROOT / "docs" / "sync.rst").read_text(encoding="utf-8")
+    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    sync_doc = (ROOT / "docs" / "sync.md").read_text(encoding="utf-8")
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
 
     for text in (readme, usage, sync_doc, skill):
@@ -315,8 +312,8 @@ def test_docs_do_not_reference_removed_commands() -> None:
 # sw: s=@bdd-docs-and-skill-bdd-docs-and-skill-prefer-specweave-and-plain-pytest
 def test_docs_and_skill_describe_isolated_ledger() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
-    command_contract = (ROOT / "docs" / "command_contract.rst").read_text(
+    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    command_contract = (ROOT / "docs" / "command_contract.md").read_text(
         encoding="utf-8"
     )
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
@@ -341,7 +338,7 @@ def test_behavior_spec_docs_do_not_promote_bdd_runners() -> None:
     """
     architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    usage = (ROOT / "docs" / "usage.rst").read_text(encoding="utf-8")
+    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
 
     for text in (architecture, readme, usage, skill):
@@ -427,14 +424,14 @@ def _command_key(tokens: list[str]) -> str | None:
 # sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
 # sw: s=@bdd-docs-and-skill-service-boundary-whitelist-doc-matches-test-constants
 def test_service_boundary_whitelist_doc_matches_test_constants() -> None:
-    """Verify docs/service_boundary_whitelist.rst tracks current whitelist entries."""
+    """Verify docs/service_boundary_whitelist.md tracks current whitelist entries."""
     from tests.test_service_boundaries import (
         CLI_SERVICES_IMPORT_WHITELIST,
         FUNCTION_LINE_WHITELIST,
         MODULE_LINE_WHITELIST,
     )
 
-    doc = (ROOT / "docs" / "service_boundary_whitelist.rst").read_text(encoding="utf-8")
+    doc = (ROOT / "docs" / "service_boundary_whitelist.md").read_text(encoding="utf-8")
 
     # Module whitelist entries must appear in the doc
     for module_path in MODULE_LINE_WHITELIST:
@@ -460,10 +457,10 @@ def test_service_boundary_whitelist_doc_matches_cli_import_whitelist_exactly() -
     """Verify CLI services import refs in doc match test whitelist as exact sets."""
     from tests.test_service_boundaries import CLI_SERVICES_IMPORT_WHITELIST
 
-    doc = (ROOT / "docs" / "service_boundary_whitelist.rst").read_text(encoding="utf-8")
+    doc = (ROOT / "docs" / "service_boundary_whitelist.md").read_text(encoding="utf-8")
     doc_refs = set(
         re.findall(
-            r"``(taskledger/cli[^`]+:taskledger\.services\.[^`]+)``",
+            r"`(taskledger/cli[^`]+:taskledger\.services\.[^`]+)`",
             doc,
         )
     )

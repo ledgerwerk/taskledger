@@ -124,8 +124,8 @@ Use the owning layer before editing.
 - `taskledger/errors.py` — public exception taxonomy and exit codes
 - `taskledger/command_inventory.py` — registered command metadata
 - `skills/taskledger/SKILL.md` — external agent skill protocol
-- `docs/command_contract.rst` — CLI grammar contract
-- `API.md`, `docs/api.rst`, `docs/public_surface.rst` — public API documentation
+- `docs/command_contract.md` — CLI grammar contract
+- `API.md`, `docs/api.md`, `docs/public_surface.md` — public API documentation
 
 ## 4. Packaging Rule for Skills
 

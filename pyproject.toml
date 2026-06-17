@@ -78,6 +78,12 @@ dev = [
     "twine",
     "types-PyYAML",
 ]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "myst-parser",
+    "rst-to-myst",
+]
 rich = [
     "rich",
 ]

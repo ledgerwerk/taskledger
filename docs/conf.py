@@ -19,6 +19,7 @@ except metadata.PackageNotFoundError:
 version = ".".join(release.split(".")[:2])
 
 extensions = [
+    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
@@ -27,11 +28,22 @@ extensions = [
     "sphinx.ext.coverage",
 ]
 
+source_suffix = {
+    ".md": "markdown",
+}
+
+root_doc = "index"
+
+myst_enable_extensions = [
+    "colon_fence",
+]
+
+myst_heading_anchors = 3
+
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 html_theme = "sphinx_rtd_theme"
-html_static_path = ["_static"]
 
 autodoc_default_options = {
     "members": True,
