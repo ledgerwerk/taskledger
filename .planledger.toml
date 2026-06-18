@@ -3,4 +3,4 @@ name = "taskledger"
 uuid = "fe3469ad-0e17-4ade-9d38-b4d4cf810beb"
 
 [storage]
-planledger_dir = "../planledger-state/taskledger"
+planledger_dir = "../ledger/plan/taskledger"

@@ -63,10 +63,10 @@ dynamic=["version"]
 taskledger = "taskledger.launcher:main"
 
 [project.urls]
-Homepage = "https://github.com/holgern/taskledger"
-Repository = "https://github.com/holgern/taskledger"
-Issues = "https://github.com/holgern/taskledger/issues"
-Changelog = "https://github.com/holgern/taskledger/releases"
+Homepage = "https://github.com/ledgerwerk/taskledger"
+Repository = "https://github.com/ledgerwerk/taskledger"
+Issues = "https://github.com/ledgerwerk/taskledger/issues"
+Changelog = "https://github.com/ledgerwerk/taskledger/releases"
 
 [project.optional-dependencies]
 dev = [
