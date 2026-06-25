@@ -42,6 +42,8 @@ def start_validation(
     *,
     actor: ActorRef | None = None,
     harness: HarnessRef | None = None,
+    refresh_implementation_snapshot_first: bool = False,
+    refresh_reason: str | None = None,
 ) -> dict[str, object]:
     task = resolve_task(workspace_root, task_ref)
     _tasks._ensure_not_archived(task, operation="start validation for")
@@ -55,6 +57,27 @@ def start_validation(
         raise _tasks._cli_error(
             "Validation requires a finished implementation run.",
             EXIT_CODE_INVALID_TRANSITION,
+        )
+    if refresh_implementation_snapshot_first:
+        from taskledger.services.workspace_snapshot import (
+            refresh_implementation_snapshot,
+        )
+
+        if refresh_reason is None or not refresh_reason.strip():
+            raise _tasks._cli_error(
+                "--reason is required with --refresh-implementation-snapshot.",
+                EXIT_CODE_BAD_INPUT,
+            )
+        refresh_implementation_snapshot(
+            workspace_root,
+            task.id,
+            reason=refresh_reason,
+            actor=actor,
+            harness=harness,
+        )
+        task = resolve_task(workspace_root, task.id)
+        impl_run = _tasks._require_run(
+            workspace_root, task, task.latest_implementation_run
         )
     _ensure_implementation_snapshot_current(workspace_root, task, impl_run)
     run = _tasks._start_run(
@@ -104,6 +127,17 @@ def validation_status(
         run = resolve_run(workspace_root, task.id, run_id)
 
     report = _tasks._build_validation_gate_report(workspace_root, task, run)
+    if task.latest_implementation_run is not None:
+        impl_run = _tasks._require_run(
+            workspace_root, task, task.latest_implementation_run
+        )
+        if impl_run.run_type == "implementation":
+            from taskledger.services.workspace_snapshot import (
+                compare_implementation_snapshot,
+            )
+
+            evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
+            report["implementation_snapshot"] = evaluation.to_dict()
     return {"kind": "validation_status", "result": report}
 
 
@@ -446,37 +480,15 @@ def _ensure_implementation_snapshot_current(
     impl_run: TaskRunRecord,
 ) -> None:
     """Block validation if the workspace differs from the implementation snapshot."""
-    from taskledger.services.git_utils import capture_workspace_snapshot
+    from taskledger.services.workspace_snapshot import compare_implementation_snapshot
 
-    expected_commit = impl_run.workspace_git_commit
-
-    if expected_commit is None:
-        # Missing snapshots on old runs are acceptable for normal recent tasks,
-        # but not after archive/unarchive recovery.
-        if task.notes and any(
-            "Unarchived from non-terminal state" in n for n in task.notes
-        ):
-            raise _tasks._cli_error(
-                (
-                    f"Cannot validate old implementation for {task.id}: "
-                    "implementation snapshot is missing. "
-                    "Restart implementation or create a follow-up task."
-                ),
-                EXIT_CODE_INVALID_TRANSITION,
-            )
+    evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
+    if evaluation.ok:
         return
-
-    current = capture_workspace_snapshot(workspace_root)
-    if (
-        current.git_commit != expected_commit
-        or current.status_hash != impl_run.workspace_status_hash
-        or current.diff_hash != impl_run.workspace_diff_hash
-    ):
-        raise _tasks._cli_error(
-            (
-                "Cannot start validation because the workspace differs from the "
-                "implementation snapshot recorded at implement finish. "
-                "Restart implementation or create a follow-up task."
-            ),
-            EXIT_CODE_INVALID_TRANSITION,
-        )
+    error = LaunchError(evaluation.message)
+    error.taskledger_exit_code = EXIT_CODE_INVALID_TRANSITION
+    error.taskledger_error_code = "IMPLEMENTATION_SNAPSHOT_MISMATCH"
+    error.taskledger_data = evaluation.to_dict()
+    if evaluation.command_hint:
+        error.taskledger_remediation = [evaluation.command_hint]
+    raise error

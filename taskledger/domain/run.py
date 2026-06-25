@@ -63,6 +63,11 @@ class TaskRunRecord:
     workspace_diff_hash: str | None = None
     workspace_status_hash: str | None = None
     workspace_snapshot_at: str | None = None
+    workspace_content_hash: str | None = None
+    workspace_paths_hash: str | None = None
+    workspace_entry_count: int | None = None
+    workspace_snapshot_format: str | None = None
+    workspace_snapshot_ref: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -99,6 +104,11 @@ class TaskRunRecord:
             "workspace_diff_hash": self.workspace_diff_hash,
             "workspace_status_hash": self.workspace_status_hash,
             "workspace_snapshot_at": self.workspace_snapshot_at,
+            "workspace_content_hash": self.workspace_content_hash,
+            "workspace_paths_hash": self.workspace_paths_hash,
+            "workspace_entry_count": self.workspace_entry_count,
+            "workspace_snapshot_format": self.workspace_snapshot_format,
+            "workspace_snapshot_ref": self.workspace_snapshot_ref,
         }
 
     @classmethod
@@ -155,6 +165,13 @@ class TaskRunRecord:
             workspace_diff_hash=_optional_string(data.get("workspace_diff_hash")),
             workspace_status_hash=_optional_string(data.get("workspace_status_hash")),
             workspace_snapshot_at=_optional_string(data.get("workspace_snapshot_at")),
+            workspace_content_hash=_optional_string(data.get("workspace_content_hash")),
+            workspace_paths_hash=_optional_string(data.get("workspace_paths_hash")),
+            workspace_entry_count=_optional_int(data.get("workspace_entry_count")),
+            workspace_snapshot_format=_optional_string(
+                data.get("workspace_snapshot_format")
+            ),
+            workspace_snapshot_ref=_optional_string(data.get("workspace_snapshot_ref")),
         )
 
     @property

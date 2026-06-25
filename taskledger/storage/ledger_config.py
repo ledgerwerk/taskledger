@@ -304,12 +304,19 @@ def _apply_ledger_patch(
         else:
             new_lines.append(line)
 
-    # Append missing keys
+    # Append missing top-level keys before the first table section so they
+    # are not accidentally written under [ledger] or another TOML table.
     missing = set(keys_to_set.keys()) - found_keys
     if missing:
-        if new_lines and new_lines[-1].strip():
-            new_lines.append("")
-        new_lines.append(
+        insert_at = len(new_lines)
+        for index, line in enumerate(new_lines):
+            if line.lstrip().startswith("["):
+                insert_at = index
+                break
+        inserted: list[str] = []
+        if insert_at > 0 and new_lines[insert_at - 1].strip():
+            inserted.append("")
+        inserted.append(
             "# Taskledger branch-scoped state."
             " This block is intentionally safe to commit."
         )
@@ -322,7 +329,10 @@ def _apply_ledger_patch(
             if key in missing:
                 value = keys_to_set[key]
                 formatted = toml_value_map[key](value)
-                new_lines.append(f"{key} = {formatted}")
+                inserted.append(f"{key} = {formatted}")
+        if insert_at < len(new_lines) and inserted[-1].strip():
+            inserted.append("")
+        new_lines[insert_at:insert_at] = inserted
 
     result = "\n".join(new_lines)
     # Ensure trailing newline

@@ -26,6 +26,7 @@ taskledger plan start --task task-0001
 taskledger implement resume --task task-0001 --reason "Reacquire implementation lock."
 taskledger implement restart --task task-0001 --summary "Fix validation findings."
 taskledger implement finish --task task-0001 --summary "Implemented."
+taskledger implement snapshot refresh --task task-0001 --reason "Accept current workspace as the implementation snapshot."
 taskledger review record --task task-0001 --result pass --summary "No blocking issues."
 taskledger validate status --task task-0001
 ```
@@ -348,6 +349,11 @@ status but `active_stage` is missing, `next-action` must not report
 `The task is cancelled.` For an orphaned implementation with a still-running
 latest implementation run and no active lock, it should direct agents to
 `taskledger implement resume --task TASK_REF --reason "..."`.
+
+For an implemented task whose validation is blocked by `IMPLEMENTATION_SNAPSHOT_MISMATCH`,
+`next-action` must point to `validate-reconcile` and the audited recovery command
+`taskledger implement snapshot refresh --reason "..."`, not to `implement restart` unless
+the task is actually in `failed_validation`.
 For an approved task with a non-implementation run still marked running,
 `next-action` must not direct agents to `taskledger implement start`.
 It should report a repair-oriented action and point to `taskledger doctor`.

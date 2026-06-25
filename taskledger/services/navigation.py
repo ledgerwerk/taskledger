@@ -519,6 +519,36 @@ def _inactive_status_next_action(
                     "message": "Validation requires a finished implementation run.",
                 }
             )
+            return (
+                "validate",
+                "Implementation is complete and ready to validate.",
+                next_item,
+                blockers,
+                progress,
+            )
+        from taskledger.services.workspace_snapshot import (
+            compare_implementation_snapshot,
+        )
+
+        evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
+        if not evaluation.ok:
+            blockers.append(
+                {
+                    "kind": "implementation_snapshot",
+                    "message": evaluation.message,
+                    "reason_code": evaluation.reason_code,
+                    "command_hint": evaluation.command_hint,
+                    "details": evaluation.details,
+                }
+            )
+            return (
+                "validate-reconcile",
+                "Implementation is finished, but validation is blocked by a "
+                "workspace snapshot mismatch.",
+                next_item,
+                blockers,
+                progress,
+            )
         return (
             "validate",
             "Implementation is complete and ready to validate.",
@@ -798,6 +828,24 @@ def can_perform(workspace_root: Path, task_ref: str, action: str) -> dict[str, o
                 "implementation run, and no conflicting lock."
             )
         )
+        if ok and impl_run is not None:
+            from taskledger.services.workspace_snapshot import (
+                compare_implementation_snapshot,
+            )
+
+            evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
+            if not evaluation.ok:
+                ok = False
+                reason = "Validation is blocked by implementation snapshot mismatch."
+                blocking.append(
+                    {
+                        "kind": "implementation_snapshot",
+                        "message": evaluation.message,
+                        "reason_code": evaluation.reason_code,
+                        "command_hint": evaluation.command_hint,
+                        "details": evaluation.details,
+                    }
+                )
         if (
             impl_run is None
             or impl_run.run_type != "implementation"
@@ -1319,6 +1367,10 @@ def _next_action_command(action: str) -> str | None:
         "todo-work": "taskledger implement checklist",
         "implement-finish": "taskledger implement finish --summary SUMMARY",
         "validate": "taskledger validate start",
+        "validate-reconcile": (
+            "taskledger implement snapshot refresh --reason "
+            '"Accept current workspace as the implementation snapshot."'
+        ),
         "validate-check": (
             "taskledger validate check --criterion CRITERION "
             '--status pass --evidence "..."'
@@ -1400,6 +1452,7 @@ def _commands_for_next_item(
             "todo-work": "Show implementation checklist",
             "implement-finish": "Finish implementation",
             "validate": "Start validation",
+            "validate-reconcile": "Refresh implementation snapshot",
             "validate-check": "Record validation check",
             "validate-finish": "Finish validation",
             "repair-lock": "Show current lock",
@@ -1414,6 +1467,7 @@ def _commands_for_next_item(
             "todo-work": "context",
             "implement-finish": "finish",
             "validate": "start",
+            "validate-reconcile": "refresh",
             "validate-check": "check",
             "validate-finish": "finish",
             "repair-lock": "inspect",

@@ -313,6 +313,7 @@ linked-file drift checks.
 - If validation fails, record the failure and do not hide it.
 - Do not treat code review summaries as validation evidence unless the validation stage records criterion checks separately.
 - Run `taskledger validate status` to inspect all blocking issues before finishing.
+- If `validate start` reports `IMPLEMENTATION_SNAPSHOT_MISMATCH`, do not stage or unstage files blindly. Run `validate status` or `can validate`. If the user accepts the current workspace as the implementation result, run `taskledger implement snapshot refresh --reason "..."` and then `taskledger validate start`.
 - If validation fails because implementation has a bug, finish validation as failed, run `taskledger next-action`, then restart implementation with `taskledger implement restart`. Use implementation context or an implementation handoff for the next actor.
 
 ### Waiver Rules

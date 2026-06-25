@@ -512,8 +512,17 @@ def finish_implementation(
     _tasks._require_todos_complete_for_implementation_finish(workspace_root, task)
 
     from taskledger.services.git_utils import capture_workspace_snapshot
+    from taskledger.services.workspace_snapshot import (
+        SNAPSHOT_FORMAT,
+        capture_workspace_content_snapshot,
+        save_workspace_snapshot_manifest,
+    )
 
     snapshot = capture_workspace_snapshot(workspace_root)
+    content_snapshot = capture_workspace_content_snapshot(workspace_root)
+    snapshot_ref = save_workspace_snapshot_manifest(
+        workspace_root, task.id, run.run_id, content_snapshot
+    )
     finished = replace(
         run,
         status="finished",
@@ -524,6 +533,11 @@ def finish_implementation(
         workspace_diff_hash=snapshot.diff_hash,
         workspace_status_hash=snapshot.status_hash,
         workspace_snapshot_at=snapshot.captured_at,
+        workspace_content_hash=content_snapshot.content_hash,
+        workspace_paths_hash=content_snapshot.paths_hash,
+        workspace_entry_count=content_snapshot.entry_count,
+        workspace_snapshot_format=SNAPSHOT_FORMAT,
+        workspace_snapshot_ref=snapshot_ref,
     )
     save_run(workspace_root, finished)
     updated = replace(task, status_stage="implemented", updated_at=utc_now_iso())

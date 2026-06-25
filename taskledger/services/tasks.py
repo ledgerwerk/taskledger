@@ -1312,6 +1312,8 @@ def start_validation(
     *,
     actor: ActorRef | None = None,
     harness: HarnessRef | None = None,
+    refresh_implementation_snapshot_first: bool = False,
+    refresh_reason: str | None = None,
 ) -> dict[str, object]:
     from taskledger.services.validation_flow import (
         start_validation as _start_validation,
@@ -1320,6 +1322,29 @@ def start_validation(
     return _start_validation(
         workspace_root,
         task_ref,
+        actor=actor,
+        harness=harness,
+        refresh_implementation_snapshot_first=refresh_implementation_snapshot_first,
+        refresh_reason=refresh_reason,
+    )
+
+
+def refresh_implementation_snapshot(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    reason: str,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
+) -> dict[str, object]:
+    from taskledger.services.workspace_snapshot import (
+        refresh_implementation_snapshot as _refresh_implementation_snapshot,
+    )
+
+    return _refresh_implementation_snapshot(
+        workspace_root,
+        task_ref,
+        reason=reason,
         actor=actor,
         harness=harness,
     )

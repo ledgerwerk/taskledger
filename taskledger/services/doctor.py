@@ -164,6 +164,39 @@ def inspect_v2_project(workspace_root: Path) -> dict[str, object]:  # noqa: C901
         warnings=warnings,
         repair_hints=repair_hints,
     )
+    for task in tasks:
+        if task.status_stage != "implemented":
+            continue
+        impl_run = run_map.get((task.id, task.latest_implementation_run or ""))
+        if (
+            impl_run is None
+            or impl_run.run_type != "implementation"
+            or impl_run.status != "finished"
+        ):
+            continue
+        from taskledger.services.workspace_snapshot import (
+            compare_implementation_snapshot,
+        )
+
+        evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
+        if not evaluation.ok:
+            warnings.append(
+                f"Task {task.id} is implemented but validation is blocked by "
+                "implementation snapshot mismatch."
+            )
+            if evaluation.command_hint:
+                repair_hints.append(evaluation.command_hint)
+            diagnostics.append(
+                {
+                    "severity": "warning",
+                    "code": "IMPLEMENTATION_SNAPSHOT_MISMATCH",
+                    "task_id": task.id,
+                    "message": evaluation.message,
+                    "command_hint": evaluation.command_hint,
+                    "details": evaluation.to_dict(),
+                }
+            )
+
     if broken_links:
         errors.append("V2 task records contain broken references.")
     if expired_locks:

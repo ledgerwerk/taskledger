@@ -94,6 +94,18 @@ def _render_validation_status(payload: dict[str, Any]) -> str:
             lines.append(f"  - {blocker}")
         lines.append("")
 
+    implementation_snapshot = payload.get("implementation_snapshot")
+    if isinstance(implementation_snapshot, dict):
+        lines.append("Implementation snapshot:")
+        status = "ok" if implementation_snapshot.get("ok") else "mismatch"
+        lines.append(f"  status: {status}")
+        lines.append(
+            f"  reason: {implementation_snapshot.get('reason_code', 'unknown')}"
+        )
+        command = implementation_snapshot.get("command_hint")
+        if command:
+            lines.append(f"  command: {command}")
+        lines.append("")
     can_finish = payload.get("can_finish_passed", False)
     lines.append(f"Can finish passed: {'yes' if can_finish else 'no'}")
 
@@ -140,6 +152,17 @@ def register_validate_v2_commands(app: typer.Typer) -> None:
             str | None,
             typer.Option("--session-id", help="Session identifier."),
         ] = None,
+        refresh_implementation_snapshot_flag: Annotated[
+            bool,
+            typer.Option(
+                "--refresh-implementation-snapshot",
+                help="Refresh implementation snapshot before starting validation.",
+            ),
+        ] = False,
+        reason: Annotated[
+            str | None,
+            typer.Option("--reason", help="Reason for snapshot refresh."),
+        ] = None,
     ) -> None:
         state = cli_state_from_context(ctx)
         try:
@@ -159,6 +182,8 @@ def register_validate_v2_commands(app: typer.Typer) -> None:
                 task.id,
                 actor=resolved_actor,
                 harness=resolved_harness,
+                refresh_implementation_snapshot_first=refresh_implementation_snapshot_flag,
+                refresh_reason=reason,
             )
         except LaunchError as exc:
             emit_error(ctx, exc)

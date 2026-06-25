@@ -10,6 +10,7 @@ from taskledger.api.task_runs import (
     add_implementation_deviation,
     finish_implementation,
     log_implementation,
+    refresh_implementation_snapshot,
     restart_implementation,
     resume_implementation,
     run_implementation_command,
@@ -488,6 +489,59 @@ def checklist_command(
     emit_payload(ctx, payload, human="\n".join(lines))
 
 
+def snapshot_refresh_command(
+    ctx: typer.Context,
+    reason: Annotated[str, typer.Option("--reason")],
+    task_ref: TaskOption = None,
+    actor: Annotated[
+        str | None,
+        typer.Option("--actor", help="Actor type: user, agent, or system."),
+    ] = None,
+    actor_name: Annotated[
+        str | None,
+        typer.Option("--actor-name", help="Actor name."),
+    ] = None,
+    actor_role: Annotated[
+        str | None,
+        typer.Option("--actor-role", help="Actor role in task lifecycle."),
+    ] = None,
+    harness: Annotated[
+        str | None,
+        typer.Option("--harness", help="Harness name."),
+    ] = None,
+    session_id: Annotated[
+        str | None,
+        typer.Option("--session-id", help="Session identifier."),
+    ] = None,
+) -> None:
+    state = cli_state_from_context(ctx)
+    try:
+        task = resolve_cli_task(state.cwd, task_ref)
+        resolved_actor, resolved_harness = resolve_cli_actor_harness(
+            actor=actor,
+            actor_name=actor_name,
+            actor_role=actor_role,
+            harness=harness,
+            session_id=session_id,
+            workspace_root=state.cwd,
+        )
+        payload = refresh_implementation_snapshot(
+            state.cwd,
+            task.id,
+            reason=reason,
+            actor=resolved_actor,
+            harness=resolved_harness,
+        )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    emit_payload(
+        ctx,
+        payload,
+        human=f"refreshed implementation snapshot for {payload['run_id']}",
+    )
+
+
 def register_implement_v2_commands(app: typer.Typer) -> None:
     command_context_settings = {
         "allow_extra_args": True,
@@ -509,3 +563,6 @@ def register_implement_v2_commands(app: typer.Typer) -> None:
     app.command("show")(show_command)
     app.command("status")(status_command)
     app.command("checklist")(checklist_command)
+    snapshot_app = typer.Typer(no_args_is_help=True)
+    snapshot_app.command("refresh")(snapshot_refresh_command)
+    app.add_typer(snapshot_app, name="snapshot")
