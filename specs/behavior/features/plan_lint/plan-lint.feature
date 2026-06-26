@@ -27,8 +27,8 @@ Feature: Plan Lint
       Given the pytest test setup is prepared
       When plan guidance human message when no profile is executed
       Then result.exit_code equals 0
-      Then 'No project planning guidance configured.' is in result.stdout
-      Then '[prompt_profiles.planning]' is in result.stdout
+      Then 'Built-in Taskledger plan input guidance' is in result.stdout
+      Then 'Acceptance criteria use `text`' is in result.stdout
 
     @bdd-plan-lint-plan-guidance-json-contract-when-no-profile @needs-review
     Example: Plan Guidance Json Contract When No Profile

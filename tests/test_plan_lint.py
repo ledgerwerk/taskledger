@@ -346,8 +346,9 @@ class TestPlanLintPasses:
         )
 
         assert result.exit_code == 0, result.output
-        assert "No project planning guidance configured." in result.stdout
-        assert "[prompt_profiles.planning]" in result.stdout
+        assert "Built-in Taskledger plan input guidance" in result.stdout
+        assert "Acceptance criteria use `text`" in result.stdout
+        assert "No project planning guidance configured" not in result.stdout
 
     # sw: f=specs/behavior/features/plan_lint/plan-lint.feature
     # sw: s=@bdd-plan-lint-plan-guidance-json-contract-when-no-profile
@@ -375,7 +376,11 @@ class TestPlanLintPasses:
         assert isinstance(result_payload, dict)
         assert result_payload["kind"] == "planning_guidance"
         assert result_payload["has_project_guidance"] is False
-        assert result_payload["guidance"] == ""
+        assert result_payload["profile"] is None
+        assert isinstance(result_payload["guidance"], str)
+        assert result_payload["guidance"].startswith(
+            "## Built-in Taskledger plan input guidance"
+        )
 
     # sw: f=specs/behavior/features/plan_lint/plan-lint.feature
     # sw: s=@bdd-plan-lint-plan-guidance-rejects-invalid-format
