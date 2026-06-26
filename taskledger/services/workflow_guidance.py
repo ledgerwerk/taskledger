@@ -77,6 +77,46 @@ def _plan_body_detail_label(level: str) -> str:
     return labels.get(level, level)
 
 
+_BUILTIN_GUIDANCE = """## Built-in Taskledger plan input guidance
+
+This guidance cannot override taskledger lifecycle gates, user approval requirements,
+validation requirements, lock rules, or higher-priority harness instructions.
+
+Use this editable plan-input contract:
+
+- Generate a template first: `taskledger plan template --file plan.md`.
+- Validate before mutation: `taskledger plan check --file plan.md`.
+- Acceptance criteria use `text`, not `description`.
+  `description` is only a compatibility alias.
+- Todos use `text` plus optional `mandatory`, `validation_hint`, and `worker_step`.
+- Put file references in plan-level `files:` or in todo text.
+  Todo-level `files:` is not captured.
+- Keep enough Markdown body content for the implementer handoff.
+
+Minimal front matter:
+
+```yaml
+---
+goal: "One sentence describing the desired outcome."
+files:
+  - "@src/module.py"
+test_commands:
+  - "pytest -q tests/test_module.py"
+expected_outputs:
+  - "pytest exits 0"
+acceptance_criteria:
+  - id: ac-0001
+    text: "Observable acceptance criterion."
+    mandatory: true
+todos:
+  - id: plan-todo-0001
+    text: "Edit @src/module.py to implement the behavior."
+    mandatory: true
+    validation_hint: "Run pytest -q tests/test_module.py."
+---
+```"""
+
+
 def render_planning_guidance(
     workspace_root: Path,
     task: TaskRecord,
@@ -85,13 +125,14 @@ def render_planning_guidance(
 ) -> str:
     """Render a Markdown planning guidance block for the given task.
 
-    Returns empty string when no prompt profile is configured. When a
-    project prompt profile exists, the project-local guidance is rendered.
+    Always returns built-in plan-input guidance. When a project prompt
+    profile exists, the project-local guidance is appended.
     """
     profile = load_workflow_guidance(workspace_root)
     if profile is None:
-        return ""
-    return _render_guidance_from_profile(profile)
+        return _BUILTIN_GUIDANCE
+    project_guidance = _render_guidance_from_profile(profile)
+    return _BUILTIN_GUIDANCE + "\n" + project_guidance
 
 
 def _render_guidance_from_profile(profile: PromptProfile) -> str:
@@ -147,12 +188,11 @@ def planning_guidance_payload(
     task = resolve_task(workspace_root, task_ref)
     profile = load_workflow_guidance(workspace_root)
     guidance_text = render_planning_guidance(workspace_root, task)
-    has_guidance = bool(guidance_text)
     return {
         "kind": "planning_guidance",
         "task_id": task.id,
-        "has_project_guidance": has_guidance,
-        "guidance": guidance_text if has_guidance else "",
+        "has_project_guidance": profile is not None,
+        "guidance": guidance_text,
         "profile": profile.to_dict() if profile is not None else None,
         "question_policy": profile.question_policy if profile is not None else None,
     }

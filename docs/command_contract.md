@@ -62,7 +62,9 @@ Optional positional task refs are not supported for workflow commands.
 
 ## Plan guidance command
 
-`taskledger plan guidance` is a read-only planning helper command:
+`taskledger plan guidance` is a read-only planning helper command that always
+prints built-in plan-input guidance. When a project prompt profile is configured
+it appends project-local advisory guidance:
 
 ```bash
 taskledger plan guidance [--task TASK_REF] [--format markdown|json]
@@ -74,7 +76,9 @@ Rules:
 - `--format` accepts only `markdown` or `json`;
 - when a planning run is active, it records a one-time guidance-view marker for
   that run and appends a `plan.guidance.viewed` event;
-- root `--json` continues to return the standard CLI success/error envelope.
+- root `--json` continues to return the standard CLI success/error envelope;
+- `has_project_guidance` indicates whether a project prompt profile exists,
+  not whether any guidance is available. Built-in guidance is always returned.
 
 The command payload shape is:
 

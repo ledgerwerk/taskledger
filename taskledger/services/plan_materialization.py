@@ -194,7 +194,7 @@ def regenerate_plan_from_answers(
                     "running. Run `taskledger doctor`."
                 ),
             )
-    parsed = parse_plan_input(workspace_root, body, criteria=criteria, strict=True)
+    parsed = parse_plan_input(workspace_root, body, criteria=criteria, strict=False)
     if parsed.has_errors:
         raise plan_input_error(parsed, command="plan regenerate")
     plan_body = parsed.body

@@ -46,7 +46,6 @@ from taskledger.errors import LaunchError
 from taskledger.services.plan_editing import ensure_plan_input_path_allowed
 from taskledger.services.plan_lint import PlanLintPayload
 from taskledger.services.workflow_guidance import (
-    has_planning_profile,
     planning_guidance_payload,
 )
 
@@ -99,14 +98,13 @@ def start_command(
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
     human = f"started planning {payload['task_id']}"
-    if has_planning_profile(state.cwd):
-        human = "\n".join(
-            [
-                human,
-                "Next: taskledger plan guidance",
-                "Then: taskledger plan template --include-guidance --file plan.md",
-            ]
-        )
+    human = "\n".join(
+        [
+            human,
+            "Next: taskledger plan guidance",
+            "Then: taskledger plan template --include-guidance --file plan.md",
+        ]
+    )
     emit_payload(ctx, payload, human=human)
 
 
@@ -692,14 +690,9 @@ def plan_guidance_command(
     human: str | None = None
     if normalized_format == "json":
         human = render_json(payload)
-    elif payload.get("has_project_guidance"):
-        human = str(payload["guidance"])
     else:
-        human = (
-            "No project planning guidance configured.\n"
-            "Add [prompt_profiles.planning] to taskledger.toml, then run "
-            "taskledger plan guidance again."
-        )
+        guidance_text = str(payload.get("guidance", ""))
+        human = guidance_text if guidance_text.strip() else None
     emit_payload(ctx, payload, human=human)
 
 

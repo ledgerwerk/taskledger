@@ -82,6 +82,7 @@ def propose_plan(
     *,
     body: str,
     criteria: tuple[str, ...] = (),
+    command_label: str = "plan propose",
 ) -> dict[str, object]:
     task = resolve_task(workspace_root, task_ref)
     _tasks._ensure_not_archived(task, operation="propose plan for")
@@ -90,9 +91,9 @@ def propose_plan(
     _tasks._enforce_decision(plan_propose_decision(task, lock, run=run))
     plans = list_plans(workspace_root, task.id)
     version = plans[-1].plan_version + 1 if plans else 1
-    parsed = parse_plan_input(workspace_root, body, criteria=criteria, strict=True)
+    parsed = parse_plan_input(workspace_root, body, criteria=criteria, strict=False)
     if parsed.has_errors:
-        raise plan_input_error(parsed)
+        raise plan_input_error(parsed, command=command_label)
     plan_body = parsed.body
     questions = list_questions(workspace_root, task.id)
     plan = _tasks.PlanRecord(
@@ -228,7 +229,13 @@ def upsert_plan(
         if task.status_stage == "plan_review" and lock is None:
             revised = start_planning(workspace_root, task.id)
             auto_revised = True
-    payload = propose_plan(workspace_root, task.id, body=body, criteria=criteria)
+    payload = propose_plan(
+        workspace_root,
+        task.id,
+        body=body,
+        criteria=criteria,
+        command_label="plan upsert",
+    )
     payload["operation"] = "proposed"
     payload["command"] = "plan upsert"
     if auto_revised:
@@ -307,7 +314,12 @@ def amend_plan(
         files=updated_files,
     )
     revised = start_planning(workspace_root, task.id)
-    payload = propose_plan(workspace_root, task.id, body=render_editable_plan(draft))
+    payload = propose_plan(
+        workspace_root,
+        task.id,
+        body=render_editable_plan(draft),
+        command_label="plan amend",
+    )
     payload["command"] = "plan amend"
     payload["operation"] = "amended"
     payload["from_plan_version"] = latest.plan_version

@@ -37,9 +37,6 @@ from taskledger.services.tasks import (
 )
 from taskledger.services.validation import build_validation_gate_report
 from taskledger.services.worker_pipeline import determine_next_worker_step
-from taskledger.services.workflow_guidance import (
-    has_planning_profile,
-)
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.project_config import load_worker_pipeline_config
 from taskledger.storage.task_store import (
@@ -294,14 +291,7 @@ def next_action_for_task(
     if lock_warning is not None:
         payload["lock_warning"] = lock_warning
     if guidance_command is not None:
-        payload["commands"] = [
-            _command(
-                "guidance",
-                "Review planning guidance",
-                guidance_command,
-            ),
-            *commands,
-        ]
+        payload["guidance_command"] = guidance_command
     if action in {"plan-propose", "plan-regenerate"}:
         _apply_planning_check_command(payload, action, commands)
     guided_worker_pipeline = _guided_worker_pipeline_payload(workspace_root, task)
@@ -588,8 +578,6 @@ def _guidance_command(
         return None
     if action not in {"plan-propose", "question-answer", "plan-regenerate"}:
         return None
-    if not has_planning_profile(workspace_root):
-        return None
     if _planning_guidance_already_viewed(task, runs):
         return None
     return "taskledger plan guidance"
@@ -625,26 +613,23 @@ def _apply_planning_check_command(
             "taskledger plan template --from-answers --include-guidance --file plan.md"
         )
     )
+    default_check_cmd = "taskledger plan check --file plan.md"
     payload["template_command"] = template_cmd
-    payload["check_command"] = "taskledger plan check --file plan.md"
-    check_entry = _command(
-        "check",
-        "Validate plan input",
-        "taskledger plan check --file plan.md",
-    )
+    payload["check_command"] = default_check_cmd
+
+    guidance_cmd_value = payload.get("guidance_command")
     existing = cast(list[dict[str, object]], payload.get("commands", fallback_commands))
-    insert_index = len(existing)
-    for idx, cmd in enumerate(existing):
-        kind_name = cmd.get("kind", "")
-        primary = cmd.get("primary", False)
-        if kind_name in {"regenerate", "start"} and primary:
-            insert_index = idx + 1
-            break
-    payload["commands"] = [
-        *existing[:insert_index],
-        check_entry,
-        *existing[insert_index:],
-    ]
+
+    prefix: list[dict[str, object]] = []
+    if guidance_cmd_value is not None:
+        prefix.append(
+            _command("guidance", "Review planning guidance", str(guidance_cmd_value))
+        )
+    prefix.append(_command("template", "Write editable plan template", template_cmd))
+    prefix.append(_command("check", "Validate plan input", default_check_cmd))
+
+    lifecycle = _without_kinds(existing, {"guidance", "template", "check"})
+    payload["commands"] = [*prefix, *lifecycle]
 
 
 def _archived_blocker(task: TaskRecord) -> dict[str, object]:
@@ -1664,6 +1649,13 @@ def _commands_for_next_item(
             )
         )
     return commands
+
+
+def _without_kinds(
+    commands: list[dict[str, object]],
+    kinds: set[str],
+) -> list[dict[str, object]]:
+    return [cmd for cmd in commands if cmd.get("kind") not in kinds]
 
 
 def _optional_string_value(value: object) -> str | None:

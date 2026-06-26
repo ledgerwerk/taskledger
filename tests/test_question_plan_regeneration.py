@@ -1056,6 +1056,20 @@ def test_next_action_prefers_regenerate_over_approve_for_stale_answers(
         "plan_version": None,
     }
     assert result["commands"][0] == {
+        "kind": "template",
+        "label": "Write editable plan template",
+        "command": (
+            "taskledger plan template --from-answers --include-guidance --file plan.md"
+        ),
+        "primary": False,
+    }
+    assert result["commands"][1] == {
+        "kind": "check",
+        "label": "Validate plan input",
+        "command": "taskledger plan check --file plan.md",
+        "primary": False,
+    }
+    assert result["commands"][2] == {
         "kind": "regenerate",
         "label": "Regenerate plan from answers",
         "command": "taskledger plan upsert --from-answers --file plan.md",

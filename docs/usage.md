@@ -91,7 +91,8 @@ taskledger validate check --criterion ac-0001 --status pass --evidence "pytest t
 
 ## Planning guidance profiles
 
-Taskledger supports project-local advisory planning guidance for agents. Configure
+Taskledger always provides built-in planning guidance via `taskledger plan guidance`.
+Project-local advisory guidance can extend this with project-specific advice. Configure
 it in the active project config file discovered for your workspace. Newer
 projects usually use `taskledger.toml`. Existing projects may still use
 `.taskledger.toml`; if both files exist, `.taskledger.toml` is discovered
@@ -142,8 +143,11 @@ Planning workflow integration:
 taskledger plan start
 taskledger plan guidance
 taskledger plan template --include-guidance --file plan.md
-taskledger plan lint --version 1
+# edit plan.md
+taskledger plan check --file plan.md
 taskledger plan upsert --file plan.md
+taskledger plan lint --version 1
+taskledger plan review --version 1
 ```
 
 Revising a proposed plan safely:

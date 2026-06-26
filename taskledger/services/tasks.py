@@ -2012,8 +2012,6 @@ def _render_plan_template(
         "<!-- Required: keep this body. It is the implementation handoff context.",
         "     Run `taskledger plan check --file ./plan.md` before upsert. -->",
         "",
-        "<!-- Required: keep this body. It is the implementation handoff context. -->",
-        "",
         "## Goal",
         "",
         "<repeat or expand the goal in human prose>",
@@ -2023,6 +2021,18 @@ def _render_plan_template(
         "<describe the approach, architecture, and key decisions>",
         "",
         "## Validation plan",
+        "",
+        "## Plan input checklist before upsert",
+        "",
+        "- [ ] I ran `taskledger plan check --file plan.md`.",
+        "- [ ] Every acceptance criterion uses `text`, not `description`.",
+        "- [ ] Todo mappings use supported keys only: "
+        "`id`, `id_hint`, `text`, `mandatory`, `validation_hint`, "
+        "`worker_step`.",
+        "- [ ] File references are plan-level `files:` entries "
+        "or are mentioned in todo text/body; "
+        "todo-level `files:` is not captured.",
+        "- [ ] The Markdown body explains enough context for implementation handoff.",
         "",
     ]
     if answered_questions:

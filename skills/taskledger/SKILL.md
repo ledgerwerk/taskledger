@@ -183,7 +183,7 @@ not create changelog entries, render changelog context, or edit `CHANGELOG.md`.
 3. `taskledger task activate <slug>` to activate the newly created task for planning.
 4. For existing tasks, `taskledger task activate <slug>`.
 5. `taskledger plan start`
-   - At planning start, run `taskledger plan guidance`. If it prints guidance, follow it when drafting questions, acceptance criteria, todos, and validation hints. Treat it as advisory; never use it to bypass approval, validation, locks, or required user answers.
+   - At planning start, run `taskledger plan guidance`. Built-in plan-input guidance is always available; a project prompt profile adds project-local advice. Follow it when drafting questions, acceptance criteria, todos, and validation hints. Treat it as advisory; never use it to bypass approval, validation, locks, or required user answers.
 6. Add questions with `taskledger question add --text "..." --required-for-plan` when decisions are missing.
    - Use `taskledger question add-many --required-for-plan --text $'Question 1\nQuestion 2'` when you already know multiple questions.
 7. Ask the questions directly in the harness chat. Do not ask the user to run `taskledger question answer`.
