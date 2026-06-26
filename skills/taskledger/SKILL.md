@@ -36,7 +36,7 @@ task active | task show | task create | task activate | task follow-up
 ref show | ref parse
 next-action | context | can
 config list | config get | config set
-plan start -> plan template -> plan upsert -> plan lint -> plan accept
+plan start -> plan guidance -> plan template -> plan check -> plan upsert -> plan lint -> plan accept
 question add | question add-many | question answer | question answer-many | question status | question answers
 todo next | todo show | todo done | todo status
 implement start | implement resume | implement change | implement scan-changes | implement finish
@@ -192,15 +192,19 @@ not create changelog entries, render changelog context, or edit `CHANGELOG.md`.
 10. When the user answers in chat, record the answers yourself with `taskledger question answer-many` or `taskledger question answer`.
 11. Run `taskledger question status` and review all answered questions with `taskledger question answers` before writing the plan.
 12. Before reading source files to discover plan format, run `taskledger plan template --from-answers --file ./plan.md` when answered questions exist, or `taskledger plan template --file ./plan.md` for a fresh plan skeleton.
+    - Preserve the template field names. Do not hand-write Taskledger front matter from memory.
+    - Acceptance criteria use `text`, not `description`. Todo-level `files:` are not captured by Taskledger.
     - If the project has an enabled worker pipeline and this task should use worker-tagged todos, add `--with-worker-pipeline`.
-13. If answered questions exist, write the next plan with `taskledger plan upsert --from-answers --file ./plan.md`.
-14. Use `taskledger plan upsert --file ./plan.md` for plans that are not based on newly answered questions.
-15. Never edit `.taskledger/` files directly. Treat `.taskledger/` as Taskledger private durable state.
-16. To revise a proposed plan in `plan_review`, run:
+13. After editing `./plan.md`, always run: `taskledger plan check --file ./plan.md`.
+14. If answered questions exist, write the next plan with `taskledger plan upsert --from-answers --file ./plan.md`.
+15. Use `taskledger plan upsert --file ./plan.md` for plans that are not based on newly answered questions.
+16. Never edit `.taskledger/` files directly. Treat `.taskledger/` as Taskledger private durable state.
+17. To revise a proposed plan in `plan_review`, run:
 
 - `taskledger plan revise`
 - `taskledger plan export --version latest --file ./plan.md`
 - edit `./plan.md`
+- `taskledger plan check --file ./plan.md`
 - `taskledger plan upsert --file ./plan.md`
 - For simple structured removals, prefer `taskledger plan amend ... --reason "..."`
 
@@ -446,6 +450,8 @@ taskledger next-action
 # Read advisory planning guidance before drafting plan content.
 taskledger plan guidance
 taskledger plan template --from-answers --file ./plan.md
+# edit plan.md
+taskledger plan check --file ./plan.md
 taskledger plan upsert --from-answers --file ./plan.md
 taskledger plan review --version 1
 taskledger plan lint --version 1

@@ -19,6 +19,10 @@ from taskledger.domain.models import (
 from taskledger.domain.states import EXIT_CODE_APPROVAL_REQUIRED
 from taskledger.ids import next_project_id
 from taskledger.services import tasks as _tasks
+from taskledger.services.plan_input import (
+    parse_plan_input,
+    plan_input_error,
+)
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     list_plans,
@@ -190,7 +194,10 @@ def regenerate_plan_from_answers(
                     "running. Run `taskledger doctor`."
                 ),
             )
-    front_matter, plan_body = _tasks._parse_plan_front_matter(body)
+    parsed = parse_plan_input(workspace_root, body, criteria=criteria, strict=True)
+    if parsed.has_errors:
+        raise plan_input_error(parsed, command="plan regenerate")
+    plan_body = parsed.body
     version = plans[-1].plan_version + 1 if plans else 1
     plan = PlanRecord(
         task_id=task.id,
@@ -200,24 +207,16 @@ def regenerate_plan_from_answers(
         created_by=_tasks._default_actor(),
         supersedes=plans[-1].plan_version if plans else None,
         question_refs=tuple(open_required),
-        criteria=_tasks._criteria_from_plan_input(front_matter, criteria),
-        todos=_tasks._todos_from_plan_input(workspace_root, front_matter),
+        criteria=parsed.criteria,
+        todos=parsed.todos,
         generation_reason="after_questions",
         based_on_question_ids=tuple(item.id for item in answered),
         based_on_answer_hash=_tasks._answer_snapshot_hash(questions),
-        goal=_tasks._optional_front_matter_string(front_matter, "goal"),
-        files=_tasks._string_tuple_from_front_matter(front_matter, "files"),
-        test_commands=_tasks._string_tuple_from_front_matter(
-            front_matter, "test_commands"
-        ),
-        expected_outputs=_tasks._string_tuple_from_front_matter(
-            front_matter, "expected_outputs"
-        ),
-        todos_waived_reason=(
-            _tasks._optional_front_matter_string(front_matter, "todos_waived_reason")
-            or _tasks._optional_front_matter_string(front_matter, "todo_waiver_reason")
-            or _tasks._optional_front_matter_string(front_matter, "no_todos_reason")
-        ),
+        goal=parsed.goal,
+        files=parsed.files,
+        test_commands=parsed.test_commands,
+        expected_outputs=parsed.expected_outputs,
+        todos_waived_reason=parsed.todos_waived_reason,
     )
     save_plan(workspace_root, plan)
     if plans:
@@ -293,6 +292,11 @@ def regenerate_plan_from_answers(
         regenerate_warnings.append(
             "Plan body is empty; implementation handoff will not contain a human plan."
         )
+    regenerate_warnings.extend(
+        f"{issue.code} at {issue.location}: {issue.message}"
+        for issue in parsed.issues
+        if issue.severity == "warning"
+    )
     payload = _tasks._lifecycle_payload(
         "plan regenerate",
         updated,
@@ -302,6 +306,9 @@ def regenerate_plan_from_answers(
     )
     payload["plan_body_chars"] = len(plan_body)
     payload["plan_body_lines"] = len(plan_body.splitlines())
+    payload["plan_input_warnings"] = [
+        issue.to_dict() for issue in parsed.issues if issue.severity == "warning"
+    ]
     payload["next_review_command"] = f"taskledger plan review --version {version}"
     payload["approval_command_hint"] = (
         f'taskledger plan accept --version {version} --note "User approved in harness."'

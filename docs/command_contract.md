@@ -98,6 +98,49 @@ taskledger plan amend [--task TASK_REF] [--drop-criterion CRITERION_ID ...] [--d
 Plan proposal commands that accept `--file` reject file paths under
 `.taskledger/` because that directory is private durable ledger state.
 
+## Plan check command
+
+`taskledger plan check` validates editable plan input without creating,
+revising, proposing, accepting, locking, or releasing anything:
+
+```bash
+taskledger plan check [--task TASK_REF] [--file PATH] [--strict]
+```
+
+Rules:
+
+- `--file` defaults to `plan.md` when omitted;
+- `--strict` upgrades unknown-field warnings to errors and fails on any warning;
+- task context is optional; `task_id` appears in the payload when resolvable;
+- JSON uses the root `--json` option:
+  ```bash
+  taskledger --json plan check --file ./plan.md
+  ```
+
+Payload shape:
+
+- `kind` (`plan_input_check`)
+- `task_id`
+- `passed`
+- `strict`
+- `summary` (`{errors, warnings}`)
+- `issues`
+- `parsed`
+
+## Plan schema command
+
+`taskledger plan schema` prints the editable plan input schema and one valid
+example:
+
+```bash
+taskledger plan schema
+```
+
+Payload shape:
+
+- `kind` (`plan_input_schema`)
+- `schema`
+
 ## Plan review command
 
 `taskledger plan review` is a read-only approval-facing plan renderer:

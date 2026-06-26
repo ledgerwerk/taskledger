@@ -302,19 +302,8 @@ def next_action_for_task(
             ),
             *commands,
         ]
-        if action in {"plan-propose", "plan-regenerate"}:
-            payload.update(
-                {
-                    "template_command": (
-                        "taskledger plan template --include-guidance --file plan.md"
-                        if action == "plan-propose"
-                        else (
-                            "taskledger plan template --from-answers "
-                            "--include-guidance --file plan.md"
-                        )
-                    )
-                }
-            )
+    if action in {"plan-propose", "plan-regenerate"}:
+        _apply_planning_check_command(payload, action, commands)
     guided_worker_pipeline = _guided_worker_pipeline_payload(workspace_root, task)
     if guided_worker_pipeline is not None:
         payload["worker_pipeline"] = guided_worker_pipeline
@@ -622,6 +611,40 @@ def _planning_guidance_already_viewed(
             continue
         return any(line.startswith("Planning guidance viewed:") for line in run.worklog)
     return False
+
+
+def _apply_planning_check_command(
+    payload: dict[str, object],
+    action: str,
+    fallback_commands: list[dict[str, object]],
+) -> None:
+    template_cmd = (
+        "taskledger plan template --include-guidance --file plan.md"
+        if action == "plan-propose"
+        else (
+            "taskledger plan template --from-answers --include-guidance --file plan.md"
+        )
+    )
+    payload["template_command"] = template_cmd
+    payload["check_command"] = "taskledger plan check --file plan.md"
+    check_entry = _command(
+        "check",
+        "Validate plan input",
+        "taskledger plan check --file plan.md",
+    )
+    existing = cast(list[dict[str, object]], payload.get("commands", fallback_commands))
+    insert_index = len(existing)
+    for idx, cmd in enumerate(existing):
+        kind_name = cmd.get("kind", "")
+        primary = cmd.get("primary", False)
+        if kind_name in {"regenerate", "start"} and primary:
+            insert_index = idx + 1
+            break
+    payload["commands"] = [
+        *existing[:insert_index],
+        check_entry,
+        *existing[insert_index:],
+    ]
 
 
 def _archived_blocker(task: TaskRecord) -> dict[str, object]:

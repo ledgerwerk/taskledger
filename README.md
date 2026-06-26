@@ -23,7 +23,7 @@ The normal agent path is deliberately small:
 actor whoami
 task active | task show | task create | task activate | task follow-up
 next-action | context | can
-plan start -> plan template -> plan upsert -> plan lint -> plan accept
+plan start -> plan guidance -> plan template -> plan check -> plan upsert -> plan lint -> plan accept
 question add | question add-many | question answer | question answer-many | question status | question answers
 todo next | todo show | todo done | todo status
 implement start | implement resume | implement change | implement scan-changes | implement finish

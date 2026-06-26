@@ -142,7 +142,8 @@ def test_docs_define_agent_golden_path_and_advanced_surfaces() -> None:
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
 
     normal_plan_path = (
-        "plan start -> plan template -> plan upsert -> plan lint -> plan accept"
+        "plan start -> plan guidance -> plan template -> plan check"
+        " -> plan upsert -> plan lint -> plan accept"
     )
     for text in (readme, public_surface, skill):
         assert normal_plan_path in text
@@ -418,7 +419,17 @@ def _command_key(tokens: list[str]) -> str | None:
         return first
     if len(remaining) == 1:
         return first
-    return f"{first} {remaining[1]}"
+    two_token = f"{first} {remaining[1]}"
+    if two_token in COMMAND_METADATA:
+        return two_token
+    three_token_keys = {
+        key for key in COMMAND_METADATA if key.startswith(f"{two_token} ")
+    }
+    if three_token_keys and len(remaining) >= 3:
+        three_token = f"{first} {remaining[1]} {remaining[2]}"
+        if three_token in three_token_keys:
+            return three_token
+    return two_token
 
 
 # sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature

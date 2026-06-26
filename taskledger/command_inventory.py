@@ -431,6 +431,21 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         tier=TIER_CRITICAL,
         ledger_effect=EFFECT_READ,
     ),
+    "plan check": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "safe_read_only",
+        PRIMARY,
+        PHASE_PLANNING,
+        tier=TIER_CRITICAL,
+        ledger_effect=EFFECT_READ,
+    ),
+    "plan schema": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "safe_read_only",
+        SUPPORT,
+        PHASE_PLANNING,
+        ledger_effect=EFFECT_NONE,
+    ),
     "plan show": CommandSpec(
         STABLE_FOR_AGENTS,
         "safe_read_only",
@@ -673,6 +688,13 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         PRIMARY,
         PHASE_IMPLEMENTATION,
         ledger_effect=EFFECT_WRITE,
+    ),
+    "implement snapshot": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "safe_read_only",
+        SUPPORT,
+        PHASE_IMPLEMENTATION,
+        ledger_effect=EFFECT_NONE,
     ),
     "implement snapshot refresh": CommandSpec(
         STABLE_FOR_AGENTS,

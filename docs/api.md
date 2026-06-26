@@ -86,6 +86,8 @@ Consumers should not import from `taskledger.storage`, `taskledger.services`,
 - `propose_plan`
 - `plan_template`
 - `upsert_plan`
+- `check_plan_input`
+- `plan_input_schema_text`
 - `PlanReviewOptions`
 - `build_plan_review_payload`
 - `render_plan_review`
@@ -128,6 +130,7 @@ payload = plan_guidance(Path.cwd(), "task-0001")
 - `start_implementation`
 - `restart_implementation`
 - `resume_implementation`
+- `refresh_implementation_snapshot`
 - `log_implementation`
 - `add_implementation_deviation`
 - `add_implementation_artifact`

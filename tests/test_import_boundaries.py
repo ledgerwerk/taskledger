@@ -34,6 +34,8 @@ YAML_IMPORT_ALLOWLIST: set[str] = {
     "taskledger/services/tasks.py",
     # string front matter rendering (until ledgercore has string renderer)
     "taskledger/services/plan_editing.py",
+    # editable plan input preflight parser/validator (plan check + plan input issues)
+    "taskledger/services/plan_input.py",
     # lock exclusive-create yaml dump (until ledgercore has atomic_create_yaml)
     "taskledger/storage/locks.py",
     # legacy migration tolerance

@@ -9,11 +9,13 @@ from taskledger.api.plans import (
     PlanReviewOptions,
     amend_plan,
     approve_plan,
+    check_plan_input,
     diff_plan,
     export_plan,
     lint_plan,
     list_plan_versions,
     materialize_plan_todos,
+    plan_input_schema_text,
     plan_template,
     propose_plan,
     regenerate_plan_from_answers,
@@ -136,6 +138,9 @@ def propose_command(
             operation="proposed",
             task_id=str(payload["task_id"]),
             plan_version=plan_version,
+            plan_input_warnings=cast(
+                list[object], payload.get("plan_input_warnings", [])
+            ),
         ),
     )
 
@@ -241,6 +246,9 @@ def regenerate_command(
             operation="regenerated",
             task_id=str(payload["task_id"]),
             plan_version=plan_version,
+            plan_input_warnings=cast(
+                list[object], payload.get("plan_input_warnings", [])
+            ),
         ),
     )
 
@@ -286,6 +294,9 @@ def upsert_command(
             operation=operation,
             task_id=str(payload["task_id"]),
             plan_version=plan_version,
+            plan_input_warnings=cast(
+                list[object], payload.get("plan_input_warnings", [])
+            ),
         ),
     )
 
@@ -692,6 +703,49 @@ def plan_guidance_command(
     emit_payload(ctx, payload, human=human)
 
 
+def check_command(
+    ctx: typer.Context,
+    task_ref: TaskOption = None,
+    text: Annotated[str | None, typer.Option("--text")] = None,
+    from_file: Annotated[Path | None, typer.Option("--file")] = None,
+    strict: Annotated[bool, typer.Option("--strict")] = False,
+) -> None:
+    state = cli_state_from_context(ctx)
+    task_id: str | None = None
+    try:
+        try:
+            task = resolve_cli_task(state.cwd, task_ref)
+            task_id = task.id
+        except LaunchError:
+            # plan check is pure and task-independent; it may run with no
+            # active task so a plan file can be validated preflight.
+            task_id = None
+        body = _read_plan_text_input(state.cwd, text=text, from_file=from_file)
+        payload = check_plan_input(
+            state.cwd,
+            body=body,
+            task_id=task_id,
+            strict=strict,
+        )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    emit_payload(ctx, payload, human=render_plan_input_check(payload))
+    if not payload["passed"]:
+        raise typer.Exit(code=EXIT_CODE_VALIDATION_FAILED)
+
+
+def schema_command(
+    ctx: typer.Context,
+) -> None:
+    schema_text = plan_input_schema_text()
+    payload = {
+        "kind": "plan_input_schema",
+        "schema": schema_text,
+    }
+    emit_payload(ctx, payload, human=schema_text)
+
+
 def register_plan_v2_commands(app: typer.Typer) -> None:
     command_context_settings = {
         "allow_extra_args": True,
@@ -720,6 +774,8 @@ def register_plan_v2_commands(app: typer.Typer) -> None:
         context_settings=command_context_settings,
     )(plan_command_command)
     app.command("guidance")(plan_guidance_command)
+    app.command("check")(check_command)
+    app.command("schema")(schema_command)
 
 
 def _render_plan_lint(payload: PlanLintPayload) -> str:
@@ -765,6 +821,43 @@ def _read_plan_text_input(
     return read_text_input(text=text, from_file=from_file, file_label="--file")
 
 
+def render_plan_input_check(payload: dict[str, object]) -> str:
+    summary = payload.get("summary", {})
+    errors = int(summary.get("errors", 0)) if isinstance(summary, dict) else 0
+    warnings = int(summary.get("warnings", 0)) if isinstance(summary, dict) else 0
+    header = f"Plan input check: warnings={warnings} errors={errors}"
+    if payload.get("strict"):
+        header += " (strict)"
+    if not payload.get("passed"):
+        header += " [failed]"
+    lines = [header]
+    raw_issues = cast(list[object], payload.get("issues", []))
+    issues = [item for item in raw_issues if isinstance(item, dict)]
+    for issue in issues:
+        severity = str(issue.get("severity", "warning"))
+        code = str(issue.get("code", "unknown"))
+        location = str(issue.get("location", "plan"))
+        message = str(issue.get("message", ""))
+        lines.append(f"{severity} {location} {code}")
+        if message:
+            lines.append(f"  {message}")
+        hint = issue.get("hint")
+        if isinstance(hint, str) and hint.strip():
+            lines.append(f"  hint: {hint}")
+    parsed = payload.get("parsed", {})
+    if isinstance(parsed, dict) and parsed:
+        lines += ["", "Parsed commitments:"]
+        for key, value in parsed.items():
+            label = str(key).replace("_", " ")
+            lines.append(f"  {label}: {value}")
+    lines += [
+        "",
+        "Next: taskledger plan upsert --file ./plan.md",
+        "Schema: taskledger plan schema",
+    ]
+    return "\n".join(lines)
+
+
 def _parse_version_ref(value: str | None) -> int | None:
     if value is None:
         return None
@@ -787,15 +880,26 @@ def _render_plan_upsert_human(
     operation: str,
     task_id: str,
     plan_version: int,
+    plan_input_warnings: list[object] | None = None,
 ) -> str:
-    return "\n".join(
-        [
-            f"{operation} plan v{plan_version} for {task_id}",
-            f"Next: taskledger plan review --version {plan_version}",
-            (
-                "After explicit approval: "
-                f"taskledger plan accept --version {plan_version} --note "
-                '"User approved in harness."'
-            ),
-        ]
-    )
+    lines = [
+        f"{operation} plan v{plan_version} for {task_id}",
+        f"Next: taskledger plan review --version {plan_version}",
+        (
+            "After explicit approval: "
+            f"taskledger plan accept --version {plan_version} --note "
+            '"User approved in harness."'
+        ),
+    ]
+    warnings = [item for item in (plan_input_warnings or []) if isinstance(item, dict)]
+    if warnings:
+        lines.append("")
+        lines.append(f"Plan input warnings: {len(warnings)}")
+        for item in warnings[:3]:
+            code = str(item.get("code", "unknown"))
+            location = str(item.get("location", "plan"))
+            lines.append(f"  {location} {code}")
+        remaining = len(warnings) - 3
+        if remaining > 0:
+            lines.append(f"  ... and {remaining} more")
+    return "\n".join(lines)

@@ -132,14 +132,14 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/doctor.py:139": (
         "Doctor must continue scanning even when one plan read fails."
     ),
-    "taskledger/services/doctor.py:222": (
-        "Doctor storage probe wraps unexpected file decoding failures."
-    ),
     "taskledger/services/doctor.py:255": (
         "Doctor lock inspection ignores malformed optional lock metadata."
     ),
-    "taskledger/services/doctor.py:316": (
-        "Doctor index staleness check tolerates stat errors on individual task files."
+    "taskledger/services/doctor.py:288": (
+        "Doctor schema inspection degrades gracefully when storage.yaml is unreadable."
+    ),
+    "taskledger/services/doctor.py:349": (
+        "Doctor index inspection degrades gracefully when event loading fails."
     ),
     "taskledger/services/doctor_checks/project_scan.py:49": (
         "Project scan continues past config load errors."

@@ -118,8 +118,14 @@ def test_mutating_commands_are_not_marked_safe_read_only() -> None:
         "unlink",
         "waive",
     }
+    safe_read_only_with_check_suffix = {
+        "plan check",
+    }
 
     for command, spec in COMMAND_METADATA.items():
+        if command in safe_read_only_with_check_suffix:
+            assert spec.effect == "safe_read_only", command
+            continue
         assert not (
             command.split()[-1] in mutating_suffixes and spec.effect == "safe_read_only"
         ), command
@@ -134,14 +140,14 @@ def test_all_commands_have_ledger_effect() -> None:
     assert empty == [], f"Commands with empty ledger_effect: {empty}"
 
 
-def test_critical_tier_count_under_25() -> None:
+def test_critical_tier_count_under_26() -> None:
     critical = [k for k, v in COMMAND_METADATA.items() if v.tier == TIER_CRITICAL]
-    assert len(critical) <= 25, f"Too many critical: {len(critical)}"
+    assert len(critical) <= 26, f"Too many critical: {len(critical)}"
 
 
 def test_agent_golden_path_is_explicit_and_budgeted() -> None:
     """The normal agent path should stay much smaller than all stable commands."""
-    assert len(AGENT_GOLDEN_PATH_COMMANDS) <= 40
+    assert len(AGENT_GOLDEN_PATH_COMMANDS) <= 41
     assert len(AGENT_GOLDEN_PATH_COMMANDS) == len(set(AGENT_GOLDEN_PATH_COMMANDS))
     assert set(AGENT_GOLDEN_PATH_COMMANDS) <= set(COMMAND_METADATA)
 

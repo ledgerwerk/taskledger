@@ -10,6 +10,10 @@ from taskledger.domain.states import EXIT_CODE_BAD_INPUT
 from taskledger.services import tasks as _tasks
 from taskledger.services.plan_editing import render_editable_plan
 from taskledger.services.plan_hash import approved_plan_content_hash
+from taskledger.services.plan_input import (
+    parse_plan_input,
+    plan_input_error,
+)
 from taskledger.services.plan_lint import lint_plan
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
@@ -86,7 +90,10 @@ def propose_plan(
     _tasks._enforce_decision(plan_propose_decision(task, lock, run=run))
     plans = list_plans(workspace_root, task.id)
     version = plans[-1].plan_version + 1 if plans else 1
-    front_matter, plan_body = _tasks._parse_plan_front_matter(body)
+    parsed = parse_plan_input(workspace_root, body, criteria=criteria, strict=True)
+    if parsed.has_errors:
+        raise plan_input_error(parsed)
+    plan_body = parsed.body
     questions = list_questions(workspace_root, task.id)
     plan = _tasks.PlanRecord(
         task_id=task.id,
@@ -96,29 +103,18 @@ def propose_plan(
         created_by=_tasks._default_actor(),
         supersedes=plans[-1].plan_version if plans else None,
         question_refs=tuple(item.id for item in questions if item.status == "open"),
-        criteria=_tasks._criteria_from_plan_input(front_matter, criteria),
-        todos=_tasks._todos_from_plan_input(workspace_root, front_matter),
-        generation_reason=_tasks._optional_front_matter_string(
-            front_matter, "generation_reason"
-        )
-        or "initial",
+        criteria=parsed.criteria,
+        todos=parsed.todos,
+        generation_reason=parsed.generation_reason or "initial",
         based_on_question_ids=tuple(
             item.id for item in questions if item.status == "answered"
         ),
         based_on_answer_hash=_tasks._answer_snapshot_hash(questions),
-        goal=_tasks._optional_front_matter_string(front_matter, "goal"),
-        files=_tasks._string_tuple_from_front_matter(front_matter, "files"),
-        test_commands=_tasks._string_tuple_from_front_matter(
-            front_matter, "test_commands"
-        ),
-        expected_outputs=_tasks._string_tuple_from_front_matter(
-            front_matter, "expected_outputs"
-        ),
-        todos_waived_reason=(
-            _tasks._optional_front_matter_string(front_matter, "todos_waived_reason")
-            or _tasks._optional_front_matter_string(front_matter, "todo_waiver_reason")
-            or _tasks._optional_front_matter_string(front_matter, "no_todos_reason")
-        ),
+        goal=parsed.goal,
+        files=parsed.files,
+        test_commands=parsed.test_commands,
+        expected_outputs=parsed.expected_outputs,
+        todos_waived_reason=parsed.todos_waived_reason,
     )
     save_plan(workspace_root, plan)
     finished_run = replace(
@@ -157,6 +153,12 @@ def propose_plan(
         warnings.append(
             "Plan body is empty; implementation handoff will not contain a human plan."
         )
+    parser_warnings = [
+        f"{issue.code} at {issue.location}: {issue.message}"
+        for issue in parsed.issues
+        if issue.severity == "warning"
+    ]
+    warnings.extend(parser_warnings)
     payload = _tasks._lifecycle_payload(
         "plan propose",
         updated,
@@ -166,6 +168,9 @@ def propose_plan(
     )
     payload["plan_body_chars"] = len(plan_body)
     payload["plan_body_lines"] = len(plan_body.splitlines())
+    payload["plan_input_warnings"] = [
+        issue.to_dict() for issue in parsed.issues if issue.severity == "warning"
+    ]
     payload["next_review_command"] = f"taskledger plan review --version {version}"
     payload["approval_command_hint"] = (
         f'taskledger plan accept --version {version} --note "User approved in harness."'

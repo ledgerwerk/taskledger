@@ -109,9 +109,21 @@ def _extract_command_tokens(line: str) -> str | None:
         r"taskledger(?:\s+--\S+)*\s+([a-z][\w-]*\s+[a-z][\w-]*)",
         line,
     )
-    if m2 is not None:
-        return m2.group(1).strip()
-    return first
+    if m2 is None:
+        return first
+    two_token = m2.group(1).strip()
+    if two_token in _VALID_COMMANDS:
+        return two_token
+    # Try three tokens for nested sub-groups (e.g. `implement snapshot refresh`)
+    m3 = re.search(
+        r"taskledger(?:\s+--\S+)*\s+([a-z][\w-]*\s+[a-z][\w-]*\s+[a-z][\w-]*)",
+        line,
+    )
+    if m3 is not None:
+        three_token = m3.group(1).strip()
+        if three_token in _VALID_COMMANDS:
+            return three_token
+    return two_token
 
 
 # sw: f=specs/behavior/features/command_example_linter/command-example-linter.feature
@@ -160,6 +172,15 @@ def test_command_examples_in_docs_use_valid_commands() -> None:
                 two_token = f"{parts[0]} {parts[1]}"
                 if two_token in _VALID_COMMANDS:
                     continue
+                # Try the three-token form for nested sub-groups.
+                m3 = re.search(
+                    r"taskledger(?:\s+--\S+)*\s+([a-z][\w-]*\s+[a-z][\w-]*\s+[a-z][\w-]*)",
+                    stripped,
+                )
+                if m3 is not None:
+                    three_token = m3.group(1).strip()
+                    if three_token in _VALID_COMMANDS:
+                        continue
             failures.append(
                 f"{path}:{i}: unknown command '{tokens}' in: {stripped[:120]}"
             )

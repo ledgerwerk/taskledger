@@ -69,8 +69,8 @@ def _todo_granularity_label(level: str) -> str:
 
 
 def _plan_body_detail_label(level: str) -> str:
-    labels: dict[str, str] = {
-        "terse": "terse (summary only)",
+    labels = {
+        "minimal": "minimal (only essential rationale)",
         "normal": "normal (rationale + approach)",
         "detailed": "detailed (full architecture and decisions)",
     }
@@ -85,7 +85,8 @@ def render_planning_guidance(
 ) -> str:
     """Render a Markdown planning guidance block for the given task.
 
-    Returns empty string when no prompt profile is configured.
+    Returns empty string when no prompt profile is configured. When a
+    project prompt profile exists, the project-local guidance is rendered.
     """
     profile = load_workflow_guidance(workspace_root)
     if profile is None:

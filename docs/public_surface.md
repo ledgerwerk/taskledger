@@ -16,13 +16,13 @@ registered surface.
 
 Agents should start with this durable lifecycle path:
 
-`plan start -> plan template -> plan upsert -> plan lint -> plan accept` is
+`plan start -> plan guidance -> plan template -> plan check -> plan upsert -> plan lint -> plan accept` is
 the normal planning/approval path for agents.
 
 - `actor whoami`
 - `task active`, `task show`, `task create`, `task activate`, `task follow-up`
 - `next-action`, `context`, `can`
-- `plan start`, `plan template`, `plan upsert`, `plan lint`, `plan accept`
+- `plan start`, `plan guidance`, `plan template`, `plan check`, `plan upsert`, `plan lint`, `plan accept`
 - `question add`, `question add-many`, `question answer`, `question answer-many`, `question status`, `question answers`
 - `todo next`, `todo show`, `todo done`, `todo status`
 - `implement start`, `implement resume`, `implement change`, `implement scan-changes`, `implement finish`
@@ -85,7 +85,7 @@ advanced, repair/migration, human-oriented, or beta support surfaces.
 
 ## plan subcommands
 
-- Normal path: `plan start` -> `plan template` -> `plan upsert` -> `plan lint` -> `plan accept`
+- Normal path: `plan start` -> `plan guidance` -> `plan template` -> `plan check` -> `plan upsert` -> `plan lint` -> `plan accept`
 - Support reads/records: `plan show`, `plan review`, `plan list`, `plan diff`, `plan export`, `plan command -- ...`
 - Advanced or compatibility paths: `plan approve`, `plan propose`, `plan draft`, `plan regenerate --from-answers`, `plan materialize-todos`, `plan revise`, `plan amend`, `plan reject`
 
