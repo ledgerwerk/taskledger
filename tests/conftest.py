@@ -12,32 +12,30 @@ if str(ROOT) not in sys.path:
 sys.dont_write_bytecode = True
 
 
-# Tests create many short-lived Markdown/YAML records under tmp_path.
-# Production durability still fsyncs; pytest opts into faster temporary IO.
-os.environ.setdefault("TASKLEDGER_TEST_FAST_IO", "1")
-
 import shutil  # noqa: E402
 import weakref  # noqa: E402
-from collections.abc import Mapping, Sequence  # noqa: E402
-from typing import IO, Any  # noqa: E402
+from typing import Any  # noqa: E402
 
-import click  # noqa: E402
-import click.testing  # noqa: E402
 import pytest  # noqa: E402
+import typer.testing as typer_testing  # noqa: E402
 from typer import Typer  # noqa: E402
 from typer.main import get_command as _typer_get_command  # noqa: E402
 from typer.testing import CliRunner as _TyperCliRunner  # noqa: E402
 
-# Click 8.2+ removed ``mix_stderr`` from CliRunner.__init__.  Typer's
-# CliRunner inherits from Click, so passing ``mix_stderr=False`` raises
-# TypeError/AttributeError on modern Click.  Patch __init__ to silently
-# accept and discard the parameter so every test file keeps working.
+# Some test modules still instantiate ``CliRunner(mix_stderr=False)`` for
+# historical reasons. Newer Typer/Click releases reject that argument, so the
+# constructor wrapper below discards it. This shim exists only for test
+# source compatibility and is unrelated to command caching.
 _original_cli_runner_init = _TyperCliRunner.__init__
 
 
-def _patched_cli_runner_init(self: _TyperCliRunner, **kwargs: Any) -> None:
+def _patched_cli_runner_init(
+    self: _TyperCliRunner,
+    *args: Any,
+    **kwargs: Any,
+) -> None:
     kwargs.pop("mix_stderr", None)
-    _original_cli_runner_init(self, **kwargs)
+    _original_cli_runner_init(self, *args, **kwargs)
 
 
 _TyperCliRunner.__init__ = _patched_cli_runner_init  # type: ignore[assignment]
@@ -52,8 +50,16 @@ from tests.support.builders import (  # noqa: E402
 
 # Typer rebuilds the full Click command tree on every CliRunner.invoke call.
 # Taskledger's CLI is intentionally broad, so repeated rebuilds dominate the
-# CLI-heavy test suite, especially on Windows. Cache the immutable Click command
-# tree per Typer app for tests; each invocation still gets a fresh Click context.
+# CLI-heavy test suite, especially on Windows. Cache the immutable Click
+# command tree per Typer app for tests; each invocation still gets a fresh
+# Click context.
+#
+# The cache is implemented by swapping the private command-lookup helper used
+# by ``typer.testing``. Typer's own ``CliRunner.invoke`` then calls our cached
+# function instead of rebuilding the command tree. We do NOT replace
+# ``CliRunner.invoke`` with ``click.testing.CliRunner.invoke`` because the two
+# runner implementations do not share instance state; on Click 8.1.x the
+# cross-class call reads ``self.mix_stderr`` and raises AttributeError.
 _CLICK_COMMAND_CACHE: weakref.WeakKeyDictionary[Typer, Any] = (
     weakref.WeakKeyDictionary()
 )
@@ -67,31 +73,8 @@ def _cached_click_command(app: Typer) -> Any:
     return cached
 
 
-def _invoke_with_cached_click_command(
-    self: _TyperCliRunner,
-    app: Typer,
-    args: str | Sequence[str] | None = None,
-    input: bytes | str | IO[Any] | None = None,
-    env: Mapping[str, str | None] | None = None,
-    catch_exceptions: bool = True,
-    color: bool = False,
-    **extra: Any,
-) -> click.testing.Result:
-    if not hasattr(self, "capture"):
-        self.capture = "sys"
-    return click.testing.CliRunner.invoke(
-        self,  # type: ignore[arg-type]
-        _cached_click_command(app),
-        args=args,
-        input=input,
-        env=env,
-        catch_exceptions=catch_exceptions,
-        color=color,
-        **extra,
-    )
-
-
-_TyperCliRunner.invoke = _invoke_with_cached_click_command  # type: ignore[assignment]
+if hasattr(typer_testing, "_get_command"):
+    typer_testing._get_command = _cached_click_command  # type: ignore[attr-defined]
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
