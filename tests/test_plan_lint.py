@@ -1062,3 +1062,114 @@ class TestPlanLintHumanOutput:
         assert payload["result"]["passed"] is True
         codes = [i["code"] for i in payload["result"]["issues"]]
         assert "todo_not_concrete" not in codes
+
+
+def test_plan_lint_warns_when_approval_ready_heading_is_missing(
+    tmp_path: Path,
+) -> None:
+    _init_project(tmp_path)
+    _create_task(tmp_path, "approval-heading-warning")
+    _start_planning(tmp_path, "approval-heading-warning")
+    _propose_plan(
+        tmp_path,
+        _FULL_PLAN,
+        slug="approval-heading-warning",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "plan",
+            "lint",
+            "--task",
+            "approval-heading-warning",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = _json(result)["result"]
+    heading_issues = [
+        issue
+        for issue in payload["issues"]
+        if issue["code"] == "missing_approval_heading"
+    ]
+    assert len(heading_issues) == 1
+    assert heading_issues[0]["severity"] == "warning"
+
+
+def test_plan_lint_strict_errors_when_approval_ready_heading_is_missing(
+    tmp_path: Path,
+) -> None:
+    _init_project(tmp_path)
+    _create_task(tmp_path, "approval-heading-strict")
+    _start_planning(tmp_path, "approval-heading-strict")
+    _propose_plan(
+        tmp_path,
+        _FULL_PLAN,
+        slug="approval-heading-strict",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "plan",
+            "lint",
+            "--strict",
+            "--task",
+            "approval-heading-strict",
+        ],
+    )
+
+    assert result.exit_code == EXIT_CODE_VALIDATION_FAILED, result.output
+    payload = _json(result)["result"]
+    heading_issues = [
+        issue
+        for issue in payload["issues"]
+        if issue["code"] == "missing_approval_heading"
+    ]
+    assert len(heading_issues) == 1
+    assert heading_issues[0]["severity"] == "error"
+
+
+def test_plan_lint_does_not_require_out_of_scope_heading(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    _create_task(tmp_path, "approval-heading-complete")
+    _start_planning(tmp_path, "approval-heading-complete")
+    approval_body = _FULL_PLAN.replace(
+        "## Goal\n\nTest goal for plan linting.",
+        "# Approval Plan\n\n"
+        "## Summary\n\nBounded outcome.\n\n"
+        "## Implementation Changes\n\n- Update the implementation.\n\n"
+        "## Tests\n\n- Run the test suite.\n\n"
+        "## Assumptions\n\n- Existing behavior remains stable.",
+    )
+    _propose_plan(
+        tmp_path,
+        approval_body,
+        slug="approval-heading-complete",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "plan",
+            "lint",
+            "--strict",
+            "--task",
+            "approval-heading-complete",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = _json(result)["result"]
+    codes = [issue["code"] for issue in payload["issues"]]
+    assert "missing_approval_heading" not in codes

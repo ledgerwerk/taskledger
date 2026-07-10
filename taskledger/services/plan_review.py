@@ -49,6 +49,24 @@ def build_plan_review_payload(
     open_required = _required_open_question_ids(questions)
     stale_answer_ids = _stale_answer_question_ids(questions, plan)
 
+    required_questions = [
+        question for question in questions if question.required_for_plan
+    ]
+    answered_required_questions = [
+        question for question in required_questions if question.status == "answered"
+    ]
+    open_required_questions = [
+        question for question in required_questions if question.status == "open"
+    ]
+    question_status = {
+        "required_answered": len(answered_required_questions),
+        "required_total": len(required_questions),
+        "required_open": [
+            {"id": question.id, "text": question.question}
+            for question in open_required_questions
+        ],
+    }
+
     if task.status_stage != "plan_review":
         blockers.append(
             {
@@ -125,6 +143,23 @@ def build_plan_review_payload(
         warnings.append("Plan lint was not included in this review output.")
 
     approval_ready = len(blockers) == 0
+
+    if open_required_questions:
+        decision_status = (
+            "Approval is blocked because required planning questions remain unanswered."
+        )
+    elif stale_answer_ids:
+        decision_status = (
+            "Approval is blocked because answered questions are not reflected "
+            "in this plan."
+        )
+    elif blockers:
+        decision_status = "Approval is blocked by review blockers."
+    else:
+        decision_status = (
+            "No required planning decision remains; review assumptions and "
+            "out-of-scope notes before approving."
+        )
     commands = (
         _review_commands(plan.plan_version) if options.include_next_commands else []
     )
@@ -140,6 +175,8 @@ def build_plan_review_payload(
         "plan_version": plan.plan_version,
         "plan_status": plan.status,
         "approval_ready": approval_ready,
+        "decision_status": decision_status,
+        "question_status": question_status,
         "blockers": blockers,
         "warnings": warnings,
         "lint": lint_payload,
@@ -208,6 +245,7 @@ def render_plan_review_markdown(payload: dict[str, object]) -> str:
             lines.append(f"- {warning}")
         lines.append("")
 
+    _append_approval_brief(lines, payload)
     lines.append("## Summary")
     lines.append("")
     lines.append(str(payload.get("summary") or "(no summary available)"))
@@ -294,6 +332,32 @@ def render_plan_review_markdown(payload: dict[str, object]) -> str:
     if result and not result.endswith("\n"):
         result += "\n"
     return result
+
+
+def _append_approval_brief(lines: list[str], payload: dict[str, object]) -> None:
+    lines.append("## Approval Brief")
+    lines.append("")
+    lines.append(f"- Decision status: {payload.get('decision_status')}")
+    question_status = payload.get("question_status")
+    if isinstance(question_status, dict):
+        answered = question_status.get("required_answered", 0)
+        total = question_status.get("required_total", 0)
+        lines.append(f"- Questions {answered}/{total} answered.")
+    lines.append("")
+    lines.append("### Unanswered Required Questions")
+    lines.append("")
+    open_questions = (
+        question_status.get("required_open")
+        if isinstance(question_status, dict)
+        else None
+    )
+    if isinstance(open_questions, list) and open_questions:
+        for question in open_questions:
+            if isinstance(question, dict):
+                lines.append(f"- {question.get('id')}: {question.get('text')}")
+    else:
+        lines.append("- none")
+    lines.append("")
 
 
 def render_plan_review(

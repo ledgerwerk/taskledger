@@ -215,6 +215,41 @@ not create changelog entries, render changelog context, or edit `CHANGELOG.md`.
 21. After `taskledger plan upsert --from-answers`, run `taskledger question status`. If it still reports `Plan regeneration needed: True`, do not ask for approval. Inspect `taskledger question answers`, `taskledger plan show --version N`, and `taskledger doctor`.
 22. Before asking the user to approve, run `taskledger plan review --version N` and paste or summarize the rendered review. Then run `taskledger plan lint --version N` if the review did not include lint. Do not record approval until the user explicitly approves.
 23. Record approval only with clear user intent such as approve, accept, go ahead, or start implementation. Prefer `taskledger plan accept --version N --note "User approved in harness: ..."` for normal chat approval. Use `taskledger plan approve --version N --actor user --approval-source explicit_chat --note "..."` only when explicit actor/source metadata is needed (advanced).
+
+### Approval presentation protocol
+
+Before asking the user to approve a proposed plan:
+
+1. Run `taskledger plan review --version N`.
+2. Present a readable approval brief in chat. Do not only say that the plan is ready.
+3. Include, in this order:
+   - scope / decision status
+   - required question status as `Questions X/Y answered`
+   - proposed plan title
+   - `Summary`
+   - `Implementation Changes`
+   - `Tests`
+   - `Assumptions`
+   - `Out of Scope / Deferred`
+   - exact approval instruction
+4. Use the stored plan body and machine-readable commitments from the review output. Do not invent extra scope.
+5. If review output reports blockers, do not ask for approval. Present the blockers and the next remediation command.
+6. If no blockers remain, ask for explicit approval using wording like:
+   `Reply with "approve" or "go ahead" to start implementation.`
+
+Bad approval prompt:
+
+```text
+Plan plan-v1 is ready for approval. It covers tests and docs. Reply approve.
+```
+
+Good approval prompt:
+
+```text
+Use the structured approval brief above, including scope status, question counts,
+summary, implementation changes, tests, assumptions, and out-of-scope notes.
+```
+
 24. Never replace a user-provided rich plan with only generated YAML criteria and todos. Preserve the user's plan body after the front matter and use front matter only to expose machine-readable fields to Taskledger.
 25. A Taskledger plan is not just YAML front matter. The YAML block is for machine-readable `goal`, `acceptance_criteria`, `todos`, file links, and test commands. The rich human plan must remain as Markdown after the second `---`. Before approval, inspect `taskledger plan show --version N` or the saved `plan-vN.md` and verify that the accepted plan body is non-empty and contains the implementation rationale.
 

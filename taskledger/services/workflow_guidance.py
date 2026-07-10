@@ -93,6 +93,32 @@ Use this editable plan-input contract:
   Todo-level `files:` is not captured.
 - Keep enough Markdown body content for the implementer handoff.
 
+Approval-ready Markdown body structure:
+
+Use these headings after the closing `---` front matter:
+
+# <Plan title>
+
+## Summary
+
+Explain the intended outcome and why the plan is bounded.
+
+## Implementation Changes
+
+List the concrete code, config, docs, and behavior changes.
+
+## Tests
+
+List the automated and manual checks that prove the plan.
+
+## Assumptions
+
+List assumptions the user should accept before approval.
+
+## Out of Scope
+
+List adjacent cleanup or behavior changes intentionally excluded.
+
 Minimal front matter:
 
 ```yaml

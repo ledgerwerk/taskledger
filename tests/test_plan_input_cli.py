@@ -358,6 +358,12 @@ def test_plan_template_contains_checklist_and_single_body_comment(
     assert "## Plan input checklist before upsert" in template
     assert "- [ ] I ran `taskledger plan check --file plan.md`." in template
     assert template.count("Required: keep this body") == 1
+    assert "# <short approval plan title>" in template
+    assert "## Summary" in template
+    assert "## Implementation Changes" in template
+    assert "## Tests" in template
+    assert "## Assumptions" in template
+    assert "## Out of Scope" in template
 
 
 # ---------------------------------------------------------------------------

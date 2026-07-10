@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from taskledger.services.workflow_guidance import (
+    _BUILTIN_GUIDANCE,
     _plan_body_detail_label,
     _profile_label,
     _question_policy_label,
@@ -121,3 +122,13 @@ def test_render_guidance_guardrail_always_present() -> None:
 
 def test_has_planning_profile_no_config(tmp_path: Path) -> None:
     assert has_planning_profile(tmp_path) is False
+
+
+def test_builtin_planning_guidance_includes_approval_ready_body_structure() -> None:
+    result = _BUILTIN_GUIDANCE
+    assert "Approval-ready Markdown body structure" in result
+    assert "## Summary" in result
+    assert "## Implementation Changes" in result
+    assert "## Tests" in result
+    assert "## Assumptions" in result
+    assert "## Out of Scope" in result

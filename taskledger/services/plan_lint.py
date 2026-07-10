@@ -34,6 +34,13 @@ _PLACEHOLDER_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\bclean up\b", re.IGNORECASE),
 ]
 
+_REQUIRED_APPROVAL_HEADINGS = (
+    "Summary",
+    "Implementation Changes",
+    "Tests",
+    "Assumptions",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class PlanLintIssue:
@@ -152,6 +159,31 @@ def _run_lint_rules(plan: PlanRecord, strict: bool) -> list[PlanLintIssue]:
                 location="plan.body",
                 message="Plan must have a non-empty body after front matter.",
                 hint="Add implementation notes after the closing `---` separator.",
+            )
+        )
+
+    # 3c. missing_approval_heading
+    missing_approval_headings = [
+        heading
+        for heading in _REQUIRED_APPROVAL_HEADINGS
+        if _body_section(plan.body, heading) is None
+    ]
+    if missing_approval_headings:
+        severity: Severity = "error" if strict else "warning"
+        issues.append(
+            PlanLintIssue(
+                severity=severity,
+                code="missing_approval_heading",
+                location="plan.body",
+                message=(
+                    "Plan body should include approval-ready headings: "
+                    + ", ".join(_REQUIRED_APPROVAL_HEADINGS)
+                    + "."
+                ),
+                hint=(
+                    "Use `taskledger plan template --file ./plan.md` and keep the "
+                    "approval-ready body structure."
+                ),
             )
         )
     # 4. todo_not_concrete

@@ -526,3 +526,15 @@ def test_taskledger_runtime_has_no_bdd_or_archledger_coupling() -> None:
     haystack = "\n".join(path.read_text(encoding="utf-8") for path in runtime_paths)
     for pattern in FORBIDDEN_RUNTIME_PATTERNS:
         assert pattern not in haystack, f"Forbidden pattern found in runtime: {pattern}"
+
+
+def test_skill_documents_structured_approval_presentation_protocol() -> None:
+    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
+    assert "### Approval presentation protocol" in skill
+    assert "Questions X/Y answered" in skill
+    assert "Implementation Changes" in skill
+    assert "Assumptions" in skill
+    assert "Do not only say that the plan is ready" in skill
+    assert "If review output reports blockers, do not ask for approval." in skill
+    assert "Bad approval prompt:" in skill
+    assert "Good approval prompt:" in skill

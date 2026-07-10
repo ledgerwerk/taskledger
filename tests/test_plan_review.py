@@ -82,6 +82,9 @@ def test_plan_review_markdown_includes_proposed_plan_body(tmp_path: Path) -> Non
     assert content.startswith("# Proposed Plan:")
     assert "## Proposed Plan" in content
     assert "Render a concise approval-focused review artifact." in content
+    assert "## Approval Brief" in content
+    assert "Questions 0/0 answered" in content
+    assert "No required planning decision remains" in content
 
 
 # sw: f=specs/behavior/features/plan_review/plan-review.feature
@@ -115,6 +118,13 @@ def test_plan_review_reports_ready_when_lint_passes_and_no_blockers(
     lint = payload["lint"]
     assert isinstance(lint, dict)
     assert lint.get("passed") is True
+    question_status = payload["question_status"]
+    assert question_status == {
+        "required_answered": 0,
+        "required_total": 0,
+        "required_open": [],
+    }
+    assert "No required planning decision remains" in payload["decision_status"]
 
 
 # sw: f=specs/behavior/features/plan_review/plan-review.feature
@@ -136,6 +146,16 @@ def test_plan_review_reports_blocked_for_open_questions(tmp_path: Path) -> None:
     kinds = {item["kind"] for item in payload["blockers"] if isinstance(item, dict)}
     assert "open_questions" in kinds
     assert payload["approval_ready"] is False
+    question_status = payload["question_status"]
+    assert question_status["required_answered"] == 0
+    assert question_status["required_total"] == 1
+    assert question_status["required_open"][0]["id"].startswith("q-")
+    assert question_status["required_open"][0]["text"] == "Should this be optional?"
+    rendered = str(render_plan_review(ws, task.id, version=1)["content"])
+    assert "## Approval Brief" in rendered
+    assert "Questions 0/1 answered" in rendered
+    assert "Approval is blocked" in rendered
+    assert "Should this be optional?" in rendered
 
 
 # sw: f=specs/behavior/features/plan_review/plan-review.feature
@@ -164,6 +184,10 @@ def test_plan_review_reports_blocked_for_stale_answers(tmp_path: Path) -> None:
     kinds = {item["kind"] for item in payload["blockers"] if isinstance(item, dict)}
     assert "stale_answers" in kinds
     assert payload["approval_ready"] is False
+    assert (
+        "Approval is blocked because answered questions are not reflected"
+        in payload["decision_status"]
+    )
 
 
 # sw: f=specs/behavior/features/plan_review/plan-review.feature
@@ -211,6 +235,8 @@ def test_plan_review_json_payload_is_structured(tmp_path: Path) -> None:
     rendered = json.loads(str(payload["content"]))
     assert rendered["kind"] == "plan_review"
     assert rendered["plan_id"] == "plan-v1"
+    assert "question_status" in payload
+    assert payload["question_status"]["required_total"] == 0
 
 
 # sw: f=specs/behavior/features/plan_review/plan-review.feature
