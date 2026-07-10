@@ -34,15 +34,15 @@ class WorktreePathEntry:
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> WorktreePathEntry:
+        size = data.get("size")
+        content_hash = data.get("content_hash")
         return cls(
             path=str(data["path"]),
             status=str(data["status"]),
             exists=bool(data["exists"]),
             kind=str(data["kind"]),
-            size=data.get("size") if isinstance(data.get("size"), int) else None,
-            content_hash=data.get("content_hash")
-            if isinstance(data.get("content_hash"), str)
-            else None,
+            size=size if isinstance(size, int) else None,
+            content_hash=content_hash if isinstance(content_hash, str) else None,
         )
 
 
@@ -70,29 +70,30 @@ class WorkspaceContentSnapshot:
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> WorkspaceContentSnapshot:
-        entries = tuple(
-            WorktreePathEntry.from_dict(item)
-            for item in data.get("entries", [])
-            if isinstance(item, dict)
+        raw_entries = data.get("entries")
+        entries = (
+            tuple(
+                WorktreePathEntry.from_dict(item)
+                for item in raw_entries
+                if isinstance(item, dict)
+            )
+            if isinstance(raw_entries, list)
+            else ()
         )
+        git_commit = data.get("git_commit")
+        dirty = data.get("dirty")
+        content_hash = data.get("content_hash")
+        paths_hash = data.get("paths_hash")
+        entry_count = data.get("entry_count")
+        captured_at = data.get("captured_at")
         return cls(
-            git_commit=data.get("git_commit")
-            if isinstance(data.get("git_commit"), str)
-            else None,
-            dirty=data.get("dirty") if isinstance(data.get("dirty"), bool) else None,
-            content_hash=data.get("content_hash")
-            if isinstance(data.get("content_hash"), str)
-            else None,
-            paths_hash=data.get("paths_hash")
-            if isinstance(data.get("paths_hash"), str)
-            else None,
-            entry_count=data.get("entry_count")
-            if isinstance(data.get("entry_count"), int)
-            else len(entries),
+            git_commit=git_commit if isinstance(git_commit, str) else None,
+            dirty=dirty if isinstance(dirty, bool) else None,
+            content_hash=content_hash if isinstance(content_hash, str) else None,
+            paths_hash=paths_hash if isinstance(paths_hash, str) else None,
+            entry_count=entry_count if isinstance(entry_count, int) else len(entries),
             entries=entries,
-            captured_at=data.get("captured_at")
-            if isinstance(data.get("captured_at"), str)
-            else None,
+            captured_at=captured_at if isinstance(captured_at, str) else None,
         )
 
 

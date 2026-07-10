@@ -14,7 +14,7 @@ import typer
 
 try:
     from typer._click import (
-        exceptions as _typer_click_exceptions,  # type: ignore[import-not-found]
+        exceptions as _typer_click_exceptions,
     )
 except ImportError:  # pragma: no cover - older Typer
     TyperClickException: Any = None
