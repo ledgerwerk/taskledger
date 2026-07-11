@@ -1,0 +1,177 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/multi_repo.md
+linked_sources:
+  - taskledger/cli_misc.py
+  - taskledger/domain/task.py
+  - taskledger/services/file_links.py
+  - taskledger/services/handoff.py
+sections:
+  - section_id: md:section:docs/multi_repo.md::multi-repo-context
+    doc_path: docs/multi_repo.md
+    heading_path:
+      - Multi-repo context
+    heading_slug: multi-repo-context
+    line_span:
+      - 1
+      - 6
+    section_hash: 732c8f5282b25187593aa9940fc4e6dfd9e57a244a2882776110d38e8bd1133f
+    summary: Multi-repo context
+    text: "# Multi-repo context
+
+
+      `taskledger` does not own repository checkout orchestration. It records the
+
+      task, links the files and external resources that matter, and renders handoff
+
+      context that another harness can use."
+    links:
+      - source_id: py:module:taskledger/services/file_links.py
+        source_path: taskledger/services/file_links.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for multi repo context.
+        tracked_hashes:
+          body_hash: 36e57fab87fd5f4a9b64a3e72e3b6c3501e7b9b0137bbff6e81d6397e1dcf2f4
+          public_contract_hash: 01e1e7adfcf48ac4be4c8d60494d4fd6a119e7bc0ed63018a810d1d9500d6f71
+      - source_id: py:module:taskledger/services/handoff.py
+        source_path: taskledger/services/handoff.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for multi repo context.
+        tracked_hashes:
+          body_hash: 1d11d6520901034d036df36b6465aeb7de92b518bfc5e805a5506a89fc21f506
+          public_contract_hash: e79ddac789a730c17db3c405610f7858263d46c2465d483e379afd6a67a63c89
+  - section_id: md:section:docs/multi_repo.md::common-workflow
+    doc_path: docs/multi_repo.md
+    heading_path:
+      - Multi-repo context
+      - Common workflow
+    heading_slug: common-workflow
+    line_span:
+      - 7
+      - 39
+    section_hash: 596d48a53a53def91a9b73dcd0cfb4f0fd0cb9d10d7c65a5f1a460d2e5531666
+    summary: Common workflow
+    text: '## Common workflow
+
+
+      Create or activate the task first:
+
+
+      ```bash
+
+      taskledger init
+
+      taskledger task create "Fix sale customization" --description "Repair sale order
+      behavior."
+
+      ```
+
+
+      Attach files from the current workspace or from neighboring checkouts:
+
+
+      ```bash
+
+      taskledger file add --path ../odoo/addons/sale/models/sale_order.py --kind code
+      --label "Upstream sale order reference"
+
+      taskledger file add --path custom_sale/models/sale_order.py --kind code --label
+      "Custom sale implementation" --required-for-validation
+
+      taskledger link add --url https://example.invalid/ticket/123 --label "Support
+      ticket"
+
+      ```
+
+
+      Use search helpers to inspect the workspace:
+
+
+      ```bash
+
+      taskledger search sale_order
+
+      taskledger grep "action_confirm"
+
+      taskledger symbols sale_order.py
+
+      taskledger deps custom_sale.models.sale_order
+
+      ```
+
+
+      Then render fresh context for the next stage:
+
+
+      ```bash
+
+      taskledger context --for implementation --format markdown
+
+      taskledger handoff create --mode implementation --intended-actor agent --intended-harness
+      codex
+
+      ```'
+    links:
+      - source_id: py:module:taskledger/cli_misc.py
+        source_path: taskledger/cli_misc.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for common workflow.
+        tracked_hashes:
+          body_hash: 230c491193480a4f63a4f37dae7c4496e3f85cd0b7aef3ad55ff129c824e602d
+          public_contract_hash: c24c84f30a49469f5b5605df77e6c50ba91838c5ab34633fc3d8262ae9f5f3f3
+      - source_id: py:module:taskledger/services/file_links.py
+        source_path: taskledger/services/file_links.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for common workflow.
+        tracked_hashes:
+          body_hash: 36e57fab87fd5f4a9b64a3e72e3b6c3501e7b9b0137bbff6e81d6397e1dcf2f4
+          public_contract_hash: 01e1e7adfcf48ac4be4c8d60494d4fd6a119e7bc0ed63018a810d1d9500d6f71
+      - source_id: py:module:taskledger/services/handoff.py
+        source_path: taskledger/services/handoff.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for common workflow.
+        tracked_hashes:
+          body_hash: 1d11d6520901034d036df36b6465aeb7de92b518bfc5e805a5506a89fc21f506
+          public_contract_hash: e79ddac789a730c17db3c405610f7858263d46c2465d483e379afd6a67a63c89
+  - section_id: md:section:docs/multi_repo.md::mental-model
+    doc_path: docs/multi_repo.md
+    heading_path:
+      - Multi-repo context
+      - Mental model
+    heading_slug: mental-model
+    line_span:
+      - 40
+      - 47
+    section_hash: 942fec2b17bc452adaf33b79e96c604bfa15d1ace54c1248534c91a0d5ce3053
+    summary: Mental model
+    text:
+      "## Mental model\n\n- `file add` records task-specific source and implementation\
+      \ files.\n- `link add` records issue trackers, design notes, pull requests, or\
+      \ other\n  external references.\n- `search`, `grep`, `symbols`, and `deps` are\
+      \ read-only helpers.\n- The active task remains explicit. Without an active task,\
+      \ task-scoped commands\n  require `--task` or a positional task reference."
+    links:
+      - source_id: py:module:taskledger/domain/task.py
+        source_path: taskledger/domain/task.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for mental model.
+        tracked_hashes:
+          body_hash: ac0afb90d85ec615051ad5050b44ad953e74fb866382200d5cb14d9ee625534a
+          public_contract_hash: 4b03245fa683ec8b55837e0442b82d8805dece48e3f1d1f06042bc7b5028deed
+      - source_id: py:module:taskledger/services/file_links.py
+        source_path: taskledger/services/file_links.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for mental model.
+        tracked_hashes:
+          body_hash: 36e57fab87fd5f4a9b64a3e72e3b6c3501e7b9b0137bbff6e81d6397e1dcf2f4
+          public_contract_hash: 01e1e7adfcf48ac4be4c8d60494d4fd6a119e7bc0ed63018a810d1d9500d6f71
+last_fresh_scan_version: 6
+last_fresh_hash: ba3a8c2eba0e4d91eb1757cfa44035b1cab1e3e3bce5d4ca01b683f5ae4d699f
+notes: Documentation links validated after final scan version 6.
+version: 257

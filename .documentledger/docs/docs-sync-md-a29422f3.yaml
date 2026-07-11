@@ -1,0 +1,471 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/sync.md
+linked_sources:
+  - taskledger/cli_sync.py
+  - taskledger/exchange.py
+  - taskledger/services/git_sync.py
+  - taskledger/services/lock_diagnostics.py
+  - taskledger/services/storage_locations.py
+  - taskledger/services/trace.py
+  - taskledger/storage/locks.py
+  - taskledger/storage/project_config.py
+sections:
+  - section_id: md:section:docs/sync.md::sync-taskledger-state-across-pcs
+    doc_path: docs/sync.md
+    heading_path:
+      - Sync taskledger state across PCs
+    heading_slug: sync-taskledger-state-across-pcs
+    line_span:
+      - 1
+      - 7
+    section_hash: c2e328aad7435a80a36dfb90598038d528891d6bb548f70c522defada428a3a5
+    summary: Sync taskledger state across PCs
+    text: "# Sync taskledger state across PCs
+
+
+      Taskledger already supports keeping durable task state outside the source
+
+      repository. The recommended workflow is to commit only `taskledger.toml` in
+
+      the source repo, point `taskledger_dir` at an external sibling directory, and
+
+      sync that external directory with a private Git repository."
+    links:
+      - source_id: py:module:taskledger/cli_sync.py
+        source_path: taskledger/cli_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for sync taskledger state across pcs.
+        tracked_hashes:
+          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
+          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+      - source_id: py:module:taskledger/services/git_sync.py
+        source_path: taskledger/services/git_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for sync taskledger state across pcs.
+        tracked_hashes:
+          body_hash: 0709df69974e87c2ca01ab57e4ee075270b633efc0fbbce3e1ebd35070fedca8
+          public_contract_hash: 9c4a737eef5f74376cf2a89ca21d1d6da16974a474601a7f9f830f50b853081b
+  - section_id: md:section:docs/sync.md::external-state-directory
+    doc_path: docs/sync.md
+    heading_path:
+      - Sync taskledger state across PCs
+      - External state directory
+    heading_slug: external-state-directory
+    line_span:
+      - 8
+      - 23
+    section_hash: c7c0a9695b2f342b3d58e745305c6d9f0148e49a3b54fbef8092e758360d822d
+    summary: External state directory
+    text: '## External state directory
+
+
+      Use `taskledger init --taskledger-dir` or edit `taskledger.toml` so the
+
+      workspace keeps only config while the durable state lives elsewhere:
+
+
+      ```toml
+
+      config_version = 2
+
+      taskledger_dir = "../taskledger-state/project-a"
+
+      project_uuid = "keep-existing-uuid"
+
+      project_name = "project-a"
+
+      ledger_ref = "main"
+
+      ```
+
+
+      Relative paths are preferred because they keep the same sibling layout working
+
+      across multiple PCs.'
+    links:
+      - source_id: py:module:taskledger/services/storage_locations.py
+        source_path: taskledger/services/storage_locations.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for external state directory.
+        tracked_hashes:
+          body_hash: 8e66f108562ea21adca7beeb2e885c53de2799b75801f6e7e605fecae1cfe1a0
+          public_contract_hash: aa37ba65bfda915bc0dd00e83b743707169bddc415c9022715cc98502d45b55d
+      - source_id: py:module:taskledger/storage/project_config.py
+        source_path: taskledger/storage/project_config.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for external state directory.
+        tracked_hashes:
+          body_hash: 9b1503b5d128e799424d66098e89c0bfd54c37ee1ac71ced0e9ba06b41e6af01
+          public_contract_hash: 3dd9a0323a7a9b90bfda7b204ebcea1f9347275a782873b3226f1121c54b96cc
+  - section_id: md:section:docs/sync.md::private-state-git-repo
+    doc_path: docs/sync.md
+    heading_path:
+      - Sync taskledger state across PCs
+      - Private state Git repo
+    heading_slug: private-state-git-repo
+    line_span:
+      - 24
+      - 43
+    section_hash: b882f548c326ea3ed33d55acd9a96d522d77db383ebbed0028cd59937a07a5d3
+    summary: Private state Git repo
+    text:
+      "## Private state Git repo\n\nRecommended layout:\n\n```text\n/home/me/src/project-a/\
+      \                  # source repo\n/home/me/src/taskledger-state/           # private\
+      \ state repo\n/home/me/src/taskledger-state/project-a/\n  storage.yaml\n  ledgers/\n\
+      \    main/\n      tasks/\n      events/\n      releases/\n      indexes/\n```\n\
+      \nThe source repository keeps `taskledger.toml` and ignores `.taskledger/`.\n\
+      The private state repository stores the external `taskledger_dir` contents."
+    links:
+      - source_id: py:module:taskledger/services/git_sync.py
+        source_path: taskledger/services/git_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for private state git repo.
+        tracked_hashes:
+          body_hash: 0709df69974e87c2ca01ab57e4ee075270b633efc0fbbce3e1ebd35070fedca8
+          public_contract_hash: 9c4a737eef5f74376cf2a89ca21d1d6da16974a474601a7f9f830f50b853081b
+  - section_id: md:section:docs/sync.md::second-pc-bootstrap
+    doc_path: docs/sync.md
+    heading_path:
+      - Sync taskledger state across PCs
+      - Second PC bootstrap
+    heading_slug: second-pc-bootstrap
+    line_span:
+      - 44
+      - 58
+    section_hash: 7e027c7a4f567eb9829289c0e1ddbaa94b7a9037a7e9dfbccc763fc1f9bd2a74
+    summary: Second PC bootstrap
+    text: "## Second PC bootstrap
+
+
+      Clone both repositories as siblings:
+
+
+      ```bash
+
+      cd ~/src
+
+      git clone <source-repo-url> project-a
+
+      git clone <private-state-repo-url> taskledger-state
+
+
+      cd project-a
+
+      taskledger status --full
+
+      taskledger doctor
+
+      taskledger task list
+
+      ```"
+    links:
+      - source_id: py:module:taskledger/cli_sync.py
+        source_path: taskledger/cli_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for second pc bootstrap.
+        tracked_hashes:
+          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
+          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+      - source_id: py:module:taskledger/services/git_sync.py
+        source_path: taskledger/services/git_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for second pc bootstrap.
+        tracked_hashes:
+          body_hash: 0709df69974e87c2ca01ab57e4ee075270b633efc0fbbce3e1ebd35070fedca8
+          public_contract_hash: 9c4a737eef5f74376cf2a89ca21d1d6da16974a474601a7f9f830f50b853081b
+  - section_id: md:section:docs/sync.md::daily-sync-protocol
+    doc_path: docs/sync.md
+    heading_path:
+      - Sync taskledger state across PCs
+      - Daily sync protocol
+    heading_slug: daily-sync-protocol
+    line_span:
+      - 59
+      - 102
+    section_hash: 1510f7ef0e175ee4023b60537bdf91395089669cf88df133f2d970b402feee63
+    summary: Daily sync protocol
+    text: '## Daily sync protocol
+
+
+      Taskledger provides a Git sync command group that supports this workflow:
+
+
+      ```bash
+
+      taskledger sync git init --repo ../taskledger-state --project-path project-a
+
+      taskledger sync git status
+
+      taskledger sync git pull
+
+      taskledger sync git push
+
+      taskledger sync git push --message "Sync project-a taskledger state"
+
+      ```
+
+
+      In a shared `taskledger-state` repository, Taskledger can safely inspect and
+
+      report project-local vs outside-project dirty paths. `sync git push` commits
+
+      repository-wide changes by design to match the standard Git workflow. Use
+
+      `sync git cd` for advanced manual inspection or conflict resolution.
+
+
+      For manual conflict resolution or debugging:
+
+
+      ```bash
+
+      cd "$(taskledger sync git cd)"
+
+      git status --short
+
+      ```
+
+
+      Before starting work on a PC:
+
+
+      ```bash
+
+      cd ~/src/project-a
+
+      taskledger sync git status
+
+      taskledger sync git pull
+
+      taskledger sync git import-local
+
+      taskledger doctor
+
+      taskledger next-action
+
+      ```
+
+
+      After finishing a task cycle or stopping at a safe boundary:
+
+
+      ```bash
+
+      cd ~/src/project-a
+
+      taskledger doctor
+
+      taskledger sync git status
+
+      taskledger sync git push
+
+      ```'
+    links:
+      - source_id: py:module:taskledger/cli_sync.py
+        source_path: taskledger/cli_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for daily sync protocol.
+        tracked_hashes:
+          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
+          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+      - source_id: py:module:taskledger/services/git_sync.py
+        source_path: taskledger/services/git_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for daily sync protocol.
+        tracked_hashes:
+          body_hash: 0709df69974e87c2ca01ab57e4ee075270b633efc0fbbce3e1ebd35070fedca8
+          public_contract_hash: 9c4a737eef5f74376cf2a89ca21d1d6da16974a474601a7f9f830f50b853081b
+  - section_id: md:section:docs/sync.md::active-lock-rule
+    doc_path: docs/sync.md
+    heading_path:
+      - Sync taskledger state across PCs
+      - Active lock rule
+    heading_slug: active-lock-rule
+    line_span:
+      - 103
+      - 115
+    section_hash: 7dfd9473a15ecaaaf0e58ffc7ee9253b27bedca07ef4d634136d8d576e878c10
+    summary: Active lock rule
+    text: "## Active lock rule
+
+
+      Do not use the same Taskledger state concurrently from multiple PCs. Prefer to
+
+      switch machines only when:
+
+
+      - the task is `done`;
+
+      - the task is `approved` and no implementation lock exists;
+
+      - implementation is finished and validation has not started; or
+
+      - no active lock is present.
+
+
+      Keep one active writer per project. Concurrent writes can produce Git conflicts
+
+      or semantic conflicts across canonical task records."
+    links:
+      - source_id: py:module:taskledger/services/lock_diagnostics.py
+        source_path: taskledger/services/lock_diagnostics.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for active lock rule.
+        tracked_hashes:
+          body_hash: d7509b4a0c79a85dd0f2c88f3b1a89f480a833e9e5904745fdb81a278802217b
+          public_contract_hash: 796ccb55399de813c369d0882bf97e0a9798346e631d918b27e1af0daef42ebd
+      - source_id: py:module:taskledger/storage/locks.py
+        source_path: taskledger/storage/locks.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for active lock rule.
+        tracked_hashes:
+          body_hash: 230eca334d1c801adc00634143a94a8acadd9e2611e471492659ccb9be16174e
+          public_contract_hash: 4d2ad196a034cb157ccba9a525228b938ad902c20903c6b9981b19e0867660cc
+  - section_id: md:section:docs/sync.md::when-to-use-export-import-instead
+    doc_path: docs/sync.md
+    heading_path:
+      - Sync taskledger state across PCs
+      - When to use export/import instead
+    heading_slug: when-to-use-export-import-instead
+    line_span:
+      - 116
+      - 141
+    section_hash: e6d790d7cd0f5695a96e75dd594b3ef885abf921b531a197557c141f978913aa
+    summary: When to use export/import instead
+    text:
+      "## When to use export/import instead\n\nArchive commands are still the transfer\
+      \ primitive and remain available at both\nthe root and under `sync`:\n\n```bash\n\
+      taskledger export task-0040\ntaskledger import ./taskledger-task-project-a-main-task-0040-...tar.gz\n\
+      taskledger sync export --output ./taskledger-transfer.tar.gz\ntaskledger sync\
+      \ import ./taskledger-transfer.tar.gz --dry-run\n```\n\nIf work must move mid-run,\
+      \ prefer task-scoped transfer archives instead of\nsyncing the full live state\
+      \ directory:\n\n```bash\ntaskledger export task-0040\n  # copy archive to the\
+      \ other PC\ntaskledger import ./taskledger-task-project-a-main-task-0040-...tar.gz\n\
+      taskledger next-action\ntaskledger implement resume --reason \"Continue imported\
+      \ implementation.\"\n```\n\nImported runtime locks are quarantined by default,\
+      \ which makes archive transfer\nsafer than syncing an active lock between machines."
+    links:
+      - source_id: py:module:taskledger/cli_sync.py
+        source_path: taskledger/cli_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for when to use export import instead.
+        tracked_hashes:
+          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
+          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+      - source_id: py:module:taskledger/exchange.py
+        source_path: taskledger/exchange.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for when to use export import instead.
+        tracked_hashes:
+          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
+          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+  - section_id: md:section:docs/sync.md::syncthing-rclone-caveats
+    doc_path: docs/sync.md
+    heading_path:
+      - Sync taskledger state across PCs
+      - Syncthing/rclone caveats
+    heading_slug: syncthing-rclone-caveats
+    line_span:
+      - 142
+      - 157
+    section_hash: 61a85458490c0b9340bb06ddaf87bbf1e0f7dd0cc3e4ff09aa1fa73936a87379
+    summary: Syncthing/rclone caveats
+    text: "## Syncthing/rclone caveats
+
+
+      Syncthing and `rclone bisync` can transport the external state directory, but
+
+      Git is the safer default for Taskledger's text-first state because it preserves
+
+      history and exposes conflicts directly.
+
+
+      If Syncthing is used:
+
+
+      - avoid concurrent writers;
+
+      - stop one agent before starting another PC;
+
+      - run `taskledger doctor` after sync; and
+
+      - resolve conflict files before continuing.
+
+
+      Treat `rclone bisync` as an advanced workflow. Keep Git push/pull under user
+
+      control and do not automate network sync from Taskledger itself."
+    links:
+      - source_id: py:module:taskledger/services/git_sync.py
+        source_path: taskledger/services/git_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for syncthing rclone caveats.
+        tracked_hashes:
+          body_hash: 0709df69974e87c2ca01ab57e4ee075270b633efc0fbbce3e1ebd35070fedca8
+          public_contract_hash: 9c4a737eef5f74376cf2a89ca21d1d6da16974a474601a7f9f830f50b853081b
+      - source_id: py:module:taskledger/storage/locks.py
+        source_path: taskledger/storage/locks.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for syncthing rclone caveats.
+        tracked_hashes:
+          body_hash: 230eca334d1c801adc00634143a94a8acadd9e2611e471492659ccb9be16174e
+          public_contract_hash: 4d2ad196a034cb157ccba9a525228b938ad902c20903c6b9981b19e0867660cc
+  - section_id: md:section:docs/sync.md::task-centered-traceability
+    doc_path: docs/sync.md
+    heading_path:
+      - Sync taskledger state across PCs
+      - Task-centered traceability
+    heading_slug: task-centered-traceability
+    line_span:
+      - 158
+      - 169
+    section_hash: 38351c70e47624ccd0822d7eb243956f291f63694f1e49beacf19957240cf6a7
+    summary: Task-centered traceability
+    text: "## Task-centered traceability
+
+
+      Taskledger owns temporal work truth: task history, plans, acceptance criteria,
+
+      implementation changes, validation checks, reviews, locks, and handoffs.
+
+      Cross-ledger links are opaque file or ID references.
+
+
+      Use `taskledger trace TASK --format json` to emit a read-only
+
+      `taskledger.trace.v1` task bundle. The bundle links task IDs, accepted AC IDs,
+
+      opaque link refs, source refs, evidence refs, changes, reviews, and handoffs.
+
+
+      Evidence import is explicit and auditable through
+
+      `taskledger validate check --criterion ... --status ... --evidence ...`."
+    links:
+      - source_id: py:module:taskledger/services/trace.py
+        source_path: taskledger/services/trace.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for task centered traceability.
+        tracked_hashes:
+          body_hash: a17dfa1f687e5363a49319c0b586296ec8fdadb65e7f3f0fcf9b442f720ffe72
+          public_contract_hash: 64fd5109b1e88e236e5b4db7300b086a76a8749f0cb44e4eeb73123416c8f3c2
+last_fresh_scan_version: 6
+last_fresh_hash: fb199bb32ff5f910feff59103682cb197c94675d4dd8016182880e276937a201
+notes: Documentation links validated after final scan version 6.
+version: 257

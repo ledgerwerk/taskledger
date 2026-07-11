@@ -1,0 +1,501 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/public_surface.md
+linked_sources:
+  - taskledger/api/__init__.py
+  - taskledger/cli.py
+  - taskledger/cli_misc.py
+  - taskledger/cli_plan.py
+  - taskledger/cli_question.py
+  - taskledger/cli_storage.py
+  - taskledger/cli_sync.py
+  - taskledger/cli_task.py
+  - taskledger/command_inventory.py
+  - taskledger/services/agent_transcripts.py
+  - taskledger/services/file_links.py
+  - taskledger/services/task_collections.py
+  - taskledger/services/task_reports.py
+sections:
+  - section_id: md:section:docs/public_surface.md::public-surface
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+    heading_slug: public-surface
+    line_span:
+      - 1
+      - 8
+    section_hash: 629f9543d491e42c42e650c376c53f5b445308b6d75557d5176b9fd55a0b7d56
+    summary: Public surface
+    text: "# Public surface
+
+
+      `taskledger` supports the task-first workflow:
+
+
+      ```text
+
+      task -> plan -> approval -> implement -> validate -> done
+
+      ```"
+    links:
+      - source_id: py:module:taskledger/api/__init__.py
+        source_path: taskledger/api/__init__.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for public surface.
+        tracked_hashes:
+          body_hash: 6b94a8907ea1d32446c28da3d8a0c3a4e0ec8d8e219aa8a5b2f66cf5b8bbf2ea
+          public_contract_hash: ad8f198fca92ff539fc726767663abc079195db88669431df6f2b3df2426d04d
+      - source_id: py:module:taskledger/cli.py
+        source_path: taskledger/cli.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for public surface.
+        tracked_hashes:
+          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
+          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+      - source_id: py:module:taskledger/command_inventory.py
+        source_path: taskledger/command_inventory.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for public surface.
+        tracked_hashes:
+          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
+          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+  - section_id: md:section:docs/public_surface.md::supported-cli-entries
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - Supported CLI entries
+    heading_slug: supported-cli-entries
+    line_span:
+      - 9
+      - 14
+    section_hash: 9175680e6583a6d0af824a00eb2e8e7f53e4e5113d0a07f12201491bdc68e3ef
+    summary: Supported CLI entries
+    text: "## Supported CLI entries
+
+
+      The command inventory tracks 44 top-level CLI entries. Some are groups and some
+
+      are root commands. The normal agent path is intentionally smaller than the full
+
+      registered surface."
+    links:
+      - source_id: py:module:taskledger/cli.py
+        source_path: taskledger/cli.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for supported cli entries.
+        tracked_hashes:
+          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
+          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+      - source_id: py:module:taskledger/command_inventory.py
+        source_path: taskledger/command_inventory.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for supported cli entries.
+        tracked_hashes:
+          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
+          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+  - section_id: md:section:docs/public_surface.md::core-agent-path
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - Supported CLI entries
+      - Core agent path
+    heading_slug: core-agent-path
+    line_span:
+      - 15
+      - 32
+    section_hash: aa5bfc66ff929aad127311e461e01f7e8f3db1cf333e23ec55359cc42a56648a
+    summary: Core agent path
+    text: "### Core agent path
+
+
+      Agents should start with this durable lifecycle path:
+
+
+      `plan start -> plan guidance -> plan template -> plan check -> plan upsert ->
+      plan lint -> plan accept` is
+
+      the normal planning/approval path for agents.
+
+
+      - `actor whoami`
+
+      - `task active`, `task show`, `task create`, `task activate`, `task follow-up`
+
+      - `next-action`, `context`, `can`
+
+      - `plan start`, `plan guidance`, `plan template`, `plan check`, `plan upsert`,
+      `plan lint`, `plan accept`
+
+      - `question add`, `question add-many`, `question answer`, `question answer-many`,
+      `question status`, `question answers`
+
+      - `todo next`, `todo show`, `todo done`, `todo status`
+
+      - `implement start`, `implement resume`, `implement change`, `implement scan-changes`,
+      `implement finish`
+
+      - `validate start`, `validate status`, `validate check`, `validate finish`
+
+      - `review record`
+
+      - `handoff create`, `handoff show`, `handoff claim`, `handoff close`"
+    links:
+      - source_id: py:module:taskledger/command_inventory.py
+        source_path: taskledger/command_inventory.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for core agent path.
+        tracked_hashes:
+          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
+          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+  - section_id: md:section:docs/public_surface.md::top-level-entry-categories
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - Supported CLI entries
+      - Top-level entry categories
+    heading_slug: top-level-entry-categories
+    line_span:
+      - 33
+      - 79
+    section_hash: 73c44e546ddcdc741748ca484077b8853c740a278bcb42876cbeae101d558f12
+    summary: Top-level entry categories
+    text: '### Top-level entry categories
+
+
+      **Primary groups** — core task-first lifecycle:
+
+
+      - `task`, `plan`, `question`, `implement`, `validate`, `review`, `todo`
+
+      - `context`, `next-action`, `init`, `handoff`
+
+
+      **Support entries** — auxiliary operations:
+
+
+      - `intro`, `file`, `link`, `require`, `lock`, `config`, `actor`, `harness`, `usage`
+
+      - `export`, `import`, `snapshot`, `pipeline`, `can`, `commands`
+
+
+      **Advanced entries** — power-user, storage, transfer, and project operations:
+
+
+      - `ledger`, `storage`, `sync`, `release`, `migrate`
+
+
+      **Human-oriented entries** — interactive inspection and reporting:
+
+
+      - `status`, `view`, `monitor`, `tree`, `search`, `grep`, `symbols`, `deps`
+
+
+      **Repair and migration groups** — exceptional recovery:
+
+
+      - `doctor`, `repair`, `reindex`, `migrate`
+
+
+      `usage` is the compact fresh-session startup command. It summarizes actor,
+
+      harness, active work, inbox items, and ready tasks without mutating ledger
+
+      state.
+
+
+      `monitor` is the human-oriented, read-only terminal monitor. It replaces the
+
+      old browser/TUI surfaces with a dependency-free snapshot view that keeps using
+
+      the same underlying taskledger read models.
+
+
+      The supported implementation lifecycle includes `implement restart --summary "..."`
+      when a task is in `failed_validation` and `implement resume --reason "..."` when
+      an existing running implementation run has lost its lock.
+
+
+      Small post-completion deltas use `task follow-up PARENT_REF TITLE` to create a
+
+      new child task instead of reopening a `done` task.
+
+
+      Release boundaries are tracked separately from task lifecycle state with
+
+      `release tag`, `release list`, and `release show`. Taskledger does not
+
+      manage changelog entries or `CHANGELOG.md`; use the separate `releaseledger`
+
+      tool for changelog entries, changelog context, and `CHANGELOG.md` builds.
+
+
+      `release *`, `storage move`, `sync git pull/push/sync`, sync hooks,
+
+      `ledger fork/switch/adopt`, `migrate *`, `repair *`, and
+
+      `search`/`grep`/`symbols`/`deps` are not normal task work. They are
+
+      advanced, repair/migration, human-oriented, or beta support surfaces.'
+    links:
+      - source_id: py:module:taskledger/cli.py
+        source_path: taskledger/cli.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for top level entry categories.
+        tracked_hashes:
+          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
+          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+      - source_id: py:module:taskledger/command_inventory.py
+        source_path: taskledger/command_inventory.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for top level entry categories.
+        tracked_hashes:
+          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
+          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+  - section_id: md:section:docs/public_surface.md::question-subcommands
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - question subcommands
+    heading_slug: question-subcommands
+    line_span:
+      - 80
+      - 85
+    section_hash: cd5495e60dcbacfa8046a5e76b888556520492e7fca9f4561f007b048e870bc5
+    summary: question subcommands
+    text: "## question subcommands
+
+
+      - `question add`, `question list [--status STATUS]`, `question answers [--format
+      markdown|json]`
+
+      - `question add-many [--text TEXT|--yaml-file PATH] [--required-for-plan]`
+
+      - `question answer`, `question answer-many`, `question dismiss`, `question open`,
+      `question status`"
+    links:
+      - source_id: py:module:taskledger/cli_question.py
+        source_path: taskledger/cli_question.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for question subcommands.
+        tracked_hashes:
+          body_hash: ddcb45a984cef5bdf4f7ed56d934e0be687fdf7d27d84713469a3d23467d0c1f
+          public_contract_hash: eb167bb8006be0ebba134184b82acf75a713f6d2a8fdd13a7c4a09551e944629
+  - section_id: md:section:docs/public_surface.md::plan-subcommands
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - plan subcommands
+    heading_slug: plan-subcommands
+    line_span:
+      - 86
+      - 94
+    section_hash: 734b7f1e90e04f4826fc6674ad9dd815dfe0a5ac97c4a62cf14f36608df086b5
+    summary: plan subcommands
+    text: "## plan subcommands
+
+
+      - Normal path: `plan start` -> `plan guidance` -> `plan template` -> `plan check`
+      -> `plan upsert` -> `plan lint` -> `plan accept`
+
+      - Support reads/records: `plan show`, `plan review`, `plan list`, `plan diff`,
+      `plan export`, `plan command -- ...`
+
+      - Advanced or compatibility paths: `plan approve`, `plan propose`, `plan draft`,
+      `plan regenerate --from-answers`, `plan materialize-todos`, `plan revise`, `plan
+      amend`, `plan reject`
+
+
+      Prefer `plan accept` for explicit chat approval. `plan approve` remains for
+
+      advanced metadata control and compatibility."
+    links:
+      - source_id: py:module:taskledger/cli_plan.py
+        source_path: taskledger/cli_plan.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan subcommands.
+        tracked_hashes:
+          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
+          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+  - section_id: md:section:docs/public_surface.md::task-reporting-and-transcripts
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - task reporting and transcripts
+    heading_slug: task-reporting-and-transcripts
+    line_span:
+      - 95
+      - 109
+    section_hash: eeff9e9ad003e2f55aa3746932d3dcc2f62875303e24393983f9a01feffd8b6b
+    summary: task reporting and transcripts
+    text: "## task reporting and transcripts
+
+
+      - `next-action` answers what should happen next.
+
+      - `task show` summarizes current task state.
+
+      - `context` renders agent continuation context.
+
+      - `handoff create/show/claim/close` manages durable transfer between sessions
+      or actors.
+
+      - `task report` supports section control including `--include command-log`
+
+      - `task export` writes a full single-file LLM/archive bundle.
+
+      - `task transcript` renders a per-task command transcript in `markdown` or `json`
+
+
+      `task dossier`, root `view`, and `handoff plan-context` /
+
+      `handoff implementation-context` / `handoff validation-context` remain
+
+      advanced/compatibility read surfaces; prefer `context --for ...` and
+
+      `handoff show` for new agent protocols."
+    links:
+      - source_id: py:module:taskledger/cli_task.py
+        source_path: taskledger/cli_task.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for task reporting and transcripts.
+        tracked_hashes:
+          body_hash: ca38b266993121c7460898163de1b9aedf26a8431a1baa941a3eef85e134583b
+          public_contract_hash: f7e3d46b24ea2e4b056199e81e22533db67cdb60571a8ce131f714c919206e49
+      - source_id: py:module:taskledger/services/agent_transcripts.py
+        source_path: taskledger/services/agent_transcripts.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for task reporting and transcripts.
+        tracked_hashes:
+          body_hash: 3529d873f73caca5e0481238b6aecf0be13113e207eb7d20e9353e5b58587ca5
+          public_contract_hash: f2ed02c45378086fd7fa43c103fba21d6b976638858f3a705a32674e2d49c2dd
+      - source_id: py:module:taskledger/services/task_reports.py
+        source_path: taskledger/services/task_reports.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for task reporting and transcripts.
+        tracked_hashes:
+          body_hash: c17261bafe940c39aa7fe6b806a9387249f1ad93331046f91762b6036dc03532
+          public_contract_hash: 59b78b662256cd2ae913fd57b0c5d7f9a391ce017d938ede693645b44f4cae8c
+  - section_id: md:section:docs/public_surface.md::todo-subcommands
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - todo subcommands
+    heading_slug: todo-subcommands
+    line_span:
+      - 110
+      - 114
+    section_hash: 9d066b643d40e3a2cc88420f161071d7172667d01267a6c6c88913fa01535d91
+    summary: todo subcommands
+    text: "## todo subcommands
+
+
+      - `todo add`, `todo list`, `todo done`, `todo show`, `todo status`, `todo next`
+
+      - Todo source is inferred from active lock: `implementer` during implementation,
+      `planner` during planning, `user` otherwise."
+    links:
+      - source_id: py:module:taskledger/cli_misc.py
+        source_path: taskledger/cli_misc.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for todo subcommands.
+        tracked_hashes:
+          body_hash: 230c491193480a4f63a4f37dae7c4496e3f85cd0b7aef3ad55ff129c824e602d
+          public_contract_hash: c24c84f30a49469f5b5605df77e6c50ba91838c5ab34633fc3d8262ae9f5f3f3
+      - source_id: py:module:taskledger/services/task_collections.py
+        source_path: taskledger/services/task_collections.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for todo subcommands.
+        tracked_hashes:
+          body_hash: e4307ef9120f7f9c1aba033c7006e107ae72f1a3b3edbf5b935922b3cf617509
+          public_contract_hash: 97ae38fd36e3410bf142fb4db9b878a4257c7e0f12b18ae3e95217f840ddb9f9
+  - section_id: md:section:docs/public_surface.md::file-subcommands
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - file subcommands
+    heading_slug: file-subcommands
+    line_span:
+      - 115
+      - 120
+    section_hash: ed9077235a703cba0de5d5ae61292124f0dfed56b711f2130abdefb8b1829679
+    summary: file subcommands
+    text: "## file subcommands
+
+
+      - `file add`, `file link`, `file remove`, `file list`, `file status`, `file refresh`
+
+      - `file link` records or updates a task-linked file with an optional baseline
+      snapshot.
+
+      - `file status` reports `new`, `modified`, `deleted`, `unchanged`, and `unbaselined`
+      drift states."
+    links:
+      - source_id: py:module:taskledger/cli_misc.py
+        source_path: taskledger/cli_misc.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for file subcommands.
+        tracked_hashes:
+          body_hash: 230c491193480a4f63a4f37dae7c4496e3f85cd0b7aef3ad55ff129c824e602d
+          public_contract_hash: c24c84f30a49469f5b5605df77e6c50ba91838c5ab34633fc3d8262ae9f5f3f3
+      - source_id: py:module:taskledger/services/file_links.py
+        source_path: taskledger/services/file_links.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for file subcommands.
+        tracked_hashes:
+          body_hash: 36e57fab87fd5f4a9b64a3e72e3b6c3501e7b9b0137bbff6e81d6397e1dcf2f4
+          public_contract_hash: 01e1e7adfcf48ac4be4c8d60494d4fd6a119e7bc0ed63018a810d1d9500d6f71
+  - section_id: md:section:docs/public_surface.md::storage-and-sync-subcommands
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - storage and sync subcommands
+    heading_slug: storage-and-sync-subcommands
+    line_span:
+      - 121
+      - 125
+    section_hash: aca11fe8ea573e57d98f8a1a829042c6da1ec0b40b0efdc570f0dc0b4758d849
+    summary: storage and sync subcommands
+    text: '## storage and sync subcommands
+
+
+      - `storage where`, `storage move --to PATH --mode copy|move [--adopt-existing]
+      [--force]`
+
+      - `sync preflight`, `sync status`, `sync commit --message "..."`'
+    links:
+      - source_id: py:module:taskledger/cli_storage.py
+        source_path: taskledger/cli_storage.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage and sync subcommands.
+        tracked_hashes:
+          body_hash: 3349da69e06523ec3cb5203e7ad161ed685e2b4a81aa04b4d9452c2197894ae9
+          public_contract_hash: d0209653dd0b44b22715e884c42eadf9b3f48459f6f2ae47d1640e314520fb83
+      - source_id: py:module:taskledger/cli_sync.py
+        source_path: taskledger/cli_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage and sync subcommands.
+        tracked_hashes:
+          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
+          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+last_fresh_scan_version: 6
+last_fresh_hash: de402d61ed42ad66dbf79495a923276372ca70a9d3173f7694a962fa7a59d96b
+notes: Documentation links validated after final scan version 6.
+version: 258

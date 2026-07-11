@@ -215,6 +215,7 @@ context_taskledger.index.json
 *.unpack.py
 workspace/
 .taskledger/
+.documentledger/rendered/
 .pi-lens/
 .code/
 todo.md

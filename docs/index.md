@@ -18,6 +18,7 @@ command_contract
 transfer
 sync
 service_boundary_whitelist
+documentation_freshness
 ```
 
 ## Indices and tables

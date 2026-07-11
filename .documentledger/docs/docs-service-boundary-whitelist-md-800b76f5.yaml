@@ -1,0 +1,275 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/service_boundary_whitelist.md
+linked_sources:
+  - taskledger/cli_sync.py
+  - taskledger/services/doctor_checks/task_checks.py
+  - taskledger/services/implementation_flow.py
+  - taskledger/services/planning_flow.py
+  - taskledger/services/tasks.py
+  - taskledger/services/validation_flow.py
+  - tests/test_service_boundaries.py
+sections:
+  - section_id: md:section:docs/service_boundary_whitelist.md::service-boundary-whitelist
+    doc_path: docs/service_boundary_whitelist.md
+    heading_path:
+      - Service boundary whitelist
+    heading_slug: service-boundary-whitelist
+    line_span:
+      - 1
+      - 9
+    section_hash: ecf9532e4d94a7610b8f7b9e93999a9dc199570936db2116478bba4afa7f38ff
+    summary: Service boundary whitelist
+    text: "# Service boundary whitelist
+
+
+      This note tracks temporary static-boundary whitelist entries enforced by
+
+      `tests/test_service_boundaries.py`.
+
+
+      The whitelist is debt tracking, not a permanent exception list. When an item
+
+      drops below budget or is removed, update this note and the related test
+
+      constants."
+    links:
+      - source_id: py:module:tests/test_service_boundaries.py
+        source_path: tests/test_service_boundaries.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for service boundary whitelist.
+        tracked_hashes:
+          body_hash: 73c84289d938430e648f3ad0633582b18e10be45e142f2bc457932b571f21e93
+          public_contract_hash: e6fbde978acaf581ef8f022106d8ce721723d31d2edabf9c3f58d76ae6df31ce
+  - section_id: md:section:docs/service_boundary_whitelist.md::module-line-budget-whitelist-2000-lines
+    doc_path: docs/service_boundary_whitelist.md
+    heading_path:
+      - Service boundary whitelist
+      - Module line budget whitelist (>2000 lines)
+    heading_slug: module-line-budget-whitelist-2000-lines
+    line_span:
+      - 10
+      - 18
+    section_hash: 6e9beeafca9da93dfdabf7a18a00a84d7bf0d74f8546335eae3ae94cf5ec41f1
+    summary: Module line budget whitelist (>2000 lines)
+    text:
+      "## Module line budget whitelist (>2000 lines)\n\n- `taskledger/services/tasks.py`\n\
+      \n  - Current reason: Temporary compatibility facade while workflow services\n\
+      \    are extracted.\n  - Target split direction: Continue reducing to a smaller\
+      \ compatibility\n    facade and move residual helpers into focused modules."
+    links:
+      - source_id: py:module:taskledger/services/tasks.py
+        source_path: taskledger/services/tasks.py
+        coverage: architecture
+        impact: behavior
+        reason:
+          Tracks the owning implementation for module line budget whitelist 2000
+          lines.
+        tracked_hashes:
+          body_hash: d1f811e004475405c34fd88d4f215b025aef419ba0fc7775e6cf224aa20258e3
+          public_contract_hash: d97b72f6a3644cece87ac96edef0dc23c2e62bada5ae4726502dcf95fee6e2e2
+      - source_id: py:module:tests/test_service_boundaries.py
+        source_path: tests/test_service_boundaries.py
+        coverage: architecture
+        impact: behavior
+        reason:
+          Tracks the owning implementation for module line budget whitelist 2000
+          lines.
+        tracked_hashes:
+          body_hash: 73c84289d938430e648f3ad0633582b18e10be45e142f2bc457932b571f21e93
+          public_contract_hash: e6fbde978acaf581ef8f022106d8ce721723d31d2edabf9c3f58d76ae6df31ce
+  - section_id: md:section:docs/service_boundary_whitelist.md::current-split-status
+    doc_path: docs/service_boundary_whitelist.md
+    heading_path:
+      - Service boundary whitelist
+      - Current split status
+    heading_slug: current-split-status
+    line_span:
+      - 19
+      - 31
+    section_hash: e279b4652cf45032be605e9a10ab67edb913d59203e114ee5f1a73a007c1fda7
+    summary: Current split status
+    text:
+      "## Current split status\n\nImplemented in this tranche:\n\n- `taskledger/services/planning_flow.py`\n\
+      - `taskledger/services/implementation_flow.py`\n- `taskledger/services/validation_flow.py`\n\
+      - `taskledger/services/tasks.py` delegates plan, implement, and validate\n  entrypoints\
+      \ to the new modules.\n\nRemaining target: continue reducing `taskledger/services/tasks.py`\
+      \ to a\nsmaller compatibility facade and move residual helpers into focused modules."
+    links:
+      - source_id: py:module:taskledger/services/implementation_flow.py
+        source_path: taskledger/services/implementation_flow.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for current split status.
+        tracked_hashes:
+          body_hash: aac2b0a90f6d3ff215f95627604de880da28008e5824299a1328c598d3282cfb
+          public_contract_hash: c8eea6da233863fee959f7b373e3e1937ff4153a88dad55db92b2bcf658e4932
+      - source_id: py:module:taskledger/services/planning_flow.py
+        source_path: taskledger/services/planning_flow.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for current split status.
+        tracked_hashes:
+          body_hash: 8f08d2e00e4da943d49e11fdf7e665c396f0295589c1d289fd0ff28b77bb30e8
+          public_contract_hash: c4b299b43313a9cf137cd93064db9968b38018f147555b50d6ac0d158cc8aa3a
+      - source_id: py:module:taskledger/services/tasks.py
+        source_path: taskledger/services/tasks.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for current split status.
+        tracked_hashes:
+          body_hash: d1f811e004475405c34fd88d4f215b025aef419ba0fc7775e6cf224aa20258e3
+          public_contract_hash: d97b72f6a3644cece87ac96edef0dc23c2e62bada5ae4726502dcf95fee6e2e2
+      - source_id: py:module:taskledger/services/validation_flow.py
+        source_path: taskledger/services/validation_flow.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for current split status.
+        tracked_hashes:
+          body_hash: 65732bac4a575ea235efc41c7364efed95d05a9356276e06c3b379ce814c19be
+          public_contract_hash: a5c8bea901396ea33fd3c7f86c59f13ba0a7c9c2b9ed28c40c81debf9b30fec1
+  - section_id: md:section:docs/service_boundary_whitelist.md::function-line-budget-whitelist-250-lines
+    doc_path: docs/service_boundary_whitelist.md
+    heading_path:
+      - Service boundary whitelist
+      - Function line budget whitelist (>250 lines)
+    heading_slug: function-line-budget-whitelist-250-lines
+    line_span:
+      - 32
+      - 43
+    section_hash: 6d225dd713f199590825205ef8483e97a4324004023efc674a5140ecc3bbaf46
+    summary: Function line budget whitelist (>250 lines)
+    text:
+      "## Function line budget whitelist (>250 lines)\n\n- `taskledger/services/doctor_checks/task_checks.py::scan_task_integrity`\n\
+      \n  - Current reason: Consolidated per-task integrity scan with change/lock\n\
+      \    validation; further splitting into focused inspectors is planned.\n\n- `taskledger/cli_sync.py::register_sync_commands`\n\
+      \n  - Current reason: Sync command registration currently co-locates legacy\n\
+      \    sync, archive alias, git sync, and hook command wiring."
+    links:
+      - source_id: py:module:taskledger/cli_sync.py
+        source_path: taskledger/cli_sync.py
+        coverage: architecture
+        impact: behavior
+        reason:
+          Tracks the owning implementation for function line budget whitelist 250
+          lines.
+        tracked_hashes:
+          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
+          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+      - source_id: py:module:taskledger/services/doctor_checks/task_checks.py
+        source_path: taskledger/services/doctor_checks/task_checks.py
+        coverage: architecture
+        impact: behavior
+        reason:
+          Tracks the owning implementation for function line budget whitelist 250
+          lines.
+        tracked_hashes:
+          body_hash: 829dd2e9d477725b0b6d8c7abba24cfc5953f9bb369c54845927a1205c4ee08d
+          public_contract_hash: be988e5e29f3b3129d891023159236981b9a9c36260718c8fa2035c5ef30ef45
+      - source_id: py:module:tests/test_service_boundaries.py
+        source_path: tests/test_service_boundaries.py
+        coverage: architecture
+        impact: behavior
+        reason:
+          Tracks the owning implementation for function line budget whitelist 250
+          lines.
+        tracked_hashes:
+          body_hash: 73c84289d938430e648f3ad0633582b18e10be45e142f2bc457932b571f21e93
+          public_contract_hash: e6fbde978acaf581ef8f022106d8ce721723d31d2edabf9c3f58d76ae6df31ce
+  - section_id: md:section:docs/service_boundary_whitelist.md::cli-services-import-whitelist
+    doc_path: docs/service_boundary_whitelist.md
+    heading_path:
+      - Service boundary whitelist
+      - CLI→services import whitelist
+    heading_slug: cli-services-import-whitelist
+    line_span:
+      - 44
+      - 103
+    section_hash: 69b82dad4accfade1595f994d1e4a67b1c584988680e6b8c4ae7e3e8e65ac032
+    summary: CLI→services import whitelist
+    text:
+      "## CLI→services import whitelist\n\nCLI modules may import from `taskledger.services`\
+      \ only when listed in\n`tests/test_service_boundaries.py` under `CLI_SERVICES_IMPORT_WHITELIST`.\n\
+      \nCurrent sanctioned imports:\n\n- `taskledger/cli.py:taskledger.services.dashboard`\
+      \ — Dashboard and view\n  rendering are currently service-level read models.\n\
+      - `taskledger/cli.py:taskledger.services.agent_logging` — Root CLI\n  initializes\
+      \ recorder and payload/error notes.\n- `taskledger/cli.py:taskledger.services.tree`\
+      \ — Tree rendering currently\n  lives in services/tree.py.\n- `taskledger/cli.py:taskledger.services.doctor`\
+      \ — Repair command uses\n  doctor cleanup helper pending API wrapper.\n- `taskledger/cli.py:taskledger.services.monitor`\
+      \ — Root monitor command\n  renders the terminal monitor read model.\n- `taskledger/cli.py:taskledger.services.usage`\
+      \ — Root usage command renders\n  the fresh-session startup read model.\n- `taskledger/cli_actor.py:taskledger.services.actors`\
+      \ — Actor and harness\n  resolution currently lives in services/actors.py.\n-\
+      \ `taskledger/cli_common.py:taskledger.services.agent_logging` — CLI common\n\
+      \  emits recorder task/payload/error notes.\n- `taskledger/cli_common.py:taskledger.services.actors`\
+      \ — CLI common\n  resolves actor/harness context for event metadata.\n- `taskledger/cli_implement.py:taskledger.services.agent_logging`\
+      \ —\n  Implement command wrapper records managed-shell command failures.\n- `taskledger/cli_misc.py:taskledger.services.doctor`\
+      \ — Doctor commands\n  still consume doctor service inspectors directly.\n- `taskledger/cli_pipeline.py:taskledger.services.handoff`\
+      \ — Pipeline\n  context rendering currently reuses the handoff service payloads.\n\
+      - `taskledger/cli_pipeline.py:taskledger.services.worker_pipeline` —\n  Pipeline\
+      \ CLI commands read the worker pipeline service overlay directly.\n- `taskledger/cli_review.py:taskledger.services.actors`\
+      \ — Review commands\n  resolve reviewer/harness context.\n- `taskledger/cli_plan.py:taskledger.services.plan_editing`\
+      \ — Plan input\n  path validation currently lives in services/plan_editing.py.\n\
+      - `taskledger/cli_plan.py:taskledger.services.plan_lint` — Plan lint\n  payload\
+      \ model is still service-owned.\n- `taskledger/cli_question.py:taskledger.services.actors`\
+      \ — Question\n  commands resolve actor/harness context.\n- `taskledger/cli_plan.py:taskledger.services.workflow_guidance`\
+      \ — Planning\n  guidance profile read model is service-owned.\n- `taskledger/cli_plan.py:taskledger.services.agent_logging`\
+      \ — Plan command\n  wrapper records managed-shell command failures.\n- `taskledger/cli_plan.py:taskledger.services.planning_flow`\
+      \ — Plan\n  guidance command marks guidance viewed via planning flow service.\n\
+      - `taskledger/cli_task.py:taskledger.services.actors` — Task record command\n\
+      \  resolves completed-by actor metadata.\n- `taskledger/cli_task.py:taskledger.services.agent_transcripts`\
+      \ — Task\n  transcript rendering currently lives in services.\n- `taskledger/cli_task.py:taskledger.services.task_reports`\
+      \ — Task report\n  rendering and options are service-owned.\n- `taskledger/cli_task.py:taskledger.services.task_export`\
+      \ — Task export\n  service for compiled LLM-ready Markdown.\n- `taskledger/cli_task.py:taskledger.services.tasks`\
+      \ — Task events read\n  model and lifecycle mutations.\n- `taskledger/cli_trace.py:taskledger.services.trace`\
+      \ — Trace CLI delegates\n  to the trace service."
+    links:
+      - source_id: py:module:tests/test_service_boundaries.py
+        source_path: tests/test_service_boundaries.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for cli services import whitelist.
+        tracked_hashes:
+          body_hash: 73c84289d938430e648f3ad0633582b18e10be45e142f2bc457932b571f21e93
+          public_contract_hash: e6fbde978acaf581ef8f022106d8ce721723d31d2edabf9c3f58d76ae6df31ce
+  - section_id: md:section:docs/service_boundary_whitelist.md::catch-all-exception-whitelist-except-exception
+    doc_path: docs/service_boundary_whitelist.md
+    heading_path:
+      - Service boundary whitelist
+      - Catch-all exception whitelist (`except Exception`)
+    heading_slug: catch-all-exception-whitelist-except-exception
+    line_span:
+      - 104
+      - 113
+    section_hash: 6c2c3b31260c977c0b2e68904ea121d30c63d9f89a20eded5f369c5d97ecdf02
+    summary: Catch-all exception whitelist (`except Exception`)
+    text: "## Catch-all exception whitelist (`except Exception`)
+
+
+      Current allowed sites are listed with reasons in
+
+      `tests/test_service_boundaries.py` under `EXCEPT_EXCEPTION_WHITELIST`.
+
+
+      Policy intent:
+
+
+      - Allow catch-all handling only in doctor/repair and resilience wrappers.
+
+      - Block new catch-all sites unless explicitly reviewed and justified.
+
+      - Require whitelist edits to be intentional and reasoned."
+    links:
+      - source_id: py:module:tests/test_service_boundaries.py
+        source_path: tests/test_service_boundaries.py
+        coverage: architecture
+        impact: behavior
+        reason:
+          Tracks the owning implementation for catch all exception whitelist except
+          exception.
+        tracked_hashes:
+          body_hash: 73c84289d938430e648f3ad0633582b18e10be45e142f2bc457932b571f21e93
+          public_contract_hash: e6fbde978acaf581ef8f022106d8ce721723d31d2edabf9c3f58d76ae6df31ce
+last_fresh_scan_version: 6
+last_fresh_hash: 776da0eaba645c1bc8055f5624876f2fc9e2e7ca7f969fbdaf4417dc899bdd10
+notes: Documentation links validated after final scan version 6.
+version: 259

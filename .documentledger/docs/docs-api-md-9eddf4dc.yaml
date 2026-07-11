@@ -1,0 +1,750 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/api.md
+linked_sources:
+  - taskledger/__init__.py
+  - taskledger/api/__init__.py
+  - taskledger/api/config.py
+  - taskledger/api/handoff.py
+  - taskledger/api/introductions.py
+  - taskledger/api/locks.py
+  - taskledger/api/plans.py
+  - taskledger/api/project.py
+  - taskledger/api/questions.py
+  - taskledger/api/releases.py
+  - taskledger/api/reviews.py
+  - taskledger/api/search.py
+  - taskledger/api/storage.py
+  - taskledger/api/sync.py
+  - taskledger/api/task_runs.py
+  - taskledger/api/tasks.py
+sections:
+  - section_id: md:section:docs/api.md::api-reference
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+    heading_slug: api-reference
+    line_span:
+      - 1
+      - 4
+    section_hash: a600c097aa38fd4052eb05e85253e99957a51b385da711e77d4eb144cd77cfbd
+    summary: API reference
+    text: "# API reference
+
+
+      `taskledger` exposes a task-first public API through `taskledger.api`."
+    links:
+      - source_id: py:module:taskledger/api/__init__.py
+        source_path: taskledger/api/__init__.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for api reference.
+        tracked_hashes:
+          body_hash: 6b94a8907ea1d32446c28da3d8a0c3a4e0ec8d8e219aa8a5b2f66cf5b8bbf2ea
+          public_contract_hash: ad8f198fca92ff539fc726767663abc079195db88669431df6f2b3df2426d04d
+  - section_id: md:section:docs/api.md::supported-modules
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Supported modules
+    heading_slug: supported-modules
+    line_span:
+      - 5
+      - 20
+    section_hash: cbe9085034f2ebb1b64f9cf8785db4174c1dc8fcb3f5803a1409c1ebed9210fd
+    summary: Supported modules
+    text: "## Supported modules
+
+
+      - `taskledger.api.project`
+
+      - `taskledger.api.tasks`
+
+      - `taskledger.api.plans`
+
+      - `taskledger.api.questions`
+
+      - `taskledger.api.task_runs`
+
+      - `taskledger.api.reviews`
+
+      - `taskledger.api.introductions`
+
+      - `taskledger.api.locks`
+
+      - `taskledger.api.handoff`
+
+      - `taskledger.api.releases`
+
+      - `taskledger.api.storage`
+
+      - `taskledger.api.sync`
+
+      - `taskledger.api.search`"
+    links:
+      - source_id: py:module:taskledger/api/__init__.py
+        source_path: taskledger/api/__init__.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for supported modules.
+        tracked_hashes:
+          body_hash: 6b94a8907ea1d32446c28da3d8a0c3a4e0ec8d8e219aa8a5b2f66cf5b8bbf2ea
+          public_contract_hash: ad8f198fca92ff539fc726767663abc079195db88669431df6f2b3df2426d04d
+  - section_id: md:section:docs/api.md::import-boundary
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Import boundary
+    heading_slug: import-boundary
+    line_span:
+      - 21
+      - 25
+    section_hash: fff995819d9dd4f8573eae1c6ce742db2b6ec0165de71e85637d0472c415445c
+    summary: Import boundary
+    text: "## Import boundary
+
+
+      Consumers should not import from `taskledger.storage`, `taskledger.services`,
+
+      `taskledger.domain`, or `taskledger.search` directly."
+    links:
+      - source_id: py:module:taskledger/__init__.py
+        source_path: taskledger/__init__.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for import boundary.
+        tracked_hashes:
+          body_hash: 0e53f18c83541e0061c7eafaac7ca36d1b3abdf31d21498bf952ef1ea24565f9
+          public_contract_hash: 61e47adc986930e46f39de6d086742ba3f7ee3ae6afcbecfbf91e917224eb883
+      - source_id: py:module:taskledger/api/__init__.py
+        source_path: taskledger/api/__init__.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for import boundary.
+        tracked_hashes:
+          body_hash: 6b94a8907ea1d32446c28da3d8a0c3a4e0ec8d8e219aa8a5b2f66cf5b8bbf2ea
+          public_contract_hash: ad8f198fca92ff539fc726767663abc079195db88669431df6f2b3df2426d04d
+  - section_id: md:section:docs/api.md::project-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Project API
+    heading_slug: project-api
+    line_span:
+      - 26
+      - 38
+    section_hash: 7ac61df8c2b1acaaa2b92430f53c293acb1c094f412d0500dce9fe3cf9beae4c
+    summary: Project API
+    text: "## Project API
+
+
+      - `init_project`
+
+      - `project_status`
+
+      - `project_status_summary`
+
+      - `project_doctor`
+
+      - `project_export`
+
+      - `project_import`
+
+      - `project_export_archive`
+
+      - `project_import_archive`
+
+      - `project_snapshot`
+
+      - `project_tree`"
+    links:
+      - source_id: py:module:taskledger/api/config.py
+        source_path: taskledger/api/config.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for project api.
+        tracked_hashes:
+          body_hash: 87d4b53721ddb6a7ebc5b51d1d97a98c7474c2e8bd3a98395a3d98932f03509c
+          public_contract_hash: 0d260a94d215e1cea50aa8588f94eb4445611a5e75f46f6e6cfabb2d53213187
+      - source_id: py:module:taskledger/api/project.py
+        source_path: taskledger/api/project.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for project api.
+        tracked_hashes:
+          body_hash: 0517652b6bee074d95687b6d5b3b17ecf064cf710df438e411e5992961b8e0b9
+          public_contract_hash: 1fccc2b8a71fbc1c469b01f3e97cb0c53f1d7bf80d14e19af4d2042de86174d3
+  - section_id: md:section:docs/api.md::task-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Task API
+    heading_slug: task-api
+    line_span:
+      - 39
+      - 82
+    section_hash: f2067e1ba8d7df7997107073bdc906f1927b4356c98476c5dc08d8075b011a25
+    summary: Task API
+    text: "## Task API
+
+
+      - `create_task`
+
+      - `record_completed_task`
+
+      - `show_active_task`
+
+      - `activate_task`
+
+      - `deactivate_task`
+
+      - `clear_active_task`
+
+      - `resolve_active_task`
+
+      - `list_task_summaries`
+
+      - `show_task`
+
+      - `edit_task`
+
+      - `cancel_task`
+
+      - `uncancel_task`
+
+      - `close_task`
+
+      - `archive_task`
+
+      - `unarchive_task`
+
+      - `create_follow_up_task`
+
+      - `list_archived_task_summaries`
+
+      - `add_requirement`
+
+      - `remove_requirement`
+
+      - `waive_requirement`
+
+      - `add_file_link`
+
+      - `file_status`
+
+      - `remove_file_link`
+
+      - `list_file_links`
+
+      - `refresh_file_baseline`
+
+      - `add_todo`
+
+      - `set_todo_done`
+
+      - `show_todo`
+
+      - `todo_status`
+
+      - `next_todo`
+
+      - `task_dossier`
+
+      - `render_task_report`
+
+      - `TaskReportOptions`
+
+      - `export_task_markdown`
+
+      - `TaskMarkdownExportOptions`
+
+      - `next_action`
+
+      - `can_perform`
+
+      - `reindex`
+
+      - `repair_task_record`
+
+      - `repair_orphaned_planning_run`
+
+      - `repair_planning_command_changes`"
+    links:
+      - source_id: py:module:taskledger/api/tasks.py
+        source_path: taskledger/api/tasks.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for task api.
+        tracked_hashes:
+          body_hash: aaca4e8c6474b727223b5db9b921c181e03cc17b5b9ef578b653dcc935c6fd45
+          public_contract_hash: 578d4b5f07ccb3f1c892849e5b4101720399ea064410ccacfc35c11f53719075
+  - section_id: md:section:docs/api.md::plan-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Plan API
+    heading_slug: plan-api
+    line_span:
+      - 83
+      - 116
+    section_hash: 82c2af108c005a16a56b1e32f27a9e88ce28df5bd9905ff0e7acb61de342eb79
+    summary: Plan API
+    text: '## Plan API
+
+
+      - `start_planning`
+
+      - `propose_plan`
+
+      - `plan_template`
+
+      - `upsert_plan`
+
+      - `check_plan_input`
+
+      - `plan_input_schema_text`
+
+      - `PlanReviewOptions`
+
+      - `build_plan_review_payload`
+
+      - `render_plan_review`
+
+      - `export_plan`
+
+      - `amend_plan`
+
+      - `list_plan_versions`
+
+      - `show_plan`
+
+      - `diff_plan`
+
+      - `lint_plan`
+
+      - `plan_guidance`
+
+      - `approve_plan`
+
+      - `reject_plan`
+
+      - `revise_plan`
+
+      - `regenerate_plan_from_answers`
+
+      - `materialize_plan_todos`
+
+      - `run_planning_command`
+
+
+      Planning guidance example:
+
+
+      ```python
+
+      from pathlib import Path
+
+      from taskledger.api.plans import plan_guidance
+
+
+      payload = plan_guidance(Path.cwd(), "task-0001")
+
+      ```'
+    links:
+      - source_id: py:module:taskledger/api/plans.py
+        source_path: taskledger/api/plans.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan api.
+        tracked_hashes:
+          body_hash: 4896961a4a3cbfa276d78405edc22aa87d244e1651649f0e141b57990c529463
+          public_contract_hash: 4b984034934eca9e70985a1fdeec0483b99462f632bac6b338e8ac1d0d0e2ea1
+  - section_id: md:section:docs/api.md::question-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Question API
+    heading_slug: question-api
+    line_span:
+      - 117
+      - 127
+    section_hash: f38745fe9622f0211e70eefc37d80f446a6417a3900a63a1e533859c25ad8788
+    summary: Question API
+    text: "## Question API
+
+
+      - `add_question`
+
+      - `add_questions`
+
+      - `answer_question`
+
+      - `answer_questions`
+
+      - `list_questions`
+
+      - `list_open_questions`
+
+      - `dismiss_question`
+
+      - `question_status`"
+    links:
+      - source_id: py:module:taskledger/api/questions.py
+        source_path: taskledger/api/questions.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for question api.
+        tracked_hashes:
+          body_hash: 9defb5b1c175b90507d718618a7ad99070d0a8220673d259eb8d6ccc4e1d71c0
+          public_contract_hash: 4792729db1b2b54c9b7d899e97eafba77b00fbedeb89c7ba68b9861842c59227
+  - section_id: md:section:docs/api.md::run-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Run API
+    heading_slug: run-api
+    line_span:
+      - 128
+      - 149
+    section_hash: 7dc312fcd465182dab7f5c8b2ebb4d6c0cfcca3d0c1d2b72a08764e6d3c160b9
+    summary: Run API
+    text: "## Run API
+
+
+      - `start_implementation`
+
+      - `restart_implementation`
+
+      - `resume_implementation`
+
+      - `refresh_implementation_snapshot`
+
+      - `log_implementation`
+
+      - `add_implementation_deviation`
+
+      - `add_implementation_artifact`
+
+      - `add_change`
+
+      - `scan_changes`
+
+      - `run_implementation_command`
+
+      - `finish_implementation`
+
+      - `show_task_run`
+
+      - `start_validation`
+
+      - `add_validation_check`
+
+      - `validation_status`
+
+      - `waive_criterion`
+
+      - `finish_validation`
+
+      - `list_runs`
+
+      - `list_changes`"
+    links:
+      - source_id: py:module:taskledger/api/task_runs.py
+        source_path: taskledger/api/task_runs.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for run api.
+        tracked_hashes:
+          body_hash: 9a87b35c2cc28913578f6d2a66529f7fc546f4eab2616bc29d69eac78838e72f
+          public_contract_hash: ab33559c9a585d83775180f80c991fa58855bf0e643d8ac13d39a57a3c4e41e2
+  - section_id: md:section:docs/api.md::review-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Review API
+    heading_slug: review-api
+    line_span:
+      - 150
+      - 155
+    section_hash: 218bb57f18fe42d1d4f3bffe84f8d8a8190437b2d3ba286bc85753f3d0f8f081
+    summary: Review API
+    text: "## Review API
+
+
+      - `record_code_review`
+
+      - `list_code_review_records`
+
+      - `show_code_review`"
+    links:
+      - source_id: py:module:taskledger/api/reviews.py
+        source_path: taskledger/api/reviews.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for review api.
+        tracked_hashes:
+          body_hash: 39ad82a689b662ccd13c6206ea1e0308ab2acc59716fe925af0341d268e7d46b
+          public_contract_hash: c7995eed3c1ca014745de0ed3156b9e354a48a7eddd6a68d5beb76d5cc52418a
+  - section_id: md:section:docs/api.md::other-apis
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Other APIs
+    heading_slug: other-apis
+    line_span:
+      - 156
+      - 157
+    section_hash: c146d34ed9cf9f806249b2851204fb46bb9816e2c4a76212b353afe996d34501
+    summary: Other APIs
+    text: "## Other APIs"
+    links:
+      - source_id: py:module:taskledger/api/__init__.py
+        source_path: taskledger/api/__init__.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for other apis.
+        tracked_hashes:
+          body_hash: 6b94a8907ea1d32446c28da3d8a0c3a4e0ec8d8e219aa8a5b2f66cf5b8bbf2ea
+          public_contract_hash: ad8f198fca92ff539fc726767663abc079195db88669431df6f2b3df2426d04d
+  - section_id: md:section:docs/api.md::introduction-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Other APIs
+      - Introduction API
+    heading_slug: introduction-api
+    line_span:
+      - 158
+      - 164
+    section_hash: 9b936e355f5add57fd05930635a5f0a26110ca88fdc8eb39d5c829c40ba38553
+    summary: Introduction API
+    text: "### Introduction API
+
+
+      - `create_introduction`
+
+      - `list_introductions`
+
+      - `resolve_introduction`
+
+      - `link_introduction`"
+    links:
+      - source_id: py:module:taskledger/api/introductions.py
+        source_path: taskledger/api/introductions.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for introduction api.
+        tracked_hashes:
+          body_hash: 719baf37e8e9fab10159a55f31d0918d26f7c6a21b820b7529e07bbbf311afb2
+          public_contract_hash: b6244636ab4f3bb6274cddab6ca3180c102f839c338aa8e6a92c4e1d2966ce93
+  - section_id: md:section:docs/api.md::lock-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Other APIs
+      - Lock API
+    heading_slug: lock-api
+    line_span:
+      - 165
+      - 171
+    section_hash: 0e7f0bd36fae92b6a84071256cd77e7dc1d810daba48bbbe8219085782cab66b
+    summary: Lock API
+    text: "### Lock API
+
+
+      - `show_lock`
+
+      - `break_lock`
+
+      - `list_locks`
+
+      - `load_active_locks`"
+    links:
+      - source_id: py:module:taskledger/api/locks.py
+        source_path: taskledger/api/locks.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for lock api.
+        tracked_hashes:
+          body_hash: 11c912d71d8516bb5d60640fa368bc9fc13b0b919fb12d713f7624c81f272ae3
+          public_contract_hash: 502ef2479ead3007b70b18309b260e1550868aa24b06b9a3b301f0b90b992092
+  - section_id: md:section:docs/api.md::handoff-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Other APIs
+      - Handoff API
+    heading_slug: handoff-api
+    line_span:
+      - 172
+      - 181
+    section_hash: aafbd4bcc6cac7c137b422659574fde25bbf228a2788331240701406953bc822
+    summary: Handoff API
+    text: "### Handoff API
+
+
+      - `render_handoff`
+
+      - `create_handoff`
+
+      - `list_all_handoffs`
+
+      - `show_handoff`
+
+      - `claim_handoff_api`
+
+      - `close_handoff_api`
+
+      - `cancel_handoff_api`"
+    links:
+      - source_id: py:module:taskledger/api/handoff.py
+        source_path: taskledger/api/handoff.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for handoff api.
+        tracked_hashes:
+          body_hash: e597168ae2877d3ef07ce8136119a4f39bc4483ac224949a0d64ea3eb094dc2e
+          public_contract_hash: 4ac8b25fed61d4cdc24b0fdd6ad7dc075687a060d692cfc21312cfa1896193bb
+  - section_id: md:section:docs/api.md::release-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Other APIs
+      - Release API
+    heading_slug: release-api
+    line_span:
+      - 182
+      - 187
+    section_hash: 82e7e5cf5db6010a938ce454677d1091da378bc8050964c48ae3a2b5931a2b9d
+    summary: Release API
+    text: "### Release API
+
+
+      - `list_release_records`
+
+      - `show_release`
+
+      - `tag_release`"
+    links:
+      - source_id: py:module:taskledger/api/releases.py
+        source_path: taskledger/api/releases.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for release api.
+        tracked_hashes:
+          body_hash: be3182aa6b3b9da294d3260059fae4111800d5399799605d36ffe753f2db307b
+          public_contract_hash: b7fee828d51a9785b76aed62fbc02af8ab3dfb6423f48f58fe942e38831cf522
+  - section_id: md:section:docs/api.md::storage-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Other APIs
+      - Storage API
+    heading_slug: storage-api
+    line_span:
+      - 188
+      - 195
+    section_hash: ad22ceb81af8e940731e1c5dddd7f86a8ac72071cca8a8ea27e6860eb2641fae
+    summary: Storage API
+    text: "### Storage API
+
+
+      - `storage_where`
+
+      - `storage_move`
+
+      - `sync_preflight`
+
+      - `sync_status`
+
+      - `sync_commit`"
+    links:
+      - source_id: py:module:taskledger/api/storage.py
+        source_path: taskledger/api/storage.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage api.
+        tracked_hashes:
+          body_hash: 02ac713b13025b95bf0538880c0ece3a78bbe43fdafbbd883de45562976aab5f
+          public_contract_hash: 6c269b3fcb08216071b23355c28863461606dc3184616baf2169855fce486689
+  - section_id: md:section:docs/api.md::search-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Other APIs
+      - Search API
+    heading_slug: search-api
+    line_span:
+      - 196
+      - 202
+    section_hash: 07f5db20d8555ce289ee11e067f2a917924a44a634ece9bf108b851c217dac09
+    summary: Search API
+    text: "### Search API
+
+
+      - `search_workspace`
+
+      - `grep_workspace`
+
+      - `symbols_workspace`
+
+      - `dependencies_for_module`"
+    links:
+      - source_id: py:module:taskledger/api/search.py
+        source_path: taskledger/api/search.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for search api.
+        tracked_hashes:
+          body_hash: bbe2cbc17d66e643e29205260f7950ca72180ad1045aa3e455cd4049f90940f3
+          public_contract_hash: 9568bd89b4907aab84996e2a68c359b97a876b97a6f6e0a0a79aa0a7c69bae5e
+  - section_id: md:section:docs/api.md::sync-api
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Other APIs
+      - Sync API
+    heading_slug: sync-api
+    line_span:
+      - 203
+      - 216
+    section_hash: 740e6a1e352f479f71af014d880e910d4db3f21ce1c6803258a1466d0067812e
+    summary: Sync API
+    text: "### Sync API
+
+
+      - `sync_git_init`
+
+      - `sync_git_paths`
+
+      - `sync_git_status`
+
+      - `sync_git_import_local`
+
+      - `sync_git_commit`
+
+      - `sync_git_export_local`
+
+      - `sync_git_pull`
+
+      - `sync_git_push`
+
+      - `sync_git_sync`
+
+      - `sync_git_hooks_install`
+
+      - `sync_git_hooks_status`
+
+      - `sync_git_hooks_uninstall`"
+    links:
+      - source_id: py:module:taskledger/api/sync.py
+        source_path: taskledger/api/sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for sync api.
+        tracked_hashes:
+          body_hash: ac78193048ac4b8fdbddc5139939fedfb639047a12551eed806b99b4040a9206
+          public_contract_hash: 5ad474cdbca765ba10692260f20a3453d61c4f8d22301197b5891b4a243c7c73
+last_fresh_scan_version: 6
+last_fresh_hash: a456022a754ef947444c76d1bfcfc08255e5c67136550f4bfe45f0e9a2f42cb6
+notes: Documentation links validated after final scan version 6.
+version: 257

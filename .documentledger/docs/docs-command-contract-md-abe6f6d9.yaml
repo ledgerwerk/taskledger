@@ -1,0 +1,1732 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/command_contract.md
+linked_sources:
+  - taskledger/cli.py
+  - taskledger/cli_archive.py
+  - taskledger/cli_common.py
+  - taskledger/cli_config.py
+  - taskledger/cli_implement.py
+  - taskledger/cli_ledger.py
+  - taskledger/cli_misc.py
+  - taskledger/cli_plan.py
+  - taskledger/cli_ref.py
+  - taskledger/cli_release.py
+  - taskledger/cli_review.py
+  - taskledger/cli_storage.py
+  - taskledger/cli_sync.py
+  - taskledger/cli_task.py
+  - taskledger/command_inventory.py
+  - taskledger/domain/models.py
+  - taskledger/domain/policies.py
+  - taskledger/exchange.py
+  - taskledger/refs.py
+  - taskledger/services/agent_transcripts.py
+  - taskledger/services/code_review.py
+  - taskledger/services/command_runner.py
+  - taskledger/services/handoff.py
+  - taskledger/services/lock_diagnostics.py
+  - taskledger/services/monitor.py
+  - taskledger/services/navigation.py
+  - taskledger/services/next_action_model.py
+  - taskledger/services/next_action_payload.py
+  - taskledger/services/plan_editing.py
+  - taskledger/services/plan_input.py
+  - taskledger/services/plan_review.py
+  - taskledger/services/releases.py
+  - taskledger/services/task_collections.py
+  - taskledger/services/task_lifecycle.py
+  - taskledger/services/task_repair.py
+  - taskledger/services/worker_context.py
+  - taskledger/services/workflow_guidance.py
+  - taskledger/storage/ledger_config.py
+  - taskledger/storage/locks.py
+  - taskledger/storage/migrations.py
+  - taskledger/storage/project_config.py
+  - taskledger/storage/task_store.py
+sections:
+  - section_id: md:section:docs/command_contract.md::cli-command-contract
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+    heading_slug: cli-command-contract
+    line_span:
+      - 1
+      - 8
+    section_hash: 06043e9c3dfc5fd2cd02328d9cd3b98356902b8edfce61f47f868060e50057e6
+    summary: CLI Command Contract
+    text: "# CLI Command Contract
+
+
+      Taskledger uses a task-first command grammar:
+
+
+      ```text
+
+      taskledger [--root PATH] [--json] <area> <verb> [RESOURCE_REF] [--task TASK_REF]
+      [options]
+
+      ```"
+    links:
+      - source_id: py:module:taskledger/cli.py
+        source_path: taskledger/cli.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for cli command contract.
+        tracked_hashes:
+          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
+          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+      - source_id: py:module:taskledger/command_inventory.py
+        source_path: taskledger/command_inventory.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for cli command contract.
+        tracked_hashes:
+          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
+          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+  - section_id: md:section:docs/command_contract.md::global-options
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Global Options
+    heading_slug: global-options
+    line_span:
+      - 9
+      - 17
+    section_hash: cf844a41c3df3f82204e3d7245d0d80097e7cc67dc0ddf870a5659e22eb8e6bd
+    summary: Global Options
+    text: "## Global Options
+
+
+      - `--root PATH` selects the workspace root.
+
+      - `--json` is root-level only and must appear before the command group.
+
+      - Command-local `--json` options are not part of the public contract.
+
+
+      `--cwd` remains accepted as a compatibility root alias, but docs and examples
+
+      should prefer `--root`."
+    links:
+      - source_id: py:module:taskledger/cli.py
+        source_path: taskledger/cli.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for global options.
+        tracked_hashes:
+          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
+          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+      - source_id: py:module:taskledger/cli_common.py
+        source_path: taskledger/cli_common.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for global options.
+        tracked_hashes:
+          body_hash: 1b3ff15c848b08101f955c94b0b1e17a2fdacd4e6c063f3f404da91e5274fce8
+          public_contract_hash: 43c00d80234c9f1cc23bd916f596230ff68085efcf0b1c82786b88f7611e4e72
+  - section_id: md:section:docs/command_contract.md::task-scoping
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Task Scoping
+    heading_slug: task-scoping
+    line_span:
+      - 18
+      - 62
+    section_hash: b170cb56aabf99295154d2ecef6ac50476abf0d887978e01a5c8316d206d62fc
+    summary: Task Scoping
+    text: '## Task Scoping
+
+
+      Task-scoped workflow commands default to the active task. Use
+
+      `--task TASK_REF` when explicitly targeting another task.
+
+
+      ```bash
+
+      taskledger plan start
+
+      taskledger plan start --task task-0001
+
+      taskledger implement resume --task task-0001 --reason "Reacquire implementation
+      lock."
+
+      taskledger implement restart --task task-0001 --summary "Fix validation findings."
+
+      taskledger implement finish --task task-0001 --summary "Implemented."
+
+      taskledger implement snapshot refresh --task task-0001 --reason "Accept current
+      workspace as the implementation snapshot."
+
+      taskledger review record --task task-0001 --result pass --summary "No blocking
+      issues."
+
+      taskledger validate status --task task-0001
+
+      ```
+
+
+      Task-resource commands accept the task as their direct positional resource:
+
+
+      ```bash
+
+      taskledger task show task-0001
+
+      taskledger task cancel task-0001 --reason "Duplicate"
+
+      taskledger task archive task-0001 --reason "Hide historical task"
+
+      taskledger task unarchive task-0001 --reason "Restore task"
+
+      taskledger task report task-0001
+
+      taskledger task show tl:task-0001
+
+      taskledger task show tl-task-0001
+
+      ```
+
+
+      Reference parsing helpers are available:
+
+
+      ```bash
+
+      taskledger ref show task-0001
+
+      taskledger ref parse TL-TASK-0001
+
+      ```
+
+
+      Fresh-session and monitoring commands are top-level read surfaces:
+
+
+      ```bash
+
+      taskledger usage [TASK_REF] [--task TASK_REF] [-q]
+
+      taskledger --json usage
+
+      taskledger monitor [TASK_REF] [--task TASK_REF] [--refresh-seconds 2] [--once]
+      [--max-events 10] [--max-ready 10] [--plain] [--no-clear]
+
+      ```
+
+
+      Optional positional task refs are not supported for workflow commands.'
+    links:
+      - source_id: py:module:taskledger/cli_common.py
+        source_path: taskledger/cli_common.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for task scoping.
+        tracked_hashes:
+          body_hash: 1b3ff15c848b08101f955c94b0b1e17a2fdacd4e6c063f3f404da91e5274fce8
+          public_contract_hash: 43c00d80234c9f1cc23bd916f596230ff68085efcf0b1c82786b88f7611e4e72
+      - source_id: py:module:taskledger/services/navigation.py
+        source_path: taskledger/services/navigation.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for task scoping.
+        tracked_hashes:
+          body_hash: 260020f1983cb17ba5448b7c17dd16eeb195570278c7f274ca85df02e382f3af
+          public_contract_hash: 9053a6187eb8ccf041619e7fabbcc593e184b1c7f4fbe853d3f6f0853e1423b6
+  - section_id: md:section:docs/command_contract.md::plan-guidance-command
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Plan guidance command
+    heading_slug: plan-guidance-command
+    line_span:
+      - 63
+      - 91
+    section_hash: 25aeb732f345e0ccd5a1f0fc0e11be7a5131453744dc4af432840b28101b8809
+    summary: Plan guidance command
+    text:
+      "## Plan guidance command\n\n`taskledger plan guidance` is a read-only planning\
+      \ helper command that always\nprints built-in plan-input guidance. When a project\
+      \ prompt profile is configured\nit appends project-local advisory guidance:\n\n\
+      ```bash\ntaskledger plan guidance [--task TASK_REF] [--format markdown|json]\n\
+      ```\n\nRules:\n\n- defaults to the active task when `--task` is omitted;\n- `--format`\
+      \ accepts only `markdown` or `json`;\n- when a planning run is active, it records\
+      \ a one-time guidance-view marker for\n  that run and appends a `plan.guidance.viewed`\
+      \ event;\n- root `--json` continues to return the standard CLI success/error envelope;\n\
+      - `has_project_guidance` indicates whether a project prompt profile exists,\n\
+      \  not whether any guidance is available. Built-in guidance is always returned.\n\
+      \nThe command payload shape is:\n\n- `kind`\n- `task_id`\n- `has_project_guidance`\n\
+      - `guidance`\n- `profile`\n- `question_policy`"
+    links:
+      - source_id: py:module:taskledger/cli_plan.py
+        source_path: taskledger/cli_plan.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan guidance command.
+        tracked_hashes:
+          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
+          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+      - source_id: py:module:taskledger/services/workflow_guidance.py
+        source_path: taskledger/services/workflow_guidance.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan guidance command.
+        tracked_hashes:
+          body_hash: a445ece87903cec9ce8cc15d8f07f75f921a7243a8e9d2b1cedc124a49edccf6
+          public_contract_hash: d4b0ef51ee8d3b882f3de8387f9f86fb4e0c2bd463133be4e59ca2841f6fe247
+  - section_id: md:section:docs/command_contract.md::plan-revision-commands
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Plan revision commands
+    heading_slug: plan-revision-commands
+    line_span:
+      - 92
+      - 104
+    section_hash: e7c178004f6f377134f0a5a30bc96810d72eb5e3c65ca2ee47216cc7fc89fba5
+    summary: Plan revision commands
+    text: '## Plan revision commands
+
+
+      `taskledger plan export` renders an editable plan draft outside durable
+
+      storage, and `taskledger plan amend` applies structured plan-review edits:
+
+
+      ```bash
+
+      taskledger plan export [--task TASK_REF] [--version latest|N] [--file PATH] [--overwrite]
+      [--stdout]
+
+      taskledger plan amend [--task TASK_REF] [--drop-criterion CRITERION_ID ...] [--drop-todo
+      TODO_ID ...] [--remove-file PATH ...] --reason "..."
+
+      ```
+
+
+      Plan proposal commands that accept `--file` reject file paths under
+
+      `.taskledger/` because that directory is private durable ledger state.'
+    links:
+      - source_id: py:module:taskledger/cli_plan.py
+        source_path: taskledger/cli_plan.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan revision commands.
+        tracked_hashes:
+          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
+          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+      - source_id: py:module:taskledger/services/plan_editing.py
+        source_path: taskledger/services/plan_editing.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan revision commands.
+        tracked_hashes:
+          body_hash: 649cd30ff2aee863260b6c64d0760cb90917e3c6871356c1ae1f13a8397292ed
+          public_contract_hash: 0fa795f6c6ff265739b2842a5840d38e763f7de8d886c6dafaec84dd75b16309
+  - section_id: md:section:docs/command_contract.md::plan-check-command
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Plan check command
+    heading_slug: plan-check-command
+    line_span:
+      - 105
+      - 133
+    section_hash: 1e0ed4dea8fa578e2ef82f1b6b6bd4a5e0eaaf61cb9a5a4a857d661d20e8e265
+    summary: Plan check command
+    text:
+      "## Plan check command\n\n`taskledger plan check` validates editable plan\
+      \ input without creating,\nrevising, proposing, accepting, locking, or releasing\
+      \ anything:\n\n```bash\ntaskledger plan check [--task TASK_REF] [--file PATH]\
+      \ [--strict]\n```\n\nRules:\n\n- `--file` defaults to `plan.md` when omitted;\n\
+      - `--strict` upgrades unknown-field warnings to errors and fails on any warning;\n\
+      - task context is optional; `task_id` appears in the payload when resolvable;\n\
+      - JSON uses the root `--json` option:\n  ```bash\n  taskledger --json plan check\
+      \ --file ./plan.md\n  ```\n\nPayload shape:\n\n- `kind` (`plan_input_check`)\n\
+      - `task_id`\n- `passed`\n- `strict`\n- `summary` (`{errors, warnings}`)\n- `issues`\n\
+      - `parsed`"
+    links:
+      - source_id: py:module:taskledger/cli_plan.py
+        source_path: taskledger/cli_plan.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan check command.
+        tracked_hashes:
+          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
+          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+      - source_id: py:module:taskledger/services/plan_input.py
+        source_path: taskledger/services/plan_input.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan check command.
+        tracked_hashes:
+          body_hash: cfb5c7626bb9f2dd8689ffe05020dc44598958d225974c9612a5684e7d24a1b6
+          public_contract_hash: fe3029085c299c38e7bd193c37de014dadb079a5fafd0f501a45b8048dd81011
+  - section_id: md:section:docs/command_contract.md::plan-schema-command
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Plan schema command
+    heading_slug: plan-schema-command
+    line_span:
+      - 134
+      - 147
+    section_hash: d650302d7c8b30c402fe5ee749319e383db472f77fcec2a85c6a3a9a303b6c38
+    summary: Plan schema command
+    text: "## Plan schema command
+
+
+      `taskledger plan schema` prints the editable plan input schema and one valid
+
+      example:
+
+
+      ```bash
+
+      taskledger plan schema
+
+      ```
+
+
+      Payload shape:
+
+
+      - `kind` (`plan_input_schema`)
+
+      - `schema`"
+    links:
+      - source_id: py:module:taskledger/cli_plan.py
+        source_path: taskledger/cli_plan.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan schema command.
+        tracked_hashes:
+          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
+          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+      - source_id: py:module:taskledger/services/plan_input.py
+        source_path: taskledger/services/plan_input.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan schema command.
+        tracked_hashes:
+          body_hash: cfb5c7626bb9f2dd8689ffe05020dc44598958d225974c9612a5684e7d24a1b6
+          public_contract_hash: fe3029085c299c38e7bd193c37de014dadb079a5fafd0f501a45b8048dd81011
+  - section_id: md:section:docs/command_contract.md::plan-review-command
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Plan review command
+    heading_slug: plan-review-command
+    line_span:
+      - 148
+      - 178
+    section_hash: 85396581640bc6020252e0b464db9117e1124e1904f29c53d9c4804e170e0444
+    summary: Plan review command
+    text: '## Plan review command
+
+
+      `taskledger plan review` is a read-only approval-facing plan renderer:
+
+
+      ```bash
+
+      taskledger plan review [--task TASK_REF] [--version N] [--format markdown|json]
+      [-o PATH]
+
+      ```
+
+
+      Rules:
+
+
+      - defaults to the active task when `--task` is omitted;
+
+      - defaults to the latest proposed plan in `plan_review` stage when `--version`
+      is omitted;
+
+      - renders Markdown by default and can emit JSON-formatted content with `--format
+      json`;
+
+      - when `-o/--output` is provided, writes rendered content to a file path.
+
+
+      Taskledger stores task-local work state and opaque links. Cross-ledger
+
+      semantics belong to an organizer such as ledgerdeck.
+
+
+      Relevant commands for external artifact references:
+
+
+      ```bash
+
+      taskledger link add --url specs/behavior/features/checkout/payment.feature --label
+      "behavior spec"
+
+      taskledger file link specs/behavior/features/checkout/payment.feature --kind doc
+      --label "behavior spec"
+
+      taskledger validate check --criterion ac-0001 --status pass --evidence "pytest
+      tests/test_checkout_payment.py::test_payment_flow"
+
+      ```
+
+
+      Rules:
+
+
+      - Links are opaque. Taskledger does not parse or interpret linked files.
+
+      - Validation evidence is recorded through generic `validate check`.'
+    links:
+      - source_id: py:module:taskledger/cli_plan.py
+        source_path: taskledger/cli_plan.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan review command.
+        tracked_hashes:
+          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
+          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+      - source_id: py:module:taskledger/services/plan_review.py
+        source_path: taskledger/services/plan_review.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for plan review command.
+        tracked_hashes:
+          body_hash: 91b6e5450e0347710b13fb6d5026b3198e6fd207b3bb0c518e97e53148fdca2a
+          public_contract_hash: 1bf3e49cb50b6a24b8ce1a42cde7ecab9278c1e2df2b397042ce09be1620b95f
+  - section_id: md:section:docs/command_contract.md::archive-import-lock-policy
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Archive import lock policy
+    heading_slug: archive-import-lock-policy
+    line_span:
+      - 179
+      - 191
+    section_hash: 2394ce0608e9ab239388ff7b3c4cb5b5a096f0b2104b345b3c0ec66e08ec9624
+    summary: Archive import lock policy
+    text: "## Archive import lock policy
+
+
+      Archive imports support explicit lock handling:
+
+
+      ```bash
+
+      taskledger import ./taskledger-transfer.tar.gz --replace [--lock-policy drop|quarantine|keep]
+
+      taskledger import ./taskledger-task-<project>-<ledger>-task-0040-<ts>.tar.gz [--id-policy
+      preserve|renumber-on-conflict|fail-on-conflict]
+
+      ```
+
+
+      The default is `quarantine` so imported source-machine runtime locks are not
+
+      restored as active `lock.yaml` files. `keep` is diagnostic-only behavior
+
+      for full-fidelity lock restoration."
+    links:
+      - source_id: py:module:taskledger/cli_archive.py
+        source_path: taskledger/cli_archive.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for archive import lock policy.
+        tracked_hashes:
+          body_hash: 778d872bfdb3c1b99133b5cc320ff9e914fc8aa9e13f60df7963cc3acecaea98
+          public_contract_hash: c6d0642090ec9fd5395c86f3d691cbcc318af1343d74957dfbd36f8346598756
+      - source_id: py:module:taskledger/exchange.py
+        source_path: taskledger/exchange.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for archive import lock policy.
+        tracked_hashes:
+          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
+          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+  - section_id: md:section:docs/command_contract.md::transfer-archive-manifest-contract
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Transfer archive manifest contract
+    heading_slug: transfer-archive-manifest-contract
+    line_span:
+      - 192
+      - 215
+    section_hash: 8449f870f783aead94b00d80a9bb7be2194817f66fe18d944eaf96648cd8623b
+    summary: Transfer archive manifest contract
+    text:
+      "## Transfer archive manifest contract\n\nTransfer archives include both machine\
+      \ identity and human-readable metadata:\n`manifest.project.name` and `manifest.project.slug`\
+      \ are display metadata,\nwhile `manifest.project.uuid` remains the safety identity.\n\
+      \n```json\n{\n  \"project\": {\n    \"uuid\": \"<project_uuid>\",\n    \"name\"\
+      : \"<project_name>\",\n    \"slug\": \"<project_slug>\",\n    \"ledger_ref\":\
+      \ \"<ledger_ref>\"\n  }\n}\n```\n\nImport compatibility is backward-safe: older\
+      \ archives that only contain\n`project.uuid` and `project.ledger_ref` remain valid.\
+      \ UUID comparison is\nstill authoritative for import safety.\n\n`taskledger import\
+      \ --dry-run` must not mutate taskledger state for either\narchive or JSON payload\
+      \ imports."
+    links:
+      - source_id: py:module:taskledger/exchange.py
+        source_path: taskledger/exchange.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for transfer archive manifest contract.
+        tracked_hashes:
+          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
+          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+  - section_id: md:section:docs/command_contract.md::export-task-selection
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Export task selection
+    heading_slug: export-task-selection
+    line_span:
+      - 216
+      - 227
+    section_hash: fe6cc440fe0ae75f51c1b5df1002b78581dee6f6cc78429d3dc26eb54efc0957
+    summary: Export task selection
+    text: "## Export task selection
+
+
+      Taskledger export supports full-ledger and task-scoped archives:
+
+
+      ```bash
+
+      taskledger export
+
+      taskledger export ./backup.tar.gz
+
+      taskledger export --task task-0040
+
+      taskledger export task-0040
+
+      taskledger export task-0040 -o ./task0040.tar.gz
+
+      ```"
+    links:
+      - source_id: py:module:taskledger/cli_archive.py
+        source_path: taskledger/cli_archive.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for export task selection.
+        tracked_hashes:
+          body_hash: 778d872bfdb3c1b99133b5cc320ff9e914fc8aa9e13f60df7963cc3acecaea98
+          public_contract_hash: c6d0642090ec9fd5395c86f3d691cbcc318af1343d74957dfbd36f8346598756
+      - source_id: py:module:taskledger/exchange.py
+        source_path: taskledger/exchange.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for export task selection.
+        tracked_hashes:
+          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
+          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+  - section_id: md:section:docs/command_contract.md::positional-resource-refs
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Positional Resource Refs
+    heading_slug: positional-resource-refs
+    line_span:
+      - 228
+      - 243
+    section_hash: 340cd284886bdf83bb3697a9e2dfc88d1b86789aede8f6b0e044d81c7d97d349
+    summary: Positional Resource Refs
+    text: '## Positional Resource Refs
+
+
+      Positional refs are reserved for the direct resource being changed or shown:
+
+
+      ```bash
+
+      taskledger task create TITLE [options]
+
+      taskledger task record TITLE [options]
+
+      taskledger task activate TASK_REF
+
+      taskledger task follow-up PARENT_REF TITLE [options]
+
+      taskledger todo done TODO_ID --task TASK_REF --evidence "pytest -q"
+
+      taskledger question answer QUESTION_ID --task TASK_REF --text "Yes."
+
+      taskledger handoff show HANDOFF_ID --task TASK_REF
+
+      taskledger require add REQUIRED_TASK_REF --task TASK_REF
+
+      taskledger release show 0.4.1
+
+      ```'
+    links:
+      - source_id: py:module:taskledger/cli_ref.py
+        source_path: taskledger/cli_ref.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for positional resource refs.
+        tracked_hashes:
+          body_hash: 307e6e393ea36ad97cae0ea049b22dd8f37dd6f2957e909a33378a74e6f50cb1
+          public_contract_hash: 032fbafffe80075ba6c0e33bbeb9e8aab990eaf6952b12e630e6ef89c0f13ef7
+      - source_id: py:module:taskledger/refs.py
+        source_path: taskledger/refs.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for positional resource refs.
+        tracked_hashes:
+          body_hash: b972e29da39354b1e301f132a255748b54badf4ceb106bca5301d2d89d5ce381
+          public_contract_hash: d34bf7247f32083f3cd5d27236c252b5e32911075f586c726c6519e8278e20af
+  - section_id: md:section:docs/command_contract.md::release-commands
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Release commands
+    heading_slug: release-commands
+    line_span:
+      - 244
+      - 259
+    section_hash: 4465c999b67700a3590fbf79f186bc1469289f2d68fd3d5f944b00e71f9b8eb7
+    summary: Release commands
+    text: '## Release commands
+
+
+      Release boundaries are durable project records, not task lifecycle states:
+
+
+      ```bash
+
+      taskledger release tag 0.4.1 --at-task task-0030 --note "0.4.1 released"
+
+      taskledger release list
+
+      taskledger release show 0.4.1
+
+      ```
+
+
+      `release tag` writes a durable release record under the current ledger''s
+
+      `releases/` directory. Release boundaries must point to done tasks.
+
+      Taskledger does not provide changelog entry, changelog context, or
+
+      `CHANGELOG.md` build commands; those belong to the separate `releaseledger`
+
+      tool. Load both skills when cross-ledger release notes need task context.'
+    links:
+      - source_id: py:module:taskledger/cli_release.py
+        source_path: taskledger/cli_release.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for release commands.
+        tracked_hashes:
+          body_hash: 990ae00f16f53ab8d97a75ffcfe26415ca9a7c444c21e10369090ba44cf17f63
+          public_contract_hash: fcace0aabed9b51f0e8741b2a44b9ae30b3b9f0434b6585962aaf2ab0f5552de
+      - source_id: py:module:taskledger/services/releases.py
+        source_path: taskledger/services/releases.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for release commands.
+        tracked_hashes:
+          body_hash: 3e2bb583940d6203f4cc95bf50c2929c3aaf64e6ea4129104c0ccfefb8dca673
+          public_contract_hash: dcc8dc9575c562466f5e721a021a61f1f0600e0ca4bd8a4839ae9b827f84efe4
+  - section_id: md:section:docs/command_contract.md::ledger-commands
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Ledger commands
+    heading_slug: ledger-commands
+    line_span:
+      - 260
+      - 279
+    section_hash: f2bd6a2af595601cf1321dc9d07bbf1a3db7a37fb4ce9be5eee2ef419f4b0bf3
+    summary: Ledger commands
+    text: "## Ledger commands
+
+
+      Branch-scoped ledgers isolate ignored local task state by the checked-in
+
+      `ledger_ref` stored in `taskledger.toml`:
+
+
+      ```bash
+
+      taskledger ledger status
+
+      taskledger ledger list
+
+      taskledger ledger fork feature-a
+
+      taskledger ledger switch main
+
+      taskledger ledger adopt --from feature-a task-0030
+
+      taskledger ledger doctor
+
+      ```
+
+
+      `ledger fork` creates a new local namespace under
+
+      `.taskledger/ledgers/<ref>/` and updates only Taskledger-owned ledger keys in
+
+      `taskledger.toml`. `ledger switch` changes the checked-in pointer to an
+
+      existing local ledger. `ledger adopt` copies a task from another local ledger
+
+      into the current ledger and renumbers on collision."
+    links:
+      - source_id: py:module:taskledger/cli_ledger.py
+        source_path: taskledger/cli_ledger.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for ledger commands.
+        tracked_hashes:
+          body_hash: 2fe3dccb062c3f8f2bf025405d12f7097279becd69f2c383a906edfb36204ca4
+          public_contract_hash: 089ce07e54a73cc3f1c4227c516671d4049031988da1cdefa9251bae77229659
+      - source_id: py:module:taskledger/storage/ledger_config.py
+        source_path: taskledger/storage/ledger_config.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for ledger commands.
+        tracked_hashes:
+          body_hash: 84a049e7b0fc590591532eaa6b07bc1d491f58d99582b7d4c793cbb36ee7626f
+          public_contract_hash: 87a081240602c556e839993a9a25e721316f0da75e6c4fdd54c55413b5576fd2
+  - section_id: md:section:docs/command_contract.md::storage-and-sync-helper-commands
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Storage and sync helper commands
+    heading_slug: storage-and-sync-helper-commands
+    line_span:
+      - 280
+      - 318
+    section_hash: 5c3802e46eef0a9b25978d33414f2fa905622c9a40199934b2533e14064e6311
+    summary: Storage and sync helper commands
+    text:
+      "## Storage and sync helper commands\n\nTaskledger also exposes local storage\
+      \ discovery and sync helpers:\n\n```bash\ntaskledger storage where\ntaskledger\
+      \ storage move --to ../taskledger-state/project-a --mode copy|move [--adopt-existing]\
+      \ [--force]\ntaskledger sync preflight\ntaskledger sync status\ntaskledger sync\
+      \ commit --message \"Sync project-a taskledger state\"\ntaskledger sync export\
+      \ --output ./taskledger-transfer.tar.gz\ntaskledger sync import ./taskledger-transfer.tar.gz\
+      \ --dry-run\ntaskledger sync git status\ntaskledger sync git init --repo ../taskledger-state\
+      \ --project-path project-a\ntaskledger sync git commit --message \"Sync project-a\
+      \ taskledger state\"\ncd \"$(taskledger sync git cd)\"\ngit pull --ff-only\ngit\
+      \ push\ntaskledger sync git hooks install\ntaskledger sync git hooks status\n\
+      taskledger sync git hooks uninstall\n```\n\nRules:\n\n- `storage where` is read-only\
+      \ and reports the resolved workspace root,\n  config path, `taskledger_dir`, project\
+      \ identity, ledger ref, Git detection,\n  and active lock count.\n- `storage move`\
+      \ updates `taskledger.toml` atomically after the target has\n  been copied or\
+      \ explicitly adopted.\n- `sync preflight` performs only local checks. It must\
+      \ not perform network\n  push/pull operations.\n- `sync status` and `sync commit`\
+      \ operate only on the Git repository that\n  contains the resolved `taskledger_dir`.\n\
+      - `sync export` and `sync import` are archive aliases for the root\n  `export`/`import`\
+      \ commands.\n- `sync git` commands operate on a private external Git repository\
+      \ that stores\n  full project taskledger state under `<repo>/<project_path>`."
+    links:
+      - source_id: py:module:taskledger/cli_storage.py
+        source_path: taskledger/cli_storage.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage and sync helper commands.
+        tracked_hashes:
+          body_hash: 3349da69e06523ec3cb5203e7ad161ed685e2b4a81aa04b4d9452c2197894ae9
+          public_contract_hash: d0209653dd0b44b22715e884c42eadf9b3f48459f6f2ae47d1640e314520fb83
+      - source_id: py:module:taskledger/cli_sync.py
+        source_path: taskledger/cli_sync.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage and sync helper commands.
+        tracked_hashes:
+          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
+          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+  - section_id: md:section:docs/command_contract.md::config-commands
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Config commands
+    heading_slug: config-commands
+    line_span:
+      - 319
+      - 343
+    section_hash: 58c042588ff175304d6c462578a8fce3b133d1195780df63bfdb51c7066c9fc4
+    summary: Config commands
+    text:
+      "## Config commands\n\nProject config inspection and edits are available under\
+      \ `config`:\n\n```bash\ntaskledger config list\ntaskledger config show\ntaskledger\
+      \ config keys\ntaskledger config get prompt_profiles.planning.max_required_questions\n\
+      taskledger config describe prompt_profiles.planning.plan_body_detail\ntaskledger\
+      \ config set prompt_profiles.planning.max_required_questions 3\ntaskledger config\
+      \ set prompt_profiles.planning.question_policy always_before_plan\n```\n\nRules:\n\
+      \n- dotted keys target nested TOML tables (for example\n  `prompt_profiles.planning.max_required_questions`);\n\
+      - `config keys` lists available key names and path patterns;\n- `config describe`\
+      \ provides key semantics, allowed values, defaults, and\n  whether a key is explicitly\
+      \ set;\n- `config set` accepts TOML literals (numbers, booleans, arrays, inline\n\
+      \  tables); when TOML parsing fails, the value is treated as a plain string;\n\
+      - invalid values are rejected using standard LaunchError JSON/human envelopes."
+    links:
+      - source_id: py:module:taskledger/cli_config.py
+        source_path: taskledger/cli_config.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for config commands.
+        tracked_hashes:
+          body_hash: ffccb5b0edb63630ee1219a2fa355fde0d48dbb19617f6978c9f6f6937e6d6da
+          public_contract_hash: 1d93e0a9aadaf4fce9b1ca4ca234fa62738ee326365f023b9f4833f6d7bd1ba3
+      - source_id: py:module:taskledger/storage/project_config.py
+        source_path: taskledger/storage/project_config.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for config commands.
+        tracked_hashes:
+          body_hash: 9b1503b5d128e799424d66098e89c0bfd54c37ee1ac71ced0e9ba06b41e6af01
+          public_contract_hash: 3dd9a0323a7a9b90bfda7b204ebcea1f9347275a782873b3226f1121c54b96cc
+  - section_id: md:section:docs/command_contract.md::next-action-result-contract
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - "`next-action` result contract"
+    heading_slug: next-action-result-contract
+    line_span:
+      - 344
+      - 409
+    section_hash: 1860353b2b10cf0bdec8ebb497092384ad5daef257a0d2d25ff3eb6f4f2e7df7
+    summary: "`next-action` result contract"
+    text:
+      "## `next-action` result contract\n\n`taskledger next-action` is the preferred\
+      \ fresh-context entrypoint for agents\nand operators. It should identify the next\
+      \ concrete question, todo, criterion,\nplan, dependency, or repair target instead\
+      \ of only naming a lifecycle bucket.\n\nHuman output should stay concise but actionable:\n\
+      \n```text\ntodo-work: Implementation is in progress; 1 todos remain.\nNext todo:\
+      \ todo-0001 -- Update next-action JSON payload.\nCommand: taskledger todo show\
+      \ todo-0001\nWorker step: tester\nWorker context: taskledger pipeline context\
+      \ tester\nWorker handoff: taskledger handoff create --worker tester --summary\
+      \ \"...\"\nMark todo done after evidence exists: taskledger todo done todo-0001\
+      \ --evidence \"...\"\nProgress: 0/1 todos done\n```\n\nJSON output preserves the\
+      \ existing fields:\n\n- `kind`\n- `task_id`\n- `status_stage`\n- `active_stage`\n\
+      - `action`\n- `reason`\n- `blocking`\n- `next_command`\n\nand may also include:\n\
+      \n- `next_item` for the concrete target\n- `commands` for ordered command hints\
+      \ with one primary command\n- `progress` for question, todo, or validation queues\n\
+      - `worker_pipeline` when an enabled `guided` worker pipeline has a pending\n \
+      \ step; this object includes `enabled`, `mode`, `next_step`,\n  `context_command`,\
+      \ and `handoff_command`\n- `template_command` plus `required_plan_fields` and\n\
+      \  `recommended_plan_fields` when the next step is regenerating a plan from\n\
+      \  answered questions\n- `guidance_command` when planning guidance should be reviewed\
+      \ before drafting\n  or regenerating a plan\n\nAgents should inspect `next_item`,\
+      \ prefer `next_command` when it is safe,\navoid inventing question answers, and\
+      \ never mark todos done without evidence.\n\nWhen a task is in `failed_validation`,\
+      \ `next-action` should direct agents\nback to implementation with `taskledger\
+      \ implement restart --summary SUMMARY`.\n\nWhen a task persists `planning`, `implementing`,\
+      \ or `validating` as its\nstatus but `active_stage` is missing, `next-action`\
+      \ must not report\n`The task is cancelled.` For an orphaned implementation with\
+      \ a still-running\nlatest implementation run and no active lock, it should direct\
+      \ agents to\n`taskledger implement resume --task TASK_REF --reason \"...\"`.\n\
+      \nFor an implemented task whose validation is blocked by `IMPLEMENTATION_SNAPSHOT_MISMATCH`,\n\
+      `next-action` must point to `validate-reconcile` and the audited recovery command\n\
+      `taskledger implement snapshot refresh --reason \"...\"`, not to `implement restart`\
+      \ unless\nthe task is actually in `failed_validation`.\nFor an approved task with\
+      \ a non-implementation run still marked running,\n`next-action` must not direct\
+      \ agents to `taskledger implement start`.\nIt should report a repair-oriented\
+      \ action and point to `taskledger doctor`.\nTruly cancelled tasks recover through\n\
+      `taskledger task uncancel --task TASK_REF --reason \"...\"`"
+    links:
+      - source_id: py:module:taskledger/services/next_action_model.py
+        source_path: taskledger/services/next_action_model.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for next action result contract.
+        tracked_hashes:
+          body_hash: fd7c3a0aff391a7af2edb4e35abb367fba0b0be88e32236363e8b017990a277b
+          public_contract_hash: 0aac6366c8968e45b3767332eac44d36f79a9bbdf981c8290e8fac4012896ca2
+      - source_id: py:module:taskledger/services/next_action_payload.py
+        source_path: taskledger/services/next_action_payload.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for next action result contract.
+        tracked_hashes:
+          body_hash: a63b4bf64f5929b558a9c353caa77871b077c9193bde39571842a6e225a5d76b
+          public_contract_hash: 5dbb8d57ac6679f0ae5f8859ff225b087b14c7ebabf84789e670a522520b7858
+  - section_id: md:section:docs/command_contract.md::compact-mutation-output
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - "`next-action` result contract"
+      - Compact mutation output
+    heading_slug: compact-mutation-output
+    line_span:
+      - 410
+      - 439
+    section_hash: 8ed5d9ebe23daf1f8a484523de1dca9fd402a9c04335d9b3ba15c99e791b8750
+    summary: Compact mutation output
+    text: "### Compact mutation output
+
+
+      Mutation commands emit compact acknowledgements instead of full task or run records.
+
+      This reduces LLM context consumption during implementation loops.
+
+
+      The following commands produce compact output:
+
+
+      - `todo add`: emits `todo_added` result with new todo, progress, and next command.
+
+      - `todo done` / `todo undone`: emits `todo_update` result with todo id, status,
+      progress, and next command.
+
+      - `implement finish`: emits `task_lifecycle` result with task id, run id, status,
+      and next command.
+
+
+      Human mode shows a one-line summary:
+
+
+      ```text
+
+      added todo-0001 on task-0001  (0/3 done)
+
+      done todo-0001 on task-0001  (1/3 done)
+
+      finished implementation run-0001  task task-0001 -> implemented
+
+      ```
+
+
+      JSON mode wraps the compact result in the standard success envelope with `result_type`.
+
+
+      For full task, run, or todo details after a mutation, use:
+
+
+      - `taskledger task show` or `taskledger status` for task-level detail.
+
+      - `taskledger todo show TODO_ID` for individual todo detail.
+
+      - `taskledger next-action` for the next concrete step.
+
+      - `taskledger todo next` for the next open todo.
+
+
+      to a durable non-active stage rather than directly re-entering an active stage."
+    links:
+      - source_id: py:module:taskledger/cli_common.py
+        source_path: taskledger/cli_common.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for compact mutation output.
+        tracked_hashes:
+          body_hash: 1b3ff15c848b08101f955c94b0b1e17a2fdacd4e6c063f3f404da91e5274fce8
+          public_contract_hash: 43c00d80234c9f1cc23bd916f596230ff68085efcf0b1c82786b88f7611e4e72
+      - source_id: py:module:taskledger/services/next_action_payload.py
+        source_path: taskledger/services/next_action_payload.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for compact mutation output.
+        tracked_hashes:
+          body_hash: a63b4bf64f5929b558a9c353caa77871b077c9193bde39571842a6e225a5d76b
+          public_contract_hash: 5dbb8d57ac6679f0ae5f8859ff225b087b14c7ebabf84789e670a522520b7858
+  - section_id: md:section:docs/command_contract.md::run-and-lock-repair
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Run and lock repair
+    heading_slug: run-and-lock-repair
+    line_span:
+      - 440
+      - 441
+    section_hash: 5cc3d3f568a36ead2fe049cc45cbeacbcd7a5635d22d48c186e78ab9590b3989
+    summary: Run and lock repair
+    text: "## Run and lock repair"
+    links:
+      - source_id: py:module:taskledger/cli_misc.py
+        source_path: taskledger/cli_misc.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for run and lock repair.
+        tracked_hashes:
+          body_hash: 230c491193480a4f63a4f37dae7c4496e3f85cd0b7aef3ad55ff129c824e602d
+          public_contract_hash: c24c84f30a49469f5b5605df77e6c50ba91838c5ab34633fc3d8262ae9f5f3f3
+      - source_id: py:module:taskledger/services/task_repair.py
+        source_path: taskledger/services/task_repair.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for run and lock repair.
+        tracked_hashes:
+          body_hash: 2a7d1aac3442b91b30a4f727c566daa5b1339f4d5d13a95a6a5263ade071e485
+          public_contract_hash: 4ae985dd542a559252134a9d0dffb7a987c8694ac4c6b699bbf1daabdf35e169
+  - section_id: md:section:docs/command_contract.md::managed-command-wrappers
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Managed command wrappers
+    heading_slug: managed-command-wrappers
+    line_span:
+      - 442
+      - 456
+    section_hash: 7ea810606070bdc4a9bfa273a8a745223603a94794c53b92157d5abe1f3f506c
+    summary: Managed command wrappers
+    text: '## Managed command wrappers
+
+
+      `plan command` and `implement command` mirror the inner command exit code by
+
+      default.
+
+
+      Use `--allow-failure` when you intentionally want to record a non-zero inner
+
+      exit code while returning wrapper exit code `0`:
+
+
+      ```bash
+
+      taskledger plan command -- pytest tests/ -q
+
+      taskledger plan command --allow-failure -- pytest tests/ -q
+
+      taskledger implement command -- ruff check --config=.ruff.toml .
+
+      taskledger implement command --allow-failure -- python -c "raise SystemExit(7)"
+
+      ```'
+    links:
+      - source_id: py:module:taskledger/cli_implement.py
+        source_path: taskledger/cli_implement.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for managed command wrappers.
+        tracked_hashes:
+          body_hash: 3a6ab828b954b2e77ca156188b69bb45b1e64b6a7965e133f3c5f6cd4539d7d2
+          public_contract_hash: 6ce5b29c66cd8a29a8777869e94c76b24616034ea85966aee4a0fdac37467875
+      - source_id: py:module:taskledger/cli_plan.py
+        source_path: taskledger/cli_plan.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for managed command wrappers.
+        tracked_hashes:
+          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
+          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+      - source_id: py:module:taskledger/services/command_runner.py
+        source_path: taskledger/services/command_runner.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for managed command wrappers.
+        tracked_hashes:
+          body_hash: 311131df3f566f249a983f693bcc0566a4f7701ffb0cf4118cccec02020bf5fc
+          public_contract_hash: 75089e2d4f27f34e8a53162f5e9352f10ccaa8a40d88df1929009b7c852bfee4
+  - section_id: md:section:docs/command_contract.md::transcript-review-modes
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Transcript review modes
+    heading_slug: transcript-review-modes
+    line_span:
+      - 457
+      - 494
+    section_hash: 794e4524ebfe2d8b4308339a0bc7fd89891f7bc459b10a4bf23598a3e4b566f4
+    summary: Transcript review modes
+    text: '## Transcript review modes
+
+
+      `task transcript` defaults to review mode, which groups wrapper +
+
+      managed-shell pairs, highlights failures and wrapper/managed mismatches, and
+
+      flags late lifecycle commands. Raw per-record audit table is available with
+
+      `--raw`.
+
+
+      ```bash
+
+      taskledger task transcript --task TASK_REF
+
+      taskledger task transcript --task TASK_REF --raw
+
+      taskledger task transcript --task TASK_REF --failures
+
+      ```
+
+
+      `--review` is the default (no flag needed). `--raw` shows every record
+
+      without collapsing. `--failures` renders only failed command rows and retry
+
+      detection. `--raw`, `--review`, and `--failures` are mutually exclusive.
+
+
+      `task export` writes a Markdown file with a deterministic body combining a curated
+
+      archive report, raw task-bundle record files, and optional source-file snapshots.
+
+      It is the recommended command for handing a task to an LLM/coding agent.
+
+
+      ```bash
+
+      taskledger task export TASK_REF -o task.llm.md
+
+      taskledger task export --task TASK_REF --no-source-files -o task.records.md
+
+      taskledger --json task export TASK_REF -o task.llm.md
+
+      ```
+
+
+      `taskledger doctor` and `taskledger doctor locks` report running runs without
+
+      matching active locks. Orphaned running planning runs can be finished only
+
+      through an explicit repair command with a reason:
+
+
+      ```bash
+
+      taskledger repair run --task TASK_REF --run RUN_ID --reason "Planning was already
+      completed."
+
+      ```
+
+
+      The repair command refuses to finish non-planning runs, non-running runs, or
+
+      runs that still have a matching active lock.'
+    links:
+      - source_id: py:module:taskledger/cli_task.py
+        source_path: taskledger/cli_task.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for transcript review modes.
+        tracked_hashes:
+          body_hash: ca38b266993121c7460898163de1b9aedf26a8431a1baa941a3eef85e134583b
+          public_contract_hash: f7e3d46b24ea2e4b056199e81e22533db67cdb60571a8ce131f714c919206e49
+      - source_id: py:module:taskledger/services/agent_transcripts.py
+        source_path: taskledger/services/agent_transcripts.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for transcript review modes.
+        tracked_hashes:
+          body_hash: 3529d873f73caca5e0481238b6aecf0be13113e207eb7d20e9353e5b58587ca5
+          public_contract_hash: f2ed02c45378086fd7fa43c103fba21d6b976638858f3a705a32674e2d49c2dd
+  - section_id: md:section:docs/command_contract.md::post-completion-follow-up-deltas
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Post-completion follow-up deltas
+    heading_slug: post-completion-follow-up-deltas
+    line_span:
+      - 495
+      - 501
+    section_hash: e609ee3a0e38387fba23fed7f6731326e0dbc9f720e85ff4d4e91d4d9e44bfdc
+    summary: Post-completion follow-up deltas
+    text: "## Post-completion follow-up deltas
+
+
+      `taskledger task follow-up PARENT_REF TITLE` is the supported path for small
+
+      post-completion changes. It requires a `done` parent task, creates a new draft
+
+      child task with `parent_task_id` and `parent_relation=follow_up`, and keeps
+
+      the parent task terminal."
+    links:
+      - source_id: py:module:taskledger/cli_task.py
+        source_path: taskledger/cli_task.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for post completion follow up deltas.
+        tracked_hashes:
+          body_hash: ca38b266993121c7460898163de1b9aedf26a8431a1baa941a3eef85e134583b
+          public_contract_hash: f7e3d46b24ea2e4b056199e81e22533db67cdb60571a8ce131f714c919206e49
+      - source_id: py:module:taskledger/services/task_lifecycle.py
+        source_path: taskledger/services/task_lifecycle.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for post completion follow up deltas.
+        tracked_hashes:
+          body_hash: 0550f08df72c1e62fcc46443bd468ea25ad77beef7b6390823ef239f8772a677
+          public_contract_hash: 78d63207cbc0d7927d88b0dcdde15e9ff17e5717c470812d3a0867535210d5a9
+  - section_id: md:section:docs/command_contract.md::human-monitoring-ui
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Human monitoring UI
+    heading_slug: human-monitoring-ui
+    line_span:
+      - 502
+      - 535
+    section_hash: 0298f433c4af2c7c89f3469f030efb47b773ff8d71b7c785a9d51406853dc16a
+    summary: Human monitoring UI
+    text:
+      "## Human monitoring UI\n\n`taskledger usage` is the compact fresh-session\
+      \ startup command:\n\n```bash\ntaskledger usage [TASK_REF] [--task TASK_REF] [-q]\n\
+      taskledger --json usage\n```\n\nRules:\n\n- it is read-only and must not claim\
+      \ handoffs, repair locks, or mutate task\n  state;\n- root `--json` returns the\
+      \ standard CLI envelope with `result.kind == \"usage\"`;\n- it summarizes actor,\
+      \ harness, active work, inbox items, and ready tasks;\n- agents should continue\
+      \ to use `next-action`, `todo next`, and other JSON\n  commands as the canonical\
+      \ same-session automation interface.\n\n`taskledger monitor` is the dependency-free\
+      \ human-oriented terminal monitor:\n\n```bash\ntaskledger monitor [TASK_REF] [--task\
+      \ TASK_REF] [--refresh-seconds 2] [--once] [--max-events 10] [--max-ready 10]\
+      \ [--plain] [--no-clear]\n```\n\nRules:\n\n- it is read-only and never mutates\
+      \ `.taskledger/` state;\n- root `--json` prints a single `monitor_snapshot` payload\
+      \ and exits;\n- non-JSON mode refreshes on a timer until interrupted;\n- `--plain`\
+      \ disables styling and `--no-clear` appends snapshots instead of\n  clearing the\
+      \ terminal;\n- it replaces the removed server/TUI surface; agents should keep\
+      \ using JSON\n  commands for automation."
+    links:
+      - source_id: py:module:taskledger/cli.py
+        source_path: taskledger/cli.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for human monitoring ui.
+        tracked_hashes:
+          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
+          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+      - source_id: py:module:taskledger/services/monitor.py
+        source_path: taskledger/services/monitor.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for human monitoring ui.
+        tracked_hashes:
+          body_hash: 5ad664fed5e2cce677b0212b1613924dde689eea7668dd34b4f49ea123811866
+          public_contract_hash: d802306b5e44422f1ca1b07a20e472631f9972ebd0cf4b1fef1b681cd892434a
+  - section_id: md:section:docs/command_contract.md::focused-context-and-handoff-options
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Focused context and handoff options
+    heading_slug: focused-context-and-handoff-options
+    line_span:
+      - 536
+      - 537
+    section_hash: d8ac659bcff4149afd436fbfdcf89010381f45febb0e26e7d0840c288ec9a4c1
+    summary: Focused context and handoff options
+    text: "## Focused context and handoff options"
+    links:
+      - source_id: py:module:taskledger/cli_misc.py
+        source_path: taskledger/cli_misc.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for focused context and handoff options.
+        tracked_hashes:
+          body_hash: 230c491193480a4f63a4f37dae7c4496e3f85cd0b7aef3ad55ff129c824e602d
+          public_contract_hash: c24c84f30a49469f5b5605df77e6c50ba91838c5ab34633fc3d8262ae9f5f3f3
+      - source_id: py:module:taskledger/services/handoff.py
+        source_path: taskledger/services/handoff.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for focused context and handoff options.
+        tracked_hashes:
+          body_hash: 1d11d6520901034d036df36b6465aeb7de92b518bfc5e805a5506a89fc21f506
+          public_contract_hash: e79ddac789a730c17db3c405610f7858263d46c2465d483e379afd6a67a63c89
+      - source_id: py:module:taskledger/services/worker_context.py
+        source_path: taskledger/services/worker_context.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for focused context and handoff options.
+        tracked_hashes:
+          body_hash: 511035457103e07da7dd1ec3d48f8092e67ded0fb9579135008cb3e01ee501b6
+          public_contract_hash: 8415131fc69c2de5c57d94521b24b53ba719ced082723c08522516b45cc22d27
+  - section_id: md:section:docs/command_contract.md::code-review-commands
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Code review commands
+    heading_slug: code-review-commands
+    line_span:
+      - 538
+      - 586
+    section_hash: 7b6fb56c9a5a18d283949bc012b2c08b61e6a024e4dcd6badfaa22b4c188b1bb
+    summary: Code review commands
+    text:
+      "## Code review commands\n\n`review` stores optional durable code-review evidence\
+      \ without adding a new\nlifecycle stage. Review evidence may be recorded before\
+      \ validation or after a\ntask has reached `done`; storing the review remains append-only\
+      \ and does not\nreopen the completed task:\n\n```bash\ntaskledger review record\
+      \ [--task TASK_REF] --result pass|fail|blocked (--summary TEXT | --summary-file\
+      \ PATH) [--from-git] [--commit COMMIT] [--worker STEP_ID] [--handoff HANDOFF_ID]\
+      \ [--run RUN_ID]\ntaskledger review list [--task TASK_REF]\ntaskledger review\
+      \ show REVIEW_REF [--task TASK_REF]\n```\n\nJSON mode returns a stable payload\
+      \ with `kind = \"code_review_recorded\"` for\n`review record` and includes `review_id`,\
+      \ `task_id`, `result`,\n`source`, `implementation_run`, `worker_step_id`, and\
+      \ compact git\nmetadata fields when present.\n\nWhen a user explicitly asks an\
+      \ agent for a review, the agent should persist\nthe final review with `taskledger\
+      \ review record` before answering. A\nchat-only review is not durable task evidence.\
+      \ Post-completion review\nrecords are append-only and do not reopen the task.\n\
+      \nFocused worker contexts keep lifecycle `mode` separate from worker-role\n`--for`:\n\
+      \n```bash\ntaskledger context --for planner|implementer|validator|spec-reviewer|code-reviewer|reviewer|full\
+      \ [--scope task|todo|run] [--todo TODO_ID] [--run RUN_ID] [--format markdown|json|text]\
+      \ [--task TASK_REF]\ntaskledger handoff create --mode planning|implementation|validation|review|full\
+      \ [--for planner|implementer|validator|spec-reviewer|code-reviewer|reviewer|full]\
+      \ [--scope task|todo|run] [--todo TODO_ID] [--run RUN_ID] [--task TASK_REF]\n\
+      taskledger handoff create --worker STEP_ID [--scope task|todo|run] [--todo TODO_ID]\
+      \ [--run RUN_ID] [--task TASK_REF]\ntaskledger pipeline context STEP_ID [--scope\
+      \ task|todo|run] [--todo TODO_ID] [--run RUN_ID] [--format markdown|json|text]\
+      \ [--task TASK_REF]\ntaskledger handoff show HANDOFF_ID --format text|markdown|json\
+      \ [--task TASK_REF]\n```\n\nRules:\n\n- `--todo` implies `--scope todo`.\n- `--run`\
+      \ implies `--scope run`.\n- `--scope todo` requires `--todo`.\n- `--scope run`\
+      \ requires `--run`.\n- `--for implementation|validation|planning|review|full`\
+      \ remain accepted as\n  compatibility aliases.\n- `handoff create --worker` derives\
+      \ mode and context from the configured\n  worker step and stores `worker_step_id`\
+      \ in the handoff record.\n- `pipeline context STEP_ID` is equivalent to `context\
+      \ --worker STEP_ID`.\n- `spec-reviewer` and `code-reviewer` worker contexts require\
+      \ `--run` or\n  explicit `--scope task` when they are not bound to a validation/review\
+      \ run.\n- `handoff show --format markdown` prints the stored snapshot body."
+    links:
+      - source_id: py:module:taskledger/cli_review.py
+        source_path: taskledger/cli_review.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for code review commands.
+        tracked_hashes:
+          body_hash: ce05e36af564b3ca6613a7cdaa354d52c7ebc96cd8d6601bb6edb1f3a59598dc
+          public_contract_hash: a1760f01de179e2e495e051c6d39f46026675a945aaadfee447fff52dcf68c01
+      - source_id: py:module:taskledger/services/code_review.py
+        source_path: taskledger/services/code_review.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for code review commands.
+        tracked_hashes:
+          body_hash: 263b1f77a1c2fa02272692c4392e77afd59ca7a7e4050b68f1959912e3678fd5
+          public_contract_hash: bbe1bafbc97948aae43c061f292156549456d25f197d4cc89eee4f6a11fc5fc7
+  - section_id: md:section:docs/command_contract.md::removed-pre-release-aliases
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Removed Pre-Release Aliases
+    heading_slug: removed-pre-release-aliases
+    line_span:
+      - 587
+      - 602
+    section_hash: ad1d0dacab8f1b02028074caf0bf2f8a17fe0544a5d566878513508ea76a9eba
+    summary: Removed Pre-Release Aliases
+    text: "## Removed Pre-Release Aliases
+
+
+      These aliases are intentionally not registered:
+
+
+      - `task new`
+
+      - `task clear-active`
+
+      - `implement add-change`
+
+      - `validate add-check`
+
+      - `file unlink`
+
+      - `link link`
+
+      - `link unlink`
+
+
+      Use `task create`, `task deactivate`, `implement change`,
+
+      `validate check`, `file add`, `file remove`, `link add`, and
+
+      `link remove` instead."
+    links:
+      - source_id: py:module:taskledger/cli.py
+        source_path: taskledger/cli.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for removed pre release aliases.
+        tracked_hashes:
+          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
+          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+      - source_id: py:module:taskledger/command_inventory.py
+        source_path: taskledger/command_inventory.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for removed pre release aliases.
+        tracked_hashes:
+          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
+          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+  - section_id: md:section:docs/command_contract.md::approval-escape-hatches
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Approval escape hatches
+    heading_slug: approval-escape-hatches
+    line_span:
+      - 603
+      - 609
+    section_hash: a2c4b78c0c13b31c50c57fe54502128a6b592a558e9c04141d848c3aca9f9b09
+    summary: Approval escape hatches
+    text: '## Approval escape hatches
+
+
+      Plan approval escape hatches require `--reason` to prevent silent bypass:
+
+
+      Approval also requires `--note` for user approval. Agent approval additionally
+
+      requires `--allow-agent-approval --reason "..."`.'
+    links:
+      - source_id: py:module:taskledger/cli_plan.py
+        source_path: taskledger/cli_plan.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for approval escape hatches.
+        tracked_hashes:
+          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
+          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+      - source_id: py:module:taskledger/domain/policies.py
+        source_path: taskledger/domain/policies.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for approval escape hatches.
+        tracked_hashes:
+          body_hash: df36f4d808969929234caf8bd3c89c220edc54129a08b7f82216f29ee9238065
+          public_contract_hash: dc6d5123aba37fefa177b9f599c7c48e7dae219d868682791dd9397474fd3c13
+  - section_id: md:section:docs/command_contract.md::todo-source-inference
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Todo source inference
+    heading_slug: todo-source-inference
+    line_span:
+      - 610
+      - 622
+    section_hash: 5dcabb3a53972775d997692b5473ea37866749529585c83a02398e3efdf06a93
+    summary: Todo source inference
+    text: "## Todo source inference
+
+
+      When `todo add` is called without an explicit `--source`, the source is
+
+      inferred from the active lock:
+
+
+      | Active lock stage | Inferred source |
+
+      | ----------------- | --------------- |
+
+      | `implementing`    | `implementer`   |
+
+      | `planning`        | `planner`       |
+
+      | No active lock    | `user`          |
+
+
+      Plan-materialized todos always use `source=plan`."
+    links:
+      - source_id: py:module:taskledger/cli_misc.py
+        source_path: taskledger/cli_misc.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for todo source inference.
+        tracked_hashes:
+          body_hash: 230c491193480a4f63a4f37dae7c4496e3f85cd0b7aef3ad55ff129c824e602d
+          public_contract_hash: c24c84f30a49469f5b5605df77e6c50ba91838c5ab34633fc3d8262ae9f5f3f3
+      - source_id: py:module:taskledger/services/task_collections.py
+        source_path: taskledger/services/task_collections.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for todo source inference.
+        tracked_hashes:
+          body_hash: e4307ef9120f7f9c1aba033c7006e107ae72f1a3b3edbf5b935922b3cf617509
+          public_contract_hash: 97ae38fd36e3410bf142fb4db9b878a4257c7e0f12b18ae3e95217f840ddb9f9
+  - section_id: md:section:docs/command_contract.md::storage-compatibility
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Storage Compatibility
+    heading_slug: storage-compatibility
+    line_span:
+      - 623
+      - 679
+    section_hash: 1d3f0cd57d3bca6515696abfa7778e5589b15c2fe3588106dd31bdfc4008842c
+    summary: Storage Compatibility
+    text: "## Storage Compatibility
+
+
+      Taskledger stores project-local configuration in `taskledger.toml` at the
+
+      workspace root. `.taskledger.toml` is also read as a local override file when
+
+      it exists.
+
+
+      The resolved `taskledger_dir` defaults to `.taskledger/` beside that config
+
+      file, but `taskledger init --taskledger-dir /path/to/state` may point durable
+
+      state elsewhere. Commands resolve config files upward from the starting
+
+      directory and keep `--root` scoped to the source workspace, not the storage
+
+      root.
+
+
+      Taskledger uses:
+
+
+      - a workspace storage layout version in `taskledger_dir/storage.yaml`
+
+      - per-record `schema_version`
+
+      - per-record `object_type`
+
+      - per-file `file_version` for durable Markdown/YAML/JSON record files
+
+
+      Storage layout version history:
+
+
+      - Layout 2: Introduced branch-scoped ledgers under `taskledger_dir/ledgers/<ledger_ref>/`
+
+      - Layout 3: Consolidates layout-2 root-level task state into branch-scoped ledgers;
+      migrates legacy root `tasks/`, `events/`, `intros/`, `releases/`, and `active-task.yaml`
+      into the active ledger namespace
+
+
+      Taskledger does not silently rewrite storage during read-only commands.
+
+
+      If the installed taskledger version can read but not write an older workspace,
+
+      it reports that migration is required.
+
+
+      To migrate:
+
+
+      ```bash
+
+      taskledger migrate status
+
+      taskledger migrate plan
+
+      taskledger migrate apply --backup
+
+      ```
+
+
+      After migration to layout 3, verify health with:
+
+
+      ```bash
+
+      taskledger doctor
+
+      taskledger ledger doctor
+
+      ```
+
+
+      Indexes under `taskledger_dir/ledgers/<ledger_ref>/indexes/` are optional derived
+      caches or
+
+      registries. Task, plan, and run commands must continue to work from canonical
+
+      Markdown/YAML records even when task/run/plan JSON cache files are absent. The
+
+      remaining derived caches may be plain JSON arrays with no version metadata and
+
+      can be rebuilt with:
+
+
+      ```bash
+
+      taskledger reindex
+
+      ```
+
+
+      A newer storage version than the installed taskledger supports is rejected with
+
+      a clear error."
+    links:
+      - source_id: py:module:taskledger/domain/models.py
+        source_path: taskledger/domain/models.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage compatibility.
+        tracked_hashes:
+          body_hash: 2923c50cfb6e12dcd943ffd65500016daf1a959836e41ba353cd8ecae548d940
+          public_contract_hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      - source_id: py:module:taskledger/storage/migrations.py
+        source_path: taskledger/storage/migrations.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage compatibility.
+        tracked_hashes:
+          body_hash: 16d1a5fefe568187f64fe3eb35c1ccef5ce082e680f53394dd9be05009138c97
+          public_contract_hash: 2c0b911f646d19269d99e9058b4211d05b6f02d8c75ff531abae44a58d27b04c
+      - source_id: py:module:taskledger/storage/task_store.py
+        source_path: taskledger/storage/task_store.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage compatibility.
+        tracked_hashes:
+          body_hash: 8596b23b2e310a5b4c110fdb7bacffb2af5933efe2a5584808f1157096cf9db6
+          public_contract_hash: 36507ae533b5dd01ca93b9b753c2d91347451387616f2c63f1e8327a9631c172
+  - section_id: md:section:docs/command_contract.md::lock-recovery-contract
+    doc_path: docs/command_contract.md
+    heading_path:
+      - CLI Command Contract
+      - Lock recovery contract
+    heading_slug: lock-recovery-contract
+    line_span:
+      - 680
+      - 711
+    section_hash: 76a940d341088408b4ea1c9443eb0dde5ebe80e7d7ee9d8e9fccdf1ab80b939d
+    summary: Lock recovery contract
+    text:
+      "## Lock recovery contract\n\nLock diagnostics are exposed through three surfaces:\n\
+      \n- `taskledger lock show --task TASK` returns a `diagnostics` object and\n  a\
+      \ structured human block. The `classification` field names the lock\n  state:\
+      \ `none`, `expired`, `active_dead_local_process`,\n  `active_live_local_process`,\
+      \ `active_unverifiable_remote_or_unknown_process`,\n  `active_no_pid`, `active_same_actor`,\
+      \ or `active_other_actor`.\n- `taskledger --json next-action` returns `lock_status`\
+      \ whenever a lock\n  exists, and sets `action=repair-lock` with a diagnostics\
+      \ blocker when the\n  active implementation lock has a dead local holder PID.\n\
+      - `taskledger implement resume --repair-expired-lock` returns a\n  `LOCK_CONFLICT`\
+      \ error (exit code 4) with diagnostics and remediation\n  commands when the existing\
+      \ lock is non-expired.\n\n`--repair-expired-lock` is not a general stale-lock\
+      \ takeover flag. It only\napplies to locks whose `expires_at` is in the past.\
+      \ For non-expired active\nlocks, follow the classification returned by `lock show`\
+      \ or `next-action`.\n\nFor non-expired active locks classified as `active_dead_local_process`,\
+      \ the\ncanonical recovery sequence is:\n\n```bash\ntaskledger repair lock --task\
+      \ TASK --reason \"Holder PID ... is no longer running.\"\ntaskledger implement\
+      \ resume --task TASK --reason \"Reacquire implementation lock after stale holder\
+      \ repair.\"\n```\n\nFor `active_live_local_process` or `active_other_actor`, do\
+      \ not repair;\nuse a handoff or wait for the holder to release. For\n`active_unverifiable_remote_or_unknown_process`,\
+      \ do not infer staleness\nfrom local process checks; inspect handoffs or ask the\
+      \ user before repairing."
+    links:
+      - source_id: py:module:taskledger/services/lock_diagnostics.py
+        source_path: taskledger/services/lock_diagnostics.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for lock recovery contract.
+        tracked_hashes:
+          body_hash: d7509b4a0c79a85dd0f2c88f3b1a89f480a833e9e5904745fdb81a278802217b
+          public_contract_hash: 796ccb55399de813c369d0882bf97e0a9798346e631d918b27e1af0daef42ebd
+      - source_id: py:module:taskledger/services/task_repair.py
+        source_path: taskledger/services/task_repair.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for lock recovery contract.
+        tracked_hashes:
+          body_hash: 2a7d1aac3442b91b30a4f727c566daa5b1339f4d5d13a95a6a5263ade071e485
+          public_contract_hash: 4ae985dd542a559252134a9d0dffb7a987c8694ac4c6b699bbf1daabdf35e169
+      - source_id: py:module:taskledger/storage/locks.py
+        source_path: taskledger/storage/locks.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for lock recovery contract.
+        tracked_hashes:
+          body_hash: 230eca334d1c801adc00634143a94a8acadd9e2611e471492659ccb9be16174e
+          public_contract_hash: 4d2ad196a034cb157ccba9a525228b938ad902c20903c6b9981b19e0867660cc
+last_fresh_scan_version: 6
+last_fresh_hash: 157e67f8e8c30955fb2a7a8e39271f0ddc1c3a64e9b4be4acd2224aa081ea205
+notes: Documentation links validated after final scan version 6.
+version: 259

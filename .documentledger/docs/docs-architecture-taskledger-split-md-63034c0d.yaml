@@ -1,0 +1,291 @@
+schema: documentledger.doc_record.v4
+doc_path: docs/architecture_taskledger_split.md
+linked_sources:
+  - taskledger/cli.py
+  - taskledger/command_inventory.py
+  - taskledger/domain/models.py
+  - taskledger/domain/policies.py
+  - taskledger/services/implementation_flow.py
+  - taskledger/services/planning_flow.py
+  - taskledger/services/tasks.py
+  - taskledger/services/validation_flow.py
+  - taskledger/storage/sidecar_index.py
+  - taskledger/storage/task_store.py
+sections:
+  - section_id: md:section:docs/architecture_taskledger_split.md::taskledger-architecture
+    doc_path: docs/architecture_taskledger_split.md
+    heading_path:
+      - Taskledger architecture
+    heading_slug: taskledger-architecture
+    line_span:
+      - 1
+      - 9
+    section_hash: a19295a18d5f82f3cc6e84e2112e31de58aab741fc319460132024598f2c616a
+    summary: Taskledger architecture
+    text: "# Taskledger architecture
+
+
+      `taskledger` is a task-first CLI and Python package for staged coding work.
+
+      The canonical workflow is:
+
+
+      ```text
+
+      task -> plan -> approval -> implement -> validate -> done
+
+      ```"
+    links:
+      - source_id: py:module:taskledger/cli.py
+        source_path: taskledger/cli.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for taskledger architecture.
+        tracked_hashes:
+          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
+          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+      - source_id: py:module:taskledger/services/tasks.py
+        source_path: taskledger/services/tasks.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for taskledger architecture.
+        tracked_hashes:
+          body_hash: d1f811e004475405c34fd88d4f215b025aef419ba0fc7775e6cf224aa20258e3
+          public_contract_hash: d97b72f6a3644cece87ac96edef0dc23c2e62bada5ae4726502dcf95fee6e2e2
+      - source_id: py:module:taskledger/storage/task_store.py
+        source_path: taskledger/storage/task_store.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for taskledger architecture.
+        tracked_hashes:
+          body_hash: 8596b23b2e310a5b4c110fdb7bacffb2af5933efe2a5584808f1157096cf9db6
+          public_contract_hash: 36507ae533b5dd01ca93b9b753c2d91347451387616f2c63f1e8327a9631c172
+  - section_id: md:section:docs/architecture_taskledger_split.md::owning-layers
+    doc_path: docs/architecture_taskledger_split.md
+    heading_path:
+      - Taskledger architecture
+      - Owning layers
+    heading_slug: owning-layers
+    line_span:
+      - 10
+      - 24
+    section_hash: 780d4f6f93c6f4393d19896907953f8e069d33c37c2188aa8076de27bc3d55a6
+    summary: Owning layers
+    text:
+      "## Owning layers\n\n- `taskledger/domain/` owns lifecycle enums, policies,\
+      \ record models, and the\n  canonical `TASKLEDGER_STORAGE_LAYOUT_VERSION` constant.\n\
+      - `taskledger/storage/` owns persisted task bundles, locks, and the\n  `task_sidecars.json`\
+      \ summary index. Low-level atomic I/O, JSON I/O, YAML\n  I/O, front matter parsing,\
+      \ and cross-ledger ref parsing are delegated to\n  `ledgercore`.\n- `taskledger/services/`\
+      \ owns task lifecycle orchestration, including\n  `plan_input.py`, `plan_lint.py`,\
+      \ `plan_review.py`, `planning_flow.py`,\n  `implementation_flow.py`, `workspace_snapshot.py`,\
+      \ `validation_flow.py`,\n  `handoff.py`, `doctor.py`, and `navigation.py`.\n-\
+      \ `taskledger/api/*` exposes stable public wrappers.\n- `taskledger/cli*.py` wires\
+      \ Typer commands only."
+    links:
+      - source_id: py:module:taskledger/cli.py
+        source_path: taskledger/cli.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for owning layers.
+        tracked_hashes:
+          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
+          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+      - source_id: py:module:taskledger/domain/models.py
+        source_path: taskledger/domain/models.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for owning layers.
+        tracked_hashes:
+          body_hash: 2923c50cfb6e12dcd943ffd65500016daf1a959836e41ba353cd8ecae548d940
+          public_contract_hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      - source_id: py:module:taskledger/services/tasks.py
+        source_path: taskledger/services/tasks.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for owning layers.
+        tracked_hashes:
+          body_hash: d1f811e004475405c34fd88d4f215b025aef419ba0fc7775e6cf224aa20258e3
+          public_contract_hash: d97b72f6a3644cece87ac96edef0dc23c2e62bada5ae4726502dcf95fee6e2e2
+      - source_id: py:module:taskledger/storage/task_store.py
+        source_path: taskledger/storage/task_store.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for owning layers.
+        tracked_hashes:
+          body_hash: 8596b23b2e310a5b4c110fdb7bacffb2af5933efe2a5584808f1157096cf9db6
+          public_contract_hash: 36507ae533b5dd01ca93b9b753c2d91347451387616f2c63f1e8327a9631c172
+  - section_id: md:section:docs/architecture_taskledger_split.md::storage-model
+    doc_path: docs/architecture_taskledger_split.md
+    heading_path:
+      - Taskledger architecture
+      - Storage model
+    heading_slug: storage-model
+    line_span:
+      - 25
+      - 34
+    section_hash: 0c0b572ba7277f171fb91f76306ce51b57cee66a430a1531a93f28ec49cc2ba4
+    summary: Storage model
+    text: "## Storage model
+
+
+      Markdown records are canonical. Task, plan, and run reads come from those
+
+      records directly. The `task_sidecars.json` summary index under
+
+      `.taskledger/ledgers/<ledger_ref>/` is a derived cache that per-task sidecar
+
+      writes update in place. Action and event logging is enabled by default and
+
+      appends immutable `TaskEvent` records to the ledger-level `events/`
+
+      directory. Active stages require visible lock files, and stale locks are
+
+      reported instead of being cleared silently."
+    links:
+      - source_id: py:module:taskledger/domain/models.py
+        source_path: taskledger/domain/models.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage model.
+        tracked_hashes:
+          body_hash: 2923c50cfb6e12dcd943ffd65500016daf1a959836e41ba353cd8ecae548d940
+          public_contract_hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      - source_id: py:module:taskledger/storage/sidecar_index.py
+        source_path: taskledger/storage/sidecar_index.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage model.
+        tracked_hashes:
+          body_hash: 764ed7ce4ae5c783fdececb6098e1bee3d1fa07e7a0f2f11285930da58329952
+          public_contract_hash: 1e8086c061f79a755c5fccc09dbaa3baacd634db938feed69c0c0b78ea476d8a
+      - source_id: py:module:taskledger/storage/task_store.py
+        source_path: taskledger/storage/task_store.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for storage model.
+        tracked_hashes:
+          body_hash: 8596b23b2e310a5b4c110fdb7bacffb2af5933efe2a5584808f1157096cf9db6
+          public_contract_hash: 36507ae533b5dd01ca93b9b753c2d91347451387616f2c63f1e8327a9631c172
+  - section_id: md:section:docs/architecture_taskledger_split.md::lifecycle-flow
+    doc_path: docs/architecture_taskledger_split.md
+    heading_path:
+      - Taskledger architecture
+      - Lifecycle flow
+    heading_slug: lifecycle-flow
+    line_span:
+      - 35
+      - 50
+    section_hash: 783135f58f53afe57efbd14d398712aa0f80327b8fd4af9faa7ad13f2235a32b
+    summary: Lifecycle flow
+    text: '## Lifecycle flow
+
+
+      `plan start` opens planning. `plan guidance` reports the active project
+
+      planning profile. `plan template` writes a fresh plan skeleton, and
+
+      `plan check --file plan.md` runs the preflight parser in
+
+      `taskledger/services/plan_input.py` without mutating state. `plan upsert`
+
+      persists the plan; `plan lint` surfaces blocking issues; `plan review`
+
+      produces the approval brief; `plan accept --note "..."` records the
+
+      user-only decision.
+
+
+      `implement start` acquires a lock, starts a run, and captures a workspace
+
+      snapshot through `taskledger/services/workspace_snapshot.py`. `validate start`
+
+      blocks when the current workspace diverges; `implement snapshot refresh --reason
+      "..."` is the only sanctioned recovery path. Validation checks
+
+      gate completion. Code-review records extend traceability as append-only
+
+      evidence without creating a new lifecycle stage.'
+    links:
+      - source_id: py:module:taskledger/domain/policies.py
+        source_path: taskledger/domain/policies.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for lifecycle flow.
+        tracked_hashes:
+          body_hash: df36f4d808969929234caf8bd3c89c220edc54129a08b7f82216f29ee9238065
+          public_contract_hash: dc6d5123aba37fefa177b9f599c7c48e7dae219d868682791dd9397474fd3c13
+      - source_id: py:module:taskledger/services/implementation_flow.py
+        source_path: taskledger/services/implementation_flow.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for lifecycle flow.
+        tracked_hashes:
+          body_hash: aac2b0a90f6d3ff215f95627604de880da28008e5824299a1328c598d3282cfb
+          public_contract_hash: c8eea6da233863fee959f7b373e3e1937ff4153a88dad55db92b2bcf658e4932
+      - source_id: py:module:taskledger/services/planning_flow.py
+        source_path: taskledger/services/planning_flow.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for lifecycle flow.
+        tracked_hashes:
+          body_hash: 8f08d2e00e4da943d49e11fdf7e665c396f0295589c1d289fd0ff28b77bb30e8
+          public_contract_hash: c4b299b43313a9cf137cd93064db9968b38018f147555b50d6ac0d158cc8aa3a
+      - source_id: py:module:taskledger/services/validation_flow.py
+        source_path: taskledger/services/validation_flow.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for lifecycle flow.
+        tracked_hashes:
+          body_hash: 65732bac4a575ea235efc41c7364efed95d05a9356276e06c3b379ce814c19be
+          public_contract_hash: a5c8bea901396ea33fd3c7f86c59f13ba0a7c9c2b9ed28c40c81debf9b30fec1
+  - section_id: md:section:docs/architecture_taskledger_split.md::command-surface
+    doc_path: docs/architecture_taskledger_split.md
+    heading_path:
+      - Taskledger architecture
+      - Command surface
+    heading_slug: command-surface
+    line_span:
+      - 51
+      - 61
+    section_hash: 75da1928df026d9f877c4d444d993d0847e689df2346c42fbe45f3f6fb199817
+    summary: Command surface
+    text: "## Command surface
+
+
+      The supported command groups are `task`, `plan`, `question`, `implement`,
+
+      `validate`, `todo`, `intro`, `file`, `link`, `require`, `release`, `lock`,
+
+      `handoff`, `context`, `actor`, `harness`, `view`, `tree`, `next-action`,
+
+      `can`, `search`, `grep`, `symbols`, `deps`, `doctor`, `repair`, `reindex`,
+
+      `migrate`, `init`, `status`, `export`, `import`, `snapshot`, `storage`,
+
+      `sync`, `ledger`, `pipeline`, `commands`, `review`, `monitor`, `usage`, and
+
+      `ref`. The authoritative source for the complete command surface and flags
+
+      is `taskledger/command_inventory.py` and `docs/command_contract.md`."
+    links:
+      - source_id: py:module:taskledger/cli.py
+        source_path: taskledger/cli.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for command surface.
+        tracked_hashes:
+          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
+          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+      - source_id: py:module:taskledger/command_inventory.py
+        source_path: taskledger/command_inventory.py
+        coverage: architecture
+        impact: behavior
+        reason: Tracks the owning implementation for command surface.
+        tracked_hashes:
+          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
+          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+last_fresh_scan_version: 6
+last_fresh_hash: f8dd0dfa90c795f52c069a1ab31a4e18092d9768a71487c3e69360c89bfffb0f
+notes: Documentation links validated after final scan version 6.
+version: 258
