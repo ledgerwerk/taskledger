@@ -1,7 +1,7 @@
 ---
 title: "Architecture Documentation"
-date: "1980-01-01"
-generator: "archledger 0.1.1.dev13+g9edca5498"
+version: 1
+generator: "archledger 0.3.2.dev1+g505ad5c4c"
 arc42_template_version: "9.0-EN"
 ---
 
@@ -15,15 +15,16 @@ taskledger is a task-first durable state layer for staged coding work. It provid
 
 The system is designed for use by both human developers and automated coding agents. Its primary goals are:
 
-- **Durable task state**: Every task, plan, todo, and validation check is persisted as Markdown/YAML front matter in the project's `.taskledger/` directory. State survives process restarts, context switches, and handoffs between actors.
-- **Explicit lifecycle gates**: Transitions between stages (draft → planning → plan_review → approved → implementing → implemented → validating → done) are enforced by policy decisions. User approval is required before implementation begins. Validation checks gate completion.
+- **Durable task state**: Every task, plan, run, lock, todo, and validation check is persisted as a Markdown record with YAML front matter in the project `.taskledger/` directory. State survives process restarts, context switches, and handoffs between actors.
+- **Explicit lifecycle gates**: Transitions between stages (draft -> planning -> plan_review -> approved -> implementing -> implemented -> validating -> done) are enforced by policy decisions. User approval is required before implementation begins. Validation checks gate completion.
 - **Fresh-context handoffs**: Agents and humans can create, claim, and close handoff records that capture enough context (task state, plan, todos, questions, lock status) for a fresh process to continue work without reading the entire history.
 - **Machine-readable output**: Every CLI command supports `--json` for structured output with a stable envelope shape (`ok`, `command`, `result_type`, `result`, `events`, `warnings`) and deterministic exit codes.
+- **Opaque cross-ledger references**: Task-ledger task, plan, file, and link references remain opaque strings. Taskledger does not interpret ledgercore global refs, archledger IDs, or other external system identifiers.
 
 The canonical workflow is:
 
 ```text
-task → plan → approval → implement → validate → done
+task -> plan -> approval -> implement -> validate -> done
 ```
 
 This workflow is the product contract, not decoration. Deviations from this flow require explicit user decisions or repair commands.
@@ -42,27 +43,28 @@ This workflow is the product contract, not decoration. Deviations from this flow
 
 ## Stakeholders
 
-| Title            | Contact | Expectations |
-| ---------------- | ------- | ------------ |
-| Coding agents    |         |              |
-| Human developers |         |              |
+| Title            | Contact | Expectations                                                                                                                 |
+| ---------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Coding agents    |         | deterministic exit codes, stable json envelope, fresh context handoff continuation, task first workflow, human approval gate |
+| Human developers |         | human approval workflow, concise human rendering, plan review and acceptance, acceptance criterion waivers, monitor overview |
 
 # Architecture Constraints
 
 taskledger operates under several fixed constraints that shape its architecture:
 
-- **Python 3.10+ with minimal dependencies**: The runtime depends only on `typer`, `PyYAML`, and `tomli` (for Python <3.11). No database, no network server, no external service is required.
-- **File-system canonical storage**: All durable state lives in the project's `.taskledger/` directory as Markdown files with YAML front matter. This makes state inspectable, diffable, and version-controllable alongside source code.
+- **Python 3.10+ with minimal dependencies**: The runtime depends only on `typer`, `click`, `PyYAML`, `tomli` (Python <3.11), and `ledgercore` for atomic I/O, JSON I/O, YAML I/O, front matter parsing, and cross-ledger ref parsing. No database, no network server, no external service is required.
+- **File-system canonical storage**: All durable state lives in the project `.taskledger/` directory as Markdown files with YAML front matter. This makes state inspectable, diffable, and version-controllable alongside source code.
 - **CLI-first with machine-readable JSON output**: The primary interface is the `taskledger` CLI command. Every command supports `--json` for structured output. The JSON envelope shape and exit codes are part of the public contract.
-- **Skills outside the package**: Agent skill files (e.g., `skills/taskledger/SKILL.md`) live outside the Python package and are never packaged as Python package data. The package provides the CLI/library; skill distribution is separate.
+- **Skills outside the package**: Agent skill files (for example `skills/taskledger/SKILL.md`) live outside the Python package and are never packaged as Python package data. The package provides the CLI and library; skill distribution is separate.
 - **Project-local configuration**: Each project has its own `taskledger.toml` and `.taskledger/` directory. There is no global state or central server.
+- **Source-first architecture records**: Arc42 architecture records live under `.archledger/` and are the source of truth for `ARCHITECTURE.md`. `docs/architecture_taskledger_split.md` is a concise human-maintained summary. Skills stay outside both the Python package and the archledger build output.
 
-- **Python 3.10+ with minimal dependencies**
+- **Python 3.10+ with minimal ledgercore-backed dependencies**
   - Impact: Limits runtime to Python 3.10+ with three dependencies; no database or native extensions.
-  - Notes: Runtime dependencies are limited to `typer`, `PyYAML`, and `tomli` (Python <3.11 only). This constraint ensures easy installation in constrained environments (CI, containers, Termux) and avoids dependency conflicts with host projects. The trade-off is that features like full-text search use pure-Python implementations rather than native libraries.
-- **File-system canonical storage**
+  - Notes: Runtime dependencies are limited to `typer`, `click`, `PyYAML`, `tomli` (Python <3.11 only), and `ledgercore` (for atomic I/O, JSON I/O, YAML I/O, front matter parsing, and cross-ledger ref parsing). This constraint ensures easy installation in constrained environments (CI, containers, Termux) and avoids dependency conflicts with host projects. The trade-off is that features like full-text search use pure-Python implementations rather than native libraries.
+- **File-system canonical storage with sidecar summary index**
   - Impact: State is file-based; query performance depends on index rebuilds.
-  - Notes: All durable state is stored as Markdown files with YAML front matter in `.taskledger/`. This makes state human-readable, diffable in Git, and inspectable without taskledger. The trade-off is that query performance depends on file scanning and index rebuilding rather than a database engine.
+  - Notes: All durable state is stored as Markdown files with YAML front matter in `.taskledger/`. This makes state human-readable, diffable in Git, and inspectable without taskledger. The trade-off is that query performance depends on file scanning and `task_sidecars.json` summary index rebuilding rather than a database engine. The sidecar index is maintained in place by per-task sidecar writes and rebuilt from canonical records on miss.
 - **CLI-first with machine-readable JSON output**
   - Impact: JSON envelope shape and exit codes are public API contracts; breaking changes require version bumps.
   - Notes: The CLI is the primary interface. Every command supports `--json` for machine-readable output with a stable envelope shape (`ok`, `command`, `result_type`, `result`, `events`, `warnings`) and deterministic exit codes. This enables agent harnesses and CI pipelines to consume output programmatically without parsing human text.
@@ -74,14 +76,12 @@ taskledger operates under several fixed constraints that shape its architecture:
 
 taskledger operates as a self-contained tool within a software development project. It interacts with four categories of external actors:
 
-1. **Agent harnesses** (opencode, codex, chatgpt, etc.) invoke taskledger CLI commands to create tasks, propose plans, log implementation changes, run validation checks, and manage handoffs. They consume `--json` output.
-2. **Human developers** use the CLI directly in terminals for task creation, plan review, approval, lock management, and inspection (`status`, `context`, `next-action`, `doctor`).
-3. **CI systems** may invoke taskledger for status checks, validation, or snapshot/export operations.
+1. **Agent harnesses** (pi, codex, chatgpt, and similar) invoke taskledger CLI commands to create tasks, propose plans, log implementation changes, run validation checks, and manage handoffs. They consume `--json` output.
+2. **Human developers** use the CLI directly in terminals for task creation, plan review, approval, lock management, and inspection (`status`, `context`, `next-action`, `doctor`, `monitor`).
+3. **CI systems** may invoke taskledger for status checks, validation, snapshot/export operations, and `taskledger trace` bundles.
 4. **Python library consumers** import from `taskledger.api.*` to programmatically manage tasks without the CLI subprocess.
 
-The system boundary is the `.taskledger/` directory and the `taskledger.toml` config file at the project root. Everything inside `.taskledger/` is taskledger-owned state. Everything outside is the host project's source code.
-
-taskledger does not depend on any external services, databases, or network endpoints. It reads the host project's file system for search/symbol operations but does not modify files outside `.taskledger/`.
+The system boundary is the `.taskledger/` directory and the `taskledger.toml` config file at the project root. Everything inside `.taskledger/` is taskledger-owned state. Everything outside is the host project source code. Taskledger does not depend on any external services, databases, or network endpoints. It reads the host project file system for search/symbol operations but does not modify files outside `.taskledger/`.
 
 ## Business Context
 
@@ -89,14 +89,7 @@ taskledger does not depend on any external services, databases, or network endpo
 
 ## Technical Context
 
-- **Agent harnesses** -> agent harness (opencode, codex, chatgpt)
-  - Agent harnesses invoke taskledger CLI commands as subprocesses. They consume `--json` output and rely on exit codes for automation. Key interactions: `task create`, `plan start`, `plan propose`, `implement start`, `implement log`, `validate start`, `validate check`, `handoff create`, `handoff claim`, `context`. Agents are restricted from user-only actions (plan approval, criterion waivers) by default.
-- **Human developers** -> terminal user
-  - Human developers use the CLI directly in terminals. Key interactions: `task create`, `task show`, `plan approve`, `implement finish`, `validate finish`, `lock break`, `doctor`, `status`, `next-action`. Humans render human-readable output (default) and perform user-only actions like plan approval and criterion waivers.
-- **CI systems** -> CI runner
-  - CI runners invoke taskledger commands in automated pipelines. Key interactions: `status --json`, `doctor`, `validate`, `export`, `snapshot`. CI relies on deterministic exit codes to gate pipeline stages.
-- **Python library consumers** -> Python import
-  - Python code imports from `taskledger.api.*` modules to manage tasks programmatically. The API layer (`taskledger/api/tasks.py`, `taskledger/api/plans.py`, etc.) provides function wrappers that mirror CLI operations without subprocess overhead. Returns dictionaries with the same shapes as JSON output.
+<!-- archledger: no accepted records for this section yet -->
 
 # Solution Strategy
 
@@ -104,26 +97,29 @@ taskledger uses a layered architecture with clear dependency direction: upper la
 
 1. **CLI Layer** (`taskledger/cli*.py`) — Typer commands that parse arguments, resolve task references, call service functions, and render output (human text or JSON).
 2. **API Layer** (`taskledger/api/*.py`) — Stable public wrappers that mirror the CLI surface for programmatic use.
-3. **Services Layer** (`taskledger/services/*.py`) — Orchestration logic: lifecycle flows (planning, implementation, validation), handoff rendering, doctor checks, dashboard assembly.
+3. **Services Layer** (`taskledger/services/*.py`) — Orchestration logic: lifecycle flows (planning, implementation, validation), handoff rendering, doctor checks, plan input validation, plan review, snapshot capture, dashboard assembly, and navigation.
 4. **Domain Layer** (`taskledger/domain/*.py`) — Pure data models, state enums, normalization, and policy decisions. No I/O, no file system access.
-5. **Storage Layer** (`taskledger/storage/*.py`) — File system operations: front matter read/write, atomic writes, lock files, index rebuilds, migrations.
+5. **Storage Layer** (`taskledger/storage/*.py`) — File system operations: front matter read/write, atomic writes, lock files, sidecar index rebuilds, migrations. Storage delegates low-level primitives to `ledgercore`.
 
 Key architectural choices:
 
-- **Markdown/YAML front matter as canonical format** — Each record (task, plan, run, lock, handoff, etc.) is stored as a `.md` file with YAML front matter metadata and a Markdown body. This makes state human-readable and Git-friendly.
-- **JSON indexes as derived caches** — Index files under `.taskledger/indexes/` are rebuilt from canonical records by `taskledger reindex`. They are never the source of truth.
+- **Markdown and YAML front matter as canonical format** — Each record (task, plan, run, lock, handoff, code review, etc.) is stored as a `.md` file with YAML front matter metadata and a Markdown body. This makes state human-readable and Git-friendly.
+- **Sidecar indexes as derived caches** — A `task_sidecars.json` summary index lives under `.taskledger/ledgers/<ledger_ref>/` and is rebuilt from canonical records. Per-task sidecar writes update the index in place.
 - **Policy-based gate decisions** — All lifecycle transitions go through functions in `taskledger/domain/policies.py` that return `Decision` objects with `allowed`, `code`, `message`, and `exit_code`. This keeps gate logic testable and separate from I/O.
-- **Atomic file writes** — All writes use `atomic_write_text` (write to temp, `os.replace`) to prevent partial writes on crash.
-- **Evidence as sidecars** — Code-review records extend traceability without introducing new lifecycle stages or weakening validation gates.
+- **Atomic file writes** — All writes use `atomic_write_text` (write to temp, fsync, `os.replace`) from `ledgercore`.
+- **Editable plan input with preflight** — `taskledger plan check` parses editable plan input through `taskledger/services/plan_input.py`, applies worker-pipeline validation, and returns indexed issues before any plan upsert.
+- **Implementation workspace snapshots** — `taskledger/services/workspace_snapshot.py` captures Git and content snapshots when an implementation run starts, and `validate start` blocks when the workspace diverges. `implement snapshot refresh --reason ...` records new snapshots with an audit trail.
+- **Opaque cross-ledger references** — Task refs, plan versions, file links, and external handoff targets are stored as opaque strings. Taskledger does not interpret ledgercore global refs, archledger IDs, or other external system identifiers.
+- **Read-model reuse** — `view`, `status`, `tree`, and `monitor` consume service-level read models. These presentations are read-only and do not bypass lifecycle services.
 
 ## Maintenance
 
 `ARCHITECTURE.md` in the repository root is generated from archledger source records. Do not edit it directly.
 
-- **Edit**: `.archledger/sections/*.md` for section content, `.archledger/records/**/*.md` for individual records.
-- **Regenerate**: Run `archledger build` (or the configured build command) to regenerate `ARCHITECTURE.md`.
-- **Verify**: Run `pytest tests/test_docs_and_skill.py tests/test_service_boundaries.py` after changes.
-- **Authoritative source**: The archledger records under `.archledger/` are the single source of truth for architecture documentation. `docs/architecture_taskledger_split.rst` is a concise human-maintained summary.
+- **Edit**: `.archledger/profiles/arc42/sections/*.md` for section content, `.archledger/records/**/*.md` for individual records.
+- **Regenerate**: Run `archledger build` to regenerate `ARCHITECTURE.md`.
+- **Verify**: Run `archledger check` and `pytest -q tests/test_docs_and_skill.py tests/test_service_boundaries.py` after changes.
+- **Authoritative source**: The archledger records under `.archledger/` are the single source of truth for architecture documentation. `docs/architecture_taskledger_split.md` is a concise human-maintained summary.
 
 ## Strategy Items
 
@@ -135,7 +131,7 @@ Key architectural choices:
 
 ## Strategy
 
-The codebase is organized into five layers with target dependency direction: CLI (`taskledger/cli*.py`) → API (`taskledger/api/`) → Services (`taskledger/services/`) → Domain (`taskledger/domain/`) + Storage (`taskledger/storage/`). The Domain layer has no I/O dependencies. Storage owns canonical taskledger persistence and atomic record I/O. Other layers may perform bounded filesystem operations for external inputs/outputs (reports, Git sync, search, CLI file arguments). CLI should prefer API wrappers for public workflows, but current sanctioned exceptions are tracked in `tests/test_service_boundaries.py`.
+The codebase is organized into five layers with target dependency direction: CLI (`taskledger/cli*.py`) -> API (`taskledger/api/`) -> Services (`taskledger/services/`) -> Domain (`taskledger/domain/`) + Storage (`taskledger/storage/`). The Domain layer has no I/O dependencies. Storage owns canonical taskledger persistence and atomic record I/O, delegating low-level primitives (atomic writes, JSON I/O, YAML I/O, front matter parsing, cross-ledger ref parsing) to `ledgercore`. Other layers may perform bounded filesystem operations for external inputs and outputs (reports, Git sync, search, CLI file arguments). CLI should prefer API wrappers for public workflows, but current sanctioned exceptions are tracked in `tests/test_service_boundaries.py`.
 
 ## Trade-offs
 
@@ -167,13 +163,13 @@ Each persistent record (task, plan, run, lock, handoff, event, etc.) is stored a
 
 ## Strategy
 
-JSON index files under `.taskledger/indexes/` are derived caches rebuilt from canonical Markdown records by `taskledger reindex`. They speed up list and query operations but are never authoritative. `doctor indexes` checks for staleness.
+A `task_sidecars.json` summary index under `.taskledger/ledgers/<ledger_ref>/` is a derived cache rebuilt from canonical Markdown records by `taskledger reindex`. Per-task sidecar writes call `update_sidecar_summary` in `taskledger/storage/sidecar_index.py` so the index stays current. The index speeds up list and query operations but is never authoritative. `taskledger doctor indexes` checks for staleness.
 
 ## Trade-offs
 
 - Avoids the complexity of a query engine on front matter files.
-- Indexes can become stale if writes bypass taskledger (e.g., manual edits). `doctor` and `reindex` address this.
-- Index files have no version metadata — they are plain JSON arrays.
+- Indexes can become stale if writes bypass taskledger (for example manual edits). `taskledger doctor` and `reindex` address this.
+- The summary index is a JSON document with a schema version and an `object_type` field; it is rebuildable from canonical records.
 
 ## Policy-based lifecycle gate decisions
 
@@ -199,103 +195,106 @@ All lifecycle transitions are validated through pure functions in `taskledger/do
 
 ## Strategy
 
-All file writes go through `atomic_write_text` in `taskledger/storage/atomic.py`: write to a temp file in the target directory, flush + fsync, then `os.replace` for atomic rename. Directory fsync follows. Lock creation uses `atomic_create_text` with `O_CREAT | O_EXCL` for exclusive creation. These patterns prevent partial or corrupt writes on crash.
+All file writes go through the `ledgercore` atomic primitives used by `taskledger/storage/atomic.py`: write to a temp file in the target directory, flush plus fsync, then `os.replace` for atomic rename. Directory fsync follows. Lock creation uses `atomic_create_text` with `O_CREAT | O_EXCL` for exclusive creation. These patterns prevent partial or corrupt writes on crash.
 
 ## Trade-offs
 
-- Slightly slower than direct writes due to temp file + fsync overhead.
-- Can be disabled for testing via `TASKLEDGER_TEST_FAST_IO` environment variable.
+- Slightly slower than direct writes due to temp file plus fsync overhead.
+- Can be disabled for testing via the `TASKLEDGER_TEST_FAST_IO` environment variable.
 - Guarantees that readers always see complete, valid files.
 
 # Building Block View
 
 The top-level building block is the **taskledger system**, decomposed into five black-box components:
 
-1. **CLI Layer** — Handles command parsing, task reference resolution, and output rendering.
+1. **CLI Layer** — Handles command parsing, task reference resolution, and output rendering. Command families cover the canonical lifecycle plus `review`, `config`, task archive operations, transfer and sync, diagnostics, the `monitor` observer, and the `pipeline` overlay.
 2. **API Layer** — Provides stable Python function wrappers around service operations.
-3. **Services Layer** — Orchestrates lifecycle flows, handoffs, and inspection.
+3. **Services Layer** — Orchestrates lifecycle flows, plan input validation, plan review, handoffs, snapshot capture, navigation, doctor checks, worker pipelines, archival, code-review evidence, event logging, exports, dashboard assembly, and ready-work inspection.
 4. **Domain Layer** — Defines models, state machines, and policy decisions.
-5. **Storage Layer** — Manages file system persistence and layout.
+5. **Storage Layer** — Manages file system persistence and layout. Low-level primitives (atomic writes, JSON, YAML, front matter, refs) are delegated to `ledgercore`.
 
-Data flows strictly downward: CLI → Services → Domain + Storage. The API layer calls Services directly. The Domain layer has no dependencies on Storage or Services.
+Data flows strictly downward: CLI -> Services -> Domain + Storage. The API layer calls Services directly. The Domain layer has no dependencies on Storage or Services.
 
-Each task is stored as a **task bundle directory** under `.taskledger/ledgers/<ledger_ref>/` containing the task record (Markdown) and sidecar collections for plans, runs, locks, todos, questions, changes, checks, handoffs, and links. Mutations append immutable `TaskEvent` records to the ledger-level `events/` directory. Action/event logging is enabled by default; set `[event_logging] enabled = false` in `taskledger.toml` to disable new event records. Existing records remain readable regardless.
+Each task is stored as a **task bundle directory** under `.taskledger/ledgers/<ledger_ref>/` containing the task record (Markdown) and sidecar collections for plans, runs, locks, todos, questions, changes, checks, handoffs, links, and code reviews. Mutations append immutable `TaskEvent` records to the ledger-level `events/` directory. Action and event logging is enabled by default; set `[event_logging] enabled = false` in `taskledger.toml` to disable new event records. Existing records remain readable regardless. A `task_sidecars.json` summary index under the same ledger path is maintained as a derived cache of sidecar counts and lock summaries.
 
 ## Whitebox taskledger system
 
 ## Motivation
 
-taskledger decomposes into core layers with downward dependency flow. This isolates persistence, business rules, orchestration, and public interfaces.
+taskledger decomposes into core layers with downward dependency flow. This isolates persistence, business rules, orchestration, and public interfaces. Low-level persistence primitives are delegated to `ledgercore`, but the layer boundary above it stays in `taskledger/storage/`.
 
 ## Contained building blocks
 
-1. **CLI Layer** (`al_block_0030`) — Typer commands, argument parsing, output rendering
-2. **API Layer** (`al_block_0031`) — Stable Python function wrappers
-3. **Services Layer** (`al_block_0032`) — Lifecycle orchestration, handoffs, inspection
-4. **Domain Layer** (`al_block_0033`) — Models, state machines, policies (no I/O)
-5. **Storage Layer** (`al_block_0034`) — File system persistence, atomic writes, layout
+1. **CLI Layer** (`block-0030`) — Typer commands, argument parsing, output rendering
+2. **API Layer** (`block-0031`) — Stable Python function wrappers
+3. **Services Layer** (`block-0032`) — Lifecycle orchestration, handoffs, plan input, plan review, snapshots, inspection
+4. **Domain Layer** (`block-0033`) — Models, state machines, policies (no I/O)
+5. **Storage Layer** (`block-0034`) — File system persistence, atomic writes, sidecar index, layout
 
 ## Important interfaces
 
-- CLI → Services: function calls with `workspace_root` + task references
-- Services → Domain: policy functions take `PolicyContext`, return `Decision`
-- Services → Storage: record CRUD operations via `task_store.py` functions
-- API → Services: direct function calls mirroring CLI behavior
+- CLI -> Services: function calls with `workspace_root` plus task references
+- Services -> Domain: policy functions take `PolicyContext`, return `Decision`
+- Services -> Storage: record CRUD operations through `task_store.py` functions and the sidecar index
+- API -> Services: direct function calls mirroring CLI behavior
+- Storage -> ledgercore: atomic I/O, JSON I/O, YAML I/O, front matter parsing, cross-ledger ref parsing
 
 ### Level 1
 
 #### CLI Layer
 
-**Parent:** al_block_0029
+**Parent:** block-0029
 **Interfaces:**
 **Location:**
 
-Handles command parsing via Typer, task reference resolution (`--task` option, active task default), and output rendering (human text or JSON envelope via `cli_common.py`). Command families include the canonical lifecycle plus `review`, `config`, task archive operations, transfer/sync, diagnostics, and the `monitor` observer.
+Handles command parsing via Typer, task reference resolution (`--task` option, active task default), and output rendering (human text or JSON envelope via `cli_common.py`). Command families include the canonical lifecycle plus `review`, `config`, task archive operations, transfer and sync, diagnostics, the `monitor` observer, the `pipeline` overlay, and `ref` cross-ledger helpers.
 
 Source refs: `taskledger/cli.py`, `taskledger/cli_common.py`, `taskledger/command_inventory.py`, and the focused `taskledger/cli_*.py` registration modules.
 
 #### API Layer
 
-**Parent:** al_block_0029
+**Parent:** block-0029
 **Interfaces:**
 **Location:**
 
-Stable Python function wrappers under `taskledger/api/` that mirror the CLI surface for programmatic use. Each module (tasks, plans, handoff, locks, etc.) exposes functions that accept workspace paths and return dictionaries matching the JSON output shape. The API layer calls Services directly.
+Stable Python function wrappers under `taskledger/api/` that mirror the CLI surface for programmatic use. Each module (tasks, plans, handoff, locks, task runs, sync, reviews, search, etc.) exposes functions that accept workspace paths and return dictionaries matching the JSON output shape. The API layer calls Services directly.
 
 #### Services Layer
 
-**Parent:** al_block_0029
+**Parent:** block-0029
 **Interfaces:**
 **Location:**
 
-Orchestrates lifecycle flows by coordinating Domain policies and records with Storage. Focused services own planning, implementation, validation, handoffs, doctor checks, navigation, worker pipelines, archival, code-review evidence, event logging, exports, dashboard assembly, and ready-work inspection. `tasks.py` remains the compatibility-oriented lifecycle facade while ownership is progressively extracted into focused modules.
+Orchestrates lifecycle flows by coordinating Domain policies and records with Storage. Focused services own planning (`planning_flow.py`, `plan_input.py`, `plan_review.py`, `plan_lint.py`, `plan_materialization.py`), implementation (`implementation_flow.py`, `workspace_snapshot.py`), validation (`validation_flow.py`), handoffs (`handoff.py`, `handoff_lifecycle.py`, `worker_context.py`), doctor checks (`doctor.py`, `doctor_checks/`), navigation (`navigation.py`, `next_action_model.py`, `next_action_payload.py`, `ready_work.py`), worker pipelines (`worker_pipeline.py`, `workflow_guidance.py`), archival (`task_archive.py`, `task_export.py`, `task_reports.py`), code-review evidence (`code_review.py`), event logging (`task_events.py`, `agent_transcripts.py`, `agent_logging.py`, `change_tracking.py`, `check_tracking.py`, `event_logging.py`), exports and dashboard assembly (`dashboard.py`, `tree.py`, `monitor.py`). `tasks.py` remains the compatibility-oriented lifecycle facade while ownership is progressively extracted into focused modules.
 
 #### Domain Layer
 
-**Parent:** al_block_0029
+**Parent:** block-0029
 **Interfaces:**
 **Location:**
 
-Data models, state enums, normalization, and policy decisions without storage I/O. Besides lifecycle and sidecar records, the domain defines append-only code-review records. State transitions remain in `states.py`; policy decisions in `policies.py` return structured `Decision` objects.
+Data models, state enums, normalization, and policy decisions without storage I/O. Besides lifecycle and sidecar records, the domain defines append-only code-review records. State transitions remain in `states.py`; policy decisions in `policies.py` return structured `Decision` objects. The canonical storage layout version is `TASKLEDGER_STORAGE_LAYOUT_VERSION` in `taskledger/domain/states.py`.
 
 #### Storage Layer
 
-**Parent:** al_block_0029
+**Parent:** block-0029
 **Interfaces:**
 **Location:**
 
-File system persistence for canonical records. Storage layout keeps each task in `.taskledger/ledgers/<ledger_ref>/tasks/<task-id>/`, with independently addressable sidecars including plans, runs, locks, todos, questions, changes, checks, handoffs, links, and code reviews. Ledger-level collections hold events, introductions, releases, and rebuildable indexes. Action/event logging is enabled by default and can be disabled in project config. Project config edits use structured TOML handling rather than ad hoc text replacement.
+File system persistence for canonical records. Storage layout keeps each task in `.taskledger/ledgers/<ledger_ref>/tasks/<task-id>/`, with independently addressable sidecars including plans, runs, locks, todos, questions, changes, checks, handoffs, links, and code reviews. Ledger-level collections hold events, introductions, releases, and rebuildable indexes. A `task_sidecars.json` summary index is maintained as a derived cache; per-task sidecar writes call `update_sidecar_summary` from `taskledger/storage/sidecar_index.py` so the read path does not need a full rescan. Atomic write primitives, YAML I/O, front matter parsing, and ref parsing are delegated to `ledgercore`. Action and event logging is enabled by default and can be disabled in project config. Project config edits use structured TOML handling rather than ad hoc text replacement.
 
 # Runtime View
 
 The runtime view traces the main operational scenarios through the system:
 
-1. **Task lifecycle** — A task is created in `draft`, moves to `planning` (lock acquired, run started), then `plan_review` after a plan is proposed. The user approves → `approved`. Implementation starts → `implementing`, finishes → `implemented`. Validation starts → `validating`, passes → `done`.
-2. **Lock lifecycle** — Starting a stage (planning/implementation/validation) acquires a lock and creates a run. Locks have lease timers and heartbeats. Stale locks require explicit break flow with audit trail.
-3. **Handoff flow** — A worker creates a handoff with generated context (task state, plan, todos, questions, lock info). Another worker claims it, optionally transferring the lock. The handoff is closed when the receiving worker completes.
-4. **Doctor checks** — Inspects lock/run consistency, front matter integrity, index staleness, and storage layout version. Reports diagnostics with severity, code, and repair hints.
-5. **Validation evidence flow** — Acceptance criteria from the accepted plan are checked during the validation stage. Evidence is recorded per criterion with pass/fail/warn status. Latest-check-wins semantics apply; mandatory criteria gate completion.
-6. **Code-review evidence** — A reviewer records append-only review evidence against an implementation run, handoff, worker step, working tree, or commit. This is evidence attached to the task, not a new lifecycle stage.
+1. **Task lifecycle** — A task is created in `draft`, moves to `planning` (lock acquired, run started), then `plan_review` after a plan is proposed. The user approves -> `approved`. Implementation starts -> `implementing`, finishes -> `implemented`. Validation starts -> `validating`, passes -> `done`.
+2. **Plan input flow** — `taskledger plan start` opens planning. `plan guidance` reports the active project planning profile. `plan template` writes a fresh plan skeleton; `plan check --file plan.md` runs the preflight parser in `taskledger/services/plan_input.py` without mutating state. `plan upsert --file plan.md` (or `--from-answers`) persists the plan; `plan lint --version N` surfaces blocking issues; `plan review --version N` produces the approval brief; `plan accept --version N --note ...` records the user-only decision.
+3. **Implementation workspace snapshot** — `implement start` captures a Git and content snapshot in `taskledger/services/workspace_snapshot.py`. `validate start` blocks when the current workspace diverges from the implementation snapshot. `implement snapshot refresh --reason ...` records a new snapshot with an audit trail and is the normal recovery path when validation is blocked by snapshot mismatch.
+4. **Lock lifecycle** — Starting a stage (planning, implementation, validation) acquires a lock and creates a run. Locks have lease timers and heartbeats. Stale locks require explicit break flow with audit trail.
+5. **Handoff flow** — A worker creates a handoff with generated context (task state, plan, todos, questions, lock info). Another worker claims it, optionally transferring the lock. The handoff is closed when the receiving worker completes.
+6. **Doctor checks** — Inspects lock/run consistency, front matter integrity, index staleness, and storage layout version. Reports diagnostics with severity, code, and repair hints.
+7. **Validation evidence flow** — Acceptance criteria from the accepted plan are checked during the validation stage. Evidence is recorded per criterion with pass/fail/warn status. Latest-check-wins semantics apply; mandatory criteria gate completion.
+8. **Code-review evidence** — A reviewer records append-only review evidence against an implementation run, handoff, worker step, working tree, or commit. This is evidence attached to the task, not a new lifecycle stage.
 
 ## Task lifecycle: create through done
 
@@ -352,6 +351,22 @@ The runtime view traces the main operational scenarios through the system:
 
 **Key source**: `taskledger/services/handoff.py` (context generation), `taskledger/services/handoff_lifecycle.py` (claim/close/transfer), `taskledger/services/worker_context.py` (context assembly).
 
+## Editable plan input preflight
+
+**Trigger**: Agent or user edits a plan file and runs `taskledger plan check` and `taskledger plan upsert`.
+
+**Flow**:
+
+1. `plan check --file plan.md` -> Pure preflight parser in `taskledger/services/plan_input.py` returns a `plan_input_check` payload with `passed`, indexed `issues`, and parsed counts. No state mutation.
+2. Worker-pipeline configuration in `taskledger.toml` is consulted to validate `worker_step` todo tags when present.
+3. `plan upsert --file plan.md` (or `--from-answers`) runs the same parser, persists the plan as a `PlanRecord`, and materializes todos.
+4. `plan lint --version N` runs structural lint over the proposed plan body and front matter.
+5. `plan review --version N` renders the approval brief used by the user-only approval command.
+
+**Result**: Plan is persisted with no parse errors, no lint errors, and no stale answers. Approval can proceed.
+
+**Key source**: `taskledger/services/plan_input.py`, `taskledger/services/plan_lint.py`, `taskledger/services/plan_review.py`, `taskledger/cli_plan.py`.
+
 ## Doctor integrity check
 
 **Trigger**: User runs `taskledger doctor`.
@@ -383,6 +398,22 @@ The runtime view traces the main operational scenarios through the system:
 **Result**: Each long-lived branch has its own isolated task ledger. The active ledger is determined by `ledger_ref` in `taskledger.toml`.
 
 **Key source**: `taskledger/cli_ledger.py`, `taskledger/storage/ledger_config.py`, `taskledger/storage/task_store.py`.
+
+## Implementation workspace snapshot lifecycle
+
+**Trigger**: `taskledger implement start` captures a workspace snapshot; `taskledger validate start` enforces it before validation runs.
+
+**Flow**:
+
+1. `implement start` -> Acquires implementation lock, creates an implementation run, calls `capture_workspace_content_snapshot` in `taskledger/services/workspace_snapshot.py`, and persists snapshot metadata on the run.
+2. Implementation finishes via `implement finish`. The snapshot is the source of truth for what was implemented.
+3. `validate start` -> Calls `compare_implementation_snapshot`. If the current workspace diverges, validation is blocked with a `reason_code` such as `content_snapshot_mismatch` or `legacy_snapshot_mismatch`.
+4. `validate start --refresh-implementation-snapshot --reason "..."` -> `refresh_implementation_snapshot` records a new snapshot, appends an `implementation.snapshot.refreshed` event, and resumes the normal validation flow.
+5. `implement snapshot refresh --reason "..."` is the same recovery path when called outside `validate start`.
+
+**Result**: Validation only proceeds when the current workspace matches the implementation snapshot; otherwise an explicit refresh with audit trail is required.
+
+**Key source**: `taskledger/services/workspace_snapshot.py`, `taskledger/services/implementation_flow.py`, `taskledger/services/validation_flow.py`, `taskledger/cli_implement.py`.
 
 ## Git sync workflow for shared state
 
@@ -443,13 +474,13 @@ taskledger is a single-node, file-system-based tool. Deployment consists of:
 
 - **Installation**: `pip install taskledger` (PyPI) or local `pip install -e .`
 - **Project initialization**: `taskledger init` creates `taskledger.toml` and `.taskledger/` in the project root
-- **Runtime**: The CLI runs as a Python process, reading and writing the project's `.taskledger/` directory. No daemon, no server.
-- **CI integration**: taskledger commands can be run in CI pipelines for status checks and validation
+- **Runtime**: The CLI runs as a Python process, reading and writing the project `.taskledger/` directory. No daemon, no server.
+- **CI integration**: taskledger commands can be run in CI pipelines for status checks, validation, snapshot and export operations, and `taskledger trace` bundles
 - **Agent integration**: Agent harnesses invoke taskledger CLI commands as subprocess calls
 
 ## Local development deployment
 
-**Node**: Developer workstation or CI runner
+**Node**: Developer workstation or CI runner.
 
 **Software**:
 
@@ -459,8 +490,8 @@ taskledger is a single-node, file-system-based tool. Deployment consists of:
 
 **Storage**:
 
-- `.taskledger/` directory in project root (Markdown/YAML front matter files)
-- JSON index caches under `.taskledger/indexes/`
+- `.taskledger/` directory in project root (Markdown and YAML front matter files)
+- `task_sidecars.json` summary index under `.taskledger/ledgers/<ledger_ref>/`
 - Project config at `taskledger.toml`
 
 **Network**: None required.
@@ -472,64 +503,65 @@ taskledger is a single-node, file-system-based tool. Deployment consists of:
 Cross-cutting concerns that span multiple layers:
 
 - **Actor metadata**: Every mutation carries an `ActorRef` (type: agent/user/system, name, role, session, harness). Decisions distinguish user-only actions (approval, waiver) from agent actions.
-- **JSON output envelope**: All CLI commands emit a consistent JSON envelope with `ok`, `command`, `result_type`, `result`, `events`, and `warnings` fields when `--json` is passed.
-- **YAML front matter serialization**: All canonical records use YAML front matter (`---` delimited) for metadata and Markdown for body. Serialization/deserialization is in `taskledger/storage/frontmatter.py`.
-- **Atomic file writes**: All file writes go through `atomic_write_text` (temp file → `os.replace` → directory fsync) to prevent corruption.
-- **Action/event logging (default-on)**: Mutations append immutable `TaskEvent` records to the ledger-level `events/` directory under `.taskledger/ledgers/<ledger_ref>/`. Action/event logging is enabled by default; set `[event_logging] enabled = false` to disable new records. Existing records remain readable. Events track who did what, when, and why. Source: `taskledger/storage/events.py`, `taskledger/services/task_events.py`.
+- **JSON output envelope**: All CLI commands emit a consistent JSON envelope with `ok`, `command`, `result_type`, `result`, `events`, and `warnings` fields when `--json` is passed. Error envelopes add `code`, `message`, `details`, and `remediation`.
+- **YAML front matter serialization**: All canonical records use YAML front matter (`---` delimited) for metadata and Markdown for body. Serialization and deserialization live in `taskledger/storage/frontmatter.py`, backed by `ledgercore`.
+- **Atomic file writes**: All file writes go through `ledgercore` atomic primitives (temp file, flush, fsync, `os.replace`, directory fsync) to prevent corruption.
+- **Action and event logging (default-on)**: Mutations append immutable `TaskEvent` records to the ledger-level `events/` directory under `.taskledger/ledgers/<ledger_ref>/`. Action and event logging is enabled by default; set `[event_logging] enabled = false` to disable new records. Existing records remain readable. Source: `taskledger/storage/events.py`, `taskledger/services/task_events.py`, `taskledger/domain/event.py`.
 - **Exit code taxonomy**: Errors map to stable exit codes (0=success, 1=generic, 2=bad input, 3=workflow rejection, 4=lock conflict, 5=missing, 6=storage, 7=validation failed).
-- **Opaque cross-ledger references**: Links and file references remain opaque strings. Taskledger does not interpret archledger IDs, SpecWeave feature paths, or other external system references.
-- **Read-model reuse**: `view` and `status` commands consume service-level read models. These presentations are read-only and do not bypass lifecycle services.
+- **Opaque cross-ledger references**: Task refs, plan versions, file links, and handoff targets remain opaque strings. Taskledger does not interpret ledgercore global refs, archledger IDs, SpecWeave feature paths, or other external system identifiers.
+- **Read-model reuse**: `view`, `status`, `tree`, and `monitor` commands consume service-level read models. These presentations are read-only and do not bypass lifecycle services.
+- **Editable plan input**: `taskledger plan check` is a pure preflight parser in `taskledger/services/plan_input.py`. It rejects malformed YAML, normalizes the `description` alias to `text`, and surfaces indexed issues before any plan upsert. `plan lint` runs additional structural checks; `plan review` renders the approval brief.
 
 ## Actor metadata and role semantics
 
-Every mutation carries an `ActorRef` (type: agent/user/system, name, role, session ID, harness ID) and optionally a `HarnessRef` (harness identity, kind, capabilities). The system distinguishes user-only actions (plan approval, criterion waivers) from agent actions. Actor metadata is persisted in locks, runs, events, and handoff records for audit trails.
-
-Source: `taskledger/domain/actor.py` (`ActorRef`, `HarnessRef`), `taskledger/domain/states.py` (`ActorType`, `ActorRole`, `HarnessKind`).
+Every mutation carries an `ActorRef` (type: agent/user/system, name, role, session ID, harness ID) and optionally a `HarnessRef` (harness identity, kind, capabilities). The system distinguishes user-only actions (plan approval, criterion waivers, dependency waivers) from agent actions. Actor metadata is persisted in locks, runs, events, and handoff records for audit trails. Source: `taskledger/domain/actor.py` (`ActorRef`, `HarnessRef`), `taskledger/domain/states.py` (`ActorType`, `ActorRole`, `HarnessKind`).
 
 ## JSON output envelope contract
 
-When `--json` is passed, every CLI command emits a JSON envelope: `{"ok": bool, "command": str, "result_type": str, "result": ..., "events": [...], "warnings": [...]}`. On error, the envelope includes `error` with `code`, `message`, `details`, and `remediation`. This shape is a public API contract tested by `test_json_contracts.py`. Exit codes map deterministically to error categories.
+When `--json` is passed, every CLI command emits a JSON envelope: `{"ok": bool, "command": str, "result_type": str, "result": ..., "events": [...], "warnings": [...]}`. On error, the envelope includes an `error` object with `code`, `message`, `details`, and `remediation` fields. This shape is a public API contract tested by `tests/test_json_contracts.py`. Exit codes map deterministically to error categories and are part of the public contract.
 
 ## YAML front matter serialization
 
-All canonical records are `.md` files with YAML front matter (`---` delimited) containing structured metadata and a Markdown body. Read/write is handled by `read_markdown_front_matter` and `write_markdown_front_matter` in `taskledger/storage/frontmatter.py`. Models implement `to_dict()` / `from_dict()` for serialization. Schema version and object type fields enforce contract integrity on read.
+All canonical records are `.md` files with YAML front matter (`---` delimited) containing structured metadata and a Markdown body. Read and write are handled by `read_markdown_front_matter` and `write_markdown_front_matter` in `taskledger/storage/frontmatter.py`, backed by `ledgercore.frontmatter`. Models implement `to_dict()` and `from_dict()` for serialization. Schema version and object type fields enforce contract integrity on read.
 
 ## Atomic file writes
 
-All file writes go through `atomic_write_text` (temp file → flush/fsync → `os.replace` → directory fsync) or `atomic_create_text` (`O_CREAT | O_EXCL` for lock files). This prevents partial writes on crash. Test environments can disable fsync via `TASKLEDGER_TEST_FAST_IO=1` for speed. Source: `taskledger/storage/atomic.py`.
+All file writes go through `atomic_write_text` (temp file, flush, fsync, `os.replace`, directory fsync) or `atomic_create_text` (`O_CREAT | O_EXCL` for lock files). These primitives come from `ledgercore.atomic` and are re-exported by `taskledger/storage/atomic.py`. This prevents partial writes on crash. Test environments can disable fsync via `TASKLEDGER_TEST_FAST_IO=1` for speed.
 
 ## Append-only event log
 
-Mutations append an immutable `TaskEvent` record to the ledger-level `events/` directory under `.taskledger/ledgers/<ledger_ref>/`. Action/event logging is enabled by default; set `[event_logging] enabled = false` in `taskledger.toml` to disable new event records. Existing records remain readable regardless of the setting. Events are never modified or deleted. Each event has a deterministic ID, name (e.g., `task.created`, `plan.approved`, `lock.acquired`, `validation.check.logged`, `code_review.recorded`), timestamp, and actor metadata. Events support audit trails, monitor activity, handoff context, and `task transcript` output. Duplicate event detection prevents re-appending on retry. Source: `taskledger/storage/events.py`, `taskledger/services/task_events.py`, `taskledger/domain/event.py`.
+Mutations append an immutable `TaskEvent` record to the ledger-level `events/` directory under `.taskledger/ledgers/<ledger_ref>/`. Action and event logging is enabled by default; set `[event_logging] enabled = false` in `taskledger.toml` to disable new event records. Existing records remain readable regardless of the setting. Events are never modified or deleted. Each event has a deterministic ID, name (for example `task.created`, `plan.approved`, `lock.acquired`, `validation.check.logged`, `code_review.recorded`, `implementation.snapshot.refreshed`), timestamp, and actor metadata. Events support audit trails, monitor activity, handoff context, and `task transcript` output. Duplicate event detection prevents re-appending on retry. Source: `taskledger/storage/events.py`, `taskledger/services/task_events.py`, `taskledger/services/agent_logging.py`, `taskledger/services/agent_transcripts.py`, `taskledger/domain/event.py`.
 
 ## Exit code taxonomy
 
-Stable exit codes for CLI and error classification: 0 (success), 1 (generic failure), 2 (bad input), 3 (workflow rejection — invalid transition, approval required, dependency blocked), 4 (lock conflict — stale lock requires break), 5 (not found / no active task), 6 (storage error / data integrity), 7 (validation failed). Defined in `taskledger/domain/states.py` and `taskledger/errors.py`. Agents and CI pipelines rely on specific codes for automation.
+Stable exit codes for CLI and error classification: 0 (success), 1 (generic failure), 2 (bad input), 3 (workflow rejection - invalid transition, approval required, dependency blocked), 4 (lock conflict - stale lock requires break), 5 (not found or no active task), 6 (storage error or data integrity), 7 (validation failed). Defined in `taskledger/domain/states.py` and `taskledger/errors.py`. Agents and CI pipelines rely on specific codes for automation.
+
+## Editable plan input preflight
+
+Editable plan input is a preflight parser in `taskledger/services/plan_input.py`. It accepts YAML front matter with `goal`, `files`, `test_commands`, `expected_outputs`, `acceptance_criteria`, and `todos`, plus optional `generation_reason` and waiver reason fields. Criterion `description` is normalized to `text` as a compatibility alias. Worker-pipeline configuration in `taskledger.toml` validates `worker_step` todo tags. `taskledger plan check --file plan.md` returns a `plan_input_check` payload with `passed`, `summary`, indexed `issues`, and parsed counts. `plan upsert` consumes the same parser; `plan lint` runs additional structural checks; `plan review` renders the approval brief.
+
+## Implementation workspace snapshot
+
+When `taskledger implement start` is called, `taskledger/services/workspace_snapshot.py` captures a Git and content snapshot of the implementation workspace. The content snapshot (`worktree-content:v1`) records per-path status, kind, size, and content hash for files outside `.taskledger/`. The implementation run persists `workspace_git_commit`, `workspace_dirty`, `workspace_diff_hash`, `workspace_status_hash`, `workspace_snapshot_at`, `workspace_content_hash`, `workspace_paths_hash`, `workspace_entry_count`, `workspace_snapshot_format`, and `workspace_snapshot_ref`. `taskledger validate start` calls `compare_implementation_snapshot` and blocks validation when the current workspace diverges. The sanctioned recovery path is `taskledger implement snapshot refresh --reason "..."`, which records a new snapshot, appends an `implementation.snapshot.refreshed` event, and returns a structured payload with `old_snapshot` and `new_snapshot` details.
 
 ## Durable code-review evidence
 
-Code review is durable evidence attached to a task. A record captures result, summary/body, reviewer and harness, implementation run, worker step, handoff, and optional Git working-tree or commit metadata.
-
-Review records are append-only and may be recorded after a task reaches `done`. They do not create a lifecycle stage, reopen completed work, replace acceptance criteria, or weaken validation completion rules.
+Code review is durable evidence attached to a task. A record captures result, summary/body, reviewer and harness, implementation run, worker step, handoff, and optional Git working-tree or commit metadata. Review records are append-only and may be recorded after a task reaches `done`. They do not create a lifecycle stage, reopen completed work, replace acceptance criteria, or weaken validation completion rules. Source: `taskledger/domain/review.py`, `taskledger/services/code_review.py`. Test coverage: `tests/test_code_reviews.py`.
 
 # Architecture Decisions
 
 Key architecture decisions documented as ADR records:
 
-- **ADR-1**: Markdown/YAML front matter as canonical format (not JSON, not SQLite)
-- **ADR-2**: JSON indexes as derived rebuildable caches (not authoritative)
+- **ADR-1**: Markdown and YAML front matter as canonical format (not JSON, not SQLite)
+- **ADR-2**: Sidecar summary index as derived rebuildable cache (not authoritative)
 - **ADR-3**: Explicit lifecycle gates with policy decisions (not free-form state)
-- **ADR-4**: Typer CLI framework (not argparse, not click directly)
+- **ADR-4**: Typer CLI framework (not argparse, not Click directly)
 - **ADR-5**: Task bundle directory layout (not single-file index)
 - **ADR-6**: External skill packaging (skills outside the Python package)
 
 ## Markdown/YAML front matter as canonical format
 
-**Status:** accepted
-**Date:** 2026-05-23
-**Deciders:** taskledger maintainers
-**Supersedes:**
-**Related:**
+**Document version:** 1
 
 ## Context
 
@@ -552,13 +584,9 @@ Store all records as Markdown files with YAML front matter (`---` delimited). Me
 - Pure JSON: Easier parsing but not human-friendly for long-form content (plan bodies, handoff contexts).
 - Single JSON index file: Rejected due to merge conflicts and scalability concerns.
 
-## JSON indexes as derived rebuildable caches
+## Sidecar summary index as derived rebuildable cache
 
-**Status:** accepted
-**Date:** 2026-05-23
-**Deciders:** taskledger maintainers
-**Supersedes:**
-**Related:**
+**Document version:** 1
 
 ## Context
 
@@ -583,11 +611,7 @@ Maintain JSON index files under `.taskledger/indexes/` as derived caches. They a
 
 ## Explicit lifecycle gates with policy decisions
 
-**Status:** accepted
-**Date:** 2026-05-23
-**Deciders:** taskledger maintainers
-**Supersedes:**
-**Related:**
+**Document version:** 1
 
 ## Context
 
@@ -611,25 +635,21 @@ Implement lifecycle gates as pure policy functions in `taskledger/domain/policie
 
 ## Typer CLI framework
 
-**Status:** accepted
-**Date:** 2026-05-23
-**Deciders:** taskledger maintainers
-**Supersedes:**
-**Related:**
+**Document version:** 1
 
 ## Context
 
-Need a CLI framework that supports subcommand groups, type-annotated parameters, and integrates with Click's ecosystem.
+Need a CLI framework that supports subcommand groups, type-annotated parameters, and integrates with Click ecosystem extensions.
 
 ## Decision
 
-Use Typer (built on Click) for the CLI. Typer provides type-annotated parameters, subcommand groups, and automatic help generation. The root app in `cli.py` registers nested Typer apps for each command family.
+Use Typer (built on Click) for the CLI. Typer provides type-annotated parameters, subcommand groups, and automatic help generation. The root app in `cli.py` registers nested Typer apps for each command family: `task`, `plan`, `question`, `implement`, `validate`, `todo`, `intro`, `file`, `link`, `require`, `lock`, `handoff`, `release`, `storage`, `sync`, `doctor`, `repair`, `migrate`, `actor`, `harness`, `ledger`, `pipeline`, `review`, `config`, and `ref`.
 
 ## Consequences
 
 - Positive: Clean type-annotated parameter definitions with `Annotated` types.
 - Positive: Click ecosystem compatibility (middleware, testing).
-- Negative: Typer adds `click` as a transitive dependency.
+- Negative: Typer and Click are both runtime dependencies.
 
 ## Alternatives considered
 
@@ -639,24 +659,21 @@ Use Typer (built on Click) for the CLI. Typer provides type-annotated parameters
 
 ## Task bundle directory layout
 
-**Status:** accepted
-**Date:** 2026-05-23
-**Deciders:** taskledger maintainers
-**Supersedes:**
-**Related:**
+**Document version:** 1
 
 ## Context
 
-Need a storage layout that scales to many sidecar collections per task (plans, runs, locks, todos, questions, changes, checks, handoffs, links) while keeping each record individually addressable. Events are stored at ledger level, not per-task, and are enabled by default.
+Need a storage layout that scales to many sidecar collections per task (plans, runs, locks, todos, questions, changes, checks, handoffs, links, code reviews) while keeping each record individually addressable. Events are stored at ledger level, not per-task, and are enabled by default.
 
 ## Decision
 
-Use a directory-per-task layout (v2 bundle) under `.taskledger/ledgers/<ledger_ref>/`. Each task gets a directory containing the task record (Markdown) and subdirectories for sidecar collections. JSON indexes are derived caches at the ledger level. Event records are stored in the ledger-level `events/` directory (not per-task) and are written by default; set `[event_logging] enabled = false` to disable.
+Use a directory-per-task layout (v2 bundle) under `.taskledger/ledgers/<ledger_ref>/`. Each task gets a directory containing the task record (Markdown) and subdirectories for sidecar collections. JSON indexes, including the `task_sidecars.json` summary, are derived caches at the ledger level. Event records are stored in the ledger-level `events/` directory (not per-task) and are written by default; set `[event_logging] enabled = false` to disable. The current storage layout version is `TASKLEDGER_STORAGE_LAYOUT_VERSION = 3`.
 
 ## Consequences
 
-- Positive: Each record is a single file — easy to read, edit, and version-control.
+- Positive: Each record is a single file - easy to read, edit, and version-control.
 - Positive: Sidecar collections are independently addressable.
+- Positive: The sidecar summary index keeps common read paths fast.
 - Negative: Many small files create directory overhead on very large projects.
 
 ## Alternatives considered
@@ -666,11 +683,7 @@ Use a directory-per-task layout (v2 bundle) under `.taskledger/ledgers/<ledger_r
 
 ## External skill packaging
 
-**Status:** accepted
-**Date:** 2026-05-23
-**Deciders:** taskledger maintainers
-**Supersedes:**
-**Related:**
+**Document version:** 1
 
 ## Context
 
@@ -700,6 +713,8 @@ Quality requirements that gate architectural decisions:
 - **JSON envelope stability**: The JSON output shape (`ok`, `command`, `result_type`, `result`) is a public API contract. Breaking changes require explicit versioning.
 - **Lifecycle gate correctness**: Every stage transition is validated by policy functions with full test coverage of error paths.
 - **Export/import round-trip**: Archives preserve all state. Import into a fresh workspace reproduces the original taskledger state exactly.
+- **Editable plan input preflight**: `taskledger plan check` returns a structured payload with `passed`, `summary`, indexed `issues`, and parsed counts. Lint and review are gate layers; preflight catches them earlier.
+- **Implementation snapshot fidelity**: `validate start` blocks when the current workspace diverges from the implementation snapshot. `implement snapshot refresh --reason ...` is the only sanctioned recovery path and records an audit trail.
 
 ## Quality Requirements Overview
 
@@ -719,23 +734,25 @@ Quality requirements that gate architectural decisions:
 
 Known risks and areas of technical debt:
 
-- **Storage scaling with many tasks**: Each task is a directory with multiple sidecar files. Very large projects (hundreds of tasks) may see slowdowns in list/query operations since indexes are rebuilt from file scans.
-- **Migration surface between storage versions**: The storage layout has evolved (currently v3). Migration code in `taskledger/storage/migrations.py` adds complexity. Future format changes must maintain backward compatibility.
-- **Service boundary erosion**: Some service modules (notably `tasks.py`) have grown large. The service layer has no formal interface contracts — boundaries are enforced by convention and tests (`test_service_boundaries.py`).
-- **Growing dependency count**: The dependency set is small (typer, PyYAML, tomli) but new dependencies must be justified by core features, not optional presentations.
+- **Storage scaling with many tasks**: Each task is a directory with multiple sidecar files. Very large projects (hundreds of tasks) may see slowdowns in list and query operations because the `task_sidecars.json` summary index is rebuilt from file scans on miss and updated on writes. The per-task sidecar index keeps the common read path fast but does not eliminate directory overhead.
+- **Migration surface between storage versions**: The storage layout is currently v3 (`TASKLEDGER_STORAGE_LAYOUT_VERSION` in `taskledger/domain/states.py`). Migration code in `taskledger/storage/migrations.py` adds complexity. Future format changes must maintain backward compatibility or ship migration steps.
+- **Service boundary erosion**: Some service modules (notably `tasks.py` and a few focused modules) have grown large. The service layer has no formal interface contracts; boundaries are enforced by convention and the `tests/test_service_boundaries.py` whitelist in `docs/service_boundary_whitelist.md`.
+- **Implementation snapshot drift**: Workspace snapshots are a strong invariant but require explicit refresh after environment changes. `taskledger next-action` and `validate start` surface mismatch diagnostics; the recovery path is `implement snapshot refresh --reason ...`.
+- **Editable plan input compatibility**: `description` is accepted as an alias for `text` on acceptance criteria; strict mode promotes unknown-field findings to errors to prevent silent structured-data loss.
+- **Growing dependency surface**: The runtime dependency set is small (`typer`, `click`, `PyYAML`, `tomli`, `ledgercore`) but new dependencies must be justified by core features rather than optional presentations.
 
 ## Risk Overview
 
-| Title                                      | Severity | Probability | Mitigation                                                                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------------------------ | -------- | ----------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Storage scaling with many tasks            | medium   | medium      | Run reindex after bulk changes; consider task archival for completed work.                        | Each task is a directory with multiple sidecar files. Projects with hundreds of tasks may see slowdowns in list/query operations due to file system scanning. Indexes help but are not always up to date. Mitigation: `reindex` after bulk changes; consider batching for very large projects.                                                                                                                                                                                                                                                                                              |
-| Migration surface between storage versions | medium   | medium      | Doctor checks detect version mismatches; migration checks flag incompatible records.              | The storage layout has evolved through multiple versions (currently v3). Migration code in `taskledger/storage/migrations.py` adds complexity. Future format changes must maintain backward compatibility or provide migration paths. Mitigation: `doctor` checks detect version mismatches; migration checks in `doctor_checks/migration_checks.py`.                                                                                                                                                                                                                                       |
-| Service boundary erosion                   | medium   | medium      | test_service_boundaries.py whitelist tracks allowed cross-module imports and fails on violations. | Some service modules (notably `tasks.py` at 3000+ lines) have grown large. The current long-function whitelist includes `taskledger/cli_sync.py::register_sync_commands` (700+ lines) and `taskledger/services/doctor_checks/task_checks.py::scan_task_integrity` (330+ lines). The service layer has no formal interface contracts — boundaries are enforced by convention and the `test_service_boundaries.py` whitelist. Mitigation: The whitelist in `docs/service_boundary_whitelist.rst` tracks allowed cross-module imports and function line budgets; the test fails on violations. |
-| Growing dependency count                   | medium   | medium      | Small dependency set (typer, PyYAML, tomli); each justified by a core feature.                    | The dependency set is small (typer, PyYAML, tomli) and each is justified by a core feature. Risk is low as long as new dependencies are not introduced without explicit justification.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Title                                      | Severity | Probability | Mitigation                                                                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------ | -------- | ----------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Storage scaling with many tasks            | medium   | medium      | Run reindex after bulk changes; consider task archival for completed work.                        | Each task is a directory with multiple sidecar files. Projects with hundreds of tasks may see slowdowns in list and query operations due to file system scanning. The `task_sidecars.json` summary index is updated in place by per-task sidecar writes and is rebuilt on miss, which keeps the common read path fast. Mitigation: run `taskledger reindex` after bulk changes; consider task archival for completed work; rely on the sidecar summary index for navigation.     |
+| Migration surface between storage versions | medium   | medium      | Doctor checks detect version mismatches; migration checks flag incompatible records.              | The storage layout is currently v3 (`TASKLEDGER_STORAGE_LAYOUT_VERSION` in `taskledger/domain/states.py`). Migration code in `taskledger/storage/migrations.py` adds complexity. Future format changes must maintain backward compatibility or provide migration steps. Mitigation: `taskledger doctor` checks detect version mismatches; migration checks in `taskledger/services/doctor_checks/migration_checks.py` flag incompatible records.                                 |
+| Service boundary erosion                   | medium   | medium      | test_service_boundaries.py whitelist tracks allowed cross-module imports and fails on violations. | Some service modules (notably `taskledger/services/tasks.py`) have grown large. The current long-function whitelist includes entries such as `taskledger/cli_sync.py::register_sync_commands` and `taskledger/services/doctor_checks/task_checks.py::scan_task_integrity`. The service layer has no formal interface contracts; boundaries are enforced by convention and the whitelist in `docs/service_boundary_whitelist.md` exercised by `tests/test_service_boundaries.py`. |
+| Growing dependency count                   | medium   | medium      | Small dependency set (typer, PyYAML, tomli); each justified by a core feature.                    | The runtime dependency set is small (`typer`, `click`, `PyYAML`, `tomli` on Python <3.11, and `ledgercore` for atomic I/O, JSON I/O, YAML I/O, front matter parsing, and cross-ledger ref parsing). Each dependency is justified by a core feature. Risk is low as long as new dependencies are not introduced without explicit justification, and as long as `ledgercore` remains the boundary for low-level primitives.                                                        |
 
 # Glossary
 
-Domain terms used throughout taskledger:
+Domain terms used throughout taskledger. The full glossary lives in the per-term `glossary-NNNN` records under `.archledger/records/glossary/`. Each term is stored as a record with `term`, `definition`, and reference metadata rather than in this section body.
 
 | Term                 | Definition                                                                                                    |
 | -------------------- | ------------------------------------------------------------------------------------------------------------- |

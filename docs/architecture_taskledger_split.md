@@ -9,29 +9,59 @@ task -> plan -> approval -> implement -> validate -> done
 
 ## Owning layers
 
-- `taskledger/domain/` owns lifecycle enums, policies, and record models.
-- `taskledger/storage/task_store.py` and `taskledger/storage/locks.py` own persisted
-  task bundles and visible lock files under `.taskledger/`.
-- `taskledger/services/tasks.py` owns task lifecycle orchestration.
-- `taskledger/services/handoff.py` owns handoff payloads and rendering.
-- `taskledger/services/doctor.py` owns integrity checks.
-- `taskledger/api/*` exposes public wrappers.
-- `taskledger/cli*.py` wires commands only.
+- `taskledger/domain/` owns lifecycle enums, policies, record models, and the
+  canonical `TASKLEDGER_STORAGE_LAYOUT_VERSION` constant.
+- `taskledger/storage/` owns persisted task bundles, locks, and the
+  `task_sidecars.json` summary index. Low-level atomic I/O, JSON I/O, YAML
+  I/O, front matter parsing, and cross-ledger ref parsing are delegated to
+  `ledgercore`.
+- `taskledger/services/` owns task lifecycle orchestration, including
+  `plan_input.py`, `plan_lint.py`, `plan_review.py`, `planning_flow.py`,
+  `implementation_flow.py`, `workspace_snapshot.py`, `validation_flow.py`,
+  `handoff.py`, `doctor.py`, and `navigation.py`.
+- `taskledger/api/*` exposes stable public wrappers.
+- `taskledger/cli*.py` wires Typer commands only.
 
 ## Storage model
 
 Markdown records are canonical. Task, plan, and run reads come from those
-records directly. JSON files under `.taskledger/indexes/` are optional derived
-caches or registries. Active stages require visible lock files, and stale locks
-are reported instead of being cleared silently.
+records directly. The `task_sidecars.json` summary index under
+`.taskledger/ledgers/<ledger_ref>/` is a derived cache that per-task sidecar
+writes update in place. Action and event logging is enabled by default and
+appends immutable `TaskEvent` records to the ledger-level `events/`
+directory. Active stages require visible lock files, and stale locks are
+reported instead of being cleared silently.
+
+## Lifecycle flow
+
+`plan start` opens planning. `plan guidance` reports the active project
+planning profile. `plan template` writes a fresh plan skeleton, and
+`plan check --file plan.md` runs the preflight parser in
+`taskledger/services/plan_input.py` without mutating state. `plan upsert`
+persists the plan; `plan lint` surfaces blocking issues; `plan review`
+produces the approval brief; `plan accept --note "..."` records the
+user-only decision.
+
+`implement start` acquires a lock, starts a run, and captures a workspace
+snapshot through `taskledger/services/workspace_snapshot.py`. `validate start`
+blocks when the current workspace diverges; `implement snapshot refresh --reason "..."` is the only sanctioned recovery path. Validation checks
+gate completion. Code-review records extend traceability as append-only
+evidence without creating a new lifecycle stage.
 
 ## Command surface
 
-The supported command groups are `task`, `plan`, `question`,
-`implement`, `validate`, `review`, `todo`, `intro`, `file`, `link`,
-`require`, `release`, `lock`, `handoff`, `context`, `actor`,
-`harness`, `view`, `tree`, `next-action`, `can`, `search`,
-`grep`, `symbols`, `deps`, `doctor`, `repair`, `reindex`,
-`migrate`, `init`, `status`, `export`, `import`, `snapshot`,
-`storage`, `sync`, `ledger`, `report`, `serve`, `pipeline`,
-`commands`, and `review` (code-review records).
+The supported command groups are `task`, `plan`, `question`, `implement`,
+`validate`, `todo`, `intro`, `file`, `link`, `require`, `release`, `lock`,
+`handoff`, `context`, `actor`, `harness`, `view`, `tree`, `next-action`,
+`can`, `search`, `grep`, `symbols`, `deps`, `doctor`, `repair`, `reindex`,
+`migrate`, `init`, `status`, `export`, `import`, `snapshot`, `storage`,
+`sync`, `ledger`, `pipeline`, `commands`, `review`, `monitor`, `usage`, and
+`ref`. The authoritative source for the complete command surface and flags
+is `taskledger/command_inventory.py` and `docs/command_contract.md`.
+
+## Architecture records
+
+Arc42 architecture records live under `.archledger/` and are the source of
+truth for `ARCHITECTURE.md`. Skills (`skills/taskledger/SKILL.md`) and
+`docs/architecture_taskledger_split.md` live outside the Python package and
+outside the archledger build output.
