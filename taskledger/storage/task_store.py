@@ -105,6 +105,38 @@ def resolve_v2_paths(workspace_root: Path) -> V2Paths:
     from taskledger.storage.ledger_config import load_ledger_config
     from taskledger.storage.paths import load_project_locator
 
+    try:
+        from taskledger.storage.project_context import load_project_context
+
+        context = load_project_context(workspace_root)
+    except LaunchError:
+        context = None
+    if context is not None and context.mode == "canonical":
+        taskledger_root = context.paths.data_root
+        ledger_dir = context.paths.ledger_data_dir
+        indexes_dir = context.paths.ledger_indexes_dir
+        return V2Paths(
+            workspace_root=context.project_root,
+            taskledger_root=taskledger_root,
+            ledger_ref=context.ledger_state.ref,
+            ledger_dir=ledger_dir,
+            project_dir=ledger_dir,
+            introductions_dir=context.paths.introductions_dir,
+            releases_dir=context.paths.releases_dir,
+            tasks_dir=context.paths.tasks_dir,
+            plans_dir=ledger_dir / "plans",
+            questions_dir=ledger_dir / "questions",
+            runs_dir=ledger_dir / "runs",
+            changes_dir=ledger_dir / "changes",
+            events_dir=context.paths.events_dir,
+            indexes_dir=indexes_dir,
+            active_task_path=context.paths.active_task_path,
+            actor_path=context.paths.actor_path,
+            harness_path=context.paths.harness_path,
+            active_locks_index_path=context.paths.active_locks_index_path,
+            dependencies_index_path=context.paths.dependencies_index_path,
+            introductions_index_path=context.paths.introductions_index_path,
+        )
     locator = load_project_locator(workspace_root)
     taskledger_root = locator.taskledger_dir
     config = load_ledger_config(locator.config_path)
@@ -142,17 +174,19 @@ def ensure_v2_layout(workspace_root: Path) -> V2Paths:
         paths.releases_dir,
         paths.tasks_dir,
         paths.events_dir,
-        paths.indexes_dir,
     ):
         directory.mkdir(parents=True, exist_ok=True)
-    for index_path in (
-        paths.active_locks_index_path,
-        paths.dependencies_index_path,
-        paths.introductions_index_path,
-    ):
-        if index_path.exists():
-            continue
-        atomic_write_text(index_path, "[]\n")
+    # Indexes are a rebuildable cache. Legacy mode keeps the historical eager
+    # files; canonical mode creates them only when an index writer requests it.
+    if paths.indexes_dir == paths.ledger_dir / "indexes":
+        paths.indexes_dir.mkdir(parents=True, exist_ok=True)
+        for index_path in (
+            paths.active_locks_index_path,
+            paths.dependencies_index_path,
+            paths.introductions_index_path,
+        ):
+            if not index_path.exists():
+                atomic_write_text(index_path, "[]\n")
     return paths
 
 

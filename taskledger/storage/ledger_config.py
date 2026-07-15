@@ -6,7 +6,7 @@ import importlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from ledgercore.refs import normalize_ref_token
 
@@ -80,10 +80,12 @@ def validate_ledger_ref(value: str) -> str:
 
 
 def load_ledger_config(config_path: Path) -> LedgerConfig:
-    """Load LedgerConfig from a .taskledger.toml file.
-
-    If ledger keys are absent, returns sensible defaults (ref="main").
-    """
+    """Load branch state from canonical data/state.toml or legacy config."""
+    canonical = _canonical_context_for_config(config_path)
+    if canonical is not None:
+        return _load_canonical_ledger_state(canonical.paths.state_path)
+    if not config_path.exists():
+        return LedgerConfig()
     if not config_path.exists():
         return LedgerConfig()
     try:
@@ -196,10 +198,10 @@ def _load_toml_mapping(config_path: Path) -> dict[object, object]:
 
 
 def update_ledger_config(config_path: Path, patch: LedgerConfigPatch) -> LedgerConfig:
-    """Atomically update ledger keys in .taskledger.toml.
-
-    Preserves comments and non-ledger keys. Writes only the four ledger keys.
-    """
+    """Atomically update canonical state.toml or legacy config keys."""
+    canonical = _canonical_context_for_config(config_path)
+    if canonical is not None:
+        return _update_canonical_ledger_state(canonical.paths.state_path, patch)
     current_text = ""
     if config_path.exists():
         try:
@@ -339,3 +341,64 @@ def _apply_ledger_patch(
     if result and not result.endswith("\n"):
         result += "\n"
     return result
+
+
+def _canonical_context_for_config(config_path: Path) -> Any:
+    if config_path.parent.name != "task" or config_path.parent.parent.name != ".ledger":
+        return None
+    from taskledger.storage.project_context import load_project_context
+
+    return load_project_context(
+        config_path.parent.parent.parent, require_initialized=False, allow_legacy=False
+    )
+
+
+def _load_canonical_ledger_state(path: Path) -> LedgerConfig:
+    if not path.exists():
+        return LedgerConfig()
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise LaunchError(f"Invalid canonical ledger state {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise LaunchError(f"Invalid canonical ledger state {path}.")
+    return _ledger_config_from_dict(data)
+
+
+def _update_canonical_ledger_state(
+    path: Path, patch: LedgerConfigPatch
+) -> LedgerConfig:
+    current = _load_canonical_ledger_state(path)
+    if patch.ref is not None:
+        validate_ledger_ref(patch.ref)
+    if patch.next_task_number is not None and patch.next_task_number < 1:
+        raise LaunchError("ledger_next_task_number must be a positive integer.")
+    if patch.branch_guard is not None and patch.branch_guard not in (
+        "off",
+        "warn",
+        "error",
+    ):
+        raise LaunchError("ledger_branch_guard must be one of: off, warn, error.")
+    updated = LedgerConfig(
+        ref=patch.ref if patch.ref is not None else current.ref,
+        parent_ref=patch.parent_ref
+        if patch.parent_ref is not None
+        else current.parent_ref,
+        next_task_number=patch.next_task_number
+        if patch.next_task_number is not None
+        else current.next_task_number,
+        branch_guard=patch.branch_guard
+        if patch.branch_guard is not None
+        else current.branch_guard,
+    )
+    from taskledger.storage.atomic import atomic_write_text
+
+    atomic_write_text(
+        path,
+        "schema_version = 1\n"
+        f"ledger_ref = {updated.ref!r}\n"
+        f"ledger_parent_ref = {(updated.parent_ref or '')!r}\n"
+        f"ledger_next_task_number = {updated.next_task_number}\n"
+        f"ledger_branch_guard = {updated.branch_guard!r}\n",
+    )
+    return updated

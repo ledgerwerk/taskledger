@@ -1620,4 +1620,22 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         tier=TIER_RARE,
         ledger_effect=EFFECT_WRITE,
     ),
+    "storage path": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "safe_read_only",
+        HUMAN,
+        PHASE_TRANSFER,
+        agent_safe=True,
+        ledger_effect=EFFECT_READ,
+        workspace_effect=EFFECT_READ,
+    ),
+    "config path": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "safe_read_only",
+        HUMAN,
+        PHASE_TRANSFER,
+        agent_safe=True,
+        ledger_effect=EFFECT_READ,
+        workspace_effect=EFFECT_READ,
+    ),
 }

@@ -709,3 +709,7 @@ For `active_live_local_process` or `active_other_actor`, do not repair;
 use a handoff or wait for the holder to release. For
 `active_unverifiable_remote_or_unknown_process`, do not infer staleness
 from local process checks; inspect handoffs or ask the user before repairing.
+
+## Layout and migration commands
+
+`taskledger config path` reports the project-located Taskledger configuration. `taskledger storage path data|logs|indexes` reports a named mount. Legacy layout conversion is explicit: `migrate status`, `migrate plan`, and `migrate apply --backup`; canonical `storage move` is rejected because workspace and cache roots are shared Ledger settings.

@@ -20,7 +20,7 @@ class ProjectLocator:
     workspace_root: Path
     config_path: Path
     taskledger_dir: Path
-    source: Literal["explicit", "dotfile", "toml", "legacy", "default"]
+    source: Literal["explicit", "dotfile", "toml", "legacy", "default", "canonical"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -39,6 +39,22 @@ def resolve_taskledger_root(workspace_root: Path) -> Path:
 
 
 def resolve_project_paths(workspace_root: Path) -> ProjectPaths:
+    try:
+        from taskledger.storage.project_context import load_project_context
+
+        context = load_project_context(workspace_root, require_initialized=False)
+    except Exception:
+        context = None
+    if context is not None and context.mode == "canonical":
+        return ProjectPaths(
+            workspace_root=context.project_root,
+            project_dir=context.paths.ledger_data_dir,
+            taskledger_dir=context.paths.data_root,
+            config_path=context.config_path,
+            releases_dir=context.paths.releases_dir,
+            repos_dir=context.paths.ledger_data_dir,
+            repo_index_path=context.paths.repo_registry_path,
+        )
     locator = load_project_locator(workspace_root)
     return project_paths_for_root(
         locator.workspace_root,
@@ -64,6 +80,20 @@ def load_project_locator(
 ) -> ProjectLocator:
     start_path = start.expanduser().resolve()
     config_path = find_project_config(start_path)
+    if config_path is None:
+        from ledgercore import locate_ledger_project
+
+        canonical = locate_ledger_project(start_path)
+        if canonical is not None and canonical.source == "canonical":
+            from taskledger.storage.project_context import load_project_context
+
+            context = load_project_context(start_path, require_initialized=False)
+            return ProjectLocator(
+                workspace_root=context.project_root,
+                config_path=context.config_path,
+                taskledger_dir=context.paths.data_root,
+                source="canonical",
+            )
     if config_path is not None:
         workspace_root = config_path.parent
         taskledger_dir = (

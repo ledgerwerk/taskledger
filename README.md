@@ -807,3 +807,7 @@ accepted as aliases, but canonical output is lowercase colon refs.
 Run `taskledger trace TASK --format json` for a read-only `taskledger.trace.v1`
 bundle that links task history, accepted AC IDs, opaque link refs,
 source refs, evidence refs, reviews, and handoffs.
+
+## Canonical Ledger layout
+
+New projects use Ledgercore's canonical `.ledger/` marker. Taskledger configuration is stored at `.ledger/task/config.toml`; durable checkout data, logs, and rebuildable indexes resolve through the registered `data`, `logs`, and `indexes` mounts. Legacy projects remain readable during the compatibility window. Use `taskledger migrate status`, `taskledger migrate plan`, then `taskledger migrate apply --backup` for explicit migration.

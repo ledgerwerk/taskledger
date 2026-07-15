@@ -421,7 +421,23 @@ def set_project_config_value(config_path: Path, dotted_key: str, value: object) 
 
 
 def load_project_config_overrides(paths: ProjectPaths) -> dict[str, object]:
-    data = load_project_config_document(paths.config_path)
+    if (
+        paths.config_path.parent.name == "task"
+        and paths.config_path.parent.parent.name == ".ledger"
+    ):
+        try:
+            data = tomllib.loads(paths.config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise LaunchError(
+                f"Invalid canonical project config {paths.config_path}: {exc}"
+            ) from exc
+        if not isinstance(data, dict) or data.get("config_version") != 3:
+            raise LaunchError(
+                f"Canonical project config {paths.config_path} must have "
+                "config_version = 3.",
+            )
+    else:
+        data = load_project_config_document(paths.config_path)
     return {key: value for key, value in data.items() if key in WORKFLOW_CONFIG_KEYS}
 
 
@@ -1402,3 +1418,78 @@ def _parse_event_logging(
     return EventLoggingConfig(
         enabled=bool(raw.get("enabled", base.enabled)),
     )
+
+
+def load_canonical_project_config(path: Path) -> ProjectConfig:
+    """Load version-3 config without accepting legacy topology or state keys."""
+    document = _load_canonical_document(path)
+    stable = {
+        key: value
+        for key, value in document.items()
+        if key in WORKFLOW_CONFIG_KEYS or key in SYNC_CONFIG_KEYS
+    }
+    return merge_project_config(stable)
+
+
+def load_legacy_project_config(path: Path) -> dict[str, object]:
+    """Load the legacy version-1/2 document during the compatibility window."""
+    return load_project_config_document(path)
+
+
+def render_canonical_taskledger_config(
+    config: ProjectConfig | None = None,
+    *,
+    config_version: int = 3,
+    ledger_code: str = "tl",
+    ledger_name: str = "taskledger",
+) -> str:
+    if config_version != 3:
+        raise LaunchError("Canonical Taskledger config version must be 3.")
+    return (
+        "# Project-local Taskledger configuration.\n"
+        "# Topology and mutable ledger state belong to Ledgercore and "
+        "data/state.toml.\n"
+        "config_version = 3\n\n"
+        "[ledger]\n"
+        f"code = {ledger_code!r}\n"
+        f"name = {ledger_name!r}\n"
+    )
+
+
+def _load_canonical_document(path: Path) -> dict[str, object]:
+    if not path.exists():
+        raise LaunchError(f"Missing canonical Taskledger config {path}.")
+    try:
+        text = path.read_text(encoding="utf-8")
+        data = tomllib.loads(text)
+    except (OSError, ValueError) as exc:
+        raise LaunchError(f"Invalid canonical Taskledger config {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise LaunchError(
+            f"Invalid canonical Taskledger config {path}: expected a TOML table."
+        )
+    version = data.get("config_version")
+    if version != 3:
+        raise LaunchError(
+            f"Canonical Taskledger config {path} must have config_version = 3, "
+            f"got {version!r}."
+        )
+    forbidden = {
+        "taskledger_dir",
+        "project_uuid",
+        "project_name",
+        "ledger_ref",
+        "ledger_parent_ref",
+        "ledger_next_task_number",
+        "ledger_branch_guard",
+    }
+    found = sorted(forbidden.intersection(data))
+    if found:
+        raise LaunchError(
+            f"Canonical Taskledger config {path} contains forbidden legacy fields: "
+            f"{', '.join(found)}"
+        )
+    _validate_project_config_overrides(
+        {key: value for key, value in data.items() if key != "config_version"}, path
+    )
+    return data

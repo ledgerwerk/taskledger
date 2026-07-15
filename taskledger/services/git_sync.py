@@ -28,6 +28,7 @@ from taskledger.storage.project_config import (
     load_project_config_document,
     update_taskledger_dir,
 )
+from taskledger.storage.project_context import load_project_context
 from taskledger.storage.project_identity import project_name_or_default
 from taskledger.storage.task_store import load_active_locks
 
@@ -54,13 +55,25 @@ def build_git_sync_config(
     branch: str | None = None,
 ) -> GitSyncConfig:
     locator = load_project_locator(workspace_root)
-    document = load_project_config_document(locator.config_path)
-    sync_table = document.get("sync")
-    sync_git_table: dict[str, object] = {}
-    if isinstance(sync_table, dict):
-        maybe_git = sync_table.get("git")
-        if isinstance(maybe_git, dict):
-            sync_git_table = maybe_git
+    context = load_project_context(workspace_root)
+    if context.mode == "canonical":
+        sync_config = context.config.sync_git
+        sync_git_table: dict[str, object] = {
+            "repo": sync_config.repo,
+            "project_path": sync_config.project_path,
+            "remote": sync_config.remote,
+            "branch": sync_config.branch,
+            "allow_active_locks": sync_config.allow_active_locks,
+            "hooks": sync_config.hooks,
+        }
+    else:
+        document = load_project_config_document(locator.config_path)
+        sync_table = document.get("sync")
+        sync_git_table = {}
+        if isinstance(sync_table, dict):
+            maybe_git = sync_table.get("git")
+            if isinstance(maybe_git, dict):
+                sync_git_table = maybe_git
 
     repo_value = (
         repo.as_posix() if repo is not None else _as_str(sync_git_table.get("repo"))

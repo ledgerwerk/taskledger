@@ -77,7 +77,11 @@ def normalize_project_name(value: object) -> str:
 
 
 def load_project_uuid(config_path: Path) -> str | None:
-    """Read ``project_uuid`` from ``config_path``, or return ``None`` if absent."""
+    """Read identity from the shared manifest or legacy Taskledger config."""
+    canonical = _canonical_manifest_identity(config_path)
+    if canonical is not None:
+        raw = canonical.get("uuid")
+        return normalize_project_uuid(raw) if raw is not None else None
     if not config_path.exists():
         return None
     data = _load_toml(config_path)
@@ -88,7 +92,11 @@ def load_project_uuid(config_path: Path) -> str | None:
 
 
 def load_project_name(config_path: Path) -> str | None:
-    """Read ``project_name`` from ``config_path``, or return ``None`` if absent."""
+    """Read display name from the shared manifest or legacy config."""
+    canonical = _canonical_manifest_identity(config_path)
+    if canonical is not None:
+        raw = canonical.get("name")
+        return normalize_project_name(raw) if raw is not None else None
     if not config_path.exists():
         return None
     data = _load_toml(config_path)
@@ -122,6 +130,11 @@ def ensure_project_uuid(config_path: Path) -> str:
     This is the primary backfill entrypoint: it reads the config TOML,
     returns the UUID if present, and otherwise atomically appends one.
     """
+    if _canonical_manifest_identity(config_path) is not None:
+        raise LaunchError(
+            "Canonical project UUID is owned by .ledger/ledger.toml; "
+            "initialization must register the shared manifest."
+        )
     existing = load_project_uuid(config_path)
     if existing is not None:
         return existing
@@ -203,3 +216,18 @@ def _load_toml(path: Path) -> dict[object, object]:
     if not isinstance(result, dict):
         raise LaunchError(f"Invalid project config {path}: expected a TOML table.")
     return result
+
+
+def _canonical_manifest_identity(config_path: Path) -> dict[object, object] | None:
+    if config_path.parent.name != "task" or config_path.parent.parent.name != ".ledger":
+        return None
+    manifest_path = config_path.parent.parent / "ledger.toml"
+    if not manifest_path.exists():
+        return None
+    data = _load_toml(manifest_path)
+    project = data.get("project")
+    if not isinstance(project, dict):
+        raise LaunchError(
+            f"Invalid Ledger manifest {manifest_path}: missing [project]."
+        )
+    return project

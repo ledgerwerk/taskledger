@@ -58,6 +58,12 @@ LAYOUT_MIGRATIONS: tuple[LayoutMigration, ...] = (
             _migrate_v2_unscoped_state_to_branch_scoped_ledgers(workspace_root)
         ),
     ),
+    LayoutMigration(
+        from_version=3,
+        to_version=4,
+        name="canonical-storage-metadata",
+        apply=lambda workspace_root: _migrate_v3_storage_metadata(workspace_root),
+    ),
 )
 
 RECORD_MIGRATIONS: tuple[RecordMigration, ...] = ()
@@ -507,3 +513,22 @@ def _scan_file(
                 target_version=TASKLEDGER_SCHEMA_VERSION,
             )
         )
+
+
+def _migrate_v3_storage_metadata(workspace_root: Path) -> None:
+    from taskledger.storage.meta import read_storage_meta, write_storage_meta
+
+    meta = read_storage_meta(workspace_root)
+    if meta is None:
+        return
+    write_storage_meta(
+        workspace_root,
+        type(meta)(
+            storage_layout_version=4,
+            record_schema_version=meta.record_schema_version,
+            created_with_taskledger=meta.created_with_taskledger,
+            created_at=meta.created_at,
+            last_migrated_with_taskledger=meta.last_migrated_with_taskledger,
+            last_migrated_at=meta.last_migrated_at,
+        ),
+    )

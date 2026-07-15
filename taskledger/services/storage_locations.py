@@ -22,6 +22,7 @@ from taskledger.services.git_utils import (
 from taskledger.storage.ledger_config import load_ledger_config
 from taskledger.storage.paths import DEFAULT_TASKLEDGER_DIR_NAME, load_project_locator
 from taskledger.storage.project_config import update_taskledger_dir
+from taskledger.storage.project_context import load_project_context
 from taskledger.storage.project_identity import (
     load_project_uuid,
     project_name_or_default,
@@ -43,23 +44,47 @@ class StorageLocationReport:
     active_lock_count: int
     has_active_locks: bool
     warnings: tuple[str, ...]
+    mode: str = "legacy"
+    project_root: str | None = None
+    project_uuid_source: str | None = None
+    manifest_path: str | None = None
+    local_config_path: str | None = None
+    checkout_id: str | None = None
+    mounts: dict[str, dict[str, object]] | None = None
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "kind": "storage_location_report",
+            "mode": self.mode,
             "workspace_root": self.workspace_root,
+            "project_root": self.project_root or self.workspace_root,
             "config_path": self.config_path,
-            "taskledger_dir": self.taskledger_dir,
             "project_uuid": self.project_uuid,
             "project_name": self.project_name,
             "ledger_ref": self.ledger_ref,
-            "inside_workspace": self.inside_workspace,
-            "is_git_repo": self.is_git_repo,
-            "git_root": self.git_root,
             "active_lock_count": self.active_lock_count,
             "has_active_locks": self.has_active_locks,
             "warnings": list(self.warnings),
         }
+        if self.mode == "legacy":
+            payload.update(
+                {
+                    "taskledger_dir": self.taskledger_dir,
+                    "inside_workspace": self.inside_workspace,
+                    "is_git_repo": self.is_git_repo,
+                    "git_root": self.git_root,
+                }
+            )
+        else:
+            payload.update(
+                {
+                    "manifest_path": self.manifest_path,
+                    "local_config_path": self.local_config_path,
+                    "checkout_id": self.checkout_id,
+                    "mounts": self.mounts or {},
+                }
+            )
+        return payload
 
 
 @dataclass(slots=True, frozen=True)
@@ -169,6 +194,52 @@ class SyncCommitReport:
 
 
 def build_storage_location_report(workspace_root: Path) -> StorageLocationReport:
+    try:
+        context = load_project_context(workspace_root)
+    except LaunchError:
+        context = None
+    if (
+        context is not None
+        and context.mode == "canonical"
+        and context.layout is not None
+    ):
+        mounts = {
+            name: {
+                "storage": str(mount.storage),
+                "scope": str(mount.scope),
+                "path": str(mount.path),
+                "source": str(mount.source),
+                "initialized": mount.path.exists(),
+            }
+            for name, mount in context.layout.mounts.items()
+        }
+        active_lock_count = _active_lock_count(workspace_root)
+        warnings = (
+            [f"{active_lock_count} active lock(s) are present."]
+            if active_lock_count
+            else []
+        )
+        return StorageLocationReport(
+            workspace_root=context.project_root.as_posix(),
+            config_path=context.config_path.as_posix(),
+            taskledger_dir=context.paths.data_root.as_posix(),
+            project_uuid=context.project_uuid,
+            project_name=context.project_name,
+            ledger_ref=context.ledger_state.ref,
+            inside_workspace=False,
+            is_git_repo=False,
+            git_root=None,
+            active_lock_count=active_lock_count,
+            has_active_locks=active_lock_count > 0,
+            warnings=tuple(warnings),
+            mode="canonical",
+            project_root=context.project_root.as_posix(),
+            project_uuid_source="manifest",
+            manifest_path=context.layout.manifest_path.as_posix(),
+            local_config_path=context.layout.local_config_path.as_posix(),
+            checkout_id=context.layout.checkout_id,
+            mounts=mounts,
+        )
     locator = load_project_locator(workspace_root)
     taskledger_dir = locator.taskledger_dir
     config_path = locator.config_path
@@ -181,14 +252,14 @@ def build_storage_location_report(workspace_root: Path) -> StorageLocationReport
     inside_workspace = _is_within(taskledger_dir, locator.workspace_root)
     git_root = _git_root(taskledger_dir)
     active_lock_count = _active_lock_count(locator.workspace_root)
-    warnings: list[str] = []
+    legacy_warnings: list[str] = []
     if inside_workspace:
-        warnings.append(
+        legacy_warnings.append(
             "Resolved taskledger_dir is inside the workspace. "
             "Keep it ignored in source control."
         )
     if active_lock_count:
-        warnings.append(f"{active_lock_count} active lock(s) are present.")
+        legacy_warnings.append(f"{active_lock_count} active lock(s) are present.")
     return StorageLocationReport(
         workspace_root=locator.workspace_root.as_posix(),
         config_path=config_path.as_posix(),
@@ -201,7 +272,7 @@ def build_storage_location_report(workspace_root: Path) -> StorageLocationReport
         git_root=git_root.as_posix() if git_root is not None else None,
         active_lock_count=active_lock_count,
         has_active_locks=active_lock_count > 0,
-        warnings=tuple(warnings),
+        warnings=tuple(legacy_warnings),
     )
 
 
@@ -258,6 +329,17 @@ def move_taskledger_storage(
     adopt_existing: bool = False,
     force: bool = False,
 ) -> StorageMoveReport:
+    try:
+        context = load_project_context(workspace_root)
+    except LaunchError:
+        context = None
+    if context is not None and context.mode == "canonical":
+        raise LaunchError(
+            "`taskledger storage move` is legacy-only in canonical projects. "
+            "Ledger workspace/cache roots are shared project settings. Edit "
+            ".ledger/ledger.local.toml or set LEDGER_WORKSPACE_ROOT / "
+            "LEDGER_CACHE_ROOT."
+        )
     if mode not in {"copy", "move"}:
         raise LaunchError("mode must be one of: copy, move.")
     locator = load_project_locator(workspace_root)
@@ -342,6 +424,38 @@ def move_taskledger_storage(
 
 def build_sync_status_report(workspace_root: Path) -> SyncStatusReport:
     location = build_storage_location_report(workspace_root)
+    if location.mode == "canonical":
+        mounts = location.to_dict().get("mounts", {})
+        included = [
+            Path(str(mounts[name]["path"]))
+            for name in ("data", "logs")
+            if isinstance(mounts, dict)
+            and isinstance(mounts.get(name), dict)
+            and Path(str(mounts[name]["path"])).exists()
+        ]
+        roots = {_git_root(path) for path in included}
+        roots.discard(None)
+        git_root = next(iter(roots), None) if len(roots) == 1 else None
+        status_lines = tuple(
+            line for path in included for line in _git_status_lines(path)
+        )
+        warnings = list(location.warnings)
+        if len(roots) > 1 or not roots:
+            warnings.append(
+                "Canonical data and logs mounts are not represented by "
+                "one sync repository."
+            )
+        return SyncStatusReport(
+            taskledger_dir=location.taskledger_dir,
+            git_root=git_root.as_posix() if git_root else None,
+            relative_path=_relative_to(included[0], git_root)
+            if included and git_root
+            else None,
+            clean=not status_lines,
+            status_lines=status_lines,
+            active_lock_count=location.active_lock_count,
+            warnings=tuple(dict.fromkeys(warnings)),
+        )
     taskledger_dir = Path(location.taskledger_dir)
     git_root = _git_root(taskledger_dir)
     status_lines = tuple(_git_status_lines(taskledger_dir))

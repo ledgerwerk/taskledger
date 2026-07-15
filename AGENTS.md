@@ -457,3 +457,7 @@ A strong change usually:
 - packaging skills into `taskledger`
 - broad style churn
 - mixing refactors with behavior changes
+
+## Canonical Ledgercore layout
+
+Taskledger canonical state uses `.ledger/ledger.toml`, `.ledger/task/config.toml`, and Ledgercore-resolved `data`, `logs`, and `indexes` mounts. Legacy storage migration must remain explicit, backed up, verified, and non-destructive.

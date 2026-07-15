@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 
@@ -15,6 +15,11 @@ from taskledger.cli_common import (
 )
 from taskledger.domain.states import TASKLEDGER_STORAGE_LAYOUT_VERSION
 from taskledger.errors import LaunchError
+from taskledger.storage.layout_migration import (
+    apply_layout_migration,
+    build_layout_migration_plan,
+    migration_status,
+)
 from taskledger.storage.migrations import (
     apply_layout_migrations,
     required_layout_migrations,
@@ -31,6 +36,25 @@ migrate_app = typer.Typer(
 def migrate_status_command(ctx: typer.Context) -> None:
     state = ctx.obj
     assert isinstance(state, CLIState)
+    try:
+        layout_status = migration_status(state.cwd)
+    except LaunchError:
+        layout_status = None
+    if isinstance(layout_status, dict) and layout_status.get("project_mode") in {
+        "legacy",
+        "canonical",
+    }:
+        emit_payload(
+            ctx,
+            layout_status,
+            human="MIGRATE STATUS\n"
+            + "\n".join(
+                f"  {key}: {value}"
+                for key, value in layout_status.items()
+                if key != "kind"
+            ),
+        )
+        return
     try:
         from taskledger.storage.meta import read_storage_meta
 
@@ -114,6 +138,41 @@ def migrate_status_command(ctx: typer.Context) -> None:
 def migrate_plan_command(ctx: typer.Context) -> None:
     state = ctx.obj
     assert isinstance(state, CLIState)
+    payload: dict[str, object]
+    try:
+        layout_status = migration_status(state.cwd)
+    except LaunchError:
+        layout_status = None
+    if isinstance(layout_status, dict) and layout_status.get("project_mode") in {
+        "legacy",
+        "canonical",
+    }:
+        if layout_status.get("project_mode") == "canonical":
+            payload = {"kind": "migration_plan", "status": "up_to_date", "plan": {}}
+            emit_payload(
+                ctx,
+                payload,
+                human="MIGRATE PLAN\n  Canonical layout is already active.",
+            )
+            return
+        try:
+            plan = build_layout_migration_plan(state.cwd)
+            payload = {
+                "kind": "migration_plan",
+                "status": "ready",
+                "plan": plan.to_dict(),
+            }
+            plan_payload = cast(dict[str, object], payload["plan"])
+            human = "MIGRATE PLAN\n" + "\n".join(
+                f"  {key}: {value}"
+                for key, value in plan_payload.items()
+                if key != "items"
+            )
+        except LaunchError as exc:
+            emit_error(ctx, exc)
+            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+        emit_payload(ctx, payload, human=human)
+        return
     try:
         from taskledger.storage.meta import read_storage_meta
 
@@ -194,9 +253,44 @@ def migrate_apply_command(
         bool,
         typer.Option("--dry-run", help="Show what would be done without writing."),
     ] = False,
+    project_uuid: Annotated[str | None, typer.Option("--project-uuid")] = None,
+    retire_legacy: Annotated[
+        bool,
+        typer.Option(
+            "--retire-legacy", help="Rename verified legacy files after migration."
+        ),
+    ] = False,
 ) -> None:
     state = ctx.obj
     assert isinstance(state, CLIState)
+    try:
+        layout_context = migration_status(state.cwd, project_uuid=project_uuid)
+    except LaunchError:
+        layout_context = None
+    if (
+        isinstance(layout_context, dict)
+        and layout_context.get("project_mode") == "legacy"
+    ):
+        try:
+            payload = apply_layout_migration(
+                state.cwd,
+                backup=backup,
+                project_uuid=project_uuid,
+                dry_run=dry_run,
+                retire_legacy=retire_legacy,
+            )
+        except LaunchError as exc:
+            emit_error(ctx, exc)
+            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+        emit_payload(
+            ctx,
+            payload,
+            human=(
+                f"MIGRATE APPLY{' (dry run)' if dry_run else ''}\n"
+                f"  status: {payload.get('status')}"
+            ),
+        )
+        return
     try:
         from taskledger.storage.meta import read_storage_meta
 

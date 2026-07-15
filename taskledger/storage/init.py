@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
 from taskledger.errors import LaunchError
@@ -8,10 +9,12 @@ from taskledger.storage.meta import StorageMeta, write_storage_meta
 from taskledger.storage.paths import (
     CANONICAL_PROJECT_CONFIG_FILENAME,
     ProjectPaths,
+    find_project_config,
     load_project_locator,
     project_paths_for_root,
 )
 from taskledger.storage.project_config import render_default_taskledger_toml
+from taskledger.storage.project_context import TaskledgerProjectContext
 from taskledger.storage.project_identity import ensure_project_uuid, new_project_uuid
 
 
@@ -208,3 +211,113 @@ def _taskledger_dir_setting(taskledger_dir: Path) -> str:
     else:
         resolved = taskledger_dir.resolve()
     return resolved.as_posix()
+
+
+def init_canonical_project_state(
+    workspace_root: Path,
+    *,
+    project_name: str | None = None,
+    project_uuid: str | None = None,
+) -> tuple[TaskledgerProjectContext, list[str]]:
+    """Initialize the canonical Ledgercore-backed Taskledger layout."""
+    import uuid
+
+    from ledgercore import locate_ledger_project
+
+    from taskledger.storage.atomic import atomic_write_text
+    from taskledger.storage.ledger_manifest import ensure_taskledger_registration
+    from taskledger.storage.project_config import render_canonical_taskledger_config
+    from taskledger.storage.project_context import load_project_context
+    from taskledger.storage.yaml_store import write_yaml_object
+
+    try:
+        tomllib = importlib.import_module("tomllib")
+    except ModuleNotFoundError:
+        tomllib = importlib.import_module("tomli")
+    root = workspace_root.expanduser().resolve()
+    existing = locate_ledger_project(
+        root, legacy_tool_filenames=(".taskledger.toml", "taskledger.toml")
+    )
+    legacy_config = find_project_config(root)
+    if (existing is not None and existing.source == "legacy-tool") or (
+        legacy_config is None and (root / ".taskledger" / "storage.yaml").exists()
+    ):
+        legacy = load_project_locator(root)
+        raise LaunchError(
+            f"Legacy Taskledger project detected at {legacy.taskledger_dir}. "
+            "Run `taskledger migrate plan`, then `taskledger migrate apply --backup`."
+        )
+    selected_uuid = project_uuid
+    if existing is not None and existing.source == "canonical":
+        manifest_path = existing.manifest_path
+        try:
+            document = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+            selected_uuid = str(document["project"]["uuid"])
+            manifest_name = document.get("project", {}).get("name")
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            raise LaunchError(
+                f"Invalid Ledger manifest {manifest_path}: {exc}"
+            ) from exc
+        if project_name is not None and manifest_name not in {None, project_name}:
+            raise LaunchError(
+                f"Project name conflicts with existing Ledger manifest {manifest_path}."
+            )
+        effective_name = project_name or (
+            manifest_name if isinstance(manifest_name, str) else root.name
+        )
+    else:
+        selected_uuid = selected_uuid or str(uuid.uuid4())
+        effective_name = project_name or root.name
+    registration = ensure_taskledger_registration(
+        root, project_uuid=selected_uuid, project_name=effective_name
+    )
+    context = load_project_context(root, require_initialized=False, allow_legacy=False)
+    paths = context.paths
+    created: list[str] = (
+        [str(registration.manifest_path)] if registration.changed else []
+    )
+    if not paths.config_path.exists():
+        atomic_write_text(paths.config_path, render_canonical_taskledger_config())
+        created.append(str(paths.config_path))
+    paths.data_root.mkdir(parents=True, exist_ok=True)
+    for directory in (
+        paths.ledger_data_dir,
+        paths.introductions_dir,
+        paths.releases_dir,
+        paths.tasks_dir,
+    ):
+        if not directory.exists():
+            directory.mkdir(parents=True, exist_ok=True)
+            created.append(str(directory))
+    if not paths.storage_meta_path.exists():
+        try:
+            from taskledger._version import __version__ as version
+        except ImportError:
+            version = "0.1.0"
+        write_yaml_object(
+            paths.storage_meta_path,
+            {
+                "storage_layout_version": 4,
+                "record_schema_version": 1,
+                "created_with_taskledger": version,
+                "created_at": __import__(
+                    "taskledger.timeutils", fromlist=["utc_now_iso"]
+                ).utc_now_iso(),
+                "last_migrated_with_taskledger": None,
+                "last_migrated_at": None,
+            },
+        )
+        created.append(str(paths.storage_meta_path))
+    if not paths.state_path.exists():
+        atomic_write_text(
+            paths.state_path,
+            (
+                "schema_version = 1\n"
+                'ledger_ref = "main"\n'
+                'ledger_parent_ref = ""\n'
+                "ledger_next_task_number = 1\n"
+                'ledger_branch_guard = "off"\n'
+            ),
+        )
+        created.append(str(paths.state_path))
+    return load_project_context(root), created

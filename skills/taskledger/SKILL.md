@@ -539,3 +539,7 @@ ID references.
 Use `taskledger trace TASK --format json` for a read-only `taskledger.trace.v1`
 bundle that exposes task IDs, accepted AC IDs, opaque link refs, source refs,
 evidence refs, implementation/review refs, and handoffs.
+
+## Canonical storage layout
+
+New projects use `.ledger/ledger.toml` and `.ledger/task/config.toml`. Resolve `data`, `logs`, and `indexes` through `taskledger storage where` or `taskledger storage path`. Migrate legacy projects explicitly with `taskledger migrate status`, `taskledger migrate plan`, and `taskledger migrate apply --backup`. Do not use canonical `storage move`; shared Ledger workspace/cache roots are configured through Ledgercore local settings.

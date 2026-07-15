@@ -756,3 +756,7 @@ opaque link refs, source refs, evidence refs, changes, reviews, and handoffs.
 
 Evidence import is explicit and auditable through
 `taskledger validate check --criterion ... --status ... --evidence ...`.
+
+## Canonical project layout
+
+Taskledger uses `.ledger/ledger.toml` and `.ledger/task/config.toml`. `taskledger storage where` reports the resolved checkout-scoped `data`, `logs`, and `indexes` mounts. Use `taskledger storage path data|logs|indexes` for one mount without initializing lazy mounts.

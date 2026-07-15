@@ -7,6 +7,7 @@ import typer
 
 from taskledger.api.storage import (
     storage_move,
+    storage_path,
     storage_where,
 )
 from taskledger.cli_common import (
@@ -20,18 +21,33 @@ from taskledger.errors import LaunchError
 
 def _render_storage_where(payload: dict[str, object]) -> str:
     lines = [
-        f"Workspace: {payload['workspace_root']}",
+        f"Project root: {payload['project_root']}",
+        f"Project UUID: {payload['project_uuid']}",
         f"Config: {payload['config_path']}",
-        f"Storage: {payload['taskledger_dir']}",
-        (
-            f"Project: {payload['project_name']} "
-            f"({payload['project_uuid'] or 'no project_uuid'})"
-        ),
+        f"Mode: {payload['mode']}",
         f"Ledger: {payload['ledger_ref']}",
-        f"Inside workspace: {'yes' if payload['inside_workspace'] else 'no'}",
-        f"Git repo: {payload['git_root'] or 'no'}",
         f"Active locks: {payload['active_lock_count']}",
     ]
+    if payload.get("mode") == "legacy":
+        lines.insert(2, f"Storage: {payload['taskledger_dir']}")
+    else:
+        lines.insert(2, f"Manifest: {payload.get('manifest_path')}")
+        lines.append("Mounts:")
+        mounts = payload.get("mounts", {})
+        if isinstance(mounts, dict):
+            for name in ("data", "logs", "indexes"):
+                mount = mounts.get(name, {})
+                if isinstance(mount, dict):
+                    lines.extend(
+                        [
+                            f"  {name}",
+                            f"    storage: {mount.get('storage')}",
+                            f"    scope: {mount.get('scope')}",
+                            f"    path: {mount.get('path')}",
+                            f"    initialized: "
+                            f"{'yes' if mount.get('initialized') else 'no'}",
+                        ]
+                    )
     warnings = payload.get("warnings", [])
     if isinstance(warnings, list) and warnings:
         lines.append("Warnings:")
@@ -73,6 +89,23 @@ def register_storage_commands(app: typer.Typer) -> None:
             payload,
             result_type="storage_where",
             human=_render_storage_where(payload),
+        )
+
+    @app.command("path")
+    def path_command(
+        ctx: typer.Context,
+        mount: Annotated[
+            str, typer.Argument(help="Mount name: data, logs, or indexes.")
+        ],
+    ) -> None:
+        state = cli_state_from_context(ctx)
+        try:
+            payload = storage_path(state.cwd, mount)
+        except LaunchError as exc:
+            emit_error(ctx, exc)
+            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+        emit_payload(
+            ctx, payload, result_type="storage_path", human=str(payload["path"])
         )
 
     @app.command("move")

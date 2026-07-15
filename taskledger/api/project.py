@@ -4,7 +4,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, cast
 
+from ledgercore import locate_ledger_project
+
 from taskledger.domain.policies import derive_active_stage
+from taskledger.errors import LaunchError
 from taskledger.exchange import (
     export_project_payload,
     import_project_archive,
@@ -15,7 +18,7 @@ from taskledger.exchange import (
 )
 from taskledger.services.doctor import inspect_v2_project
 from taskledger.services.tree import TreeOptions, build_tree
-from taskledger.storage.init import init_project_state
+from taskledger.storage.init import init_canonical_project_state, init_project_state
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.paths import load_project_locator, resolve_project_paths
 from taskledger.storage.project_identity import (
@@ -41,23 +44,57 @@ def init_project(
     taskledger_dir: Path | None = None,
     project_name: str | None = None,
 ) -> dict[str, object]:
-    paths, created = init_project_state(
-        workspace_root,
-        taskledger_dir=taskledger_dir,
-        project_name=project_name,
-    )
-    resolved_project_name = project_name_or_default(
-        paths.config_path, workspace_root=paths.workspace_root
+    if taskledger_dir is not None:
+        locator = locate_ledger_project(
+            workspace_root,
+            legacy_tool_filenames=(".taskledger.toml", "taskledger.toml"),
+        )
+        if locator is None or locator.source == "canonical":
+            raise LaunchError(
+                "--taskledger-dir is a legacy layout option. Canonical projects use "
+                "Ledger workspace/cache roots from .ledger/ledger.local.toml, "
+                "LEDGER_WORKSPACE_ROOT, and LEDGER_CACHE_ROOT."
+            )
+        paths, created = init_project_state(
+            workspace_root,
+            taskledger_dir=taskledger_dir,
+            project_name=project_name,
+        )
+        resolved_project_name = project_name_or_default(
+            paths.config_path, workspace_root=paths.workspace_root
+        )
+        return {
+            "kind": "taskledger_init",
+            "mode": "legacy",
+            "root": str(paths.project_dir),
+            "project_dir": str(paths.project_dir),
+            "workspace_root": str(paths.workspace_root),
+            "config_path": str(paths.config_path),
+            "taskledger_dir": str(paths.taskledger_dir),
+            "project_name": resolved_project_name,
+            "created": created,
+        }
+    context, created = init_canonical_project_state(
+        workspace_root, project_name=project_name
     )
     return {
         "kind": "taskledger_init",
-        "root": str(paths.project_dir),
-        "project_dir": str(paths.project_dir),
-        "workspace_root": str(paths.workspace_root),
-        "config_path": str(paths.config_path),
-        "taskledger_dir": str(paths.taskledger_dir),
-        "project_name": resolved_project_name,
+        "mode": "canonical",
+        "root": str(context.paths.data_root),
+        "project_dir": str(context.paths.ledger_data_dir),
+        "workspace_root": str(context.project_root),
+        "project_root": str(context.project_root),
+        "project_uuid": context.project_uuid,
+        "manifest_path": str(context.layout.manifest_path if context.layout else ""),
+        "config_path": str(context.config_path),
         "created": created,
+        "project_name": context.project_name,
+        "mounts": {
+            name: {"path": str(context.layout.mounts[name].path)}
+            for name in ("data", "logs", "indexes")
+        }
+        if context.layout
+        else {},
     }
 
 

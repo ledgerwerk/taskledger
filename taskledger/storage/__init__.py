@@ -1,7 +1,16 @@
 from __future__ import annotations
 
-from taskledger.storage.init import ensure_project_exists, init_project_state
+from taskledger.storage.init import (
+    ensure_project_exists,
+    init_canonical_project_state,
+    init_project_state,
+)
 from taskledger.storage.paths import resolve_project_paths, resolve_taskledger_root
+from taskledger.storage.project_context import (
+    TaskledgerPaths,
+    TaskledgerProjectContext,
+    load_project_context,
+)
 from taskledger.storage.project_config import (
     DEFAULT_PROJECT_TOML,
     load_project_config_overrides,
@@ -24,7 +33,11 @@ __all__ = [
     "add_repo",
     "clear_default_execution_repo",
     "ensure_project_exists",
+    "init_canonical_project_state",
     "init_project_state",
+    "load_project_context",
+    "TaskledgerPaths",
+    "TaskledgerProjectContext",
     "load_project_config_overrides",
     "load_repos",
     "merge_project_config",

@@ -167,3 +167,7 @@ opaque link refs, source refs, evidence refs, changes, reviews, and handoffs.
 
 Evidence import is explicit and auditable through
 `taskledger validate check --criterion ... --status ... --evidence ...`.
+
+## Canonical mounts
+
+Canonical sync includes the durable data mount and optional logs mount. Cache indexes are excluded and can be deleted and rebuilt. Workspace and cache family roots are resolved by Ledgercore and are not changed by `taskledger storage move`.

@@ -769,3 +769,7 @@ Domain terms used throughout taskledger. The full glossary lives in the per-term
 | Sidecar              | A collection of related records (todos, links, plans, etc.) attached to a task.                               |
 | Front Matter         | The YAML metadata block at the top of a canonical record file, delimited by ---.                              |
 | Worker Pipeline      | An optional advisory overlay that guides fresh-context handoffs through sequential worker steps.              |
+
+## Ledgercore 0.3 storage boundary
+
+Canonical project discovery, project identity, checkout identity, storage-class resolution, scope resolution, and physical mount resolution belong to Ledgercore. Taskledger owns manifest registration mutation, config validation, data state, record layout, migration planning, backup, and verification.

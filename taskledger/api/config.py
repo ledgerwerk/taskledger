@@ -18,6 +18,7 @@ from taskledger.storage.project_config import (
     load_project_config_document,
     set_project_config_value,
 )
+from taskledger.storage.project_context import load_project_context
 from taskledger.storage.worker_pipeline_config import (
     VALID_WORKER_ACTOR_ROLES,
     VALID_WORKER_BASE_CONTEXTS,
@@ -463,23 +464,39 @@ _CONFIG_KEY_HELP += tuple(
 
 
 def config_list(workspace_root: Path) -> dict[str, object]:
-    paths = resolve_project_paths(workspace_root)
-    document = load_project_config_document(paths.config_path)
+    context = load_project_context(workspace_root)
+    if context.mode == "canonical":
+        try:
+            document = tomllib.loads(context.config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise LaunchError(
+                f"Invalid canonical project config {context.config_path}: {exc}"
+            ) from exc
+    else:
+        document = load_project_config_document(context.config_path)
     return {
         "kind": "project_config",
-        "workspace_root": str(paths.workspace_root),
-        "config_path": str(paths.config_path),
+        "workspace_root": str(context.project_root),
+        "config_path": str(context.config_path),
         "config": document,
     }
 
 
 def config_get(workspace_root: Path, *, key: str) -> dict[str, object]:
-    paths = resolve_project_paths(workspace_root)
-    value = get_project_config_value(paths.config_path, key)
+    context = load_project_context(workspace_root)
+    if context.mode == "canonical":
+        document = config_list(workspace_root)["config"]
+        value: object = document
+        for segment in key.split("."):
+            if not isinstance(value, dict) or segment not in value:
+                raise LaunchError(f"Config key not found: {key}")
+            value = value[segment]
+    else:
+        value = get_project_config_value(context.config_path, key)
     return {
         "kind": "project_config_value",
-        "workspace_root": str(paths.workspace_root),
-        "config_path": str(paths.config_path),
+        "workspace_root": str(context.project_root),
+        "config_path": str(context.config_path),
         "key": key,
         "value": value,
     }
@@ -500,6 +517,7 @@ def config_keys(workspace_root: Path) -> dict[str, object]:
 
 def config_describe(workspace_root: Path, *, key: str) -> dict[str, object]:
     paths = resolve_project_paths(workspace_root)
+    context = load_project_context(workspace_root)
     matched = _match_config_help_entry(key)
     if matched is None:
         raise LaunchError(
@@ -509,7 +527,11 @@ def config_describe(workspace_root: Path, *, key: str) -> dict[str, object]:
     value: object = None
     has_value = False
     try:
-        value = get_project_config_value(paths.config_path, key)
+        value = (
+            config_get(workspace_root, key=key)["value"]
+            if context.mode == "canonical"
+            else get_project_config_value(paths.config_path, key)
+        )
         has_value = True
     except LaunchError as exc:
         if "Config key not found" not in str(exc):
@@ -531,16 +553,52 @@ def config_describe(workspace_root: Path, *, key: str) -> dict[str, object]:
 
 
 def config_set(workspace_root: Path, *, key: str, value_text: str) -> dict[str, object]:
+    context = load_project_context(workspace_root)
     paths = resolve_project_paths(workspace_root)
     value = parse_config_value_text(value_text)
     before: object = None
     try:
-        before = get_project_config_value(paths.config_path, key)
+        before = config_get(workspace_root, key=key)["value"]
     except LaunchError as exc:
         if "Config key not found" not in str(exc):
             raise
-    set_project_config_value(paths.config_path, key, value)
-    after = get_project_config_value(paths.config_path, key)
+    if context.mode == "canonical":
+        if key in {
+            "config_version",
+            "taskledger_dir",
+            "project_uuid",
+            "project_name",
+            "ledger_ref",
+            "ledger_parent_ref",
+            "ledger_next_task_number",
+            "ledger_branch_guard",
+        }:
+            raise LaunchError(
+                f"Config key {key} cannot be edited in canonical mode; "
+                "topology and ledger state are managed separately."
+            )
+        from tomlkit import dumps, parse, table
+
+        from taskledger.storage.atomic import atomic_write_text
+
+        try:
+            document = parse(context.config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise LaunchError(
+                f"Invalid canonical project config {context.config_path}: {exc}"
+            ) from exc
+        target = document
+        segments = key.split(".")
+        for segment in segments[:-1]:
+            if segment not in target:
+                target[segment] = table()
+            target = target[segment]
+        target[segments[-1]] = value
+        atomic_write_text(context.config_path, dumps(document))
+        after = config_get(workspace_root, key=key)["value"]
+    else:
+        set_project_config_value(paths.config_path, key, value)
+        after = get_project_config_value(paths.config_path, key)
     return {
         "kind": "project_config_updated",
         "workspace_root": str(paths.workspace_root),

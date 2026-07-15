@@ -19,6 +19,7 @@ from taskledger.cli_common import (
     render_json,
 )
 from taskledger.errors import LaunchError
+from taskledger.storage.project_context import load_project_context
 
 
 def register_config_commands(app: typer.Typer) -> None:
@@ -123,6 +124,23 @@ def register_config_commands(app: typer.Typer) -> None:
             payload,
             result_type="project_config_updated",
             human=_render_config_set(payload),
+        )
+
+    @app.command("path")
+    def path_command(ctx: typer.Context) -> None:
+        state = cli_state_from_context(ctx)
+        try:
+            context = load_project_context(state.cwd)
+            payload = {
+                "kind": "config_path",
+                "path": str(context.config_path),
+                "mode": context.mode,
+            }
+        except LaunchError as exc:
+            emit_error(ctx, exc)
+            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+        emit_payload(
+            ctx, payload, result_type="config_path", human=str(payload["path"])
         )
 
 

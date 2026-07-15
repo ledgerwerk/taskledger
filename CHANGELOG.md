@@ -1,3 +1,7 @@
+## Unreleased
+
+- Add Ledgercore 0.3 canonical `.ledger/` layout support with split data, logs, and indexes mounts, explicit legacy migration, and compatibility routing.
+
 # Changelog
 
 ## [v0.5.2] - 2026-07-10

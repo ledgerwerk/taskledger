@@ -214,3 +214,7 @@ payload = plan_guidance(Path.cwd(), "task-0001")
 - `sync_git_hooks_install`
 - `sync_git_hooks_status`
 - `sync_git_hooks_uninstall`
+
+## Canonical layout APIs
+
+Project and storage APIs resolve identity from `.ledger/ledger.toml` and expose named mount reports. Taskledger does not expose Ledgercore dataclasses as a public API.

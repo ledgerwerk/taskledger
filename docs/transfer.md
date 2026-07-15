@@ -76,3 +76,7 @@ Imported runtime locks are quarantined by default. After import, follow:
 taskledger next-action
 taskledger implement resume --reason "Continue imported implementation."
 ```
+
+## Canonical identity
+
+Archive identity comes from the shared Ledger manifest. Mutable ledger state remains in the canonical data mount. Physical mount paths are not part of the archive record schema.

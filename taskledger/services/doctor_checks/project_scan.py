@@ -7,7 +7,7 @@ from pathlib import Path
 from taskledger.storage.paths import ProjectLocator, ProjectPaths
 
 
-def scan_project_config(
+def scan_project_config(  # noqa: C901
     *,
     workspace_root: Path,
     resolved_paths: ProjectPaths,
@@ -17,6 +17,36 @@ def scan_project_config(
     repair_hints: list[str],
 ) -> None:
     """Scan project configuration, legacy state, and storage layout."""
+    from taskledger.storage.project_config import load_canonical_project_config
+    from taskledger.storage.project_context import load_project_context
+
+    try:
+        context = load_project_context(workspace_root, require_initialized=False)
+    except Exception:
+        context = None
+    if context is not None and context.mode == "canonical":
+        try:
+            load_canonical_project_config(context.config_path)
+            if context.project_uuid is None:
+                errors.append("Ledger manifest has no project UUID.")
+            if not context.paths.data_root.exists():
+                errors.append(
+                    f"Missing canonical data mount: {context.paths.data_root}."
+                )
+            elif not context.paths.storage_meta_path.exists():
+                errors.append(
+                    "Missing storage.yaml in canonical data mount: "
+                    f"{context.paths.data_root}."
+                )
+            if context.legacy_locator is not None:
+                warnings.append(
+                    "Verified legacy Taskledger files remain at "
+                    f"{context.legacy_locator.taskledger_dir}; canonical mode is "
+                    "active and legacy files are read-only."
+                )
+        except Exception as exc:
+            errors.append(str(exc))
+        return
 
     from taskledger.storage.paths import (
         DEFAULT_TASKLEDGER_DIR_NAME,
