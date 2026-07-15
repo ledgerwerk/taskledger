@@ -260,6 +260,7 @@ details in JSON context payloads.
 ### `taskledger.api.storage`
 
 - `storage_where`
+- `storage_path`
 - `storage_move`
 - `sync_preflight`
 - `sync_status`

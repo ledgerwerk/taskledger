@@ -622,15 +622,15 @@ Plan-materialized todos always use `source=plan`.
 
 ## Storage Compatibility
 
-Taskledger stores project-local configuration in `taskledger.toml` at the
-workspace root. `.taskledger.toml` is also read as a local override file when
-it exists.
+Taskledger stores canonical project configuration in `.ledger/ledger.toml`
+and `.ledger/task/config.toml`. Legacy `taskledger.toml` and `.taskledger.toml`
+remain readable during migration.
 
-The resolved `taskledger_dir` defaults to `.taskledger/` beside that config
-file, but `taskledger init --taskledger-dir /path/to/state` may point durable
-state elsewhere. Commands resolve config files upward from the starting
-directory and keep `--root` scoped to the source workspace, not the storage
-root.
+Plain `taskledger init` keeps authoritative data under `.ledger` and never
+infers a sibling store. External storage requires
+`taskledger init --sibling-ledger-root PATH --create-store`; each project is
+isolated under `PATH/taskledger/<project-uuid>`, with a matching binding.
+Commands keep `--root` scoped to the source workspace, not the storage root.
 
 Taskledger uses:
 
@@ -654,7 +654,7 @@ To migrate:
 ```bash
 taskledger migrate status
 taskledger migrate plan
-taskledger migrate apply --backup
+taskledger migrate apply --sibling-ledger-root PATH --backup
 ```
 
 After migration to layout 3, verify health with:
@@ -712,4 +712,4 @@ from local process checks; inspect handoffs or ask the user before repairing.
 
 ## Layout and migration commands
 
-`taskledger config path` reports the project-located Taskledger configuration. `taskledger storage path data|logs|indexes` reports a named mount. Legacy layout conversion is explicit: `migrate status`, `migrate plan`, and `migrate apply --backup`; canonical `storage move` is rejected because workspace and cache roots are shared Ledger settings.
+`taskledger config path` reports the project-located Taskledger configuration. `taskledger storage path data|indexes` reports a named mount. Legacy layout conversion is explicit and requires a destination: `migrate status`, `migrate plan`, and `migrate apply --sibling-ledger-root PATH --backup`; canonical `storage move` is rejected because storage mode is selected through explicit Ledger local configuration.

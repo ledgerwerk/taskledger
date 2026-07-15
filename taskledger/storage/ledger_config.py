@@ -25,7 +25,6 @@ LEDGER_CONFIG_KEYS = frozenset(
     {
         "ledger_ref",
         "ledger_parent_ref",
-        "ledger_next_task_number",
         "ledger_branch_guard",
     }
 )
@@ -38,17 +37,15 @@ DEFAULT_LEDGER_NAME = "taskledger"
 class LedgerConfig:
     ref: str = "main"
     parent_ref: str | None = None
-    next_task_number: int = 1
     branch_guard: Literal["off", "warn", "error"] = "off"
 
 
 @dataclass(slots=True, frozen=True)
 class LedgerConfigPatch:
-    """Partial update to apply to ledger config keys in .taskledger.toml."""
+    """Partial update to apply to branch state keys."""
 
     ref: str | None = None
     parent_ref: str | None = None
-    next_task_number: int | None = None
     branch_guard: Literal["off", "warn", "error"] | None = None
 
 
@@ -148,13 +145,6 @@ def _ledger_config_from_dict(data: dict[object, object]) -> LedgerConfig:
     else:
         parent_ref = None
 
-    next_task_number = data.get("ledger_next_task_number")
-    if next_task_number is not None:
-        if not isinstance(next_task_number, int) or next_task_number < 1:
-            raise LaunchError("ledger_next_task_number must be a positive integer.")
-    else:
-        next_task_number = 1
-
     branch_guard = data.get("ledger_branch_guard")
     if branch_guard is not None:
         if branch_guard not in ("off", "warn", "error"):
@@ -165,7 +155,6 @@ def _ledger_config_from_dict(data: dict[object, object]) -> LedgerConfig:
     return LedgerConfig(
         ref=ref,
         parent_ref=parent_ref,
-        next_task_number=next_task_number,
         branch_guard=branch_guard,  # type: ignore[arg-type]
     )
 
@@ -212,8 +201,6 @@ def update_ledger_config(config_path: Path, patch: LedgerConfigPatch) -> LedgerC
     # Validate patch values before writing
     if patch.ref is not None:
         validate_ledger_ref(patch.ref)
-    if patch.next_task_number is not None and patch.next_task_number < 1:
-        raise LaunchError("ledger_next_task_number must be a positive integer.")
     if patch.branch_guard is not None and patch.branch_guard not in (
         "off",
         "warn",
@@ -221,7 +208,6 @@ def update_ledger_config(config_path: Path, patch: LedgerConfigPatch) -> LedgerC
     ):
         raise LaunchError("ledger_branch_guard must be one of: off, warn, error.")
 
-    # Build the replacement values
     current_config = _ledger_config_from_dict(
         tomllib.loads(current_text) if current_text else {}
     )
@@ -231,22 +217,15 @@ def update_ledger_config(config_path: Path, patch: LedgerConfigPatch) -> LedgerC
         if patch.parent_ref is not None
         else (current_config.parent_ref or "")
     )
-    new_next = (
-        patch.next_task_number
-        if patch.next_task_number is not None
-        else current_config.next_task_number
-    )
     new_guard = (
         patch.branch_guard
         if patch.branch_guard is not None
         else current_config.branch_guard
     )
-
     updated_text = _apply_ledger_patch(
         current_text,
         ref=new_ref,
         parent_ref=new_parent_ref,
-        next_task_number=new_next,
         branch_guard=new_guard,
     )
 
@@ -257,7 +236,6 @@ def update_ledger_config(config_path: Path, patch: LedgerConfigPatch) -> LedgerC
     return LedgerConfig(
         ref=new_ref,
         parent_ref=new_parent_ref or None,
-        next_task_number=new_next,
         branch_guard=new_guard,
     )
 
@@ -267,7 +245,6 @@ def _apply_ledger_patch(
     *,
     ref: str,
     parent_ref: str,
-    next_task_number: int,
     branch_guard: str,
 ) -> str:
     """Rewrite ledger keys in TOML text, preserving everything else."""
@@ -276,13 +253,11 @@ def _apply_ledger_patch(
     keys_to_set = {
         "ledger_ref": ref,
         "ledger_parent_ref": parent_ref,
-        "ledger_next_task_number": str(next_task_number),
         "ledger_branch_guard": branch_guard,
     }
     toml_value_map = {
         "ledger_ref": lambda v: f'"{v}"',
         "ledger_parent_ref": lambda v: f'"{v}"',
-        "ledger_next_task_number": lambda v: v,
         "ledger_branch_guard": lambda v: f'"{v}"',
     }
 
@@ -325,7 +300,6 @@ def _apply_ledger_patch(
         for key in (
             "ledger_ref",
             "ledger_parent_ref",
-            "ledger_next_task_number",
             "ledger_branch_guard",
         ):
             if key in missing:
@@ -371,8 +345,6 @@ def _update_canonical_ledger_state(
     current = _load_canonical_ledger_state(path)
     if patch.ref is not None:
         validate_ledger_ref(patch.ref)
-    if patch.next_task_number is not None and patch.next_task_number < 1:
-        raise LaunchError("ledger_next_task_number must be a positive integer.")
     if patch.branch_guard is not None and patch.branch_guard not in (
         "off",
         "warn",
@@ -384,9 +356,6 @@ def _update_canonical_ledger_state(
         parent_ref=patch.parent_ref
         if patch.parent_ref is not None
         else current.parent_ref,
-        next_task_number=patch.next_task_number
-        if patch.next_task_number is not None
-        else current.next_task_number,
         branch_guard=patch.branch_guard
         if patch.branch_guard is not None
         else current.branch_guard,
@@ -395,10 +364,9 @@ def _update_canonical_ledger_state(
 
     atomic_write_text(
         path,
-        "schema_version = 1\n"
+        "schema_version = 2\n"
         f"ledger_ref = {updated.ref!r}\n"
         f"ledger_parent_ref = {(updated.parent_ref or '')!r}\n"
-        f"ledger_next_task_number = {updated.next_task_number}\n"
         f"ledger_branch_guard = {updated.branch_guard!r}\n",
     )
     return updated

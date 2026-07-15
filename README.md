@@ -810,4 +810,4 @@ source refs, evidence refs, reviews, and handoffs.
 
 ## Canonical Ledger layout
 
-New projects use Ledgercore's canonical `.ledger/` marker. Taskledger configuration is stored at `.ledger/task/config.toml`; durable checkout data, logs, and rebuildable indexes resolve through the registered `data`, `logs`, and `indexes` mounts. Legacy projects remain readable during the compatibility window. Use `taskledger migrate status`, `taskledger migrate plan`, then `taskledger migrate apply --backup` for explicit migration.
+New projects use Ledgercore's canonical `.ledger/` marker. Taskledger configuration is stored at `.ledger/task/config.toml`; plain init keeps authoritative data under `.ledger` and rebuildable indexes in cache. External data requires `taskledger init --sibling-ledger-root PATH --create-store` and is isolated under `PATH/taskledger/<project-uuid>`. Legacy projects remain readable during the compatibility window. Use `taskledger migrate status`, `taskledger migrate plan`, then `taskledger migrate apply --sibling-ledger-root PATH --backup` for explicit migration.

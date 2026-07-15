@@ -52,7 +52,11 @@ def _registration_document() -> dict[str, Any]:
     return {
         "config": {"location": "project", "path": "task/config.toml"},
         "mounts": {
-            name: {"storage": storage, "scope": scope, "path": path}
+            name: {
+                "storage": storage,
+                **({"scope": scope} if scope is not None else {}),
+                "path": path,
+            }
             for name, (storage, scope, path) in CANONICAL_MOUNT_SPECS.items()
         },
     }
@@ -114,7 +118,11 @@ def _registration_matches(existing: Any) -> bool:
     if mounts is None:
         return False
     actual = {
-        name: {key: mounts[name].get(key) for key in ("storage", "scope", "path")}
+        name: {
+            "storage": mounts[name].get("storage"),
+            **({"scope": mounts[name].get("scope")} if "scope" in mounts[name] else {}),
+            "path": mounts[name].get("path"),
+        }
         for name in mounts
     }
     return bool(actual == expected["mounts"])
@@ -134,9 +142,14 @@ def _conflict(existing: Any) -> str | None:
     if set(mounts) != set(CANONICAL_MOUNT_SPECS):
         return "ledgers.taskledger.mounts"
     for name, (storage, scope, path) in CANONICAL_MOUNT_SPECS.items():
-        for key, expected in (("storage", storage), ("scope", scope), ("path", path)):
+        expected_values = {"storage": storage, "path": path}
+        if scope is not None:
+            expected_values["scope"] = scope
+        for key, expected in expected_values.items():
             if mounts[name].get(key) != expected:
                 return f"ledgers.taskledger.mounts.{name}.{key}"
+        if scope is None and "scope" in mounts[name]:
+            return f"ledgers.taskledger.mounts.{name}.scope"
     return None
 
 
@@ -150,7 +163,10 @@ def _set_registration(doc: Any) -> None:
     for name, (storage, scope, path) in CANONICAL_MOUNT_SPECS.items():
         mount = mounts.setdefault(name, table())
         mount["storage"] = storage
-        mount["scope"] = scope
+        if scope is None:
+            mount.pop("scope", None)
+        else:
+            mount["scope"] = scope
         mount["path"] = path
 
 
@@ -251,3 +267,59 @@ def ensure_taskledger_registration(
 
 
 __all__ = ["ManifestMutationResult", "ensure_taskledger_registration"]
+
+
+def upgrade_taskledger_registration(
+    project_root: Path,
+    *,
+    expected_project_uuid: str,
+) -> ManifestMutationResult:
+    """Upgrade only the recognized Ledgercore 0.3 Taskledger registration."""
+    import uuid
+
+    try:
+        normalized_uuid = str(uuid.UUID(expected_project_uuid))
+    except ValueError as exc:
+        raise LaunchError(f"Invalid project UUID {expected_project_uuid!r}.") from exc
+    manifest_path = project_root.expanduser().resolve() / ".ledger" / "ledger.toml"
+    lock = FileLock(str(manifest_path) + ".lock")
+    with lock:
+        if not manifest_path.exists():
+            raise LaunchError(f"Missing Ledger manifest {manifest_path}.")
+        current = manifest_path.read_text(encoding="utf-8")
+        document = parse(current)
+        existing = document.get("ledgers", {}).get(CANONICAL_LEDGER_NAME)
+        if _registration_matches(existing):
+            return ManifestMutationResult(
+                manifest_path, normalized_uuid, None, False, False
+            )
+        old_mounts = {
+            "data": ("workspace", "checkout", "task/data"),
+            "logs": ("workspace", "checkout", "task/logs"),
+            "indexes": ("cache", "checkout", "task/indexes"),
+        }
+        mounts = existing.get("mounts") if hasattr(existing, "get") else None
+        if not isinstance(mounts, Mapping) or set(mounts) != set(old_mounts):
+            raise LaunchError("Refusing to rewrite an unknown Taskledger registration.")
+        for name, expected in old_mounts.items():
+            actual = mounts[name]
+            if (
+                not isinstance(actual, Mapping)
+                or tuple(actual.get(key) for key in ("storage", "scope", "path"))
+                != expected
+            ):
+                raise LaunchError(
+                    "Refusing to rewrite an unknown Taskledger registration."
+                )
+        _set_registration(document)
+        contents = dumps(document)
+        _validate_bytes(manifest_path, contents)
+        atomic_write_text(manifest_path, contents)
+        return ManifestMutationResult(manifest_path, normalized_uuid, None, True, False)
+
+
+__all__ = [
+    "ManifestMutationResult",
+    "ensure_taskledger_registration",
+    "upgrade_taskledger_registration",
+]

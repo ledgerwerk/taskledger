@@ -48,10 +48,17 @@ def test_migration_plan_is_read_only(tmp_path: Path) -> None:
 
 def test_migration_creates_backup_and_preserves_legacy(tmp_path: Path) -> None:
     _legacy_project(tmp_path)
-    result = apply_layout_migration(tmp_path, backup=True)
+    sibling_root = tmp_path / "shared"
+    sibling_root.mkdir()
+    (sibling_root / ".ledger-store").write_text("store\n", encoding="utf-8")
+    result = apply_layout_migration(
+        tmp_path,
+        backup=True,
+        sibling_ledger_root=sibling_root,
+    )
     assert result["status"] == "applied"
     assert Path(str(result["backup"])).exists()
     assert (tmp_path / "taskledger.toml").exists()
     assert (tmp_path / ".taskledger").exists()
-    status = migration_status(tmp_path)
-    assert status["project_mode"] == "canonical"
+    status = migration_status(tmp_path, sibling_ledger_root=sibling_root)
+    assert status["status"] == "up_to_date"

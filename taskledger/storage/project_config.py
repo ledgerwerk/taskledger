@@ -1447,7 +1447,7 @@ def render_canonical_taskledger_config(
         raise LaunchError("Canonical Taskledger config version must be 3.")
     return (
         "# Project-local Taskledger configuration.\n"
-        "# Topology and mutable ledger state belong to Ledgercore and "
+        "# Storage topology belongs to Ledgercore; branch state belongs to "
         "data/state.toml.\n"
         "config_version = 3\n\n"
         "[ledger]\n"
@@ -1482,6 +1482,8 @@ def _load_canonical_document(path: Path) -> dict[str, object]:
         "ledger_parent_ref",
         "ledger_next_task_number",
         "ledger_branch_guard",
+        "workspace_root",
+        "workspace_provider",
     }
     found = sorted(forbidden.intersection(data))
     if found:

@@ -542,4 +542,4 @@ evidence refs, implementation/review refs, and handoffs.
 
 ## Canonical storage layout
 
-New projects use `.ledger/ledger.toml` and `.ledger/task/config.toml`. Resolve `data`, `logs`, and `indexes` through `taskledger storage where` or `taskledger storage path`. Migrate legacy projects explicitly with `taskledger migrate status`, `taskledger migrate plan`, and `taskledger migrate apply --backup`. Do not use canonical `storage move`; shared Ledger workspace/cache roots are configured through Ledgercore local settings.
+New projects use `.ledger/ledger.toml` and `.ledger/task/config.toml`. Plain init keeps authoritative data under `.ledger`; use `taskledger init --sibling-ledger-root PATH --create-store` only for an explicitly selected shared root, where data is isolated under `PATH/taskledger/<project-uuid>`. Resolve `data` and `indexes` through `taskledger storage where` or `taskledger storage path`. Migrate legacy projects explicitly with `taskledger migrate status`, `taskledger migrate plan`, and `taskledger migrate apply --sibling-ledger-root PATH --backup`. Do not infer `../ledger` or use Git automatically.

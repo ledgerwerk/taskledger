@@ -26,7 +26,6 @@ def ledger_status_command(ctx: typer.Context) -> None:
     state = ctx.obj
     assert isinstance(state, CLIState)
     try:
-        from taskledger.ids import format_task_id
         from taskledger.refs import global_ref_for_local_id
         from taskledger.storage.ledger_config import (
             load_ledger_config,
@@ -49,7 +48,9 @@ def ledger_status_command(ctx: typer.Context) -> None:
 
     task_count = len(tasks)
     active_task_id = active.task_id if active else None
-    next_task_id = format_task_id(config.next_task_number)
+    from taskledger.storage.task_ids import scan_task_id_inventory
+
+    next_task_id = scan_task_id_inventory(paths).next_task_id
     next_task_ref = global_ref_for_local_id(state.cwd, next_task_id)
     payload = {
         "ok": True,
@@ -58,8 +59,7 @@ def ledger_status_command(ctx: typer.Context) -> None:
         "ledger_name": identity.name,
         "ledger_ref": config.ref,
         "ledger_parent_ref": config.parent_ref,
-        "ledger_next_task_number": config.next_task_number,
-        "ledger_dir": str(paths.ledger_dir.relative_to(state.cwd)),
+        "ledger_dir": str(paths.ledger_dir),
         "task_count": task_count,
         "active_task_id": active_task_id,
         "next_task_id": next_task_id,
@@ -74,7 +74,7 @@ def ledger_status_command(ctx: typer.Context) -> None:
         f"  Parent ref:  {parent_display}",
         f"  Next task:   {next_task_id}",
         f"  Next ref:    {next_task_ref}",
-        f"  Storage:     {paths.ledger_dir.relative_to(state.cwd)}",
+        f"  Storage:     {paths.ledger_dir}",
         f"  Tasks:       {task_count}",
         f"  Active task: {active_display}",
     ]
@@ -209,7 +209,6 @@ def ledger_fork_command(
             LedgerConfigPatch(
                 ref=ref,
                 parent_ref=previous_ref,
-                next_task_number=config.next_task_number,
             ),
         )
     except LaunchError as exc:
@@ -222,13 +221,11 @@ def ledger_fork_command(
         "previous_ledger_ref": previous_ref,
         "ledger_ref": updated.ref,
         "ledger_parent_ref": updated.parent_ref,
-        "ledger_next_task_number": updated.next_task_number,
         "config_path": str(locator.config_path),
     }
     human_lines = [
         "LEDGER FORK",
         f"  forked ledger {previous_ref} -> {ref}",
-        f"  next task: task-{updated.next_task_number:04d}",
         f"  config updated: {locator.config_path}",
     ]
     emit_payload(ctx, payload, human="\n".join(human_lines))
@@ -320,9 +317,7 @@ def ledger_adopt_command(
     assert isinstance(state, CLIState)
     try:
         from taskledger.storage.ledger_config import (
-            LedgerConfigPatch,
             load_ledger_config,
-            update_ledger_config,
         )
         from taskledger.storage.paths import (
             load_project_locator,
@@ -345,23 +340,26 @@ def ledger_adopt_command(
         current_tasks = list_tasks(state.cwd)
         current_ids = [t.id for t in current_tasks]
         if task_ref in current_ids:
-            # Renumber: allocate next available ID
-            from taskledger.ids import allocate_ledger_task_id
+            # Renumber only the imported bundle using the shared allocator.
+            from taskledger.storage.task_ids import allocate_task_directory
 
-            new_task_id, new_next = allocate_ledger_task_id(
-                current_ids, config.next_task_number
-            )
+            new_task_id, reserved_dir = allocate_task_directory(state.cwd)
         else:
             new_task_id = task_ref
-            new_next = config.next_task_number
+            reserved_dir = None
 
         # Copy task directory
         import shutil
 
-        target_task_dir = root / "ledgers" / config.ref / "tasks" / new_task_id
-        if target_task_dir.exists():
+        target_task_dir = reserved_dir or (
+            root / "ledgers" / config.ref / "tasks" / new_task_id
+        )
+        if reserved_dir is None and target_task_dir.exists():
             raise LaunchError(f"Target task directory already exists: {new_task_id}")
-        shutil.copytree(source_task_dir, target_task_dir)
+        if reserved_dir is not None:
+            shutil.copytree(source_task_dir, target_task_dir, dirs_exist_ok=True)
+        else:
+            shutil.copytree(source_task_dir, target_task_dir)
 
         # Rewrite task.md with adopted metadata
         task_md = target_task_dir / "task.md"
@@ -381,13 +379,6 @@ def ledger_adopt_command(
             from taskledger.storage.task_store import rewrite_task_refs
 
             rewrite_task_refs(target_task_dir, task_ref, new_task_id)
-
-        # Advance config counter if needed
-        if new_next != config.next_task_number:
-            update_ledger_config(
-                locator.config_path,
-                LedgerConfigPatch(next_task_number=new_next),
-            )
 
     except LaunchError as exc:
         emit_error(ctx, exc)
@@ -440,16 +431,6 @@ def ledger_doctor_command(ctx: typer.Context) -> None:
                 "check": "ledger_dir_exists",
                 "status": "fail",
                 "message": f"Ledger directory missing: {ledger_dir}",
-            }
-        )
-
-    # Check ledger_next_task_number is positive
-    if config.next_task_number < 1:
-        issues.append(
-            {
-                "check": "next_task_number_positive",
-                "status": "fail",
-                "message": "ledger_next_task_number must be positive.",
             }
         )
 

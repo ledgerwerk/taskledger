@@ -65,7 +65,7 @@ def storage_path(workspace_root: Path, mount: str) -> dict[str, object]:
             "Mount paths are unavailable in legacy mode; "
             "use `taskledger migrate` first."
         )
-    resolved = context.layout.mounts[mount]
+    resolved = context.layout.mounts["data" if mount == "logs" else mount]
     return {
         "kind": "storage_path",
         "mount": mount,
@@ -75,4 +75,7 @@ def storage_path(workspace_root: Path, mount: str) -> dict[str, object]:
         "source": str(resolved.source),
         "initialized": resolved.path.exists(),
         "mode": context.mode,
+        "storage_mode": (
+            "sibling" if str(resolved.storage) == "workspace" else "repository"
+        ),
     }

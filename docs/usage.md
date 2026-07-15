@@ -759,4 +759,4 @@ Evidence import is explicit and auditable through
 
 ## Canonical project layout
 
-Taskledger uses `.ledger/ledger.toml` and `.ledger/task/config.toml`. `taskledger storage where` reports the resolved checkout-scoped `data`, `logs`, and `indexes` mounts. Use `taskledger storage path data|logs|indexes` for one mount without initializing lazy mounts.
+Taskledger uses `.ledger/ledger.toml` and `.ledger/task/config.toml`. Plain init resolves authoritative data under `.ledger`; explicit sibling storage uses `--sibling-ledger-root PATH` and isolates data under `PATH/taskledger/<project-uuid>`. `taskledger storage where` reports the resolved `data` and `indexes` mounts. Use `taskledger storage path data|indexes` for one mount without initializing lazy mounts.

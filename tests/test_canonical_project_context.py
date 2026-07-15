@@ -32,19 +32,31 @@ def test_fresh_canonical_context_is_read_only_before_initialization(
     assert after == before
 
 
-def test_canonical_init_resolves_three_mounts_and_preserves_identity(
-    tmp_path: Path,
-) -> None:
+def test_canonical_init_is_repository_local_by_default(tmp_path: Path) -> None:
     context, _ = init_canonical_project_state(tmp_path, project_name="demo")
     assert context.mode == "canonical"
     assert context.project_uuid
-    assert set(context.layout.mounts) == {"data", "logs", "indexes"}
-    assert context.layout.mounts["data"].scope == "checkout"
-    assert context.layout.mounts["indexes"].storage == "cache"
+    assert set(context.layout.mounts) == {"data", "indexes"}
+    assert context.layout.mounts["data"].storage == "repository"
+    assert context.paths.data_root == tmp_path / ".ledger" / "task" / "taskledger"
     assert context.paths.storage_meta_path.exists()
-    assert not context.paths.logs_root.exists()
-    assert not context.paths.indexes_root.exists()
+    assert not (tmp_path.parent / "ledger").exists()
     assert not (tmp_path / ".taskledger").exists()
+
+
+def test_explicit_sibling_root_is_uuid_scoped(tmp_path: Path) -> None:
+    sibling_root = tmp_path / "shared-ledger"
+    project = tmp_path / "project"
+    project.mkdir()
+    context, _ = init_canonical_project_state(
+        project,
+        sibling_ledger_root=sibling_root,
+        create_store=True,
+    )
+    assert context.paths.data_root == sibling_root / "taskledger" / context.project_uuid
+    assert context.layout.mounts["data"].storage == "workspace"
+    assert (sibling_root / ".ledger-store").is_file()
+    assert (context.paths.data_root / ".ledger-project.toml").is_file()
 
 
 def test_nested_canonical_context_uses_project_root(tmp_path: Path) -> None:

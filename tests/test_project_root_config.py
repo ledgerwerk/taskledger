@@ -57,9 +57,10 @@ def test_init_writes_root_taskledger_toml_and_default_storage(tmp_path: Path) ->
     result = runner.invoke(app, ["--root", str(tmp_path), "init"])
 
     assert result.exit_code == 0, result.stdout
-    assert (tmp_path / "taskledger.toml").exists()
-    assert (tmp_path / ".taskledger" / "storage.yaml").exists()
-    assert not (tmp_path / ".taskledger" / "project.toml").exists()
+    assert (tmp_path / ".ledger" / "ledger.toml").exists()
+    assert (tmp_path / ".ledger" / "task" / "config.toml").exists()
+    assert (tmp_path / ".ledger" / "task" / "taskledger" / "storage.yaml").exists()
+    assert not (tmp_path.parent / "ledger").exists()
 
 
 # sw: f=specs/behavior/features/project_root_config/project-root-config.feature
@@ -71,8 +72,8 @@ def test_init_writes_project_name_from_workspace_basename(tmp_path: Path) -> Non
     result = runner.invoke(app, ["--root", str(workspace), "init"])
 
     assert result.exit_code == 0, result.stdout
-    config_text = (workspace / "taskledger.toml").read_text(encoding="utf-8")
-    assert 'project_name = "odoo17-addon"' in config_text
+    manifest_text = (workspace / ".ledger" / "ledger.toml").read_text(encoding="utf-8")
+    assert 'name = "odoo17-addon"' in manifest_text
     json_result = runner.invoke(app, ["--root", str(workspace), "--json", "init"])
     assert json_result.exit_code == 0, json_result.stdout
     payload = json.loads(json_result.stdout)
@@ -97,8 +98,8 @@ def test_init_project_name_option_overrides_basename(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0, result.stdout
-    config_text = (workspace / "taskledger.toml").read_text(encoding="utf-8")
-    assert 'project_name = "Odoo 17 Addons"' in config_text
+    manifest_text = (workspace / ".ledger" / "ledger.toml").read_text(encoding="utf-8")
+    assert 'name = "Odoo 17 Addons"' in manifest_text
 
 
 @pytest.mark.specweave(
@@ -191,7 +192,9 @@ def test_cli_discovers_taskledger_toml_from_subdirectory(
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     assert payload["result"]["workspace_root"] == str(workspace)
-    assert payload["result"]["config_path"] == str(workspace / "taskledger.toml")
+    assert payload["result"]["config_path"] == str(
+        workspace / ".ledger" / "task" / "config.toml"
+    )
 
 
 # sw: f=specs/behavior/features/project_root_config/project-root-config.feature

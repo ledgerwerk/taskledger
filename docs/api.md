@@ -188,6 +188,7 @@ payload = plan_guidance(Path.cwd(), "task-0001")
 ### Storage API
 
 - `storage_where`
+- `storage_path`
 - `storage_move`
 - `sync_preflight`
 - `sync_status`

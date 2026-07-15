@@ -37,7 +37,7 @@ from taskledger.domain.models import (
     TodoCollection,
 )
 from taskledger.errors import LaunchError
-from taskledger.ids import allocate_ledger_task_id, slugify_project_ref
+from taskledger.ids import TASK_ID_FORMAT, slugify_project_ref
 from taskledger.storage.agent_logs import (
     append_agent_command_log,
     load_agent_command_logs,
@@ -45,16 +45,11 @@ from taskledger.storage.agent_logs import (
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.events import append_event, load_events
 from taskledger.storage.indexes import rebuild_v2_indexes
-from taskledger.storage.ledger_config import (
-    LedgerConfigPatch,
-    load_ledger_config,
-    update_ledger_config,
-)
 from taskledger.storage.locks import write_lock
 from taskledger.storage.paths import load_project_locator
 from taskledger.storage.project_identity import (
     assert_same_project_uuid,
-    ensure_project_uuid,
+    load_project_uuid,
     normalize_project_uuid,
     project_name_or_default,
     project_slug_or_default,
@@ -262,6 +257,9 @@ def import_project_payload(
         _clear_v2_state(paths)
     else:
         _assert_import_will_not_overwrite_tasks(workspace_root, imported_task_ids)
+    from taskledger.storage.task_ids import reserve_task_directories
+
+    reserve_task_directories(paths, imported_task_ids)
     payload_for_import = dict(payload)
     payload_for_import["v2"] = rewritten_v2
     _import_v2_payload(
@@ -272,7 +270,9 @@ def import_project_payload(
     )
     rebuilt_counts = rebuild_v2_indexes(paths)
     counts = {key: value for key, value in rebuilt_counts.items()}
-    next_task_number = repair_ledger_next_task_number(workspace_root)
+    from taskledger.storage.task_ids import scan_task_id_inventory
+
+    next_task_id = scan_task_id_inventory(resolve_v2_paths(workspace_root)).next_task_id
     return {
         "kind": "taskledger_import",
         "replace": replace,
@@ -288,7 +288,7 @@ def import_project_payload(
         "task_id_map": task_id_map,
         "renumbered": renumbered,
         "imported_task_ids": imported_task_ids,
-        "ledger_next_task_number": next_task_number,
+        "next_task_id": next_task_id,
     }
 
 
@@ -465,9 +465,10 @@ def _build_import_task_id_map(
 ) -> dict[str, str]:
     existing_ids = {task.id for task in list_v2_tasks(workspace_root)}
     allocated_ids = set(existing_ids)
-    locator = load_project_locator(workspace_root)
-    ledger = load_ledger_config(locator.config_path)
-    next_number = ledger.next_task_number
+    from taskledger.storage.task_ids import scan_task_id_inventory
+
+    inventory = scan_task_id_inventory(resolve_v2_paths(workspace_root))
+    next_number = inventory.highest_number + 1
     id_map: dict[str, str] = {}
     for incoming in incoming_task_ids:
         if incoming in id_map:
@@ -478,9 +479,10 @@ def _build_import_task_id_map(
             continue
         if id_policy in {"preserve", "fail-on-conflict"}:
             raise LaunchError(f"Task id already exists: {incoming}")
-        new_id, next_number = allocate_ledger_task_id(
-            sorted(allocated_ids), next_number
-        )
+        while TASK_ID_FORMAT.format(next_number) in allocated_ids:
+            next_number += 1
+        new_id = TASK_ID_FORMAT.format(next_number)
+        next_number += 1
         id_map[incoming] = new_id
         allocated_ids.add(new_id)
     return id_map
@@ -562,22 +564,6 @@ def _assert_import_will_not_overwrite_tasks(
         raise LaunchError(
             "Import would overwrite existing tasks: " + ", ".join(conflicts)
         )
-
-
-def repair_ledger_next_task_number(workspace_root: Path) -> int | None:
-    paths = resolve_v2_paths(workspace_root)
-    max_task_number = _max_numeric_task_number(paths.tasks_dir)
-    if max_task_number is None:
-        return None
-    locator = load_project_locator(workspace_root)
-    ledger = load_ledger_config(locator.config_path)
-    if ledger.next_task_number <= max_task_number:
-        updated = update_ledger_config(
-            locator.config_path,
-            LedgerConfigPatch(next_task_number=max_task_number + 1),
-        )
-        return updated.next_task_number
-    return ledger.next_task_number
 
 
 def _max_numeric_task_number(tasks_dir: Path) -> int | None:
@@ -794,7 +780,9 @@ def write_project_archive(
     """Export current-ledger state into a gzip-compressed tar archive."""
     paths = ensure_v2_layout(workspace_root)
     locator = load_project_locator(workspace_root)
-    project_uuid = ensure_project_uuid(locator.config_path)
+    project_uuid = load_project_uuid(locator.config_path)
+    if project_uuid is None:
+        raise LaunchError("Project manifest does not define a project UUID.")
     project_name = project_name_or_default(
         locator.config_path, workspace_root=locator.workspace_root
     )
@@ -1012,7 +1000,9 @@ def import_project_archive(
             str(payload.get("ledger_ref", "")) if isinstance(payload, dict) else ""
         )
     locator = load_project_locator(workspace_root)
-    local_uuid = ensure_project_uuid(locator.config_path)
+    local_uuid = load_project_uuid(locator.config_path)
+    if local_uuid is None:
+        raise LaunchError("Project manifest does not define a project UUID.")
     assert_same_project_uuid(archive_uuid, local_uuid)
 
     counts: dict[str, object] = {}
@@ -1081,7 +1071,7 @@ def import_project_archive(
         "task_id_map": result.get("task_id_map", {}),
         "renumbered": result.get("renumbered", []),
         "imported_task_ids": result.get("imported_task_ids", []),
-        "ledger_next_task_number": result.get("ledger_next_task_number"),
+        "next_task_id": result.get("next_task_id"),
         "imported_artifacts": imported_artifacts,
         "next_command": _archive_import_next_command(result),
     }
@@ -1132,7 +1122,9 @@ def _assert_payload_project_uuid(
         return
     payload_uuid = normalize_project_uuid(raw_uuid)
     locator = load_project_locator(workspace_root)
-    local_uuid = ensure_project_uuid(locator.config_path)
+    local_uuid = load_project_uuid(locator.config_path)
+    if local_uuid is None:
+        raise LaunchError("Project manifest does not define a project UUID.")
     assert_same_project_uuid(payload_uuid, local_uuid)
 
 

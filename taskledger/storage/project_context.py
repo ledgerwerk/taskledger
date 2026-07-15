@@ -8,7 +8,8 @@ and the Taskledger-owned subpaths below resolved mounts.
 from __future__ import annotations
 
 import importlib
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal, cast
 
@@ -20,6 +21,11 @@ from ledgercore import (
     parse_ledger_local_config,
     parse_ledger_project_manifest,
     resolve_ledger_layout,
+)
+from ledgercore.layout import (
+    LedgerLocalConfig,
+    LedgerProjectManifest,
+    ResolvedMount,
 )
 
 from taskledger.errors import LaunchError
@@ -53,6 +59,12 @@ InitializationStatus = Literal[
     "invalid_registration",
     "missing_config",
     "missing_data",
+    "missing_sibling_store",
+    "missing_store_marker",
+    "missing_local_provider",
+    "missing_binding",
+    "binding_mismatch",
+    "old_canonical_layout",
     "missing_storage_meta",
     "migration_required",
     "ready",
@@ -62,14 +74,13 @@ CANONICAL_LEDGER_NAME = "taskledger"
 CANONICAL_LEDGER_CODE = "tl"
 CANONICAL_SHORT_DIRECTORY = "task"
 CANONICAL_CONFIG_RELATIVE_PATH = Path("task") / "config.toml"
-CANONICAL_MOUNT_NAMES = ("data", "logs", "indexes")
+CANONICAL_MOUNT_NAMES = ("data", "indexes")
 CANONICAL_MOUNT_SPECS = {
-    "data": ("workspace", "checkout", "task/data"),
-    "logs": ("workspace", "checkout", "task/logs"),
-    "indexes": ("cache", "checkout", "task/indexes"),
+    "data": ("repository", None, "task/taskledger"),
+    "indexes": ("cache", "checkout", "task/taskledger-indexes"),
 }
 CANONICAL_CONFIG_VERSION = 3
-CANONICAL_STORAGE_LAYOUT_VERSION = 4
+CANONICAL_STORAGE_LAYOUT_VERSION = 5
 LEGACY_CONFIG_FILENAMES = (".taskledger.toml", "taskledger.toml")
 
 
@@ -293,21 +304,86 @@ def _validate_registration(layout: ResolvedLedgerLayout) -> None:
     expected_names = set(CANONICAL_MOUNT_NAMES)
     if names != expected_names:
         raise LaunchError(
-            "Taskledger registration must define exactly data, logs, and "
-            "indexes mounts; "
+            "Taskledger registration must define exactly data and indexes mounts; "
             f"found {', '.join(sorted(names)) or '(none)'}"
         )
     for name, (storage, scope, path) in CANONICAL_MOUNT_SPECS.items():
         mount = layout.mounts[name]
+        if name == "data" and str(mount.storage) == "workspace":
+            if str(mount.scope) != "project" or mount.path != (
+                mount.scoped_root / layout.project_uuid
+            ).resolve(strict=False):
+                raise LaunchError(
+                    "Explicit Taskledger sibling data must resolve to "
+                    "<root>/taskledger/<project-uuid>."
+                )
+            continue
         if (
             str(mount.storage) != storage
-            or str(mount.scope) != scope
+            or (scope is not None and str(mount.scope) != scope)
             or str(mount.path).replace("\\", "/").endswith(path) is False
         ):
             raise LaunchError(
                 f"Taskledger mount {name!r} does not match required "
-                f"{storage}/{scope}/{path}."
+                f"{storage}/{scope or 'repository'}/{path}."
             )
+
+
+def _resolve_taskledger_layout(
+    locator: LedgerProjectLocator,
+    manifest: LedgerProjectManifest,
+    local: LedgerLocalConfig,
+    *,
+    environ: dict[str, str] | None = None,
+) -> ResolvedLedgerLayout:
+    """Resolve repository-local data or an explicitly selected sibling root."""
+    if environ is None:
+        environ = dict(os.environ)
+    if environ.get("LEDGER_WORKSPACE_ROOT"):
+        raise LaunchError(
+            "LEDGER_WORKSPACE_ROOT is not a supported implicit Taskledger "
+            "storage selection. Use --sibling-ledger-root or local configuration."
+        )
+    layout = resolve_ledger_layout(
+        locator, manifest, CANONICAL_LEDGER_NAME, local_config=local, environ=environ
+    )
+    workspace_root = getattr(local, "workspace_root", None)
+    workspace_provider = getattr(local, "workspace_provider", None)
+    if workspace_provider is not None:
+        raise LaunchError(
+            "Taskledger does not support implicit workspace provider selection. "
+            "Set storage.workspace.root explicitly with --sibling-ledger-root."
+        )
+    if workspace_root is None:
+        return layout
+    sibling_root = workspace_root.resolve(strict=False)
+    marker = sibling_root / ".ledger-store"
+    if not sibling_root.exists():
+        raise LaunchError(
+            f"Explicit Taskledger sibling root does not exist: {sibling_root}"
+        )
+    if not sibling_root.is_dir():
+        raise LaunchError(
+            f"Explicit Taskledger sibling root is not a directory: {sibling_root}"
+        )
+    if not marker.is_file():
+        raise LaunchError(
+            f"Explicit Taskledger sibling root is missing marker: {marker}"
+        )
+    target_root = (sibling_root / "taskledger" / layout.project_uuid).resolve(
+        strict=False
+    )
+    data_mount = ResolvedMount(
+        name="data",
+        storage="workspace",
+        scope="project",
+        scoped_root=(sibling_root / "taskledger").resolve(strict=False),
+        path=target_root,
+        source="local-root",
+    )
+    mounts = dict(layout.mounts)
+    mounts["data"] = data_mount
+    return replace(layout, mounts=mounts)
 
 
 def load_project_context(
@@ -355,8 +431,8 @@ def load_project_context(
             else {}
         )
         local = parse_ledger_local_config(local_doc, project_root=locator.project_root)
-        layout = resolve_ledger_layout(
-            locator, manifest, CANONICAL_LEDGER_NAME, local_config=local
+        layout = _resolve_taskledger_layout(
+            locator, manifest, local, environ=dict(os.environ)
         )
         _validate_registration(layout)
     except LedgerLayoutError as exc:
@@ -378,13 +454,22 @@ def load_project_context(
     else:
         config = load_canonical_project_config(config_path)
         state = TaskledgerInitializationState("ready")
-    data_root = layout.mounts["data"].path
+    data_mount = layout.mounts["data"]
+    data_root = data_mount.path
+    explicit_sibling = str(data_mount.storage) == "workspace"
+    if explicit_sibling:
+        sibling_root = data_mount.scoped_root.parent
+        marker = sibling_root / ".ledger-store"
+        if not marker.is_file():
+            raise LaunchError(
+                f"Explicit Taskledger sibling root is missing marker: {marker}"
+            )
     ledger = _load_state(data_root / "state.toml")
     paths = _paths_for_mounts(
         locator.project_root,
         config_path,
         data_root,
-        layout.mounts["logs"].path,
+        data_root,
         layout.mounts["indexes"].path,
         ledger.ref,
     )
@@ -394,6 +479,10 @@ def load_project_context(
                 f"Taskledger data mount is not initialized at {data_root}. "
                 "Run `taskledger init`."
             )
+        if explicit_sibling:
+            from taskledger.storage.project_binding import validate_project_binding
+
+            validate_project_binding(data_root, project_uuid=layout.project_uuid)
     return TaskledgerProjectContext(
         mode="canonical",
         project_root=locator.project_root,
@@ -414,15 +503,19 @@ def _load_state(path: Path) -> LedgerConfig:
         return LedgerConfig()
     document = _load_toml(path)
     try:
-        raw_next = document.get("ledger_next_task_number", 1)
-        if not isinstance(raw_next, int):
+        schema_version = document.get("schema_version", 1)
+        if schema_version != 2:
             raise LaunchError(
-                "ledger_next_task_number must be an integer in state.toml."
+                f"Canonical ledger state {path} must use schema_version = 2."
+            )
+        if "ledger_next_task_number" in document:
+            raise LaunchError(
+                "Canonical ledger state contains forbidden "
+                "ledger_next_task_number; run taskledger migrate."
             )
         return LedgerConfig(
             ref=str(document.get("ledger_ref", "main")),
             parent_ref=(str(document.get("ledger_parent_ref")) or None),
-            next_task_number=raw_next,
             branch_guard=cast(
                 Literal["off", "warn", "error"],
                 str(document.get("ledger_branch_guard", "off")),

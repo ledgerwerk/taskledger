@@ -9,12 +9,10 @@ from taskledger.storage.init import init_canonical_project_state
 from taskledger.storage.project_context import load_project_context
 
 
-def test_mount_paths_are_separate_and_lazy(tmp_path: Path) -> None:
+def test_authoritative_and_cache_mounts_are_separate_and_lazy(tmp_path: Path) -> None:
     context, _ = init_canonical_project_state(tmp_path)
-    assert context.paths.data_root != context.paths.logs_root
-    assert context.paths.logs_root != context.paths.indexes_root
+    assert context.paths.data_root != context.paths.indexes_root
     assert context.paths.data_root.exists()
-    assert not context.paths.logs_root.exists()
     assert not context.paths.indexes_root.exists()
 
 

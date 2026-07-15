@@ -428,7 +428,7 @@ def build_sync_status_report(workspace_root: Path) -> SyncStatusReport:
         mounts = location.to_dict().get("mounts", {})
         included = [
             Path(str(mounts[name]["path"]))
-            for name in ("data", "logs")
+            for name in ("data",)
             if isinstance(mounts, dict)
             and isinstance(mounts.get(name), dict)
             and Path(str(mounts[name]["path"])).exists()

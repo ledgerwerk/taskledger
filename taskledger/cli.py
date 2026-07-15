@@ -623,6 +623,27 @@ def main(
 @app.command("init")
 def init_command(
     ctx: typer.Context,
+    sibling_ledger_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--sibling-ledger-root",
+            help="Explicit shared Ledger root for isolated external Taskledger data.",
+        ),
+    ] = None,
+    create_store: Annotated[
+        bool,
+        typer.Option(
+            "--create-store",
+            help="Create the explicitly selected sibling Ledger root if needed.",
+        ),
+    ] = False,
+    replace_workspace_selection: Annotated[
+        bool,
+        typer.Option(
+            "--replace-workspace-selection",
+            help="Replace an existing local workspace root selection.",
+        ),
+    ] = False,
     taskledger_dir: Annotated[
         Path | None,
         typer.Option("--taskledger-dir", help="Durable taskledger storage root."),
@@ -643,6 +664,9 @@ def init_command(
     payload = init_project(
         state.cwd,
         taskledger_dir=taskledger_dir,
+        sibling_ledger_root=sibling_ledger_root,
+        create_store=create_store,
+        replace_workspace_selection=replace_workspace_selection,
         project_name=project_name,
     )
     emit_payload(

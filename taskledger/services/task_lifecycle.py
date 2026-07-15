@@ -33,7 +33,7 @@ from taskledger.domain.states import (
     require_transition,
 )
 from taskledger.errors import LaunchError, LockConflict
-from taskledger.ids import allocate_ledger_task_id, next_project_id
+from taskledger.ids import next_project_id
 from taskledger.services import tasks as _tasks
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.locks import lock_is_expired
@@ -59,19 +59,13 @@ from taskledger.timeutils import utc_now_iso
 # ---------------------------------------------------------------------------
 
 
-def _allocate_task_id_and_advance(workspace_root: Path, existing_ids: list[str]) -> str:
-    """Allocate a ledger-scoped task ID and advance the config counter."""
-    from taskledger.storage.ledger_config import LedgerConfigPatch, update_ledger_config
-    from taskledger.storage.paths import load_project_locator
+def _allocate_task_id_and_advance(
+    workspace_root: Path, existing_ids: list[str] | None = None
+) -> str:
+    """Reserve the next task bundle directory using authoritative allocations."""
+    from taskledger.storage.task_ids import allocate_task_directory
 
-    locator = load_project_locator(workspace_root)
-    config_path = locator.config_path
-    from taskledger.storage.ledger_config import load_ledger_config
-
-    ledger = load_ledger_config(config_path)
-    task_id, new_next = allocate_ledger_task_id(existing_ids, ledger.next_task_number)
-    if new_next != ledger.next_task_number:
-        update_ledger_config(config_path, LedgerConfigPatch(next_task_number=new_next))
+    task_id, _ = allocate_task_directory(workspace_root)
     return task_id
 
 

@@ -35,7 +35,7 @@ def _render_storage_where(payload: dict[str, object]) -> str:
         lines.append("Mounts:")
         mounts = payload.get("mounts", {})
         if isinstance(mounts, dict):
-            for name in ("data", "logs", "indexes"):
+            for name in ("data", "indexes"):
                 mount = mounts.get(name, {})
                 if isinstance(mount, dict):
                     lines.extend(
@@ -94,9 +94,7 @@ def register_storage_commands(app: typer.Typer) -> None:
     @app.command("path")
     def path_command(
         ctx: typer.Context,
-        mount: Annotated[
-            str, typer.Argument(help="Mount name: data, logs, or indexes.")
-        ],
+        mount: Annotated[str, typer.Argument(help="Mount name: data or indexes.")],
     ) -> None:
         state = cli_state_from_context(ctx)
         try:

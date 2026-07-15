@@ -11,6 +11,7 @@ from typing import Any
 
 from taskledger.domain.states import TASKLEDGER_STORAGE_LAYOUT_VERSION
 from taskledger.errors import LaunchError
+from taskledger.storage.ledger_config import load_ledger_config
 
 Record = dict[str, Any]
 MigrationFunc = Callable[[Path], None]
@@ -63,6 +64,12 @@ LAYOUT_MIGRATIONS: tuple[LayoutMigration, ...] = (
         to_version=4,
         name="canonical-storage-metadata",
         apply=lambda workspace_root: _migrate_v3_storage_metadata(workspace_root),
+    ),
+    LayoutMigration(
+        from_version=4,
+        to_version=5,
+        name="canonical-storage-topology",
+        apply=lambda workspace_root: None,
     ),
 )
 
@@ -395,14 +402,9 @@ def _migrate_v2_unscoped_state_to_branch_scoped_ledgers(workspace_root: Path) ->
     - Moves/merges legacy root tasks/events/intros/releases into ledger namespace
     - Moves active-task.yaml with conflict detection
     - Removes and rebuilds indexes
-    - Repairs ledger_next_task_number
+    - Rebuilds derived indexes after the move
     """
     from taskledger.storage.indexes import rebuild_v2_indexes
-    from taskledger.storage.ledger_config import (
-        LedgerConfigPatch,
-        load_ledger_config,
-        update_ledger_config,
-    )
     from taskledger.storage.paths import load_project_locator
     from taskledger.storage.task_store import resolve_v2_paths
 
@@ -468,14 +470,6 @@ def _migrate_v2_unscoped_state_to_branch_scoped_ledgers(workspace_root: Path) ->
 
     # Rebuild target ledger indexes from canonical records
     rebuild_v2_indexes(resolve_v2_paths(workspace_root))
-
-    # Repair task counter: ensure it's higher than any task now in ledger
-    max_task_number = _max_numeric_task_number(ledger_dir / "tasks")
-    if max_task_number is not None and config.next_task_number <= max_task_number:
-        update_ledger_config(
-            locator.config_path,
-            LedgerConfigPatch(next_task_number=max_task_number + 1),
-        )
 
 
 def _scan_file(

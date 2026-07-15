@@ -43,13 +43,16 @@ def init_project(
     *,
     taskledger_dir: Path | None = None,
     project_name: str | None = None,
+    sibling_ledger_root: Path | None = None,
+    create_store: bool = False,
+    replace_workspace_selection: bool = False,
 ) -> dict[str, object]:
     if taskledger_dir is not None:
         locator = locate_ledger_project(
             workspace_root,
             legacy_tool_filenames=(".taskledger.toml", "taskledger.toml"),
         )
-        if locator is None or locator.source == "canonical":
+        if locator is not None and locator.source == "canonical":
             raise LaunchError(
                 "--taskledger-dir is a legacy layout option. Canonical projects use "
                 "Ledger workspace/cache roots from .ledger/ledger.local.toml, "
@@ -75,11 +78,21 @@ def init_project(
             "created": created,
         }
     context, created = init_canonical_project_state(
-        workspace_root, project_name=project_name
+        workspace_root,
+        project_name=project_name,
+        sibling_ledger_root=sibling_ledger_root,
+        create_store=create_store,
+        replace_workspace_selection=replace_workspace_selection,
     )
     return {
         "kind": "taskledger_init",
         "mode": "canonical",
+        "storage_mode": (
+            "sibling"
+            if context.layout is not None
+            and str(context.layout.mounts["data"].storage) == "workspace"
+            else "repository"
+        ),
         "root": str(context.paths.data_root),
         "project_dir": str(context.paths.ledger_data_dir),
         "workspace_root": str(context.project_root),
@@ -90,8 +103,13 @@ def init_project(
         "created": created,
         "project_name": context.project_name,
         "mounts": {
-            name: {"path": str(context.layout.mounts[name].path)}
-            for name in ("data", "logs", "indexes")
+            name: {
+                "path": str(context.layout.mounts[name].path),
+                "storage": str(context.layout.mounts[name].storage),
+                "scope": str(context.layout.mounts[name].scope),
+                "source": str(context.layout.mounts[name].source),
+            }
+            for name in ("data", "indexes")
         }
         if context.layout
         else {},

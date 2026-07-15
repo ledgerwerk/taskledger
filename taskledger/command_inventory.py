@@ -1588,6 +1588,14 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         tier=TIER_RARE,
         ledger_effect=EFFECT_WRITE,
     ),
+    "migrate inspect": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "safe_read_only",
+        MIGRATION,
+        PHASE_REPAIR,
+        tier=TIER_RARE,
+        ledger_effect=EFFECT_READ,
+    ),
     "migrate status": CommandSpec(
         STABLE_FOR_AGENTS,
         "safe_read_only",

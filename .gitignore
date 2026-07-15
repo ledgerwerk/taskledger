@@ -222,3 +222,7 @@ todo.md
 uv.lock
 /plan.md
 run.html
+
+/.ledger/ledger.local.toml
+/.ledger/*.lock
+/.ledger/backups/
