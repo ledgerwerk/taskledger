@@ -63,7 +63,7 @@ def build_git_sync_config(
         if context.project_uuid is None:
             raise LaunchError("Canonical Taskledger context has no project UUID.")
         expected_repo = context.store_root.resolve()
-        expected_project_path = f"task/taskledger/{context.project_uuid}"
+        expected_project_path = f"taskledger/{context.project_uuid}"
         if repo is not None and repo.expanduser().resolve() != expected_repo:
             raise LaunchError(
                 "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Git repository "

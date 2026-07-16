@@ -145,7 +145,7 @@ def migrate_apply_command(
             "--sibling-ledger-root",
             help=(
                 "Base sibling-ledger root. The migrated data is written below "
-                "PATH/task/taskledger/<project-uuid>."
+                "PATH/taskledger/<project-uuid>."
             ),
         ),
     ] = None,

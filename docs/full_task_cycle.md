@@ -23,7 +23,7 @@ taskledger status --full
 
 `init` writes `.ledger/ledger.toml`, `.ledger/ledger.local.toml`, and
 `.ledger/task/config.toml`. Authoritative data resolves to the UUID-scoped
-sibling path `../ledger/task/taskledger/<project-uuid>`; indexes are cache data.
+sibling path `../ledger/taskledger/<project-uuid>`; indexes are cache data.
 `doctor` checks integrity and `status --full` reports resolved storage paths.
 
 ## 2. Create And Activate A Task

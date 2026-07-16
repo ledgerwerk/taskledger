@@ -25,9 +25,10 @@ task -> plan -> approval -> implement -> validate -> done
 ## Storage model
 
 Markdown records are canonical. Task, plan, and run reads come from those
-records directly. The `task_sidecars.json` summary index under
-`.taskledger/ledgers/<ledger_ref>/` is a derived cache that per-task sidecar
-writes update in place. Action and event logging is enabled by default and
+records directly. The authoritative Taskledger data mount is
+`../ledger/taskledger/<project-uuid>` under the shared sibling base. The
+`task_sidecars.json` summary index and other rebuildable indexes are
+checkout-scoped cache data. Action and event logging is enabled by default and
 appends immutable `TaskEvent` records to the ledger-level `events/`
 directory. Active stages require visible lock files, and stale locks are
 reported instead of being cleared silently.
@@ -61,7 +62,8 @@ is `taskledger/command_inventory.py` and `docs/command_contract.md`.
 
 ## Architecture records
 
-Arc42 architecture records live under `.archledger/` and are the source of
-truth for `ARCHITECTURE.md`. Skills (`skills/taskledger/SKILL.md`) and
+Arc42 architecture records live under the Archledger direct sibling mount
+`../ledger/archledger/<project-uuid>/` and are the source of
+`ARCHITECTURE.md`. Skills (`skills/taskledger/SKILL.md`) and
 `docs/architecture_taskledger_split.md` live outside the Python package and
 outside the archledger build output.

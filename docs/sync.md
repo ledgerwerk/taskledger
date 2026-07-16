@@ -13,7 +13,7 @@ The canonical layout is:
 /home/me/src/project-a/.ledger/ledger.local.toml
 /home/me/src/project-a/.ledger/task/config.toml
 /home/me/src/ledger/.ledger-store
-/home/me/src/ledger/task/taskledger/<project-uuid>/
+/home/me/src/ledger/taskledger/<project-uuid>/
 ```
 
 Initialize the marked sibling store explicitly when needed:

@@ -25,11 +25,9 @@ def test_existing_marked_store_resolves_direct_data_and_lazy_cache(
 
     context, _ = init_canonical_project_state(project)
 
-    assert (
-        context.paths.data_root == store / "task" / "taskledger" / context.project_uuid
-    )
+    assert context.paths.data_root == store / "taskledger" / context.project_uuid
     assert context.paths.data_root != context.paths.indexes_root
-    assert not (project / ".ledger" / "task" / "taskledger").exists()
+    assert not (project / ".ledger" / "taskledger").exists()
     assert not context.paths.indexes_root.exists()
     assert context.workspace_provider == "sibling-ledger"
     assert context.data_mount_source == "local-provider"
@@ -81,7 +79,7 @@ def test_binding_rejects_nonempty_unbound_target(tmp_path: Path) -> None:
     project.mkdir()
     store = _marked_store(project)
     project_uuid = "081c7c05-2d10-42b7-9b37-3d814c2f400a"
-    target = store / "task" / "taskledger" / project_uuid
+    target = store / "taskledger" / project_uuid
     target.mkdir(parents=True)
     (target / "foreign.txt").write_text("foreign", encoding="utf-8")
 
@@ -104,12 +102,6 @@ def test_projects_share_store_without_sharing_uuid_scoped_data(
     context_b, _ = init_canonical_project_state(project_b)
 
     assert context_a.project_uuid != context_b.project_uuid
-    assert (
-        context_a.paths.data_root
-        == store / "task" / "taskledger" / context_a.project_uuid
-    )
-    assert (
-        context_b.paths.data_root
-        == store / "task" / "taskledger" / context_b.project_uuid
-    )
+    assert context_a.paths.data_root == store / "taskledger" / context_a.project_uuid
+    assert context_b.paths.data_root == store / "taskledger" / context_b.project_uuid
     assert context_a.paths.data_root != context_b.paths.data_root

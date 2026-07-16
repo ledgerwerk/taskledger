@@ -23,6 +23,7 @@ BINDING_FILENAME = ".ledger-project.toml"
 class TaskledgerProjectBinding:
     schema_version: int
     project_uuid: str
+    project_name: str | None
     ledger: str
     mount: str
 
@@ -47,6 +48,7 @@ def read_project_binding(data_root: Path) -> TaskledgerProjectBinding | None:
         raise LaunchError(f"Invalid Taskledger project binding {path}.")
     schema_version = document.get("schema_version")
     raw_uuid = document.get("project_uuid")
+    project_name = document.get("project_name")
     ledger = document.get("ledger")
     mount = document.get("mount")
     if schema_version != 1:
@@ -55,6 +57,7 @@ def read_project_binding(data_root: Path) -> TaskledgerProjectBinding | None:
         )
     if (
         not isinstance(raw_uuid, str)
+        or (project_name is not None and not isinstance(project_name, str))
         or not isinstance(ledger, str)
         or not isinstance(mount, str)
     ):
@@ -68,15 +71,14 @@ def read_project_binding(data_root: Path) -> TaskledgerProjectBinding | None:
     return TaskledgerProjectBinding(
         schema_version=1,
         project_uuid=project_uuid,
+        project_name=project_name if isinstance(project_name, str) else None,
         ledger=ledger,
         mount=mount,
     )
 
 
 def validate_project_binding(
-    data_root: Path,
-    *,
-    project_uuid: str,
+    data_root: Path, *, project_uuid: str, project_name: str | None = None
 ) -> TaskledgerProjectBinding:
     try:
         expected_uuid = str(uuid.UUID(project_uuid))
@@ -98,6 +100,16 @@ def validate_project_binding(
             f"Taskledger project binding UUID mismatch at {binding_path(data_root)}: "
             f"expected {expected_uuid}, found {binding.project_uuid}."
         )
+    if (
+        project_name is not None
+        and binding.project_name is not None
+        and binding.project_name != project_name
+    ):
+        raise LaunchError(
+            "Taskledger project binding "
+            f"{binding_path(data_root)} project name mismatch: "
+            f"expected {project_name}, found {binding.project_name}."
+        )
     if binding.ledger != "taskledger":
         raise LaunchError(
             f"Taskledger project binding {binding_path(data_root)} has ledger "
@@ -112,9 +124,7 @@ def validate_project_binding(
 
 
 def create_project_binding(
-    data_root: Path,
-    *,
-    project_uuid: str,
+    data_root: Path, *, project_uuid: str, project_name: str | None = None
 ) -> TaskledgerProjectBinding:
     try:
         normalized_uuid = str(uuid.UUID(project_uuid))
@@ -123,24 +133,40 @@ def create_project_binding(
     data_root.mkdir(parents=True, exist_ok=True)
     existing = read_project_binding(data_root)
     if existing is not None:
-        return validate_project_binding(data_root, project_uuid=normalized_uuid)
+        return validate_project_binding(
+            data_root,
+            project_uuid=normalized_uuid,
+            project_name=project_name,
+        )
     if any(data_root.iterdir()):
         raise LaunchError(
             "Taskledger data root "
             f"{data_root} is non-empty and unbound; refusing to adopt it."
         )
-    binding = TaskledgerProjectBinding(1, normalized_uuid, "taskledger", "data")
+    binding = TaskledgerProjectBinding(
+        1, normalized_uuid, project_name, "taskledger", "data"
+    )
+    name_line = (
+        f'project_name = "{binding.project_name}"\n'
+        if binding.project_name is not None
+        else ""
+    )
     contents = (
         "schema_version = 1\n"
         f'project_uuid = "{binding.project_uuid}"\n'
-        'ledger = "taskledger"\n'
-        'mount = "data"\n'
+        + name_line
+        + 'ledger = "taskledger"\n'
+        + 'mount = "data"\n'
     )
     try:
         atomic_create_text(binding_path(data_root), contents)
     except FileExistsError:
         pass
-    return validate_project_binding(data_root, project_uuid=normalized_uuid)
+    return validate_project_binding(
+        data_root,
+        project_uuid=normalized_uuid,
+        project_name=project_name,
+    )
 
 
 __all__ = [

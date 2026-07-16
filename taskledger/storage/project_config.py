@@ -358,7 +358,7 @@ def render_default_taskledger_toml(
         "# enabled = true\n"
         "\n"
         "# Optional Git synchronization policy. Canonical projects always use "
-        "# the resolved sibling repository and task/taskledger path.\n"
+        "# the resolved sibling repository and taskledger path.\n"
         "# [sync.git]\n"
         '# remote = "origin"\n'
         '# branch = "main"\n'

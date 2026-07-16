@@ -31,7 +31,7 @@ def _init(tmp_path: Path) -> Path:
 def test_canonical_sync_derives_sibling_repo_and_path(tmp_path: Path) -> None:
     project = _init(tmp_path)
     context = load_project_context(project)
-    expected_project_path = f"task/taskledger/{context.project_uuid}"
+    expected_project_path = f"taskledger/{context.project_uuid}"
     config = build_git_sync_config(project)
     assert config.repo_path == tmp_path / "ledger"
     assert config.project_path == expected_project_path
@@ -80,7 +80,7 @@ def test_canonical_git_commit_limits_committed_paths(tmp_path: Path) -> None:
         ["git", "-C", str(repo), "config", "user.name", "Taskledger Test"],
         check=True,
     )
-    task_file = repo / "task" / "taskledger" / context.project_uuid / "task-state.txt"
+    task_file = repo / "taskledger" / context.project_uuid / "task-state.txt"
     outside_file = repo / "plan" / "plan-state.txt"
     task_file.write_text("task\n", encoding="utf-8")
     outside_file.parent.mkdir(parents=True, exist_ok=True)
@@ -95,7 +95,7 @@ def test_canonical_git_commit_limits_committed_paths(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
     ).stdout.splitlines()
-    assert f"task/taskledger/{context.project_uuid}/task-state.txt" in committed
+    assert f"taskledger/{context.project_uuid}/task-state.txt" in committed
     assert "plan/plan-state.txt" not in committed
     assert outside_file.exists()
 
@@ -117,4 +117,4 @@ def test_canonical_hooks_reindex_fixed_sibling_store(tmp_path: Path) -> None:
     )
     assert "reindex" in hook
     assert "import-local" not in hook
-    assert "task/taskledger" in hook
+    assert "taskledger" in hook

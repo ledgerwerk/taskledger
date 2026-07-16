@@ -143,6 +143,26 @@ def _recognized_legacy_registration(existing: Any) -> bool:
         name: {key: mount.get(key) for key in ("storage", "scope", "path")}
         for name, mount in mounts.items()
     }
+    data = values.get("data")
+    indexes = values.get("indexes")
+    if isinstance(data, Mapping) and isinstance(indexes, Mapping):
+        data_path = data.get("path")
+        prefix = "task/taskledger/"
+        try:
+            uuid.UUID(str(data_path).removeprefix(prefix))
+        except ValueError:
+            pass
+        else:
+            if (
+                isinstance(data_path, str)
+                and data_path.startswith(prefix)
+                and data.get("storage") == "workspace"
+                and data.get("scope") == "project"
+                and indexes.get("storage") == "cache"
+                and indexes.get("scope") == "checkout"
+                and indexes.get("path") == "task/taskledger-indexes"
+            ):
+                return True
     repository_local = {
         "data": {"storage": "repository", "scope": None, "path": "task/taskledger"},
         "indexes": {
@@ -156,7 +176,7 @@ def _recognized_legacy_registration(existing: Any) -> bool:
         "logs": {"storage": "workspace", "scope": "checkout", "path": "task/logs"},
         "indexes": {"storage": "cache", "scope": "checkout", "path": "task/indexes"},
     }
-    direct_sibling = {
+    direct_sibling_legacy = {
         "data": {
             "storage": "workspace",
             "scope": "project",
@@ -168,7 +188,24 @@ def _recognized_legacy_registration(existing: Any) -> bool:
             "path": "task/taskledger-indexes",
         },
     }
-    return values in (repository_local, split_checkout, direct_sibling)
+    direct_sibling = {
+        "data": {
+            "storage": "workspace",
+            "scope": "project",
+            "path": "taskledger",
+        },
+        "indexes": {
+            "storage": "cache",
+            "scope": "checkout",
+            "path": "taskledger-indexes",
+        },
+    }
+    return values in (
+        repository_local,
+        split_checkout,
+        direct_sibling_legacy,
+        direct_sibling,
+    )
 
 
 def _conflict(existing: Any, project_uuid: str) -> str | None:

@@ -629,8 +629,10 @@ Taskledger stores canonical project configuration in `.ledger/ledger.toml`,
 Canonical initialization requires the shared `sibling-ledger` provider. The
 fixed sibling store is `../ledger` unless a migration supplies a base with
 `--sibling-ledger-root PATH`. Each project is isolated under
-`<sibling-root>/task/taskledger/<project-uuid>` with a matching binding.
-Commands keep `--root` scoped to the source workspace, not the storage root.
+`<sibling-root>/<ledger-name>/<project-uuid>` with a matching binding. Taskledger
+therefore uses `<sibling-root>/taskledger/<project-uuid>`, while Planledger and
+other registered ledgers use their own direct ledger-name directories. Commands keep
+`--root` scoped to the source workspace, not the storage root.
 
 Taskledger uses:
 
@@ -712,4 +714,4 @@ from local process checks; inspect handoffs or ask the user before repairing.
 
 ## Layout and migration commands
 
-`taskledger config path` reports the project-located Taskledger configuration. `taskledger storage path data|indexes` reports a named mount. Legacy layout conversion is explicit: `migrate status`, `migrate plan`, and `migrate apply --sibling-ledger-root PATH --backup` use `PATH` as the base store and target `PATH/task/taskledger/<project-uuid>`. Canonical `storage move` is rejected because storage mode is selected through explicit Ledger local configuration.
+`taskledger config path` reports the project-located Taskledger configuration. `taskledger storage path data|indexes` reports a named mount. Legacy layout conversion is explicit: `migrate status`, `migrate plan`, and `migrate apply --sibling-ledger-root PATH --backup` use `PATH` as the base store and target `PATH/taskledger/<project-uuid>`. Canonical `storage move` is rejected because storage mode is selected through explicit Ledger local configuration.

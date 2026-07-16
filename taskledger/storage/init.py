@@ -326,7 +326,11 @@ def init_canonical_project_state(
     paths.data_root.mkdir(parents=True, exist_ok=True)
     from taskledger.storage.project_binding import create_project_binding
 
-    create_project_binding(paths.data_root, project_uuid=selected_uuid)
+    create_project_binding(
+        paths.data_root,
+        project_uuid=selected_uuid,
+        project_name=effective_name,
+    )
     for directory in (
         paths.ledger_data_dir,
         paths.introductions_dir,

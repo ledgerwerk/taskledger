@@ -448,6 +448,8 @@ def _copy_items(
                 continue
             seen.add(source)
             relative = source.relative_to(source_root)
+            if relative == Path(".ledger-project.toml"):
+                continue
             if (
                 relative.parts[:2] == ("ledgers", "main", "indexes")
                 and relative.name != "repos.json"
@@ -502,6 +504,8 @@ def _is_repository_local_registration(
 
 def _is_direct_sibling_registration(
     registration: Mapping[str, object] | None,
+    *,
+    project_uuid: str | None = None,
 ) -> bool:
     if registration is None:
         return False
@@ -511,15 +515,23 @@ def _is_direct_sibling_registration(
     mounts = mounts_value
     data = mounts.get("data")
     indexes = mounts.get("indexes")
+    if not isinstance(data, Mapping) or not isinstance(indexes, Mapping):
+        return False
+    data_path = data.get("path")
+    old_uuid_path = (
+        f"task/taskledger/{project_uuid}" if project_uuid is not None else None
+    )
     return (
-        isinstance(data, Mapping)
-        and isinstance(indexes, Mapping)
-        and data.get("storage") == "workspace"
+        data.get("storage") == "workspace"
         and data.get("scope") == "project"
-        and data.get("path") == CANONICAL_DATA_RELATIVE_PATH.as_posix()
+        and data_path in {"task/taskledger", "taskledger", old_uuid_path}
         and indexes.get("storage") == "cache"
         and indexes.get("scope") == "checkout"
-        and indexes.get("path") == "task/taskledger-indexes"
+        and indexes.get("path")
+        in {
+            "task/taskledger-indexes",
+            "taskledger-indexes",
+        }
     )
 
 
@@ -533,7 +545,7 @@ def inspect_migration(  # noqa: C901
 ) -> TaskledgerMigrationInspection:
     root = start.expanduser().resolve()
     sibling_root, marker = _target_roots(root, sibling_ledger_root)
-    target_data = sibling_root / "task" / "taskledger"
+    target_data = sibling_root / CANONICAL_DATA_RELATIVE_PATH
     target_indexes: Path | None = None
     target_registration = _target_registration()
     issues: list[MigrationIssue] = []
@@ -612,7 +624,9 @@ def inspect_migration(  # noqa: C901
                 source_kind = "canonical-repository-local"
                 source_data = root / ".ledger" / "task" / "taskledger"
                 source_logs = source_data
-        elif _is_direct_sibling_registration(current_registration):
+        elif _is_direct_sibling_registration(
+            current_registration, project_uuid=selected_uuid
+        ):
             source_kind = "direct-sibling-old-schema"
             try:
                 old_layout = _resolve_old_layout(root, manifest_doc, environ=environ)

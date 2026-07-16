@@ -37,10 +37,11 @@ taskledger storage where
 
 `taskledger init` writes the shared Ledger manifest at `.ledger/ledger.toml`,
 the local provider selection at `.ledger/ledger.local.toml`, and Taskledger
-configuration at `.ledger/task/config.toml`. Authoritative state resolves to
-`../ledger/task/taskledger/<project-uuid>/`; indexes are checkout-scoped cache
-data. Branch-scoped state is selected explicitly with `taskledger ledger fork`
-and `taskledger ledger switch`.
+configuration at `.ledger/task/config.toml`. The shared sibling base is `../ledger`;
+authoritative state resolves to `../ledger/taskledger/<project-uuid>`, while indexes
+are checkout-scoped cache data. Other registered ledgers use the same project UUID
+and their own direct `<ledger-name>/<project-uuid>` directories. Branch-scoped state
+is selected explicitly with `taskledger ledger fork` and `taskledger ledger switch`.
 
 ## Branch-local task work
 
@@ -660,7 +661,7 @@ taskledger init --create-sibling-store
 taskledger storage where
 ```
 
-Authoritative data is isolated at `../ledger/task/taskledger/<project-uuid>`.
+Authoritative Taskledger data is isolated at `../ledger/taskledger/<project-uuid>`. Other ledgers use their own direct sibling directory, such as `../ledger/planledger/<project-uuid>` and `../ledger/archledger/<project-uuid>`.
 Several source projects may share the sibling store without sharing bindings or
 records. See {doc}`sync` for the optional private-Git workflow.
 
@@ -761,4 +762,4 @@ Evidence import is explicit and auditable through
 
 ## Canonical project layout
 
-Taskledger uses `.ledger/ledger.toml`, `.ledger/ledger.local.toml`, and `.ledger/task/config.toml`. The local `sibling-ledger` provider resolves authoritative data to `../ledger/task/taskledger/<project-uuid>`, while `data` and `indexes` are reported independently by `taskledger storage where`. Use `taskledger storage path data|indexes` for one mount without initializing lazy mounts. Migration accepts `--sibling-ledger-root PATH` as a base store and targets `PATH/task/taskledger/<project-uuid>`.
+Taskledger uses `.ledger/ledger.toml`, `.ledger/ledger.local.toml`, and `.ledger/task/config.toml`. The local `sibling-ledger` provider resolves authoritative data to `../ledger/taskledger/<project-uuid>`, while `data` and `indexes` are reported independently by `taskledger storage where`. Use `taskledger storage path data|indexes` for one mount without initializing lazy mounts. Migration accepts `--sibling-ledger-root PATH` as a base store and targets `PATH/taskledger/<project-uuid>`. Planledger and Archledger use the same shared project UUID under their direct sibling directories.

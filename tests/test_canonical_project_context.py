@@ -20,10 +20,10 @@ def test_fresh_canonical_context_is_read_only_before_initialization(
             "[ledgers.taskledger.config]\nlocation = 'project'\n"
             "path = 'task/config.toml'\n\n"
             "[ledgers.taskledger.mounts.data]\n"
-            "storage = 'workspace'\nscope = 'project'\npath = 'task/taskledger'\n\n"
+            "storage = 'workspace'\nscope = 'project'\npath = 'taskledger'\n\n"
             "[ledgers.taskledger.mounts.indexes]\n"
             "storage = 'cache'\nscope = 'checkout'\n"
-            "path = 'task/taskledger-indexes'\n"
+            "path = 'taskledger-indexes'\n"
         ),
         encoding="utf-8",
     )
@@ -51,11 +51,8 @@ def test_canonical_init_uses_fixed_direct_sibling_store(tmp_path: Path) -> None:
     assert context.project_uuid
     assert context.layout is not None
     assert context.layout.mounts["data"].storage == "workspace"
-    assert (
-        context.paths.data_root
-        == sibling / "task" / "taskledger" / context.project_uuid
-    )
-    assert not (project / ".ledger" / "task" / "taskledger").exists()
+    assert context.paths.data_root == sibling / "taskledger" / context.project_uuid
+    assert not (project / ".ledger" / "taskledger").exists()
     assert (context.paths.data_root / ".ledger-project.toml").is_file()
 
 
@@ -67,7 +64,7 @@ def test_explicit_store_creation_uses_fixed_sibling_path(tmp_path: Path) -> None
 
     assert (
         context.paths.data_root
-        == tmp_path / "ledger" / "task" / "taskledger" / context.project_uuid
+        == tmp_path / "ledger" / "taskledger" / context.project_uuid
     )
     assert (tmp_path / "ledger" / ".ledger-store").is_file()
 

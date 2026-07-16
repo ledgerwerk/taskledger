@@ -77,10 +77,10 @@ InitializationStatus = Literal[
 
 CANONICAL_LEDGER_NAME = "taskledger"
 CANONICAL_LEDGER_CODE = "tl"
-CANONICAL_SHORT_DIRECTORY = "task"
+CANONICAL_SHORT_DIRECTORY = "taskledger"
 CANONICAL_CONFIG_RELATIVE_PATH = Path("task") / "config.toml"
-CANONICAL_DATA_RELATIVE_PATH = Path("task") / "taskledger"
-CANONICAL_INDEX_RELATIVE_PATH = Path("task") / "taskledger-indexes"
+CANONICAL_DATA_RELATIVE_PATH = Path("taskledger")
+CANONICAL_INDEX_RELATIVE_PATH = Path("taskledger-indexes")
 CANONICAL_MOUNT_NAMES = ("data", "indexes")
 
 
@@ -350,12 +350,12 @@ def _validate_registration(layout: ResolvedLedgerLayout) -> None:
     if (
         str(indexes.storage) != "cache"
         or str(indexes.scope) != "checkout"
-        or str(indexes.path).replace("\\", "/").split("/")[-2:]
-        != ["task", "taskledger-indexes"]
+        or str(indexes.path).replace("\\", "/").split("/")[-1]
+        != CANONICAL_INDEX_RELATIVE_PATH.name
     ):
         raise LaunchError(
             "TASKLEDGER_REGISTRATION_CONFLICT: Taskledger indexes mount must be "
-            "cache/checkout task/taskledger-indexes."
+            f"cache/checkout {CANONICAL_INDEX_RELATIVE_PATH.as_posix()}."
         )
 
 
@@ -507,7 +507,11 @@ def load_project_context(
             )
         from taskledger.storage.project_binding import validate_project_binding
 
-        validate_project_binding(data_root, project_uuid=layout.project_uuid)
+        validate_project_binding(
+            data_root,
+            project_uuid=layout.project_uuid,
+            project_name=manifest.project_name,
+        )
     return TaskledgerProjectContext(
         mode="canonical",
         project_root=locator.project_root,
