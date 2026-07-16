@@ -139,6 +139,16 @@ def migrate_apply_command(
             help="Create the fixed ../ledger sibling store if absent.",
         ),
     ] = False,
+    sibling_ledger_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--sibling-ledger-root",
+            help=(
+                "Migration-only destination sibling root. The migrated data is "
+                "written below PATH/task/taskledger."
+            ),
+        ),
+    ] = None,
     backup_dir: Annotated[Path | None, typer.Option("--backup-dir")] = None,
     source_checkout: Annotated[str | None, typer.Option("--source-checkout")] = None,
     retire_source: Annotated[
@@ -152,6 +162,7 @@ def migrate_apply_command(
         inspection = inspect_migration(
             state.cwd,
             source_checkout=source_checkout,
+            sibling_ledger_root=sibling_ledger_root,
         )
         if dry_run:
             payload = {

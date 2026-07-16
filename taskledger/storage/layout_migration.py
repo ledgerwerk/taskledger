@@ -264,9 +264,48 @@ def _target_registration() -> dict[str, object]:
 
 
 def _target_roots(root: Path, sibling_ledger_root: Path | None) -> tuple[Path, Path]:
-    """Return the fixed direct sibling target; arbitrary roots are unsupported."""
-    fixed = (root / ".." / "ledger").resolve(strict=False)
-    return fixed, fixed / ".ledger-store"
+    """Return the requested migration sibling root and its marker."""
+    sibling_root = (
+        sibling_ledger_root.expanduser().resolve(strict=False)
+        if sibling_ledger_root is not None
+        else (root / ".." / "ledger").resolve(strict=False)
+    )
+    return sibling_root, sibling_root / ".ledger-store"
+
+
+def _ensure_migration_sibling_store(
+    sibling_root: Path,
+    *,
+    create: bool,
+) -> None:
+    if sibling_root.is_symlink():
+        raise LaunchError(
+            f"TASKLEDGER_SIBLING_ROOT_UNMARKED: symlink root {sibling_root}"
+        )
+    if sibling_root.exists() and not sibling_root.is_dir():
+        raise LaunchError(f"TASKLEDGER_SIBLING_ROOT_NOT_DIRECTORY: {sibling_root}")
+    if not sibling_root.exists():
+        if not create:
+            raise LaunchError(
+                f"TASKLEDGER_SIBLING_ROOT_MISSING: {sibling_root}. "
+                "Use --create-sibling-store to initialize it."
+            )
+        sibling_root.mkdir(parents=True, exist_ok=False)
+    marker = sibling_root / ".ledger-store"
+    if marker.is_symlink() or (marker.exists() and not marker.is_file()):
+        raise LaunchError(f"TASKLEDGER_SIBLING_MARKER_INVALID: {marker}")
+    if not marker.exists():
+        if not create:
+            raise LaunchError(
+                f"TASKLEDGER_SIBLING_ROOT_UNMARKED: {sibling_root}. "
+                "Use --create-sibling-store to initialize it."
+            )
+        if any(sibling_root.iterdir()):
+            raise LaunchError(
+                "Refusing to initialize non-empty unmarked sibling root "
+                f"{sibling_root}."
+            )
+        marker.write_text("Ledgercore sibling store\n", encoding="utf-8")
 
 
 def _old_registration(document: Mapping[str, object]) -> Mapping[str, object] | None:
@@ -437,23 +476,11 @@ def inspect_migration(  # noqa: C901
     sibling_ledger_root: Path | None = None,
 ) -> TaskledgerMigrationInspection:
     root = start.expanduser().resolve()
-    sibling_root, marker = _target_roots(root, None)
+    sibling_root, marker = _target_roots(root, sibling_ledger_root)
     target_data = sibling_root / "task" / "taskledger"
     target_indexes: Path | None = None
     target_registration = _target_registration()
     issues: list[MigrationIssue] = []
-    if (
-        sibling_ledger_root is not None
-        and sibling_ledger_root.expanduser().resolve() != sibling_root
-    ):
-        issues.append(
-            _issue(
-                "blocker",
-                "DESTINATION_FIXED",
-                "Migration destination is fixed to the direct ../ledger sibling store.",
-                "Remove --sibling-ledger-root and retry.",
-            )
-        )
     source_kind: MigrationSourceKind = "uninitialized"
     source_data: Path | None = None
     source_logs: Path | None = None
@@ -624,8 +651,8 @@ def inspect_migration(  # noqa: C901
                 "BINDING_UUID_MISMATCH",
                 "Target binding belongs to "
                 f"{binding.project_uuid}, expected {selected_uuid}.",
-                "Do not merge projects with different bindings; use the "
-                "project-owned target.",
+                "Re-run with --sibling-ledger-root PATH for a separate "
+                "migration destination, or keep the existing target unchanged.",
             )
         )
     if (
@@ -779,13 +806,15 @@ def apply_migration(
     retire_source: bool = False,
 ) -> dict[str, object]:
     if create_sibling_store:
-        from taskledger.storage.init import _ensure_sibling_store
-
-        _ensure_sibling_store(inspection.project_root, create_sibling_store=True)
+        _ensure_migration_sibling_store(
+            inspection.sibling_root,
+            create=True,
+        )
     fresh = inspect_migration(
         inspection.project_root,
         source_checkout=inspection.source_checkout_id,
         project_uuid=inspection.project_uuid,
+        sibling_ledger_root=inspection.sibling_root,
     )
     if fresh.source_kind == "canonical-0.4-sibling":
         return {
@@ -799,13 +828,22 @@ def apply_migration(
             fresh.project_root,
             source_checkout=fresh.source_checkout_id,
             project_uuid=fresh.project_uuid,
+            sibling_ledger_root=fresh.sibling_root,
         )
         issues = list(fresh.issues)
     if issues and any(issue.severity == "blocker" for issue in issues):
         raise LaunchError(
             "Migration preflight blocked:\n"
             + "\n".join(
-                f"- {issue.code}: {issue.message}"
+                "- "
+                + issue.code
+                + ": "
+                + issue.message
+                + (
+                    "\n  Remedy: " + "; ".join(issue.remediation)
+                    if issue.remediation
+                    else ""
+                )
                 for issue in issues
                 if issue.severity == "blocker"
             )
@@ -852,6 +890,44 @@ def apply_migration(
     if staging != target:
         target.parent.mkdir(parents=True, exist_ok=True)
         staging.rename(target)
+
+    fixed_sibling_root = (fresh.project_root / ".." / "ledger").resolve(strict=False)
+    if fresh.sibling_root != fixed_sibling_root:
+        if retire_source:
+            raise LaunchError(
+                "--retire-source is not supported with a migration-only "
+                "sibling destination override."
+            )
+        migration_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        receipt = target / "migrations" / f"{migration_timestamp}-migration-only.json"
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        receipt.write_text(
+            json.dumps(
+                {
+                    "inspection": fresh.to_dict(),
+                    "backup": str(backup_path),
+                    "verified": True,
+                    "canonical_activation": False,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return {
+            "kind": "migration_apply",
+            "status": "applied",
+            "inspection": fresh.to_dict(),
+            "backup": str(backup_path),
+            "receipt": str(receipt),
+            "retired": False,
+            "canonical_activation": False,
+            "warnings": [
+                "Migration-only destination override was used; canonical "
+                "project activation was not changed."
+            ],
+        }
     from taskledger.storage.ledger_local_config import (
         ensure_sibling_workspace_provider,
     )

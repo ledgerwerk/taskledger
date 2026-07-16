@@ -88,3 +88,24 @@ def test_migration_does_not_compare_against_foreign_bound_target(
     assert "BINDING_UUID_MISMATCH" in codes
     assert "DESTINATION_CONFLICT" not in codes
     assert plan.copy_items == ()
+
+
+def test_migration_override_copies_without_canonical_activation(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    _legacy_project(project)
+    destination = tmp_path / "archledger-sibling"
+    result = apply_layout_migration(
+        project,
+        sibling_ledger_root=destination,
+        create_sibling_store=True,
+    )
+    assert result["status"] == "applied"
+    assert result["canonical_activation"] is False
+    assert result["inspection"]["target"]["data"] == str(
+        destination / "task" / "taskledger"
+    )
+    assert (destination / ".ledger-store").is_file()
+    assert not (project / ".ledger" / "task" / "config.toml").exists()
