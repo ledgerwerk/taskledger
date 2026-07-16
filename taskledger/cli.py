@@ -623,52 +623,40 @@ def main(
 @app.command("init")
 def init_command(
     ctx: typer.Context,
-    sibling_ledger_root: Annotated[
-        Path | None,
-        typer.Option(
-            "--sibling-ledger-root",
-            help="Explicit shared Ledger root for isolated external Taskledger data.",
-        ),
-    ] = None,
-    create_store: Annotated[
+    create_sibling_store: Annotated[
         bool,
         typer.Option(
-            "--create-store",
-            help="Create the explicitly selected sibling Ledger root if needed.",
-        ),
-    ] = False,
-    replace_workspace_selection: Annotated[
-        bool,
-        typer.Option(
-            "--replace-workspace-selection",
-            help="Replace an existing local workspace root selection.",
+            "--create-sibling-store",
+            help="Create the fixed ../ledger sibling store if needed.",
         ),
     ] = False,
     taskledger_dir: Annotated[
         Path | None,
-        typer.Option("--taskledger-dir", help="Durable taskledger storage root."),
+        typer.Option(
+            "--taskledger-dir",
+            help="Deprecated legacy migration source option.",
+        ),
     ] = None,
     project_name: Annotated[
         str | None,
         typer.Option(
             "--project-name",
-            help=(
-                "Human-readable project name used in reports and default "
-                "archive filenames."
-            ),
+            help="Human-readable project name used in reports.",
         ),
     ] = None,
 ) -> None:
     state = ctx.obj
     assert isinstance(state, CLIState)
-    payload = init_project(
-        state.cwd,
-        taskledger_dir=taskledger_dir,
-        sibling_ledger_root=sibling_ledger_root,
-        create_store=create_store,
-        replace_workspace_selection=replace_workspace_selection,
-        project_name=project_name,
-    )
+    try:
+        payload = init_project(
+            state.cwd,
+            taskledger_dir=taskledger_dir,
+            create_sibling_store=create_sibling_store,
+            project_name=project_name,
+        )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
     emit_payload(
         ctx,
         payload,

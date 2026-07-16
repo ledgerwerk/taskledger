@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -57,56 +58,79 @@ def build_git_sync_config(
     locator = load_project_locator(workspace_root)
     context = load_project_context(workspace_root)
     if context.mode == "canonical":
+        if context.store_root is None:
+            raise LaunchError("Canonical Taskledger context has no sibling store root.")
+        expected_repo = context.store_root.resolve()
+        expected_project_path = "task/taskledger"
+        if repo is not None and repo.expanduser().resolve() != expected_repo:
+            raise LaunchError(
+                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Git repository "
+                f"is fixed to {expected_repo}."
+            )
+        if project_path is not None and project_path != expected_project_path:
+            raise LaunchError(
+                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Taskledger "
+                f"path is fixed to {expected_project_path}."
+            )
         sync_config = context.config.sync_git
-        sync_git_table: dict[str, object] = {
-            "repo": sync_config.repo,
-            "project_path": sync_config.project_path,
-            "remote": sync_config.remote,
-            "branch": sync_config.branch,
-            "allow_active_locks": sync_config.allow_active_locks,
-            "hooks": sync_config.hooks,
-        }
-    else:
-        document = load_project_config_document(locator.config_path)
-        sync_table = document.get("sync")
-        sync_git_table = {}
-        if isinstance(sync_table, dict):
-            maybe_git = sync_table.get("git")
-            if isinstance(maybe_git, dict):
-                sync_git_table = maybe_git
-
+        if (
+            sync_config.repo is not None
+            and _resolve_path(locator.workspace_root, Path(sync_config.repo)).resolve()
+            != expected_repo
+        ):
+            raise LaunchError(
+                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: sync.git.repo cannot "
+                "select canonical storage."
+            )
+        if (
+            sync_config.project_path is not None
+            and sync_config.project_path != expected_project_path
+        ):
+            raise LaunchError(
+                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: sync.git.project_path "
+                "cannot select canonical storage."
+            )
+        return GitSyncConfig(
+            repo_path=expected_repo,
+            project_path=expected_project_path,
+            remote=remote or sync_config.remote,
+            branch=branch or sync_config.branch,
+            allow_active_locks=sync_config.allow_active_locks,
+            hooks=sync_config.hooks,
+        )
+    document = load_project_config_document(locator.config_path)
+    sync_table = document.get("sync")
+    sync_git_table: dict[str, object] = {}
+    if isinstance(sync_table, dict):
+        maybe_git = sync_table.get("git")
+        if isinstance(maybe_git, dict):
+            sync_git_table = maybe_git
     repo_value = (
         repo.as_posix() if repo is not None else _as_str(sync_git_table.get("repo"))
     )
-    if repo_value is None:
-        repo_path = (locator.workspace_root / ".." / "taskledger-state").resolve()
-    else:
-        repo_path = _resolve_path(locator.workspace_root, Path(repo_value))
-
+    repo_path = (
+        (locator.workspace_root / ".." / "taskledger-state").resolve()
+        if repo_value is None
+        else _resolve_path(locator.workspace_root, Path(repo_value))
+    )
     project_value = project_path or _as_str(sync_git_table.get("project_path"))
     if project_value is None:
         project_name = project_name_or_default(
-            locator.config_path,
-            workspace_root=locator.workspace_root,
+            locator.config_path, workspace_root=locator.workspace_root
         )
         project_value = slugify_project_ref(project_name, empty="project")
     _validate_project_path(project_value)
-
     return GitSyncConfig(
         repo_path=repo_path,
         project_path=project_value,
         remote=remote or _as_str(sync_git_table.get("remote")) or "origin",
         branch=branch or _as_str(sync_git_table.get("branch")) or "main",
-        allow_active_locks=(
-            bool(sync_git_table.get("allow_active_locks"))
-            if isinstance(sync_git_table.get("allow_active_locks"), bool)
-            else False
-        ),
-        hooks=(
-            bool(sync_git_table.get("hooks"))
-            if isinstance(sync_git_table.get("hooks"), bool)
-            else False
-        ),
+        allow_active_locks=bool(sync_git_table.get("allow_active_locks"))
+        if isinstance(sync_git_table.get("allow_active_locks"), bool)
+        else False,
+        hooks=bool(sync_git_table.get("hooks"))
+        if isinstance(sync_git_table.get("hooks"), bool)
+        else False,
     )
 
 
@@ -209,6 +233,70 @@ def init_git_sync_repo(
     install_hooks: bool = False,
     force_hooks: bool = False,
 ) -> dict[str, object]:
+    canonical = load_project_context(workspace_root)
+    if canonical.mode == "canonical":
+        config = build_git_sync_config(
+            workspace_root,
+            repo=repo,
+            project_path=project_path,
+            remote=remote,
+            branch=branch,
+        )
+        if adopt_existing or mode != "move":
+            raise LaunchError(
+                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Git sync init "
+                "cannot move, copy, or adopt storage."
+            )
+        assert canonical.store_root is not None
+        target_storage = _storage_path(config)
+        if target_storage.resolve() != canonical.paths.data_root.resolve():
+            raise LaunchError(
+                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical storage path "
+                "does not match the resolved Taskledger data mount."
+            )
+        _ensure_git_repo(
+            config.repo_path,
+            remote_url=None,
+            branch=config.branch,
+            allow_nonempty=True,
+        )
+        if remote_url:
+            configured_remote = _remote_url(config.repo_path, config.remote)
+            if configured_remote is None:
+                _run_git(
+                    config.repo_path,
+                    "remote",
+                    "add",
+                    config.remote,
+                    remote_url,
+                )
+            elif configured_remote != remote_url:
+                raise LaunchError(
+                    "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: configured Git remote "
+                    "does not match --remote-url."
+                )
+        canonical_hooks_report = None
+        if install_hooks or config.hooks:
+            canonical_hooks_report = install_git_hooks(
+                workspace_root,
+                repo=config.repo_path,
+                project_path=config.project_path,
+                force=force_hooks,
+                quiet=True,
+            )
+        doctor = inspect_v2_project(workspace_root)
+        return {
+            "kind": "taskledger_sync_git_init",
+            "repo_path": config.repo_path.as_posix(),
+            "project_path": config.project_path,
+            "storage_path": target_storage.as_posix(),
+            "branch": config.branch,
+            "remote": config.remote,
+            "taskledger_dir_updated": False,
+            "doctor_healthy": bool(doctor["healthy"]),
+            "hooks": canonical_hooks_report,
+            "warnings": [],
+        }
     if mode not in {"move", "copy"}:
         raise LaunchError("mode must be one of: move, copy.")
     config = build_git_sync_config(
@@ -291,6 +379,11 @@ def git_sync_import_local(
     branch: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, object]:
+    if load_project_context(workspace_root).mode == "canonical":
+        raise LaunchError(
+            "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Taskledger storage "
+            "has no local Git import path; use taskledger migrate."
+        )
     config = build_git_sync_config(
         workspace_root,
         repo=repo,
@@ -357,6 +450,8 @@ def git_sync_commit(
     require_clean_repo: bool = False,
     include_outside_project: bool = False,
 ) -> dict[str, object]:
+    context = load_project_context(workspace_root)
+    canonical = context.mode == "canonical"
     config = build_git_sync_config(
         workspace_root,
         repo=repo,
@@ -382,6 +477,11 @@ def git_sync_commit(
         raise LaunchError(
             f"{active_lock_count} active lock(s) detected. "
             "Use --allow-active-locks to continue."
+        )
+    if canonical and include_outside_project:
+        raise LaunchError(
+            "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Git commits are "
+            "limited to task/taskledger."
         )
     _ensure_git_repo(config.repo_path, remote_url=None, branch=config.branch)
     warnings: list[str] = []
@@ -412,7 +512,11 @@ def git_sync_commit(
                 "were included."
             )
     else:
-        export_paths = _sync_export_paths(config.repo_path, config.project_path)
+        export_paths = (
+            (config.project_path,)
+            if canonical
+            else _sync_export_paths(config.repo_path, config.project_path)
+        )
         _run_git(config.repo_path, "add", "--all", "--", *export_paths)
         staged = _run_git(
             config.repo_path,
@@ -463,6 +567,11 @@ def git_sync_export_local(
     allow_dirty: bool = False,
     allow_active_locks: bool = False,
 ) -> dict[str, object]:
+    if load_project_context(workspace_root).mode == "canonical":
+        raise LaunchError(
+            "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Taskledger storage "
+            "has no local Git export path; use taskledger migrate."
+        )
     payload = git_sync_commit(
         workspace_root,
         repo=repo,
@@ -487,6 +596,8 @@ def git_sync_pull(
     branch: str | None = None,
     allow_dirty: bool = False,
 ) -> dict[str, object]:
+    context = load_project_context(workspace_root)
+    canonical = context.mode == "canonical"
     config = build_git_sync_config(
         workspace_root,
         repo=repo,
@@ -495,27 +606,44 @@ def git_sync_pull(
         branch=branch,
     )
     all_dirty = _git_status_lines(config.repo_path)
-    if all_dirty and not allow_dirty:
+    if all_dirty and (not allow_dirty or canonical):
+        suffix = (
+            " Canonical sibling-repository pulls do not support --allow-dirty."
+            if canonical
+            else ""
+        )
         raise LaunchError(
             "sync git pull updates the whole sync repository and requires a clean "
             "working tree. Commit or stash unrelated project state first, "
-            "or rerun with --allow-dirty."
+            "or rerun with --allow-dirty." + suffix
         )
     _run_git(config.repo_path, "pull", "--ff-only", config.remote, config.branch)
-    imported = git_sync_import_local(
-        workspace_root,
-        repo=config.repo_path,
-        project_path=config.project_path,
-        remote=config.remote,
-        branch=config.branch,
-    )
+    if canonical:
+        doctor = inspect_v2_project(workspace_root)
+        refreshed: dict[str, object] = {
+            "kind": "taskledger_sync_git_direct",
+            "repo_path": config.repo_path.as_posix(),
+            "project_path": config.project_path,
+            "storage_path": _storage_path(config).as_posix(),
+            "taskledger_dir_updated": False,
+            "doctor_healthy": bool(doctor["healthy"]),
+            "warnings": [],
+        }
+    else:
+        refreshed = git_sync_import_local(
+            workspace_root,
+            repo=config.repo_path,
+            project_path=config.project_path,
+            remote=config.remote,
+            branch=config.branch,
+        )
     return {
         "kind": "taskledger_sync_git_pull",
         "repo_path": config.repo_path.as_posix(),
         "project_path": config.project_path,
         "pulled": True,
-        "import_local": imported,
-        "doctor_healthy": imported["doctor_healthy"],
+        "refresh": refreshed,
+        "doctor_healthy": refreshed["doctor_healthy"],
         "warnings": [],
     }
 
@@ -531,6 +659,7 @@ def git_sync_push(
     allow_dirty: bool = False,
     allow_active_locks: bool = False,
 ) -> dict[str, object]:
+    context = load_project_context(workspace_root)
     config = build_git_sync_config(
         workspace_root,
         repo=repo,
@@ -546,7 +675,7 @@ def git_sync_push(
         branch=config.branch,
         message=message,
         allow_active_locks=allow_active_locks,
-        include_outside_project=True,
+        include_outside_project=context.mode != "canonical",
     )
     _run_git(config.repo_path, "push", config.remote, config.branch)
     return {
@@ -780,7 +909,13 @@ def _validate_project_path(project_path: str) -> None:
         raise LaunchError("sync.git project_path must not be empty.")
 
 
-def _ensure_git_repo(repo_path: Path, *, remote_url: str | None, branch: str) -> None:
+def _ensure_git_repo(
+    repo_path: Path,
+    *,
+    remote_url: str | None,
+    branch: str,
+    allow_nonempty: bool = False,
+) -> None:
     if remote_url and not repo_path.exists():
         repo_path.parent.mkdir(parents=True, exist_ok=True)
         _run_git(
@@ -799,7 +934,7 @@ def _ensure_git_repo(repo_path: Path, *, remote_url: str | None, branch: str) ->
     else:
         repo_path.mkdir(parents=True, exist_ok=True)
         if not (repo_path / ".git").exists():
-            if any(repo_path.iterdir()):
+            if any(repo_path.iterdir()) and not allow_nonempty:
                 raise LaunchError(
                     "Repo path exists and is not empty: "
                     f"{repo_path}. Expected git repo."
@@ -975,9 +1110,9 @@ def _hook_targets_differ(
     return any(
         needle not in content
         for needle in (
-            f"--root {workspace_root.as_posix()}",
-            f"--repo {repo_path.as_posix()}",
-            f"--project-path {project_path}",
+            f"--root {shlex.quote(workspace_root.as_posix())}",
+            f"# taskledger-managed-repo: {repo_path.as_posix()}",
+            f"# taskledger-managed-project: {project_path}",
         )
     )
 
@@ -989,16 +1124,15 @@ def _render_hook_script(
     project_path: str,
     quiet: bool,
 ) -> str:
-    quiet_flag = " --quiet" if quiet else ""
+    quiet_suffix = " >/dev/null 2>&1" if quiet else ""
     return (
         "#!/bin/sh\n"
         f"{_HOOK_MARKER}\n"
+        f"# taskledger-managed-repo: {repo_path.as_posix()}\n"
+        f"# taskledger-managed-project: {project_path}\n"
         'if [ "${TASKLEDGER_GIT_HOOK:-}" = "1" ]; then\n'
         "  exit 0\n"
         "fi\n"
         "TASKLEDGER_GIT_HOOK=1 exec taskledger "
-        f"--root {workspace_root.as_posix()} "
-        "sync git import-local "
-        f"--repo {repo_path.as_posix()} "
-        f"--project-path {project_path}{quiet_flag}\n"
+        f"--root {shlex.quote(workspace_root.as_posix())} reindex{quiet_suffix}\n"
     )

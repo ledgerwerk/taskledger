@@ -128,8 +128,37 @@ def _registration_matches(existing: Any) -> bool:
     return bool(actual == expected["mounts"])
 
 
+def _recognized_legacy_registration(existing: Any) -> bool:
+    if not hasattr(existing, "get") or existing.get("config") is None:
+        return False
+    config = existing["config"]
+    if config.get("location") != "project" or config.get("path") != "task/config.toml":
+        return False
+    mounts = existing.get("mounts")
+    if not isinstance(mounts, Mapping):
+        return False
+    values = {
+        name: {key: mount.get(key) for key in ("storage", "scope", "path")}
+        for name, mount in mounts.items()
+    }
+    repository_local = {
+        "data": {"storage": "repository", "scope": None, "path": "task/taskledger"},
+        "indexes": {
+            "storage": "cache",
+            "scope": "checkout",
+            "path": "task/taskledger-indexes",
+        },
+    }
+    split_checkout = {
+        "data": {"storage": "workspace", "scope": "checkout", "path": "task/data"},
+        "logs": {"storage": "workspace", "scope": "checkout", "path": "task/logs"},
+        "indexes": {"storage": "cache", "scope": "checkout", "path": "task/indexes"},
+    }
+    return values in (repository_local, split_checkout)
+
+
 def _conflict(existing: Any) -> str | None:
-    if existing is None:
+    if existing is None or _recognized_legacy_registration(existing):
         return None
     config = existing.get("config") if hasattr(existing, "get") else None
     if config is None or config.get("location") != "project":
@@ -160,6 +189,9 @@ def _set_registration(doc: Any) -> None:
     config["location"] = "project"
     config["path"] = "task/config.toml"
     mounts = registration.setdefault("mounts", table())
+    for name in list(mounts):
+        if name not in CANONICAL_MOUNT_SPECS:
+            del mounts[name]
     for name, (storage, scope, path) in CANONICAL_MOUNT_SPECS.items():
         mount = mounts.setdefault(name, table())
         mount["storage"] = storage
@@ -274,48 +306,10 @@ def upgrade_taskledger_registration(
     *,
     expected_project_uuid: str,
 ) -> ManifestMutationResult:
-    """Upgrade only the recognized Ledgercore 0.3 Taskledger registration."""
-    import uuid
-
-    try:
-        normalized_uuid = str(uuid.UUID(expected_project_uuid))
-    except ValueError as exc:
-        raise LaunchError(f"Invalid project UUID {expected_project_uuid!r}.") from exc
-    manifest_path = project_root.expanduser().resolve() / ".ledger" / "ledger.toml"
-    lock = FileLock(str(manifest_path) + ".lock")
-    with lock:
-        if not manifest_path.exists():
-            raise LaunchError(f"Missing Ledger manifest {manifest_path}.")
-        current = manifest_path.read_text(encoding="utf-8")
-        document = parse(current)
-        existing = document.get("ledgers", {}).get(CANONICAL_LEDGER_NAME)
-        if _registration_matches(existing):
-            return ManifestMutationResult(
-                manifest_path, normalized_uuid, None, False, False
-            )
-        old_mounts = {
-            "data": ("workspace", "checkout", "task/data"),
-            "logs": ("workspace", "checkout", "task/logs"),
-            "indexes": ("cache", "checkout", "task/indexes"),
-        }
-        mounts = existing.get("mounts") if hasattr(existing, "get") else None
-        if not isinstance(mounts, Mapping) or set(mounts) != set(old_mounts):
-            raise LaunchError("Refusing to rewrite an unknown Taskledger registration.")
-        for name, expected in old_mounts.items():
-            actual = mounts[name]
-            if (
-                not isinstance(actual, Mapping)
-                or tuple(actual.get(key) for key in ("storage", "scope", "path"))
-                != expected
-            ):
-                raise LaunchError(
-                    "Refusing to rewrite an unknown Taskledger registration."
-                )
-        _set_registration(document)
-        contents = dumps(document)
-        _validate_bytes(manifest_path, contents)
-        atomic_write_text(manifest_path, contents)
-        return ManifestMutationResult(manifest_path, normalized_uuid, None, True, False)
+    """Upgrade a recognized superseded Taskledger registration."""
+    return ensure_taskledger_registration(
+        project_root, project_uuid=expected_project_uuid
+    )
 
 
 __all__ = [

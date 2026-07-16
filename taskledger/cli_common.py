@@ -8,7 +8,11 @@ from typing import Annotated, Any
 import typer
 
 from taskledger.domain.models import ActorRef, HarnessRef
-from taskledger.errors import LaunchError, TaskledgerError
+from taskledger.errors import (
+    LaunchError,
+    TaskledgerError,
+    error_exit_code_for_code,
+)
 from taskledger.storage.paths import discover_workspace_root
 from taskledger.storage.task_store import TaskRecord, resolve_task_or_active
 
@@ -264,6 +268,13 @@ def launch_error_exit_code(exc: Exception, default: int = 1) -> int:
     if not isinstance(code, int):
         code = getattr(exc, "exit_code", None)
     if not isinstance(code, int):
+        prefix = str(exc).split(":", 1)[0]
+        code = (
+            error_exit_code_for_code(prefix)
+            if prefix.startswith("TASKLEDGER_")
+            else None
+        )
+    if not isinstance(code, int):
         code = _exit_code_from_message(str(exc), default)
     return code if isinstance(code, int) else default
 
@@ -476,6 +487,9 @@ def _error_code(
             mapped = _error_code_from_error_type(legacy_type)
             if mapped is not None:
                 return mapped
+        prefix = str(error).split(":", 1)[0]
+        if prefix.startswith("TASKLEDGER_"):
+            return prefix
     by_exit_code = _error_code_from_exit_code(
         explicit_exit_code
         if explicit_exit_code is not None

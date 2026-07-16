@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ledgercore import locate_ledger_project
+
 from taskledger.errors import LaunchError
 from taskledger.services.doctor import inspect_v2_project
 from taskledger.services.git_utils import (
@@ -51,6 +53,11 @@ class StorageLocationReport:
     local_config_path: str | None = None
     checkout_id: str | None = None
     mounts: dict[str, dict[str, object]] | None = None
+    workspace_provider: str | None = None
+    store_root: str | None = None
+    store_marker: str | None = None
+    binding: str | None = None
+    relative_path: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -76,6 +83,17 @@ class StorageLocationReport:
                 }
             )
         else:
+            payload.update(
+                {
+                    "workspace_provider": self.workspace_provider,
+                    "store_root": self.store_root,
+                    "store_marker": self.store_marker,
+                    "binding": self.binding,
+                    "relative_path": self.relative_path,
+                    "taskledger_dir": self.taskledger_dir,
+                    "git_root": self.git_root,
+                }
+            )
             payload.update(
                 {
                     "manifest_path": self.manifest_path,
@@ -197,6 +215,9 @@ def build_storage_location_report(workspace_root: Path) -> StorageLocationReport
     try:
         context = load_project_context(workspace_root)
     except LaunchError:
+        locator = locate_ledger_project(workspace_root)
+        if locator is not None and locator.source == "canonical":
+            raise
         context = None
     if (
         context is not None
@@ -219,6 +240,13 @@ def build_storage_location_report(workspace_root: Path) -> StorageLocationReport
             if active_lock_count
             else []
         )
+        store_root = context.store_root
+        git_root = _git_root(store_root) if store_root is not None else None
+        relative_path = (
+            _relative_to(context.paths.data_root, git_root)
+            if git_root is not None
+            else None
+        )
         return StorageLocationReport(
             workspace_root=context.project_root.as_posix(),
             config_path=context.config_path.as_posix(),
@@ -227,8 +255,8 @@ def build_storage_location_report(workspace_root: Path) -> StorageLocationReport
             project_name=context.project_name,
             ledger_ref=context.ledger_state.ref,
             inside_workspace=False,
-            is_git_repo=False,
-            git_root=None,
+            is_git_repo=git_root is not None,
+            git_root=git_root.as_posix() if git_root is not None else None,
             active_lock_count=active_lock_count,
             has_active_locks=active_lock_count > 0,
             warnings=tuple(warnings),
@@ -239,6 +267,13 @@ def build_storage_location_report(workspace_root: Path) -> StorageLocationReport
             local_config_path=context.layout.local_config_path.as_posix(),
             checkout_id=context.layout.checkout_id,
             mounts=mounts,
+            workspace_provider=context.workspace_provider,
+            store_root=store_root.as_posix() if store_root else None,
+            store_marker=context.store_marker_path.as_posix()
+            if context.store_marker_path
+            else None,
+            binding=context.binding_path.as_posix() if context.binding_path else None,
+            relative_path=relative_path,
         )
     locator = load_project_locator(workspace_root)
     taskledger_dir = locator.taskledger_dir
@@ -335,10 +370,8 @@ def move_taskledger_storage(
         context = None
     if context is not None and context.mode == "canonical":
         raise LaunchError(
-            "`taskledger storage move` is legacy-only in canonical projects. "
-            "Ledger workspace/cache roots are shared project settings. Edit "
-            ".ledger/ledger.local.toml or set LEDGER_WORKSPACE_ROOT / "
-            "LEDGER_CACHE_ROOT."
+            "Canonical Taskledger storage has one fixed sibling location. "
+            "Use `taskledger migrate` to convert a legacy or superseded layout."
         )
     if mode not in {"copy", "move"}:
         raise LaunchError("mode must be one of: copy, move.")
@@ -442,8 +475,7 @@ def build_sync_status_report(workspace_root: Path) -> SyncStatusReport:
         warnings = list(location.warnings)
         if len(roots) > 1 or not roots:
             warnings.append(
-                "Canonical data and logs mounts are not represented by "
-                "one sync repository."
+                "Canonical Taskledger data is not represented by one sync repository."
             )
         return SyncStatusReport(
             taskledger_dir=location.taskledger_dir,

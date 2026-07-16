@@ -539,7 +539,10 @@ def register_sync_commands(app: typer.Typer) -> None:  # noqa: C901
             human=selected_path,
         )
 
-    @sync_git_app.command("import-local")
+    @sync_git_app.command(
+        "import-local",
+        help="Deprecated for canonical projects; use taskledger migrate.",
+    )
     def git_import_local_command(
         ctx: typer.Context,
         repo: Annotated[Path | None, typer.Option("--repo")] = None,
@@ -613,7 +616,7 @@ def register_sync_commands(app: typer.Typer) -> None:  # noqa: C901
 
     @sync_git_app.command(
         "export-local",
-        help="Compatibility alias for sync git commit.",
+        help="Deprecated for canonical projects; use taskledger migrate.",
     )
     def git_export_local_command(
         ctx: typer.Context,
@@ -657,7 +660,10 @@ def register_sync_commands(app: typer.Typer) -> None:  # noqa: C901
 
     @sync_git_app.command(
         "pull",
-        help="Pull the configured sync Git repository and import pulled state.",
+        help=(
+            "Pull the shared sibling repository; canonical pulls require a clean "
+            "working tree."
+        ),
     )
     def git_pull_command(
         ctx: typer.Context,
@@ -689,7 +695,7 @@ def register_sync_commands(app: typer.Typer) -> None:  # noqa: C901
 
     @sync_git_app.command(
         "push",
-        help="Commit sync repository changes and push them.",
+        help="Commit Taskledger state only, then push the shared repository.",
     )
     def git_push_command(
         ctx: typer.Context,

@@ -357,10 +357,9 @@ def render_default_taskledger_toml(
         "# [event_logging]\n"
         "# enabled = true\n"
         "\n"
-        "# Optional sync.git defaults for private external Git state.\n"
+        "# Optional Git synchronization policy. Canonical projects always use "
+        "# the resolved sibling repository and task/taskledger path.\n"
         "# [sync.git]\n"
-        '# repo = "../taskledger-state"\n'
-        '# project_path = "project-a"\n'
         '# remote = "origin"\n'
         '# branch = "main"\n'
         "# allow_active_locks = false\n"
@@ -1484,6 +1483,8 @@ def _load_canonical_document(path: Path) -> dict[str, object]:
         "ledger_branch_guard",
         "workspace_root",
         "workspace_provider",
+        "storage_mode",
+        "sibling_ledger_root",
     }
     found = sorted(forbidden.intersection(data))
     if found:
@@ -1491,6 +1492,16 @@ def _load_canonical_document(path: Path) -> dict[str, object]:
             f"Canonical Taskledger config {path} contains forbidden legacy fields: "
             f"{', '.join(found)}"
         )
+    sync = data.get("sync")
+    if isinstance(sync, dict):
+        sync_git = sync.get("git")
+        if isinstance(sync_git, dict) and any(
+            key in sync_git for key in ("repo", "project_path")
+        ):
+            raise LaunchError(
+                f"Canonical Taskledger config {path} cannot select storage with "
+                "sync.git.repo or sync.git.project_path."
+            )
     _validate_project_config_overrides(
         {key: value for key, value in data.items() if key != "config_version"}, path
     )

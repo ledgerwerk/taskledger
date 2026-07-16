@@ -2,6 +2,43 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
+STORAGE_ERROR_CODES = frozenset(
+    {
+        "TASKLEDGER_MIGRATION_REQUIRED",
+        "TASKLEDGER_REGISTRATION_MISSING",
+        "TASKLEDGER_REGISTRATION_CONFLICT",
+        "TASKLEDGER_WORKSPACE_ENV_UNSUPPORTED",
+        "TASKLEDGER_WORKSPACE_ROOT_CONFLICT",
+        "TASKLEDGER_WORKSPACE_PROVIDER_CONFLICT",
+        "TASKLEDGER_SIBLING_PROVIDER_REQUIRED",
+        "TASKLEDGER_SIBLING_ROOT_MISSING",
+        "TASKLEDGER_SIBLING_ROOT_NOT_DIRECTORY",
+        "TASKLEDGER_SIBLING_ROOT_UNMARKED",
+        "TASKLEDGER_SIBLING_MARKER_INVALID",
+        "TASKLEDGER_DIRECT_PATH_MISMATCH",
+        "TASKLEDGER_BINDING_MISSING",
+        "TASKLEDGER_BINDING_UUID_MISMATCH",
+        "TASKLEDGER_BINDING_LEDGER_MISMATCH",
+        "TASKLEDGER_BINDING_MOUNT_MISMATCH",
+        "TASKLEDGER_STORAGE_LAYOUT_OLD",
+        "TASKLEDGER_STATE_SCHEMA_OLD",
+        "TASKLEDGER_TASK_ALLOCATION_INVALID",
+        "TASKLEDGER_MIGRATION_AMBIGUOUS",
+        "TASKLEDGER_DESTINATION_CONFLICT",
+        "TASKLEDGER_PARTIAL_MIGRATION",
+    }
+)
+
+
+def error_exit_code_for_code(code: str) -> int | None:
+    if code == "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED":
+        return 2
+    if code in STORAGE_ERROR_CODES:
+        return 6
+    if code == "TASKLEDGER_PROJECT_NOT_FOUND":
+        return 5
+    return None
+
 
 class TaskledgerError(Exception):
     """Base class for public taskledger errors."""
@@ -24,8 +61,13 @@ class TaskledgerError(Exception):
         blocking_refs: Sequence[str] | None = None,
     ) -> None:
         super().__init__(message)
-        resolved_code = code if code is not None else self.code
+        prefix = message.split(":", 1)[0]
+        inferred_code = prefix if prefix.startswith("TASKLEDGER_") else None
+        resolved_code = code if code is not None else inferred_code or self.code
+        mapped_exit_code = error_exit_code_for_code(resolved_code)
         resolved_exit_code = exit_code if exit_code is not None else self.exit_code
+        if exit_code is None and self.exit_code == 1 and mapped_exit_code is not None:
+            resolved_exit_code = mapped_exit_code
         resolved_error_type = error_type if error_type is not None else self.error_type
         resolved_details = dict(details or data or {})
         resolved_blocking_refs = tuple(str(item) for item in (blocking_refs or ()))

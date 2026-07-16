@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Literal, cast
+from typing import Annotated
 
 import typer
 
@@ -124,34 +124,23 @@ def migrate_plan_command(ctx: typer.Context) -> None:
 @migrate_app.command("apply")
 def migrate_apply_command(
     ctx: typer.Context,
-    sibling_ledger_root: Annotated[
-        Path | None,
-        typer.Option(
-            "--sibling-ledger-root", help="Explicit migration destination root."
-        ),
-    ] = None,
     backup: Annotated[
-        bool, typer.Option("--backup", help="Create a backup before applying.")
-    ] = False,
+        bool,
+        typer.Option("--backup/--no-backup", help="Deprecated; backup is automatic."),
+    ] = True,
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Inspect without writing.")
+        bool,
+        typer.Option("--dry-run", help="Inspect without writing."),
     ] = False,
-    create_store: Annotated[
+    create_sibling_store: Annotated[
         bool,
         typer.Option(
-            "--create-store",
-            help="Create the explicitly selected sibling root if absent.",
+            "--create-sibling-store",
+            help="Create the fixed ../ledger sibling store if absent.",
         ),
     ] = False,
     backup_dir: Annotated[Path | None, typer.Option("--backup-dir")] = None,
     source_checkout: Annotated[str | None, typer.Option("--source-checkout")] = None,
-    replace_workspace_selection: Annotated[
-        bool, typer.Option("--replace-workspace-selection")
-    ] = False,
-    counter_gap: Annotated[
-        str,
-        typer.Option("--counter-gap", help="Legacy counter policy: preserve or reuse."),
-    ] = "preserve",
     retire_source: Annotated[
         bool, typer.Option("--retire-source", "--retire-legacy")
     ] = False,
@@ -163,7 +152,6 @@ def migrate_apply_command(
         inspection = inspect_migration(
             state.cwd,
             source_checkout=source_checkout,
-            sibling_ledger_root=sibling_ledger_root,
         )
         if dry_run:
             payload = {
@@ -172,17 +160,11 @@ def migrate_apply_command(
                 "inspection": inspection.to_dict(),
             }
         else:
-            policy = cast(
-                Literal["preserve", "reuse"],
-                counter_gap if counter_gap in {"preserve", "reuse"} else "preserve",
-            )
             payload = apply_migration(
                 inspection,
                 backup=backup,
                 backup_dir=backup_dir,
-                create_store=create_store,
-                replace_workspace_selection=replace_workspace_selection,
-                counter_gap_policy=policy,
+                create_sibling_store=create_sibling_store,
                 retire_source=retire_source,
             )
     except LaunchError as exc:

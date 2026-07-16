@@ -26,6 +26,7 @@ class TaskIdInventory:
     allocations: tuple[TaskIdAllocation, ...]
     highest_number: int
     next_task_id: str
+    empty_reservations: tuple[Path, ...] = ()
 
 
 def _parse_canonical_task_id(value: str, *, path: Path) -> tuple[str, int]:
@@ -39,8 +40,11 @@ def _parse_canonical_task_id(value: str, *, path: Path) -> tuple[str, int]:
     return normalized, parts.number
 
 
-def _scan_task_allocations(paths: V2Paths) -> list[TaskIdAllocation]:
+def _scan_task_allocations(
+    paths: V2Paths,
+) -> tuple[list[TaskIdAllocation], list[Path]]:
     allocations: list[TaskIdAllocation] = []
+    empty_reservations: list[Path] = []
     if paths.tasks_dir.exists():
         for entry in sorted(paths.tasks_dir.iterdir()):
             if not entry.name.startswith("task-"):
@@ -51,7 +55,7 @@ def _scan_task_allocations(paths: V2Paths) -> list[TaskIdAllocation]:
             task_path = entry / "task.md"
             if not task_path.is_file():
                 if not any(entry.iterdir()):
-                    # An empty directory is an in-flight exclusive reservation.
+                    empty_reservations.append(entry)
                     continue
                 raise LaunchError(f"Task allocation {entry} is missing task.md.")
             metadata, _ = read_markdown_front_matter(task_path)
@@ -72,8 +76,7 @@ def _scan_task_allocations(paths: V2Paths) -> list[TaskIdAllocation]:
                 continue
             if not entry.is_file() or entry.suffix != ".toml":
                 raise LaunchError(f"Malformed task tombstone path: {entry}")
-            stem = entry.stem
-            task_id, number = _parse_canonical_task_id(stem, path=entry)
+            task_id, number = _parse_canonical_task_id(entry.stem, path=entry)
             try:
                 tomllib = importlib.import_module("tomllib")
             except ModuleNotFoundError:  # pragma: no cover
@@ -82,18 +85,22 @@ def _scan_task_allocations(paths: V2Paths) -> list[TaskIdAllocation]:
                 document = tomllib.loads(entry.read_text(encoding="utf-8"))
             except (OSError, ValueError) as exc:
                 raise LaunchError(f"Invalid task tombstone {entry}: {exc}") from exc
-            if document.get("id") != task_id:
+            if (
+                document.get("schema_version") != 1
+                or document.get("id") != task_id
+                or document.get("object_type") != "task_id_tombstone"
+                or not isinstance(document.get("reason"), str)
+                or not isinstance(document.get("created_at"), str)
+            ):
                 raise LaunchError(
-                    f"Task tombstone {entry} id does not match its filename."
+                    f"Task tombstone {entry} has invalid schema or required fields."
                 )
-            if document.get("object_type") != "task_id_tombstone":
-                raise LaunchError(f"Task tombstone {entry} has an invalid object_type.")
             allocations.append(TaskIdAllocation(task_id, number, "tombstone", entry))
-    return allocations
+    return allocations, empty_reservations
 
 
 def scan_task_id_inventory(paths: V2Paths) -> TaskIdInventory:
-    allocations = _scan_task_allocations(paths)
+    allocations, empty_reservations = _scan_task_allocations(paths)
     by_number: dict[int, TaskIdAllocation] = {}
     for allocation in allocations:
         previous = by_number.get(allocation.number)
@@ -104,11 +111,15 @@ def scan_task_id_inventory(paths: V2Paths) -> TaskIdInventory:
             )
         by_number[allocation.number] = allocation
     ordered = tuple(sorted(allocations, key=lambda item: item.number))
-    highest = ordered[-1].number if ordered else 0
+    reservation_numbers = [
+        _parse_canonical_task_id(path.name, path=path)[1] for path in empty_reservations
+    ]
+    highest = max((*[item.number for item in ordered], *reservation_numbers), default=0)
     return TaskIdInventory(
         allocations=ordered,
         highest_number=highest,
         next_task_id=TASK_ID_FORMAT.format(highest + 1),
+        empty_reservations=tuple(empty_reservations),
     )
 
 

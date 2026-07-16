@@ -17,51 +17,60 @@ def test_fresh_canonical_context_is_read_only_before_initialization(
         (
             "schema_version = 2\n[project]\n"
             'uuid = "081c7c05-2d10-42b7-9b37-3d814c2f400a"\n\n'
-            '[ledgers.other.config]\nlocation = "project"\npath = "other/config.toml"\n'
+            "[ledgers.taskledger.config]\nlocation = 'project'\n"
+            "path = 'task/config.toml'\n\n"
+            "[ledgers.taskledger.mounts.data]\n"
+            "storage = 'workspace'\nscope = 'project'\npath = 'task/taskledger'\n\n"
+            "[ledgers.taskledger.mounts.indexes]\n"
+            "storage = 'cache'\nscope = 'checkout'\n"
+            "path = 'task/taskledger-indexes'\n"
         ),
         encoding="utf-8",
     )
     before = sorted(
         path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*")
     )
-    with pytest.raises(LaunchError, match="unknown ledger registration"):
-        load_project_context(tmp_path)
+    with pytest.raises(LaunchError, match="SIBLING_PROVIDER_REQUIRED"):
+        load_project_context(tmp_path, require_initialized=False)
     after = sorted(
         path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*")
     )
     assert after == before
 
 
-def test_canonical_init_is_repository_local_by_default(tmp_path: Path) -> None:
-    context, _ = init_canonical_project_state(tmp_path, project_name="demo")
-    assert context.mode == "canonical"
-    assert context.project_uuid
-    assert set(context.layout.mounts) == {"data", "indexes"}
-    assert context.layout.mounts["data"].storage == "repository"
-    assert context.paths.data_root == tmp_path / ".ledger" / "task" / "taskledger"
-    assert context.paths.storage_meta_path.exists()
-    assert not (tmp_path.parent / "ledger").exists()
-    assert not (tmp_path / ".taskledger").exists()
-
-
-def test_explicit_sibling_root_is_uuid_scoped(tmp_path: Path) -> None:
-    sibling_root = tmp_path / "shared-ledger"
+def test_canonical_init_uses_fixed_direct_sibling_store(tmp_path: Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
-    context, _ = init_canonical_project_state(
-        project,
-        sibling_ledger_root=sibling_root,
-        create_store=True,
-    )
-    assert context.paths.data_root == sibling_root / "taskledger" / context.project_uuid
+    sibling = tmp_path / "ledger"
+    sibling.mkdir()
+    (sibling / ".ledger-store").write_text("store\n", encoding="utf-8")
+
+    context, _ = init_canonical_project_state(project, project_name="demo")
+
+    assert context.mode == "canonical"
+    assert context.project_uuid
+    assert context.layout is not None
     assert context.layout.mounts["data"].storage == "workspace"
-    assert (sibling_root / ".ledger-store").is_file()
+    assert context.paths.data_root == sibling / "task" / "taskledger"
+    assert not (project / ".ledger" / "task" / "taskledger").exists()
     assert (context.paths.data_root / ".ledger-project.toml").is_file()
 
 
+def test_explicit_store_creation_uses_fixed_sibling_path(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+
+    context, _ = init_canonical_project_state(project, create_sibling_store=True)
+
+    assert context.paths.data_root == tmp_path / "ledger" / "task" / "taskledger"
+    assert (tmp_path / "ledger" / ".ledger-store").is_file()
+
+
 def test_nested_canonical_context_uses_project_root(tmp_path: Path) -> None:
-    context, _ = init_canonical_project_state(tmp_path)
-    nested = tmp_path / "src" / "module.py"
+    project = tmp_path / "project"
+    project.mkdir()
+    context, _ = init_canonical_project_state(project, create_sibling_store=True)
+    nested = project / "src" / "module.py"
     nested.parent.mkdir()
     nested.write_text("", encoding="utf-8")
     assert load_project_context(nested).project_uuid == context.project_uuid

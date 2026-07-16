@@ -22,7 +22,9 @@ runner = _make_runner()
 
 
 def _init_project(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(
+        app, ["--cwd", str(tmp_path), "init", "--create-sibling-store"]
+    )
     assert result.exit_code == 0
 
 
@@ -289,10 +291,12 @@ def test_status_json_reports_workspace_and_storage_paths(tmp_path: Path) -> None
     status = payload["result"]
     assert status["workspace_root"] == str(tmp_path)
     assert status["config_path"] == str(tmp_path / ".ledger" / "task" / "config.toml")
-    assert status["taskledger_dir"] == str(tmp_path / ".ledger" / "task" / "taskledger")
-    assert status["project_dir"] == str(
-        tmp_path / ".ledger" / "task" / "taskledger" / "ledgers" / "main"
+    assert status["taskledger_dir"] == str(
+        tmp_path.parent / "ledger" / "task" / "taskledger"
     )
+    assert status["workspace_provider"] == "sibling-ledger"
+    assert status["store_root"] == str(tmp_path.parent / "ledger")
+    assert status["authoritative_path"] == status["taskledger_dir"]
 
 
 # sw: f=specs/behavior/features/json_contracts/json-contracts.feature

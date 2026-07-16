@@ -46,10 +46,18 @@ except ModuleNotFoundError:  # pragma: no cover
 MigrationSourceKind = Literal[
     "uninitialized",
     "legacy-root",
-    "canonical-0.3-namespaced",
+    "legacy-arbitrary-external",
+    "canonical-0.3-split-checkout",
+    "canonical-repository-local",
+    "explicit-root-uuid",
+    "ledgercore-namespaced-workspace",
+    "direct-sibling-unbound",
+    "direct-sibling-old-schema",
+    "canonical",
+    "partial",
+    "invalid",
     "canonical-0.4-sibling",
     "partial-sibling-migration",
-    "invalid",
 ]
 
 
@@ -108,6 +116,7 @@ class TaskledgerMigrationInspection:
     issues: tuple[MigrationIssue, ...]
     legacy_next_task_number: int | None = None
     derived_next_task_id: str | None = None
+    tombstones_required: tuple[str, ...] = ()
     ready: bool = False
     migration_required: bool = True
 
@@ -165,6 +174,7 @@ class TaskledgerMigrationInspection:
             "task_ids": {
                 "legacy_next_task_number": self.legacy_next_task_number,
                 "derived_next_task_id": self.derived_next_task_id,
+                "tombstones_required": list(self.tombstones_required),
             },
             "counts": {"copy_items": len(self.copy_items)},
             "changes": [item.to_dict() for item in self.copy_items],
@@ -187,6 +197,46 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _legacy_task_id_fields(
+    source_data: Path | None, project_root: Path
+) -> tuple[int | None, str | None, tuple[str, ...]]:
+    if source_data is None:
+        return None, None, ()
+    stored: int | None = None
+    for config_path in (
+        project_root / "taskledger.toml",
+        project_root / ".taskledger.toml",
+        source_data / "project.toml",
+    ):
+        if not config_path.is_file():
+            continue
+        document = _manifest_document(config_path)
+        value = document.get("ledger_next_task_number")
+        if value is not None:
+            if not isinstance(value, int) or value < 1:
+                raise LaunchError(
+                    f"Malformed legacy ledger_next_task_number in {config_path}."
+                )
+            stored = value
+            break
+    highest = 0
+    for ledger_root in (source_data / "ledgers").glob("*"):
+        tasks = ledger_root / "tasks"
+        tombstones = ledger_root / "tombstones"
+        for entry in (*tasks.glob("task-*"), *tombstones.glob("task-*.toml")):
+            token = entry.stem if entry.suffix == ".toml" else entry.name
+            if token.startswith("task-") and token[5:].isdigit():
+                highest = max(highest, int(token[5:]))
+    derived_number = highest + 1
+    derived = f"task-{derived_number:04d}"
+    required = ()
+    if stored is not None and stored > derived_number:
+        required = tuple(
+            f"task-{number:04d}" for number in range(derived_number, stored)
+        )
+    return stored, derived, required
 
 
 def _manifest_document(path: Path) -> dict[str, object]:
@@ -214,12 +264,9 @@ def _target_registration() -> dict[str, object]:
 
 
 def _target_roots(root: Path, sibling_ledger_root: Path | None) -> tuple[Path, Path]:
-    sibling = (
-        sibling_ledger_root.expanduser().resolve()
-        if sibling_ledger_root is not None
-        else root / ".ledger" / "migration-destination-required"
-    )
-    return sibling, sibling / ".ledger-store"
+    """Return the fixed direct sibling target; arbitrary roots are unsupported."""
+    fixed = (root / ".." / "ledger").resolve(strict=False)
+    return fixed, fixed / ".ledger-store"
 
 
 def _old_registration(document: Mapping[str, object]) -> Mapping[str, object] | None:
@@ -290,15 +337,20 @@ def _resolve_target_layout(
     }
     manifest = parse_ledger_project_manifest(manifest_doc)
     local = parse_ledger_local_config(
-        {"schema_version": 1},
+        {
+            "schema_version": 1,
+            "storage": {"workspace": {"provider": "sibling-ledger"}},
+        },
         project_root=root,
     )
+    effective = dict(environ or {})
+    effective.pop("LEDGER_WORKSPACE_ROOT", None)
     return resolve_ledger_layout(
         _locator(root),
         manifest,
         CANONICAL_LEDGER_NAME,
         local_config=local,
-        environ=environ,
+        environ=effective,
     )
 
 
@@ -357,6 +409,25 @@ def _issue(
     return MigrationIssue(severity, code, message, tuple(remediation))
 
 
+def _is_repository_local_registration(
+    registration: Mapping[str, object] | None,
+) -> bool:
+    if registration is None or not isinstance(registration.get("mounts"), Mapping):
+        return False
+    mounts = registration["mounts"]
+    data = mounts.get("data")
+    indexes = mounts.get("indexes")
+    return (
+        isinstance(data, Mapping)
+        and isinstance(indexes, Mapping)
+        and data.get("storage") == "repository"
+        and data.get("path") == "task/taskledger"
+        and indexes.get("storage") == "cache"
+        and indexes.get("scope") == "checkout"
+        and indexes.get("path") == "task/taskledger-indexes"
+    )
+
+
 def inspect_migration(  # noqa: C901
     start: Path,
     *,
@@ -366,23 +437,32 @@ def inspect_migration(  # noqa: C901
     sibling_ledger_root: Path | None = None,
 ) -> TaskledgerMigrationInspection:
     root = start.expanduser().resolve()
-    if sibling_ledger_root is None:
-        local_path = root / ".ledger" / "ledger.local.toml"
-        if local_path.exists():
-            local_doc = _manifest_document(local_path)
-            local = parse_ledger_local_config(local_doc, project_root=root)
-            sibling_ledger_root = local.workspace_root
-    sibling_root, marker = _target_roots(root, sibling_ledger_root)
-    target_data = sibling_root / "taskledger"
+    sibling_root, marker = _target_roots(root, None)
+    target_data = sibling_root / "task" / "taskledger"
     target_indexes: Path | None = None
     target_registration = _target_registration()
     issues: list[MigrationIssue] = []
+    if (
+        sibling_ledger_root is not None
+        and sibling_ledger_root.expanduser().resolve() != sibling_root
+    ):
+        issues.append(
+            _issue(
+                "blocker",
+                "DESTINATION_FIXED",
+                "Migration destination is fixed to the direct ../ledger sibling store.",
+                "Remove --sibling-ledger-root and retry.",
+            )
+        )
     source_kind: MigrationSourceKind = "uninitialized"
     source_data: Path | None = None
     source_logs: Path | None = None
     selected_uuid: str | None = None
     checkout_id: str | None = source_checkout
     current_registration: Mapping[str, object] | None = None
+    legacy_next_task_number: int | None = None
+    derived_next_task_id: str | None = None
+    tombstones_required: tuple[str, ...] = ()
 
     if environ is None:
         environ = os.environ
@@ -421,6 +501,10 @@ def inspect_migration(  # noqa: C901
                 checkout_id = old_layout.checkout_id
             except Exception as exc:
                 issues.append(_issue("blocker", "OLD_LAYOUT_UNRESOLVED", str(exc)))
+        elif _is_repository_local_registration(current_registration):
+            source_kind = "canonical-repository-local"
+            source_data = root / ".ledger" / "task" / "taskledger"
+            source_logs = source_data
         else:
             try:
                 context = load_project_context(
@@ -465,6 +549,14 @@ def inspect_migration(  # noqa: C901
             source_logs = legacy.taskledger_dir
             selected_uuid = context.project_uuid
 
+    try:
+        (
+            legacy_next_task_number,
+            derived_next_task_id,
+            tombstones_required,
+        ) = _legacy_task_id_fields(source_data, root)
+    except LaunchError as exc:
+        issues.append(_issue("blocker", "MALFORMED_LEGACY_COUNTER", str(exc)))
     if project_uuid is not None:
         try:
             requested_uuid = str(uuid.UUID(project_uuid))
@@ -484,33 +576,24 @@ def inspect_migration(  # noqa: C901
     if selected_uuid is None and source_kind != "canonical-0.4-sibling":
         selected_uuid = str(uuid.uuid4())
 
-    if sibling_ledger_root is None:
-        issues.append(
-            _issue(
-                "blocker",
-                "DESTINATION_REQUIRED",
-                "Migration requires an explicit sibling Ledger destination root.",
-                "Use --sibling-ledger-root PATH or configure storage.workspace.root.",
-            )
-        )
-    elif sibling_root.exists() and not marker.exists():
-        issues.append(
-            _issue(
-                "blocker",
-                "SIBLING_MARKER_MISSING",
-                f"Sibling root exists without required marker {marker}.",
-            )
-        )
-    elif not sibling_root.exists():
+    if not sibling_root.exists():
         issues.append(
             _issue(
                 "blocker",
                 "SIBLING_ROOT_MISSING",
                 f"Sibling root is missing: {sibling_root}",
-                "Use --create-store when applying.",
+                "Use --create-sibling-store when applying.",
             )
         )
-    elif not marker.is_file():
+    elif not marker.exists():
+        issues.append(
+            _issue(
+                "blocker",
+                "SIBLING_ROOT_UNMARKED",
+                f"Sibling root exists without required marker {marker}.",
+            )
+        )
+    elif marker.is_symlink() or not marker.is_file():
         issues.append(
             _issue(
                 "blocker",
@@ -518,10 +601,8 @@ def inspect_migration(  # noqa: C901
                 f"Sibling marker is not a regular file: {marker}.",
             )
         )
-
     try:
         if selected_uuid is not None:
-            target_data = sibling_root / "taskledger" / selected_uuid
             target_layout = _resolve_target_layout(root, selected_uuid, environ)
             target_indexes = target_layout.mounts["indexes"].path
     except Exception as exc:
@@ -530,17 +611,21 @@ def inspect_migration(  # noqa: C901
             issues.append(_issue("warning", "TARGET_UNRESOLVED", str(exc)))
 
     binding = read_project_binding(target_data) if target_data.exists() else None
-    if (
+    binding_mismatch = (
         binding is not None
         and selected_uuid is not None
         and binding.project_uuid != selected_uuid
-    ):
+    )
+    if binding_mismatch:
+        assert binding is not None
         issues.append(
             _issue(
                 "blocker",
                 "BINDING_UUID_MISMATCH",
                 "Target binding belongs to "
                 f"{binding.project_uuid}, expected {selected_uuid}.",
+                "Do not merge projects with different bindings; use the "
+                "project-owned target.",
             )
         )
     if (
@@ -558,7 +643,9 @@ def inspect_migration(  # noqa: C901
             )
         )
 
-    items = _copy_items(source_data, source_logs, target_data)
+    items = (
+        [] if binding_mismatch else _copy_items(source_data, source_logs, target_data)
+    )
     for item in items:
         if item.action == "conflict":
             issues.append(
@@ -571,6 +658,7 @@ def inspect_migration(  # noqa: C901
     if (
         source_kind not in {"canonical-0.4-sibling", "partial-sibling-migration"}
         and not items
+        and not binding_mismatch
     ):
         issues.append(
             _issue(
@@ -594,6 +682,9 @@ def inspect_migration(  # noqa: C901
         target_registration=target_registration,
         copy_items=tuple(items),
         issues=tuple(issues),
+        legacy_next_task_number=legacy_next_task_number,
+        derived_next_task_id=derived_next_task_id,
+        tombstones_required=tombstones_required,
         ready=not any(issue.severity == "blocker" for issue in issues),
         migration_required=source_kind != "canonical-0.4-sibling",
     )
@@ -634,6 +725,26 @@ def _backup(inspection: TaskledgerMigrationInspection, backup_dir: Path | None) 
     return destination
 
 
+def _write_tombstones(target: Path, task_ids: tuple[str, ...]) -> None:
+    if not task_ids:
+        return
+    tombstones = target / "ledgers" / "main" / "tombstones"
+    tombstones.mkdir(parents=True, exist_ok=True)
+    created_at = datetime.now(timezone.utc).isoformat()
+    for task_id in task_ids:
+        path = tombstones / f"{task_id}.toml"
+        if path.exists():
+            continue
+        path.write_text(
+            "schema_version = 1\n"
+            'object_type = "task_id_tombstone"\n'
+            f'id = "{task_id}"\n'
+            'reason = "preserved-from-legacy-next-task-counter"\n'
+            f'created_at = "{created_at}"\n',
+            encoding="utf-8",
+        )
+
+
 def _write_target_state(target: Path, ref: str = "main") -> None:
     atomic_write_text(
         target / "state.toml",
@@ -662,22 +773,19 @@ def _activate_manifest(
 def apply_migration(
     inspection: TaskledgerMigrationInspection,
     *,
-    backup: bool,
+    backup: bool = True,
     backup_dir: Path | None = None,
-    create_store: bool = False,
-    replace_workspace_selection: bool = False,
-    counter_gap_policy: Literal["preserve", "reuse"] = "preserve",
+    create_sibling_store: bool = False,
     retire_source: bool = False,
 ) -> dict[str, object]:
+    if create_sibling_store:
+        from taskledger.storage.init import _ensure_sibling_store
+
+        _ensure_sibling_store(inspection.project_root, create_sibling_store=True)
     fresh = inspect_migration(
         inspection.project_root,
         source_checkout=inspection.source_checkout_id,
         project_uuid=inspection.project_uuid,
-        sibling_ledger_root=(
-            None
-            if inspection.sibling_root.name == "migration-destination-required"
-            else inspection.sibling_root
-        ),
     )
     if fresh.source_kind == "canonical-0.4-sibling":
         return {
@@ -686,33 +794,13 @@ def apply_migration(
             "inspection": fresh.to_dict(),
         }
     issues = list(fresh.issues)
-    if create_store and not fresh.sibling_root.exists():
-        fresh.sibling_root.mkdir(parents=True)
-        fresh.sibling_marker.write_text("Ledgercore sibling store\n", encoding="utf-8")
-        issues = [issue for issue in issues if issue.code != "SIBLING_ROOT_MISSING"]
-    if (
-        create_store
-        and fresh.sibling_root.exists()
-        and not fresh.sibling_marker.exists()
-    ):
-        if any(entry.name != "task" for entry in fresh.sibling_root.iterdir()):
-            issues.append(
-                _issue(
-                    "blocker",
-                    "SIBLING_ROOT_NOT_EMPTY",
-                    "Refusing to create marker in non-empty root "
-                    f"{fresh.sibling_root}.",
-                )
-            )
-        else:
-            fresh.sibling_marker.write_text(
-                "Ledgercore sibling store\n", encoding="utf-8"
-            )
-            issues = [
-                issue for issue in issues if issue.code == "SIBLING_MARKER_MISSING"
-            ]
-    if not backup:
-        raise LaunchError("Migration apply requires --backup.")
+    if create_sibling_store and fresh.issues:
+        fresh = inspect_migration(
+            fresh.project_root,
+            source_checkout=fresh.source_checkout_id,
+            project_uuid=fresh.project_uuid,
+        )
+        issues = list(fresh.issues)
     if issues and any(issue.severity == "blocker" for issue in issues):
         raise LaunchError(
             "Migration preflight blocked:\n"
@@ -748,6 +836,7 @@ def apply_migration(
                 f"Migration verification failed: {item.source} -> {destination}"
             )
     staging.mkdir(parents=True, exist_ok=True)
+    _write_tombstones(staging, fresh.tombstones_required)
     _write_target_state(staging)
     write_yaml_object(
         staging / "storage.yaml",
@@ -763,17 +852,15 @@ def apply_migration(
     if staging != target:
         target.parent.mkdir(parents=True, exist_ok=True)
         staging.rename(target)
-    from taskledger.storage.init import _write_local_sibling_root
+    from taskledger.storage.ledger_local_config import (
+        ensure_sibling_workspace_provider,
+    )
     from taskledger.storage.project_config import render_canonical_taskledger_config
 
     config_path = fresh.project_root / ".ledger" / "task" / "config.toml"
     if not config_path.exists():
         atomic_write_text(config_path, render_canonical_taskledger_config())
-    _write_local_sibling_root(
-        fresh.project_root,
-        fresh.sibling_root,
-        replace_workspace_selection=replace_workspace_selection,
-    )
+    ensure_sibling_workspace_provider(fresh.project_root)
     _activate_manifest(
         fresh.project_root,
         fresh.project_uuid or "",
@@ -839,9 +926,10 @@ def build_layout_migration_plan(
 def apply_layout_migration(
     start: Path,
     *,
-    backup: bool,
+    backup: bool = True,
     project_uuid: str | None = None,
     sibling_ledger_root: Path | None = None,
+    create_sibling_store: bool = False,
     dry_run: bool = False,
     retire_legacy: bool = False,
 ) -> dict[str, object]:
@@ -856,7 +944,12 @@ def apply_layout_migration(
             "status": "dry_run",
             "inspection": inspection.to_dict(),
         }
-    return apply_migration(inspection, backup=backup, retire_source=retire_legacy)
+    return apply_migration(
+        inspection,
+        backup=backup,
+        create_sibling_store=create_sibling_store,
+        retire_source=retire_legacy,
+    )
 
 
 def migration_status(

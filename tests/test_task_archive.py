@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -18,7 +19,10 @@ def _json_output(result) -> dict[str, object]:
 
 
 def _init(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    shutil.rmtree(tmp_path.parent / "ledger", ignore_errors=True)
+    result = runner.invoke(
+        app, ["--cwd", str(tmp_path), "init", "--create-sibling-store"]
+    )
     assert result.exit_code == 0, result.stdout
 
 

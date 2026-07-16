@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import importlib
-import os
 from pathlib import Path
-from typing import Any
 
 from taskledger.errors import LaunchError
 from taskledger.storage.common import write_text
+from taskledger.storage.ledger_local_config import ensure_sibling_workspace_provider
 from taskledger.storage.meta import StorageMeta, write_storage_meta
 from taskledger.storage.paths import (
     CANONICAL_PROJECT_CONFIG_FILENAME,
@@ -216,31 +215,34 @@ def _taskledger_dir_setting(taskledger_dir: Path) -> str:
 
 
 def _ensure_sibling_store(
-    sibling_root: Path,
+    project_root: Path,
     *,
-    create_store: bool,
+    create_sibling_store: bool,
 ) -> Path:
-    sibling_root = sibling_root.expanduser().resolve()
-    marker = sibling_root / ".ledger-store"
+    sibling_root = (project_root / ".." / "ledger").resolve(strict=False)
+    if sibling_root.is_symlink():
+        raise LaunchError(
+            f"TASKLEDGER_SIBLING_ROOT_UNMARKED: symlink root {sibling_root}"
+        )
     if sibling_root.exists() and not sibling_root.is_dir():
-        raise LaunchError(f"Taskledger sibling root is not a directory: {sibling_root}")
+        raise LaunchError(f"TASKLEDGER_SIBLING_ROOT_NOT_DIRECTORY: {sibling_root}")
     if not sibling_root.exists():
-        if not create_store:
+        if not create_sibling_store:
             raise LaunchError(
-                f"Taskledger sibling root does not exist: {sibling_root}. "
-                "Use --create-store with --sibling-ledger-root to initialize it."
+                f"TASKLEDGER_SIBLING_ROOT_MISSING: {sibling_root}. "
+                "Use --create-sibling-store to initialize it."
             )
-        sibling_root.mkdir(parents=True)
-    if marker.exists() and not marker.is_file():
-        raise LaunchError(f"Taskledger sibling marker is not a regular file: {marker}")
+        sibling_root.mkdir(parents=True, exist_ok=False)
+    marker = sibling_root / ".ledger-store"
+    if marker.is_symlink() or (marker.exists() and not marker.is_file()):
+        raise LaunchError(f"TASKLEDGER_SIBLING_MARKER_INVALID: {marker}")
     if not marker.exists():
-        if not create_store:
+        if not create_sibling_store:
             raise LaunchError(
-                f"Taskledger sibling root is missing marker: {marker}. "
-                "Use --create-store with --sibling-ledger-root to initialize it."
+                f"TASKLEDGER_SIBLING_ROOT_UNMARKED: {sibling_root}. "
+                "Use --create-sibling-store to initialize it."
             )
-        entries = list(sibling_root.iterdir())
-        if entries:
+        if any(sibling_root.iterdir()):
             raise LaunchError(
                 "Refusing to initialize non-empty unmarked sibling root "
                 f"{sibling_root}."
@@ -249,58 +251,12 @@ def _ensure_sibling_store(
     return sibling_root
 
 
-def _write_local_sibling_root(
-    project_root: Path,
-    sibling_root: Path,
-    *,
-    replace_workspace_selection: bool = False,
-) -> Path:
-    from tomlkit import dumps, parse, table
-
-    from taskledger.storage.atomic import atomic_write_text
-
-    local_path = project_root / ".ledger" / "ledger.local.toml"
-    local_path.parent.mkdir(parents=True, exist_ok=True)
-    document: Any
-    if local_path.exists():
-        try:
-            document = parse(local_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise LaunchError(
-                f"Invalid Ledger local config {local_path}: {exc}"
-            ) from exc
-    else:
-        document = table()
-        document["schema_version"] = 1
-    storage = document.setdefault("storage", table())
-    workspace = storage.setdefault("workspace", table())
-    existing_root = workspace.get("root")
-    if existing_root is not None:
-        existing_path = Path(os.path.expandvars(str(existing_root))).expanduser()
-        if not existing_path.is_absolute():
-            existing_path = project_root / existing_path
-        if (
-            existing_path.resolve(strict=False) != sibling_root.resolve(strict=False)
-            and not replace_workspace_selection
-        ):
-            raise LaunchError(
-                f"Ledger local config already selects sibling root {existing_root!r}. "
-                "Use --replace-workspace-selection to replace it."
-            )
-    workspace.pop("provider", None)
-    workspace["root"] = os.path.relpath(sibling_root, project_root)
-    atomic_write_text(local_path, dumps(document))
-    return local_path
-
-
 def init_canonical_project_state(
     workspace_root: Path,
     *,
     project_name: str | None = None,
     project_uuid: str | None = None,
-    sibling_ledger_root: Path | None = None,
-    create_store: bool = False,
-    replace_workspace_selection: bool = False,
+    create_sibling_store: bool = False,
 ) -> tuple[TaskledgerProjectContext, list[str]]:
     """Initialize the canonical Ledgercore-backed Taskledger layout."""
     import uuid
@@ -341,14 +297,6 @@ def init_canonical_project_state(
             raise LaunchError(
                 f"Invalid Ledger manifest {manifest_path}: {exc}"
             ) from exc
-        registration_doc = document.get("ledgers", {}).get("taskledger", {})
-        if isinstance(registration_doc, dict) and "logs" in registration_doc.get(
-            "mounts", {}
-        ):
-            raise LaunchError(
-                "This project uses the previous canonical Taskledger layout. "
-                "Run `taskledger migrate`."
-            )
         if project_name is not None and manifest_name not in {None, project_name}:
             raise LaunchError(
                 f"Project name conflicts with existing Ledger manifest {manifest_path}."
@@ -359,48 +307,35 @@ def init_canonical_project_state(
     else:
         selected_uuid = selected_uuid or str(uuid.uuid4())
         effective_name = project_name or root.name
-    if create_store and sibling_ledger_root is None:
-        raise LaunchError(
-            "--create-store requires --sibling-ledger-root; plain init is "
-            "repository-local."
-        )
-    local_config_path: Path | None = None
-    if sibling_ledger_root is not None:
-        sibling_root = _ensure_sibling_store(
-            sibling_ledger_root, create_store=create_store
-        )
-        local_config_path = _write_local_sibling_root(
-            root,
-            sibling_root,
-            replace_workspace_selection=replace_workspace_selection,
-        )
-    elif replace_workspace_selection:
-        raise LaunchError(
-            "--replace-workspace-selection requires --sibling-ledger-root."
-        )
+    _ensure_sibling_store(root, create_sibling_store=create_sibling_store)
     registration = ensure_taskledger_registration(
         root, project_uuid=selected_uuid, project_name=effective_name
     )
+    local_result = ensure_sibling_workspace_provider(root)
+    local_config_path = local_result.path
     context = load_project_context(root, require_initialized=False, allow_legacy=False)
     paths = context.paths
     created: list[str] = (
         [str(registration.manifest_path)] if registration.changed else []
     )
-    if local_config_path is not None:
+    if local_result.changed:
         created.append(str(local_config_path))
     if not paths.config_path.exists():
         atomic_write_text(paths.config_path, render_canonical_taskledger_config())
         created.append(str(paths.config_path))
     paths.data_root.mkdir(parents=True, exist_ok=True)
-    if sibling_ledger_root is not None:
-        from taskledger.storage.project_binding import create_project_binding
+    from taskledger.storage.project_binding import create_project_binding
 
-        create_project_binding(paths.data_root, project_uuid=selected_uuid)
+    create_project_binding(paths.data_root, project_uuid=selected_uuid)
     for directory in (
         paths.ledger_data_dir,
         paths.introductions_dir,
         paths.releases_dir,
         paths.tasks_dir,
+        paths.events_dir,
+        paths.agent_logs_dir,
+        paths.ledger_data_dir / "tombstones",
+        paths.data_root / "migrations",
     ):
         if not directory.exists():
             directory.mkdir(parents=True, exist_ok=True)

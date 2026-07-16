@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import importlib
 import os
-from dataclasses import dataclass, replace
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
@@ -25,7 +26,6 @@ from ledgercore import (
 from ledgercore.layout import (
     LedgerLocalConfig,
     LedgerProjectManifest,
-    ResolvedMount,
 )
 
 from taskledger.errors import LaunchError
@@ -58,14 +58,19 @@ InitializationStatus = Literal[
     "not_registered",
     "invalid_registration",
     "missing_config",
-    "missing_data",
+    "missing_local_provider",
+    "workspace_root_conflict",
+    "workspace_provider_conflict",
+    "workspace_environment_override",
     "missing_sibling_store",
     "missing_store_marker",
-    "missing_local_provider",
+    "invalid_store_marker",
+    "missing_data",
     "missing_binding",
     "binding_mismatch",
     "old_canonical_layout",
     "missing_storage_meta",
+    "invalid_state",
     "migration_required",
     "ready",
 ]
@@ -76,7 +81,7 @@ CANONICAL_SHORT_DIRECTORY = "task"
 CANONICAL_CONFIG_RELATIVE_PATH = Path("task") / "config.toml"
 CANONICAL_MOUNT_NAMES = ("data", "indexes")
 CANONICAL_MOUNT_SPECS = {
-    "data": ("repository", None, "task/taskledger"),
+    "data": ("workspace", "project", "task/taskledger"),
     "indexes": ("cache", "checkout", "task/taskledger-indexes"),
 }
 CANONICAL_CONFIG_VERSION = 3
@@ -153,6 +158,11 @@ class TaskledgerProjectContext:
     initialization: TaskledgerInitializationState
     layout: ResolvedLedgerLayout | None
     legacy_locator: ProjectPaths | None
+    store_root: Path | None = None
+    store_marker_path: Path | None = None
+    binding_path: Path | None = None
+    workspace_provider: Literal["sibling-ledger"] | None = None
+    data_mount_source: Literal["local-provider"] | None = None
 
 
 def _safe_child(root: Path, *parts: str) -> Path:
@@ -300,33 +310,56 @@ def _load_toml(path: Path) -> dict[str, object]:
 
 
 def _validate_registration(layout: ResolvedLedgerLayout) -> None:
-    names = set(layout.mounts)
-    expected_names = set(CANONICAL_MOUNT_NAMES)
-    if names != expected_names:
+    if set(layout.mounts) != set(CANONICAL_MOUNT_NAMES):
         raise LaunchError(
-            "Taskledger registration must define exactly data and indexes mounts; "
-            f"found {', '.join(sorted(names)) or '(none)'}"
+            "TASKLEDGER_REGISTRATION_CONFLICT: Taskledger registration must "
+            "define exactly data and indexes mounts."
         )
-    for name, (storage, scope, path) in CANONICAL_MOUNT_SPECS.items():
-        mount = layout.mounts[name]
-        if name == "data" and str(mount.storage) == "workspace":
-            if str(mount.scope) != "project" or mount.path != (
-                mount.scoped_root / layout.project_uuid
-            ).resolve(strict=False):
-                raise LaunchError(
-                    "Explicit Taskledger sibling data must resolve to "
-                    "<root>/taskledger/<project-uuid>."
-                )
-            continue
-        if (
-            str(mount.storage) != storage
-            or (scope is not None and str(mount.scope) != scope)
-            or str(mount.path).replace("\\", "/").endswith(path) is False
-        ):
-            raise LaunchError(
-                f"Taskledger mount {name!r} does not match required "
-                f"{storage}/{scope or 'repository'}/{path}."
-            )
+    data = layout.mounts["data"]
+    if (
+        str(data.storage) != "workspace"
+        or str(data.scope) != "project"
+        or not str(data.path).replace("\\", "/").endswith("/task/taskledger")
+    ):
+        raise LaunchError(
+            "TASKLEDGER_REGISTRATION_CONFLICT: Taskledger data mount must be "
+            "workspace/project task/taskledger."
+        )
+    indexes = layout.mounts["indexes"]
+    if (
+        str(indexes.storage) != "cache"
+        or str(indexes.scope) != "checkout"
+        or str(indexes.path).replace("\\", "/").split("/")[-2:]
+        != ["task", "taskledger-indexes"]
+    ):
+        raise LaunchError(
+            "TASKLEDGER_REGISTRATION_CONFLICT: Taskledger indexes mount must be "
+            "cache/checkout task/taskledger-indexes."
+        )
+
+
+def _validate_exact_sibling_postcondition(
+    project_root: Path, layout: ResolvedLedgerLayout
+) -> None:
+    expected_root = (project_root / ".." / "ledger").resolve(strict=False)
+    data = layout.mounts["data"]
+    if str(data.source) != "local-provider":
+        raise LaunchError(
+            "TASKLEDGER_SIBLING_PROVIDER_REQUIRED: Taskledger data must resolve "
+            "through the local sibling-ledger provider."
+        )
+    if data.scoped_root != expected_root or data.path != expected_root / (
+        "task/taskledger"
+    ):
+        raise LaunchError(
+            "TASKLEDGER_DIRECT_PATH_MISMATCH: Taskledger data must resolve to "
+            f"{expected_root / 'task/taskledger'}."
+        )
+    marker = expected_root / ".ledger-store"
+    if not marker.exists():
+        raise LaunchError(f"TASKLEDGER_SIBLING_ROOT_MISSING: {expected_root}")
+    if marker.is_symlink() or not marker.is_file():
+        raise LaunchError(f"TASKLEDGER_SIBLING_MARKER_INVALID: {marker}")
 
 
 def _resolve_taskledger_layout(
@@ -334,56 +367,32 @@ def _resolve_taskledger_layout(
     manifest: LedgerProjectManifest,
     local: LedgerLocalConfig,
     *,
-    environ: dict[str, str] | None = None,
+    environ: Mapping[str, str] | None = None,
 ) -> ResolvedLedgerLayout:
-    """Resolve repository-local data or an explicitly selected sibling root."""
-    if environ is None:
-        environ = dict(os.environ)
-    if environ.get("LEDGER_WORKSPACE_ROOT"):
+    """Resolve the one canonical Taskledger layout through Ledgercore."""
+    effective = dict(os.environ if environ is None else environ)
+    if effective.get("LEDGER_WORKSPACE_ROOT"):
         raise LaunchError(
-            "LEDGER_WORKSPACE_ROOT is not a supported implicit Taskledger "
-            "storage selection. Use --sibling-ledger-root or local configuration."
+            "TASKLEDGER_WORKSPACE_ENV_UNSUPPORTED: Unset LEDGER_WORKSPACE_ROOT "
+            "and retry."
         )
-    layout = resolve_ledger_layout(
-        locator, manifest, CANONICAL_LEDGER_NAME, local_config=local, environ=environ
+    if local.workspace_root is not None:
+        raise LaunchError(
+            "TASKLEDGER_WORKSPACE_ROOT_CONFLICT: Taskledger authoritative "
+            "storage is fixed to the sibling-ledger provider."
+        )
+    if local.workspace_provider != "sibling-ledger":
+        raise LaunchError(
+            "TASKLEDGER_SIBLING_PROVIDER_REQUIRED: Set "
+            "[storage.workspace].provider = 'sibling-ledger'."
+        )
+    return resolve_ledger_layout(
+        locator,
+        manifest,
+        CANONICAL_LEDGER_NAME,
+        local_config=local,
+        environ=effective,
     )
-    workspace_root = getattr(local, "workspace_root", None)
-    workspace_provider = getattr(local, "workspace_provider", None)
-    if workspace_provider is not None:
-        raise LaunchError(
-            "Taskledger does not support implicit workspace provider selection. "
-            "Set storage.workspace.root explicitly with --sibling-ledger-root."
-        )
-    if workspace_root is None:
-        return layout
-    sibling_root = workspace_root.resolve(strict=False)
-    marker = sibling_root / ".ledger-store"
-    if not sibling_root.exists():
-        raise LaunchError(
-            f"Explicit Taskledger sibling root does not exist: {sibling_root}"
-        )
-    if not sibling_root.is_dir():
-        raise LaunchError(
-            f"Explicit Taskledger sibling root is not a directory: {sibling_root}"
-        )
-    if not marker.is_file():
-        raise LaunchError(
-            f"Explicit Taskledger sibling root is missing marker: {marker}"
-        )
-    target_root = (sibling_root / "taskledger" / layout.project_uuid).resolve(
-        strict=False
-    )
-    data_mount = ResolvedMount(
-        name="data",
-        storage="workspace",
-        scope="project",
-        scoped_root=(sibling_root / "taskledger").resolve(strict=False),
-        path=target_root,
-        source="local-root",
-    )
-    mounts = dict(layout.mounts)
-    mounts["data"] = data_mount
-    return replace(layout, mounts=mounts)
 
 
 def load_project_context(
@@ -435,6 +444,7 @@ def load_project_context(
             locator, manifest, local, environ=dict(os.environ)
         )
         _validate_registration(layout)
+        _validate_exact_sibling_postcondition(locator.project_root, layout)
     except LedgerLayoutError as exc:
         raise LaunchError(f"Invalid Ledger layout {manifest_path}: {exc}") from exc
     config_path = layout.tool_config_path
@@ -456,14 +466,10 @@ def load_project_context(
         state = TaskledgerInitializationState("ready")
     data_mount = layout.mounts["data"]
     data_root = data_mount.path
-    explicit_sibling = str(data_mount.storage) == "workspace"
-    if explicit_sibling:
-        sibling_root = data_mount.scoped_root.parent
-        marker = sibling_root / ".ledger-store"
-        if not marker.is_file():
-            raise LaunchError(
-                f"Explicit Taskledger sibling root is missing marker: {marker}"
-            )
+    sibling_root = (locator.project_root / ".." / "ledger").resolve(strict=False)
+    marker = sibling_root / ".ledger-store"
+    if marker.is_symlink() or (marker.exists() and not marker.is_file()):
+        raise LaunchError(f"TASKLEDGER_SIBLING_MARKER_INVALID: {marker}")
     ledger = _load_state(data_root / "state.toml")
     paths = _paths_for_mounts(
         locator.project_root,
@@ -479,10 +485,9 @@ def load_project_context(
                 f"Taskledger data mount is not initialized at {data_root}. "
                 "Run `taskledger init`."
             )
-        if explicit_sibling:
-            from taskledger.storage.project_binding import validate_project_binding
+        from taskledger.storage.project_binding import validate_project_binding
 
-            validate_project_binding(data_root, project_uuid=layout.project_uuid)
+        validate_project_binding(data_root, project_uuid=layout.project_uuid)
     return TaskledgerProjectContext(
         mode="canonical",
         project_root=locator.project_root,
@@ -495,6 +500,11 @@ def load_project_context(
         initialization=state,
         layout=layout,
         legacy_locator=None,
+        store_root=sibling_root,
+        store_marker_path=marker,
+        binding_path=data_root / ".ledger-project.toml",
+        workspace_provider="sibling-ledger",
+        data_mount_source="local-provider",
     )
 
 

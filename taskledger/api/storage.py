@@ -57,15 +57,15 @@ __all__ = [
 
 
 def storage_path(workspace_root: Path, mount: str) -> dict[str, object]:
-    if mount not in {"data", "logs", "indexes"}:
-        raise LaunchError("Unknown mount. Expected one of: data, logs, indexes.")
+    if mount not in {"data", "indexes"}:
+        raise LaunchError("Unknown mount. Expected one of: data, indexes.")
     context = load_project_context(workspace_root)
     if context.layout is None:
         raise LaunchError(
             "Mount paths are unavailable in legacy mode; "
             "use `taskledger migrate` first."
         )
-    resolved = context.layout.mounts["data" if mount == "logs" else mount]
+    resolved = context.layout.mounts[mount]
     return {
         "kind": "storage_path",
         "mount": mount,
@@ -75,7 +75,7 @@ def storage_path(workspace_root: Path, mount: str) -> dict[str, object]:
         "source": str(resolved.source),
         "initialized": resolved.path.exists(),
         "mode": context.mode,
-        "storage_mode": (
-            "sibling" if str(resolved.storage) == "workspace" else "repository"
-        ),
+        "workspace_provider": context.workspace_provider,
+        "store_root": str(context.store_root) if context.store_root else None,
+        "binding_path": str(context.binding_path) if context.binding_path else None,
     }

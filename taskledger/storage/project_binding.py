@@ -122,7 +122,9 @@ def create_project_binding(
         raise LaunchError(f"Invalid project UUID {project_uuid!r}.") from exc
     data_root.mkdir(parents=True, exist_ok=True)
     existing = read_project_binding(data_root)
-    if existing is None and any(data_root.iterdir()):
+    if existing is not None:
+        return validate_project_binding(data_root, project_uuid=normalized_uuid)
+    if any(data_root.iterdir()):
         raise LaunchError(
             "Taskledger data root "
             f"{data_root} is non-empty and unbound; refusing to adopt it."

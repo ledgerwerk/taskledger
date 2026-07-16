@@ -53,14 +53,17 @@ def _write_storage_root(path: Path) -> None:
 
 # sw: f=specs/behavior/features/project_root_config/project-root-config.feature
 # sw: s=@bdd-project-root-config-init-writes-root-taskledger-toml-and-default-storage
-def test_init_writes_root_taskledger_toml_and_default_storage(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
-
+def test_init_writes_canonical_sibling_storage(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["--root", str(tmp_path), "init", "--create-sibling-store"]
+    )
     assert result.exit_code == 0, result.stdout
     assert (tmp_path / ".ledger" / "ledger.toml").exists()
     assert (tmp_path / ".ledger" / "task" / "config.toml").exists()
-    assert (tmp_path / ".ledger" / "task" / "taskledger" / "storage.yaml").exists()
-    assert not (tmp_path.parent / "ledger").exists()
+    assert (
+        tmp_path.parent / "ledger" / "task" / "taskledger" / "storage.yaml"
+    ).exists()
+    assert not (tmp_path / ".ledger" / "task" / "taskledger").exists()
 
 
 # sw: f=specs/behavior/features/project_root_config/project-root-config.feature
@@ -68,9 +71,9 @@ def test_init_writes_root_taskledger_toml_and_default_storage(tmp_path: Path) ->
 def test_init_writes_project_name_from_workspace_basename(tmp_path: Path) -> None:
     workspace = tmp_path / "odoo17-addon"
     workspace.mkdir()
-
-    result = runner.invoke(app, ["--root", str(workspace), "init"])
-
+    result = runner.invoke(
+        app, ["--root", str(workspace), "init", "--create-sibling-store"]
+    )
     assert result.exit_code == 0, result.stdout
     manifest_text = (workspace / ".ledger" / "ledger.toml").read_text(encoding="utf-8")
     assert 'name = "odoo17-addon"' in manifest_text
@@ -85,18 +88,17 @@ def test_init_writes_project_name_from_workspace_basename(tmp_path: Path) -> Non
 def test_init_project_name_option_overrides_basename(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
-
     result = runner.invoke(
         app,
         [
             "--root",
             str(workspace),
             "init",
+            "--create-sibling-store",
             "--project-name",
             "Odoo 17 Addons",
         ],
     )
-
     assert result.exit_code == 0, result.stdout
     manifest_text = (workspace / ".ledger" / "ledger.toml").read_text(encoding="utf-8")
     assert 'name = "Odoo 17 Addons"' in manifest_text
@@ -184,7 +186,13 @@ def test_cli_discovers_taskledger_toml_from_subdirectory(
     workspace = tmp_path / "repo"
     subdir = workspace / "src" / "pkg"
     subdir.mkdir(parents=True)
-    assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["--root", str(workspace), "init", "--create-sibling-store"],
+        ).exit_code
+        == 0
+    )
 
     monkeypatch.chdir(subdir)
     result = runner.invoke(app, ["--json", "status"])

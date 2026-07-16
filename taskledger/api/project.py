@@ -43,9 +43,7 @@ def init_project(
     *,
     taskledger_dir: Path | None = None,
     project_name: str | None = None,
-    sibling_ledger_root: Path | None = None,
-    create_store: bool = False,
-    replace_workspace_selection: bool = False,
+    create_sibling_store: bool = False,
 ) -> dict[str, object]:
     if taskledger_dir is not None:
         locator = locate_ledger_project(
@@ -80,25 +78,26 @@ def init_project(
     context, created = init_canonical_project_state(
         workspace_root,
         project_name=project_name,
-        sibling_ledger_root=sibling_ledger_root,
-        create_store=create_store,
-        replace_workspace_selection=replace_workspace_selection,
+        create_sibling_store=create_sibling_store,
     )
+    assert context.layout is not None
     return {
         "kind": "taskledger_init",
+        "schema_version": 1,
         "mode": "canonical",
-        "storage_mode": (
-            "sibling"
-            if context.layout is not None
-            and str(context.layout.mounts["data"].storage) == "workspace"
-            else "repository"
-        ),
+        "workspace_provider": "sibling-ledger",
+        "store_root": str(context.store_root),
+        "authoritative_path": str(context.paths.data_root),
+        "index_path": str(context.paths.indexes_root),
+        "binding": "valid",
+        "created_store": create_sibling_store,
         "root": str(context.paths.data_root),
         "project_dir": str(context.paths.ledger_data_dir),
         "workspace_root": str(context.project_root),
         "project_root": str(context.project_root),
         "project_uuid": context.project_uuid,
-        "manifest_path": str(context.layout.manifest_path if context.layout else ""),
+        "manifest_path": str(context.layout.manifest_path),
+        "local_config_path": str(context.layout.local_config_path),
         "config_path": str(context.config_path),
         "created": created,
         "project_name": context.project_name,
@@ -110,9 +109,7 @@ def init_project(
                 "source": str(context.layout.mounts[name].source),
             }
             for name in ("data", "indexes")
-        }
-        if context.layout
-        else {},
+        },
     }
 
 
@@ -154,6 +151,33 @@ def _project_counts_fast(workspace_root: Path) -> dict[str, int]:
     }
 
 
+def _storage_status_fields(workspace_root: Path) -> dict[str, object]:
+    from taskledger.storage.project_context import load_project_context
+
+    context = load_project_context(workspace_root, require_initialized=False)
+    if context.mode != "canonical" or context.layout is None:
+        return {}
+    return {
+        "workspace_provider": context.workspace_provider,
+        "store_root": str(context.store_root) if context.store_root else None,
+        "store_marker": (
+            str(context.store_marker_path) if context.store_marker_path else None
+        ),
+        "binding": str(context.binding_path) if context.binding_path else None,
+        "authoritative_path": str(context.paths.data_root),
+        "index_path": str(context.paths.indexes_root),
+        "mounts": {
+            name: {
+                "storage": str(mount.storage),
+                "scope": str(mount.scope),
+                "path": str(mount.path),
+                "source": str(mount.source),
+            }
+            for name, mount in context.layout.mounts.items()
+        },
+    }
+
+
 def project_status_summary(
     workspace_root: Path, *, check_health: bool = False
 ) -> dict[str, object]:
@@ -179,6 +203,7 @@ def project_status_summary(
         "counts": _project_counts_fast(workspace_root),
         "health": health,
         "active_task": _active_task_status(workspace_root),
+        **_storage_status_fields(workspace_root),
     }
 
 
@@ -203,6 +228,7 @@ def project_status(workspace_root: Path) -> dict[str, object]:
         "errors": list(cast(list[object], doctor["errors"])),
         "warnings": list(cast(list[object], doctor["warnings"])),
         "repair_hints": list(cast(list[object], doctor["repair_hints"])),
+        **_storage_status_fields(workspace_root),
         "tasks": [
             {
                 "id": task.id,
