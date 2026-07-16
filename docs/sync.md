@@ -1,45 +1,42 @@
 # Sync taskledger state across PCs
 
-Taskledger already supports keeping durable task state outside the source
-repository. The recommended workflow is to commit only `taskledger.toml` in
-the source repo, point `taskledger_dir` at an external sibling directory, and
-sync that external directory with a private Git repository.
+Taskledger stores durable state in the UUID-scoped sibling data directory resolved
+by Ledgercore's `sibling-ledger` provider. The source repository keeps the
+Ledger manifest and Taskledger config; rebuildable indexes remain in cache.
 
-## External state directory
+## UUID-scoped sibling state
 
-Use `taskledger init --taskledger-dir` or edit `taskledger.toml` so the
-workspace keeps only config while the durable state lives elsewhere:
-
-```toml
-config_version = 2
-taskledger_dir = "../taskledger-state/project-a"
-project_uuid = "keep-existing-uuid"
-project_name = "project-a"
-ledger_ref = "main"
-```
-
-Relative paths are preferred because they keep the same sibling layout working
-across multiple PCs.
-
-## Private state Git repo
-
-Recommended layout:
+The canonical layout is:
 
 ```text
-/home/me/src/project-a/                  # source repo
-/home/me/src/taskledger-state/           # private state repo
-/home/me/src/taskledger-state/project-a/
-  storage.yaml
-  ledgers/
-    main/
-      tasks/
-      events/
-      releases/
-      indexes/
+/home/me/src/project-a/.ledger/ledger.toml
+/home/me/src/project-a/.ledger/ledger.local.toml
+/home/me/src/project-a/.ledger/task/config.toml
+/home/me/src/ledger/.ledger-store
+/home/me/src/ledger/task/taskledger/<project-uuid>/
 ```
 
-The source repository keeps `taskledger.toml` and ignores `.taskledger/`.
-The private state repository stores the external `taskledger_dir` contents.
+Initialize the marked sibling store explicitly when needed:
+
+```bash
+taskledger init --create-sibling-store
+taskledger storage where
+```
+
+The project UUID is part of the authoritative data path and binding, so several
+projects can share one sibling store without mixing records.
+
+## Shared state Git repo
+
+The sibling store can be an explicit Git repository. Taskledger Git sync derives
+the repository root and limits canonical operations to the resolved project path:
+
+```bash
+taskledger sync git init
+taskledger sync git status
+taskledger sync git pull
+taskledger sync git push
+```
 
 ## Second PC bootstrap
 

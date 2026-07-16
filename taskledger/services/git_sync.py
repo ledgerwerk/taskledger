@@ -60,8 +60,10 @@ def build_git_sync_config(
     if context.mode == "canonical":
         if context.store_root is None:
             raise LaunchError("Canonical Taskledger context has no sibling store root.")
+        if context.project_uuid is None:
+            raise LaunchError("Canonical Taskledger context has no project UUID.")
         expected_repo = context.store_root.resolve()
-        expected_project_path = "task/taskledger"
+        expected_project_path = f"task/taskledger/{context.project_uuid}"
         if repo is not None and repo.expanduser().resolve() != expected_repo:
             raise LaunchError(
                 "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Git repository "
@@ -481,7 +483,7 @@ def git_sync_commit(
     if canonical and include_outside_project:
         raise LaunchError(
             "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Git commits are "
-            "limited to task/taskledger."
+            "limited to the resolved Taskledger project path."
         )
     _ensure_git_repo(config.repo_path, remote_url=None, branch=config.branch)
     warnings: list[str] = []

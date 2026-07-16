@@ -9,6 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from taskledger.cli import app
+from taskledger.storage.project_context import load_project_context
 
 
 def _make_runner() -> CliRunner:
@@ -275,6 +276,7 @@ def test_context_missing_todo_focus_returns_json_error(tmp_path: Path) -> None:
 # sw: s=@bdd-json-contracts-status-json-reports-workspace-and-storage-paths
 def test_status_json_reports_workspace_and_storage_paths(tmp_path: Path) -> None:
     _init_project(tmp_path)
+    context = load_project_context(tmp_path)
 
     result = runner.invoke(
         app,
@@ -291,9 +293,7 @@ def test_status_json_reports_workspace_and_storage_paths(tmp_path: Path) -> None
     status = payload["result"]
     assert status["workspace_root"] == str(tmp_path)
     assert status["config_path"] == str(tmp_path / ".ledger" / "task" / "config.toml")
-    assert status["taskledger_dir"] == str(
-        tmp_path.parent / "ledger" / "task" / "taskledger"
-    )
+    assert status["taskledger_dir"] == str(context.paths.data_root)
     assert status["workspace_provider"] == "sibling-ledger"
     assert status["store_root"] == str(tmp_path.parent / "ledger")
     assert status["authoritative_path"] == status["taskledger_dir"]

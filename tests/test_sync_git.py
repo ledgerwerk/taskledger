@@ -58,7 +58,13 @@ def _init_sync_workspace(
     if workspace.exists():
         raise AssertionError(f"workspace already exists: {workspace}")
     workspace.mkdir()
-    assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["--root", str(workspace), "init", "--create-sibling-store"],
+        ).exit_code
+        == 0
+    )
     if sync_repo is None:
         sync_repo = tmp_path / "state-repo"
     init_result = runner.invoke(
@@ -100,7 +106,13 @@ def test_sync_git_help_promotes_pull_and_push(
 ) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
-    assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["--root", str(workspace), "init", "--create-sibling-store"],
+        ).exit_code
+        == 0
+    )
 
     git_help = runner.invoke(app, ["--root", str(workspace), "sync", "git", "--help"])
     hooks_help = runner.invoke(

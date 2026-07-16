@@ -622,27 +622,27 @@ Plan-materialized todos always use `source=plan`.
 
 ## Storage Compatibility
 
-Taskledger stores canonical project configuration in `.ledger/ledger.toml`
-and `.ledger/task/config.toml`. Legacy `taskledger.toml` and `.taskledger.toml`
-remain readable during migration.
+Taskledger stores canonical project configuration in `.ledger/ledger.toml`,
+`.ledger/ledger.local.toml`, and `.ledger/task/config.toml`. Legacy
+`taskledger.toml` and `.taskledger.toml` remain readable during migration.
 
-Plain `taskledger init` keeps authoritative data under `.ledger` and never
-infers a sibling store. External storage requires
-`taskledger init --sibling-ledger-root PATH --create-store`; each project is
-isolated under `PATH/taskledger/<project-uuid>`, with a matching binding.
+Canonical initialization requires the shared `sibling-ledger` provider. The
+fixed sibling store is `../ledger` unless a migration supplies a base with
+`--sibling-ledger-root PATH`. Each project is isolated under
+`<sibling-root>/task/taskledger/<project-uuid>` with a matching binding.
 Commands keep `--root` scoped to the source workspace, not the storage root.
 
 Taskledger uses:
 
-- a workspace storage layout version in `taskledger_dir/storage.yaml`
+- storage layout version 5 in the UUID-scoped data root's `storage.yaml`
+- schema-2 canonical ledger state
 - per-record `schema_version`
 - per-record `object_type`
 - per-file `file_version` for durable Markdown/YAML/JSON record files
 
-Storage layout version history:
-
-- Layout 2: Introduced branch-scoped ledgers under `taskledger_dir/ledgers/<ledger_ref>/`
-- Layout 3: Consolidates layout-2 root-level task state into branch-scoped ledgers; migrates legacy root `tasks/`, `events/`, `intros/`, `releases/`, and `active-task.yaml` into the active ledger namespace
+Storage layout history is maintained by explicit migration receipts. The
+current layout keeps branch-scoped ledgers under
+`<data-root>/ledgers/<ledger_ref>/`.
 
 Taskledger does not silently rewrite storage during read-only commands.
 
@@ -657,18 +657,18 @@ taskledger migrate plan
 taskledger migrate apply --sibling-ledger-root PATH --backup
 ```
 
-After migration to layout 3, verify health with:
+After migration to layout 5, verify health with:
 
 ```bash
 taskledger doctor
 taskledger ledger doctor
 ```
 
-Indexes under `taskledger_dir/ledgers/<ledger_ref>/indexes/` are optional derived caches or
-registries. Task, plan, and run commands must continue to work from canonical
-Markdown/YAML records even when task/run/plan JSON cache files are absent. The
-remaining derived caches may be plain JSON arrays with no version metadata and
-can be rebuilt with:
+Checkout-scoped indexes under the resolved cache mount are optional derived
+caches or registries. Task, plan, and run commands must continue to work from
+canonical Markdown/YAML records even when cache files are absent. The remaining
+derived caches may be plain JSON arrays with no version metadata and can be
+rebuilt with:
 
 ```bash
 taskledger reindex
@@ -712,4 +712,4 @@ from local process checks; inspect handoffs or ask the user before repairing.
 
 ## Layout and migration commands
 
-`taskledger config path` reports the project-located Taskledger configuration. `taskledger storage path data|indexes` reports a named mount. Legacy layout conversion is explicit and requires a destination: `migrate status`, `migrate plan`, and `migrate apply --sibling-ledger-root PATH --backup`; canonical `storage move` is rejected because storage mode is selected through explicit Ledger local configuration.
+`taskledger config path` reports the project-located Taskledger configuration. `taskledger storage path data|indexes` reports a named mount. Legacy layout conversion is explicit: `migrate status`, `migrate plan`, and `migrate apply --sibling-ledger-root PATH --backup` use `PATH` as the base store and target `PATH/task/taskledger/<project-uuid>`. Canonical `storage move` is rejected because storage mode is selected through explicit Ledger local configuration.

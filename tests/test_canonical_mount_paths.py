@@ -18,7 +18,10 @@ def _init(tmp_path: Path):
 
 def test_authoritative_and_cache_mounts_are_separate_and_lazy(tmp_path: Path) -> None:
     _project, (context, _) = _init(tmp_path)
-    assert context.paths.data_root == tmp_path / "ledger" / "task" / "taskledger"
+    assert (
+        context.paths.data_root
+        == tmp_path / "ledger" / "task" / "taskledger" / context.project_uuid
+    )
     assert context.paths.data_root != context.paths.indexes_root
     assert context.paths.data_root.exists()
     assert not context.paths.indexes_root.exists()

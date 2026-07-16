@@ -96,7 +96,13 @@ def test_commands_do_not_register_local_json_options() -> None:
 def test_workflow_commands_reject_positional_task_refs_with_json_remediation(
     tmp_path: Path,
 ) -> None:
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "init", "--create-sibling-store"],
+        ).exit_code
+        == 0
+    )
     workflow_commands = [
         ("plan", "start"),
         ("implement", "start"),
@@ -119,7 +125,13 @@ def test_workflow_commands_reject_positional_task_refs_with_json_remediation(
 # sw: f=specs/behavior/features/cli_command_contract/cli-command-contract.feature
 # sw: s=@bdd-cli-command-contract-task-show-accepts-positional-task-ref-and-task-option
 def test_task_show_accepts_positional_task_ref_and_task_option(tmp_path: Path) -> None:
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "init", "--create-sibling-store"],
+        ).exit_code
+        == 0
+    )
     assert (
         runner.invoke(
             app,
@@ -169,7 +181,13 @@ def test_task_show_accepts_positional_task_ref_and_task_option(tmp_path: Path) -
 def test_task_cancel_requires_explicit_target_even_when_active_exists(
     tmp_path: Path,
 ) -> None:
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "init", "--create-sibling-store"],
+        ).exit_code
+        == 0
+    )
     assert (
         runner.invoke(
             app,
@@ -224,7 +242,13 @@ def test_task_cancel_requires_explicit_target_even_when_active_exists(
 def test_task_cancel_accepts_positional_task_ref_and_active_flag(
     tmp_path: Path,
 ) -> None:
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "init", "--create-sibling-store"],
+        ).exit_code
+        == 0
+    )
     assert (
         runner.invoke(
             app,
@@ -311,7 +335,13 @@ def test_task_cancel_accepts_positional_task_ref_and_active_flag(
 # sw: f=specs/behavior/features/cli_command_contract/cli-command-contract.feature
 # sw: s=@bdd-cli-command-contract-global-json-only-for-task-show
 def test_global_json_only_for_task_show(tmp_path: Path) -> None:
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["--cwd", str(tmp_path), "init", "--create-sibling-store"],
+        ).exit_code
+        == 0
+    )
     assert (
         runner.invoke(
             app,

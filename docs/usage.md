@@ -31,15 +31,16 @@ skill, an agent may not know the intended command sequence or gate semantics.
 ## Initialize state
 
 ```bash
-taskledger init
-taskledger init --taskledger-dir /mnt/cloud/taskledger/project-a
+taskledger init --create-sibling-store
+taskledger storage where
 ```
 
-`taskledger init` writes `taskledger.toml` in the workspace root. The
-config defaults to `taskledger_dir = ".taskledger"` and stores only safe
-branch-scoped ledger state such as `ledger_ref` and
-`ledger_next_task_number`. `.taskledger/` remains ignored and stores
-operational task state under `.taskledger/ledgers/<ledger_ref>/`.
+`taskledger init` writes the shared Ledger manifest at `.ledger/ledger.toml`,
+the local provider selection at `.ledger/ledger.local.toml`, and Taskledger
+configuration at `.ledger/task/config.toml`. Authoritative state resolves to
+`../ledger/task/taskledger/<project-uuid>/`; indexes are checkout-scoped cache
+data. Branch-scoped state is selected explicitly with `taskledger ledger fork`
+and `taskledger ledger switch`.
 
 ## Branch-local task work
 
@@ -650,17 +651,18 @@ taskledger --json review list --task task-0001
 }
 ```
 
-## Cloud-backed storage
+## Shared sibling storage
 
-Use one storage root per source project:
+Use the marked sibling store selected by `.ledger/ledger.local.toml`:
 
 ```bash
-taskledger init --taskledger-dir /mnt/cloud/taskledger/project-a
+taskledger init --create-sibling-store
+taskledger storage where
 ```
 
-Do not point two unrelated repositories at the same `taskledger_dir`.
-See {doc}`sync` for the recommended private-Git workflow when you want to use
-the same Taskledger state across multiple PCs without committing `.taskledger/`.
+Authoritative data is isolated at `../ledger/task/taskledger/<project-uuid>`.
+Several source projects may share the sibling store without sharing bindings or
+records. See {doc}`sync` for the optional private-Git workflow.
 
 ## Integrity and recovery
 
@@ -759,4 +761,4 @@ Evidence import is explicit and auditable through
 
 ## Canonical project layout
 
-Taskledger uses `.ledger/ledger.toml` and `.ledger/task/config.toml`. Plain init resolves authoritative data under `.ledger`; explicit sibling storage uses `--sibling-ledger-root PATH` and isolates data under `PATH/taskledger/<project-uuid>`. `taskledger storage where` reports the resolved `data` and `indexes` mounts. Use `taskledger storage path data|indexes` for one mount without initializing lazy mounts.
+Taskledger uses `.ledger/ledger.toml`, `.ledger/ledger.local.toml`, and `.ledger/task/config.toml`. The local `sibling-ledger` provider resolves authoritative data to `../ledger/task/taskledger/<project-uuid>`, while `data` and `indexes` are reported independently by `taskledger storage where`. Use `taskledger storage path data|indexes` for one mount without initializing lazy mounts. Migration accepts `--sibling-ledger-root PATH` as a base store and targets `PATH/task/taskledger/<project-uuid>`.

@@ -7,6 +7,7 @@ from typing import Literal
 
 from ledgercore.paths import find_config_upwards
 
+from taskledger.errors import LaunchError
 from taskledger.storage.project_config import load_project_config_document
 
 CANONICAL_PROJECT_CONFIG_FILENAME = "taskledger.toml"
@@ -79,21 +80,25 @@ def load_project_locator(
     config_filename: str = CANONICAL_PROJECT_CONFIG_FILENAME,
 ) -> ProjectLocator:
     start_path = start.expanduser().resolve()
-    config_path = find_project_config(start_path)
-    if config_path is None:
+    if taskledger_dir_override is None:
         from ledgercore import locate_ledger_project
 
         canonical = locate_ledger_project(start_path)
         if canonical is not None and canonical.source == "canonical":
             from taskledger.storage.project_context import load_project_context
 
-            context = load_project_context(start_path, require_initialized=False)
-            return ProjectLocator(
-                workspace_root=context.project_root,
-                config_path=context.config_path,
-                taskledger_dir=context.paths.data_root,
-                source="canonical",
-            )
+            try:
+                context = load_project_context(start_path, require_initialized=False)
+            except LaunchError:
+                pass
+            else:
+                return ProjectLocator(
+                    workspace_root=context.project_root,
+                    config_path=context.config_path,
+                    taskledger_dir=context.paths.data_root,
+                    source="canonical",
+                )
+    config_path = find_project_config(start_path)
     if config_path is not None:
         workspace_root = config_path.parent
         taskledger_dir = (

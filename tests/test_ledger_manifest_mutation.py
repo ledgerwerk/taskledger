@@ -15,6 +15,7 @@ def test_registration_is_idempotent(tmp_path: Path) -> None:
         tmp_path, project_uuid=UUID, project_name="demo"
     )
     original = first.manifest_path.read_text(encoding="utf-8")
+    assert f"task/taskledger/{UUID}" in original
     second = ensure_taskledger_registration(
         tmp_path, project_uuid=UUID, project_name="demo"
     )

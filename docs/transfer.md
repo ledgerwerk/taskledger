@@ -48,15 +48,15 @@ taskledger task show task-0040
 
 Rules:
 
-- Keep `project_uuid` committed in `taskledger.toml` (or legacy `.taskledger.toml` if the project still uses it).
-- `.taskledger/` is local operational state and can be absent on another PC.
-- Run `taskledger init` after cloning to create local state.
+- Keep the project UUID in `.ledger/ledger.toml`; it also scopes the sibling data directory.
+- `.ledger/ledger.local.toml` selects the shared `sibling-ledger` provider.
+- Run `taskledger init --create-sibling-store` after cloning when the sibling store is absent.
 - `taskledger export --task TASK_REF` and `taskledger export TASK_REF` export task-scoped archives.
 - `taskledger sync export` and `taskledger sync import` are aliases for the same archive transfer primitives.
 - Task-scoped import is additive by default; if the task id already exists locally, import renumbers and reports an id map.
 - `--replace` is for full-state replacement, not the normal single-task workflow.
-- Import repairs `ledger_next_task_number` so future `task create` ids remain unique.
-- Use {doc}`sync` when you want to keep an external `taskledger_dir` in a private Git repository and sync full project state between PCs.
+- Task IDs are allocated from the active ledger's task and tombstone inventory; imports do not restore a persisted counter.
+- Use the explicit Taskledger Git sync commands when you want to synchronize the UUID-scoped sibling data directory between PCs.
 
 ## Dry-run import
 

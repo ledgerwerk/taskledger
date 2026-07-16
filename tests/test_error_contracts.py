@@ -25,9 +25,11 @@ def test_canonical_sync_error_has_usage_exit_code() -> None:
 
 
 def test_init_json_preserves_stable_storage_error_contract(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
     result = CliRunner().invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "init"],
+        ["--cwd", str(workspace), "--json", "init"],
     )
 
     assert result.exit_code == 6

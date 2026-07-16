@@ -275,18 +275,18 @@ def build_storage_location_report(workspace_root: Path) -> StorageLocationReport
             binding=context.binding_path.as_posix() if context.binding_path else None,
             relative_path=relative_path,
         )
-    locator = load_project_locator(workspace_root)
-    taskledger_dir = locator.taskledger_dir
-    config_path = locator.config_path
+    legacy_locator = load_project_locator(workspace_root)
+    taskledger_dir = legacy_locator.taskledger_dir
+    config_path = legacy_locator.config_path
     project_uuid = load_project_uuid(config_path)
     project_name = project_name_or_default(
         config_path,
-        workspace_root=locator.workspace_root,
+        workspace_root=legacy_locator.workspace_root,
     )
     ledger_ref = load_ledger_config(config_path).ref
-    inside_workspace = _is_within(taskledger_dir, locator.workspace_root)
+    inside_workspace = _is_within(taskledger_dir, legacy_locator.workspace_root)
     git_root = _git_root(taskledger_dir)
-    active_lock_count = _active_lock_count(locator.workspace_root)
+    active_lock_count = _active_lock_count(legacy_locator.workspace_root)
     legacy_warnings: list[str] = []
     if inside_workspace:
         legacy_warnings.append(
@@ -296,7 +296,7 @@ def build_storage_location_report(workspace_root: Path) -> StorageLocationReport
     if active_lock_count:
         legacy_warnings.append(f"{active_lock_count} active lock(s) are present.")
     return StorageLocationReport(
-        workspace_root=locator.workspace_root.as_posix(),
+        workspace_root=legacy_locator.workspace_root.as_posix(),
         config_path=config_path.as_posix(),
         taskledger_dir=taskledger_dir.as_posix(),
         project_uuid=project_uuid,

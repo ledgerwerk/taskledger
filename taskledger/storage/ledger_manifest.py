@@ -21,7 +21,7 @@ from tomlkit import dumps, parse, table
 from taskledger.errors import LaunchError
 from taskledger.storage.project_context import (
     CANONICAL_LEDGER_NAME,
-    CANONICAL_MOUNT_SPECS,
+    canonical_mount_specs,
 )
 
 try:
@@ -48,7 +48,7 @@ class ManifestMutationResult:
         }
 
 
-def _registration_document() -> dict[str, Any]:
+def _registration_document(project_uuid: str) -> dict[str, Any]:
     return {
         "config": {"location": "project", "path": "task/config.toml"},
         "mounts": {
@@ -57,13 +57,15 @@ def _registration_document() -> dict[str, Any]:
                 **({"scope": scope} if scope is not None else {}),
                 "path": path,
             }
-            for name, (storage, scope, path) in CANONICAL_MOUNT_SPECS.items()
+            for name, (storage, scope, path) in canonical_mount_specs(
+                project_uuid
+            ).items()
         },
     }
 
 
-def _expected_registration() -> dict[str, Any]:
-    return {CANONICAL_LEDGER_NAME: _registration_document()}
+def _expected_registration(project_uuid: str) -> dict[str, Any]:
+    return {CANONICAL_LEDGER_NAME: _registration_document(project_uuid)}
 
 
 def _manifest_dict(document: Mapping[str, Any]) -> dict[str, Any]:
@@ -103,10 +105,10 @@ def _ensure_project_defaults(
     cache.setdefault("namespace", "ledgerwerk")
 
 
-def _registration_matches(existing: Any) -> bool:
+def _registration_matches(existing: Any, project_uuid: str) -> bool:
     if existing is None:
         return False
-    expected = _registration_document()
+    expected = _registration_document(project_uuid)
     config = existing.get("config") if hasattr(existing, "get") else None
     if (
         config is None
@@ -154,10 +156,22 @@ def _recognized_legacy_registration(existing: Any) -> bool:
         "logs": {"storage": "workspace", "scope": "checkout", "path": "task/logs"},
         "indexes": {"storage": "cache", "scope": "checkout", "path": "task/indexes"},
     }
-    return values in (repository_local, split_checkout)
+    direct_sibling = {
+        "data": {
+            "storage": "workspace",
+            "scope": "project",
+            "path": "task/taskledger",
+        },
+        "indexes": {
+            "storage": "cache",
+            "scope": "checkout",
+            "path": "task/taskledger-indexes",
+        },
+    }
+    return values in (repository_local, split_checkout, direct_sibling)
 
 
-def _conflict(existing: Any) -> str | None:
+def _conflict(existing: Any, project_uuid: str) -> str | None:
     if existing is None or _recognized_legacy_registration(existing):
         return None
     config = existing.get("config") if hasattr(existing, "get") else None
@@ -168,9 +182,10 @@ def _conflict(existing: Any) -> str | None:
     mounts = existing.get("mounts") if hasattr(existing, "get") else {}
     if not isinstance(mounts, Mapping):
         return "ledgers.taskledger.mounts"
-    if set(mounts) != set(CANONICAL_MOUNT_SPECS):
+    specs = canonical_mount_specs(project_uuid)
+    if set(mounts) != set(specs):
         return "ledgers.taskledger.mounts"
-    for name, (storage, scope, path) in CANONICAL_MOUNT_SPECS.items():
+    for name, (storage, scope, path) in specs.items():
         expected_values = {"storage": storage, "path": path}
         if scope is not None:
             expected_values["scope"] = scope
@@ -182,7 +197,8 @@ def _conflict(existing: Any) -> str | None:
     return None
 
 
-def _set_registration(doc: Any) -> None:
+def _set_registration(doc: Any, project_uuid: str) -> None:
+    specs = canonical_mount_specs(project_uuid)
     ledgers = doc.setdefault("ledgers", table())
     registration = ledgers.setdefault(CANONICAL_LEDGER_NAME, table())
     config = registration.setdefault("config", table())
@@ -190,9 +206,9 @@ def _set_registration(doc: Any) -> None:
     config["path"] = "task/config.toml"
     mounts = registration.setdefault("mounts", table())
     for name in list(mounts):
-        if name not in CANONICAL_MOUNT_SPECS:
+        if name not in specs:
             del mounts[name]
-    for name, (storage, scope, path) in CANONICAL_MOUNT_SPECS.items():
+    for name, (storage, scope, path) in specs.items():
         mount = mounts.setdefault(name, table())
         mount["storage"] = storage
         if scope is None:
@@ -224,7 +240,7 @@ def ensure_taskledger_registration(
             _ensure_project_defaults(
                 doc, project_uuid=normalized_uuid, project_name=project_name
             )
-            _set_registration(doc)
+            _set_registration(doc, normalized_uuid)
             contents = dumps(doc)
             _validate_bytes(manifest_path, contents)
             try:
@@ -265,11 +281,11 @@ def ensure_taskledger_registration(
             )
         existing_doc = parse(current)
         existing = existing_doc.get("ledgers", {}).get(CANONICAL_LEDGER_NAME)
-        if _registration_matches(existing):
+        if _registration_matches(existing, normalized_uuid):
             return ManifestMutationResult(
                 manifest_path, normalized_uuid, manifest.project_name, False, False
             )
-        conflict = _conflict(existing)
+        conflict = _conflict(existing, normalized_uuid)
         if conflict:
             actual = "missing" if existing is None else "conflicting value"
             raise LaunchError(
@@ -283,7 +299,7 @@ def ensure_taskledger_registration(
             project_uuid=normalized_uuid,
             project_name=project_name or manifest.project_name,
         )
-        _set_registration(existing_doc)
+        _set_registration(existing_doc, normalized_uuid)
         contents = dumps(existing_doc)
         _validate_bytes(manifest_path, contents)
         atomic_write_text(manifest_path, contents)

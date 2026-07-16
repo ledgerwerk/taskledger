@@ -51,7 +51,10 @@ def test_canonical_init_uses_fixed_direct_sibling_store(tmp_path: Path) -> None:
     assert context.project_uuid
     assert context.layout is not None
     assert context.layout.mounts["data"].storage == "workspace"
-    assert context.paths.data_root == sibling / "task" / "taskledger"
+    assert (
+        context.paths.data_root
+        == sibling / "task" / "taskledger" / context.project_uuid
+    )
     assert not (project / ".ledger" / "task" / "taskledger").exists()
     assert (context.paths.data_root / ".ledger-project.toml").is_file()
 
@@ -62,7 +65,10 @@ def test_explicit_store_creation_uses_fixed_sibling_path(tmp_path: Path) -> None
 
     context, _ = init_canonical_project_state(project, create_sibling_store=True)
 
-    assert context.paths.data_root == tmp_path / "ledger" / "task" / "taskledger"
+    assert (
+        context.paths.data_root
+        == tmp_path / "ledger" / "task" / "taskledger" / context.project_uuid
+    )
     assert (tmp_path / "ledger" / ".ledger-store").is_file()
 
 

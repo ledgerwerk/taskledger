@@ -60,9 +60,8 @@ def test_init_writes_canonical_sibling_storage(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
     assert (tmp_path / ".ledger" / "ledger.toml").exists()
     assert (tmp_path / ".ledger" / "task" / "config.toml").exists()
-    assert (
-        tmp_path.parent / "ledger" / "task" / "taskledger" / "storage.yaml"
-    ).exists()
+    taskledger_root = tmp_path.parent / "ledger" / "task" / "taskledger"
+    assert list(taskledger_root.glob("*/storage.yaml"))
     assert not (tmp_path / ".ledger" / "task" / "taskledger").exists()
 
 

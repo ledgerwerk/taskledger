@@ -17,6 +17,7 @@ from taskledger.services.git_sync import (
 )
 from taskledger.services.storage_locations import build_storage_location_report
 from taskledger.storage.init import init_canonical_project_state
+from taskledger.storage.project_context import load_project_context
 
 
 def _init(tmp_path: Path) -> Path:
@@ -29,16 +30,18 @@ def _init(tmp_path: Path) -> Path:
 
 def test_canonical_sync_derives_sibling_repo_and_path(tmp_path: Path) -> None:
     project = _init(tmp_path)
+    context = load_project_context(project)
+    expected_project_path = f"task/taskledger/{context.project_uuid}"
     config = build_git_sync_config(project)
     assert config.repo_path == tmp_path / "ledger"
-    assert config.project_path == "task/taskledger"
+    assert config.project_path == expected_project_path
     paths = git_sync_paths(project)
     assert paths["repo_path"] == str(tmp_path / "ledger")
-    assert paths["project_path"] == "task/taskledger"
+    assert paths["project_path"] == expected_project_path
 
     location = build_storage_location_report(project).to_dict()
     assert location["workspace_provider"] == "sibling-ledger"
-    assert location["relative_path"] == "task/taskledger"
+    assert location["relative_path"] == expected_project_path
 
 
 def test_canonical_sync_rejects_storage_selectors(tmp_path: Path) -> None:
@@ -52,8 +55,8 @@ def test_canonical_sync_rejects_storage_selectors(tmp_path: Path) -> None:
 def test_canonical_git_init_does_not_move_storage(tmp_path: Path) -> None:
     project = tmp_path / "project"
     project.mkdir()
-    init_canonical_project_state(project, create_sibling_store=True)
-    data_root = tmp_path / "ledger" / "task" / "taskledger"
+    context, _ = init_canonical_project_state(project, create_sibling_store=True)
+    data_root = context.paths.data_root
     before = sorted(path.relative_to(data_root) for path in data_root.rglob("*"))
 
     payload = init_git_sync_repo(project)
@@ -67,6 +70,7 @@ def test_canonical_git_init_does_not_move_storage(tmp_path: Path) -> None:
 
 def test_canonical_git_commit_limits_committed_paths(tmp_path: Path) -> None:
     project = _init(tmp_path)
+    context = load_project_context(project)
     repo = tmp_path / "ledger"
     subprocess.run(
         ["git", "-C", str(repo), "config", "user.email", "test@example.com"],
@@ -76,7 +80,7 @@ def test_canonical_git_commit_limits_committed_paths(tmp_path: Path) -> None:
         ["git", "-C", str(repo), "config", "user.name", "Taskledger Test"],
         check=True,
     )
-    task_file = repo / "task" / "taskledger" / "task-state.txt"
+    task_file = repo / "task" / "taskledger" / context.project_uuid / "task-state.txt"
     outside_file = repo / "plan" / "plan-state.txt"
     task_file.write_text("task\n", encoding="utf-8")
     outside_file.parent.mkdir(parents=True, exist_ok=True)
@@ -91,7 +95,7 @@ def test_canonical_git_commit_limits_committed_paths(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
     ).stdout.splitlines()
-    assert "task/taskledger/task-state.txt" in committed
+    assert f"task/taskledger/{context.project_uuid}/task-state.txt" in committed
     assert "plan/plan-state.txt" not in committed
     assert outside_file.exists()
 

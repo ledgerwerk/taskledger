@@ -144,8 +144,8 @@ def migrate_apply_command(
         typer.Option(
             "--sibling-ledger-root",
             help=(
-                "Migration-only destination sibling root. The migrated data is "
-                "written below PATH/task/taskledger."
+                "Base sibling-ledger root. The migrated data is written below "
+                "PATH/task/taskledger/<project-uuid>."
             ),
         ),
     ] = None,

@@ -233,16 +233,15 @@ Restart your shell session after installation.
 Initialize durable state in the current workspace:
 
 ```bash
-taskledger init
-# or keep storage outside the source repo
-taskledger init --taskledger-dir /mnt/cloud/taskledger/my-repo
-# or point at another workspace explicitly
-taskledger --root /path/to/repo init
+taskledger init --create-sibling-store
+taskledger storage where
+taskledger --root /path/to/repo init --create-sibling-store
 ```
 
-`init` writes `taskledger.toml` in the workspace root. By default that config
-points at `.taskledger/`, but `--taskledger-dir` can move durable state to an
-external directory without nesting another `.taskledger` inside it.
+`init` writes `.ledger/ledger.toml`, `.ledger/ledger.local.toml`, and
+`.ledger/task/config.toml`. Authoritative data is stored at the UUID-scoped
+sibling path `../ledger/task/taskledger/<project-uuid>`, while indexes remain in
+checkout-scoped cache storage.
 
 Create and activate a task, ask required planning questions, regenerate the
 plan from answers, approve it, implement todos with evidence, and validate it:
@@ -502,44 +501,32 @@ feature branch's active task and task list. Two ledgers may both contain a logic
 `taskledger ledger adopt --from REF TASK_REF` when branch-local task history
 should be copied into the current ledger.
 
-You can also point `taskledger.toml` at an external storage root:
+Canonical Taskledger storage uses the shared sibling store selected by
+`.ledger/ledger.local.toml`:
 
 ```bash
-taskledger init --taskledger-dir /mnt/cloud/taskledger/project-a
+taskledger init --create-sibling-store
+taskledger storage where
 ```
+
+For a project UUID `PROJECT_UUID`, authoritative data is stored at:
 
 ```text
-/home/me/src/project-a/taskledger.toml
-/mnt/cloud/taskledger/project-a/storage.yaml
-/mnt/cloud/taskledger/project-a/ledgers/main/releases/
-/mnt/cloud/taskledger/project-a/ledgers/main/tasks/
-/mnt/cloud/taskledger/project-a/ledgers/main/events/
-/mnt/cloud/taskledger/project-a/ledgers/main/indexes/
+../ledger/task/taskledger/PROJECT_UUID/
 ```
 
-Use one `taskledger_dir` per source project. Do not share one storage directory
-across unrelated repositories.
+The sibling store may be committed with the explicit Taskledger Git sync commands.
+The UUID-scoped directory prevents unrelated projects from sharing bindings or
+mixing records. Legacy projects are migrated explicitly with:
 
-### Sync across PCs without committing `.taskledger/`
-
-Use a sibling private Git repository for the external storage root instead of
-committing `.taskledger/` into the source repository:
-
-```toml
-# /home/me/src/project-a/taskledger.toml
-taskledger_dir = "../taskledger-state/project-a"
+```bash
+taskledger migrate status
+taskledger migrate plan
+taskledger migrate apply --sibling-ledger-root ../ledger --backup
 ```
 
-```text
-/home/me/src/project-a/                  # source repo
-/home/me/src/taskledger-state/           # private state repo
-/home/me/src/taskledger-state/project-a/ # taskledger_dir
-```
-
-Keep one active writer at a time. Before starting on a PC, pull the private
-state repo, then run `taskledger doctor` and `taskledger next-action`. After
-stopping at a clean lifecycle boundary, commit and push the state repo. If work
-must move mid-run, prefer `taskledger export TASK_REF` / `taskledger import ARCHIVE` because imported runtime locks are quarantined by default.
+Keep one active writer at a time. Before starting on a PC, inspect the shared
+store with `taskledger doctor` and `taskledger next-action`.
 
 Helpful local commands:
 
@@ -810,4 +797,4 @@ source refs, evidence refs, reviews, and handoffs.
 
 ## Canonical Ledger layout
 
-New projects use Ledgercore's canonical `.ledger/` marker. Taskledger configuration is stored at `.ledger/task/config.toml`; plain init keeps authoritative data under `.ledger` and rebuildable indexes in cache. External data requires `taskledger init --sibling-ledger-root PATH --create-store` and is isolated under `PATH/taskledger/<project-uuid>`. Legacy projects remain readable during the compatibility window. Use `taskledger migrate status`, `taskledger migrate plan`, then `taskledger migrate apply --sibling-ledger-root PATH --backup` for explicit migration.
+New projects use Ledgercore's canonical `.ledger/` marker. Taskledger configuration is stored at `.ledger/task/config.toml`, with `sibling-ledger` selected in `.ledger/ledger.local.toml`. Authoritative data resolves to `../ledger/task/taskledger/<project-uuid>` and indexes remain in checkout-scoped cache storage. Use `taskledger init --create-sibling-store` when the sibling store needs creation. Legacy projects remain readable during the compatibility window. Migrate them with `taskledger migrate status`, `taskledger migrate plan`, then `taskledger migrate apply --sibling-ledger-root PATH --backup`; `PATH` is the base store and the target is `PATH/task/taskledger/<project-uuid>`.

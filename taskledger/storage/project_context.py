@@ -79,11 +79,24 @@ CANONICAL_LEDGER_NAME = "taskledger"
 CANONICAL_LEDGER_CODE = "tl"
 CANONICAL_SHORT_DIRECTORY = "task"
 CANONICAL_CONFIG_RELATIVE_PATH = Path("task") / "config.toml"
+CANONICAL_DATA_RELATIVE_PATH = Path("task") / "taskledger"
+CANONICAL_INDEX_RELATIVE_PATH = Path("task") / "taskledger-indexes"
 CANONICAL_MOUNT_NAMES = ("data", "indexes")
-CANONICAL_MOUNT_SPECS = {
-    "data": ("workspace", "project", "task/taskledger"),
-    "indexes": ("cache", "checkout", "task/taskledger-indexes"),
-}
+
+
+def canonical_mount_specs(
+    project_uuid: str | None = None,
+) -> dict[str, tuple[str, str | None, str]]:
+    data_path = CANONICAL_DATA_RELATIVE_PATH
+    if project_uuid is not None:
+        data_path = data_path / project_uuid
+    return {
+        "data": ("workspace", "project", data_path.as_posix()),
+        "indexes": ("cache", "checkout", CANONICAL_INDEX_RELATIVE_PATH.as_posix()),
+    }
+
+
+CANONICAL_MOUNT_SPECS = canonical_mount_specs()
 CANONICAL_CONFIG_VERSION = 3
 CANONICAL_STORAGE_LAYOUT_VERSION = 5
 LEGACY_CONFIG_FILENAMES = (".taskledger.toml", "taskledger.toml")
@@ -316,14 +329,22 @@ def _validate_registration(layout: ResolvedLedgerLayout) -> None:
             "define exactly data and indexes mounts."
         )
     data = layout.mounts["data"]
+    try:
+        data_relative_path = data.path.relative_to(data.scoped_root)
+    except ValueError as exc:
+        raise LaunchError(
+            "TASKLEDGER_REGISTRATION_CONFLICT: Taskledger data mount must "
+            "remain below the sibling workspace root."
+        ) from exc
+    expected_data_path = CANONICAL_DATA_RELATIVE_PATH / layout.project_uuid
     if (
         str(data.storage) != "workspace"
         or str(data.scope) != "project"
-        or not str(data.path).replace("\\", "/").endswith("/task/taskledger")
+        or data_relative_path != expected_data_path
     ):
         raise LaunchError(
             "TASKLEDGER_REGISTRATION_CONFLICT: Taskledger data mount must be "
-            "workspace/project task/taskledger."
+            f"workspace/project {expected_data_path.as_posix()}."
         )
     indexes = layout.mounts["indexes"]
     if (
@@ -343,17 +364,16 @@ def _validate_exact_sibling_postcondition(
 ) -> None:
     expected_root = (project_root / ".." / "ledger").resolve(strict=False)
     data = layout.mounts["data"]
+    expected_data = expected_root / CANONICAL_DATA_RELATIVE_PATH / layout.project_uuid
     if str(data.source) != "local-provider":
         raise LaunchError(
             "TASKLEDGER_SIBLING_PROVIDER_REQUIRED: Taskledger data must resolve "
             "through the local sibling-ledger provider."
         )
-    if data.scoped_root != expected_root or data.path != expected_root / (
-        "task/taskledger"
-    ):
+    if data.scoped_root != expected_root or data.path != expected_data:
         raise LaunchError(
-            "TASKLEDGER_DIRECT_PATH_MISMATCH: Taskledger data must resolve to "
-            f"{expected_root / 'task/taskledger'}."
+            "TASKLEDGER_UUID_PATH_MISMATCH: Taskledger data must resolve to "
+            f"{expected_data}."
         )
     marker = expected_root / ".ledger-store"
     if not marker.exists():
@@ -550,6 +570,8 @@ def is_canonical_project(start: Path) -> bool:
 
 __all__ = [
     "CANONICAL_CONFIG_VERSION",
+    "CANONICAL_DATA_RELATIVE_PATH",
+    "CANONICAL_INDEX_RELATIVE_PATH",
     "CANONICAL_LEDGER_CODE",
     "CANONICAL_LEDGER_NAME",
     "CANONICAL_MOUNT_NAMES",
@@ -559,5 +581,6 @@ __all__ = [
     "TaskledgerInitializationState",
     "TaskledgerPaths",
     "TaskledgerProjectContext",
+    "canonical_mount_specs",
     "load_project_context",
 ]

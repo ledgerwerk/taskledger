@@ -25,15 +25,16 @@ from ledgercore import (
 from taskledger.errors import LaunchError
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.ledger_manifest import ensure_taskledger_registration
-from taskledger.storage.paths import ProjectPaths
+from taskledger.storage.paths import ProjectPaths, find_project_config
 from taskledger.storage.project_binding import (
     create_project_binding,
     read_project_binding,
 )
 from taskledger.storage.project_context import (
+    CANONICAL_DATA_RELATIVE_PATH,
     CANONICAL_LEDGER_NAME,
-    CANONICAL_MOUNT_SPECS,
     TaskledgerProjectContext,
+    canonical_mount_specs,
     load_project_context,
 )
 from taskledger.storage.yaml_store import write_yaml_object
@@ -179,7 +180,12 @@ class TaskledgerMigrationInspection:
             "counts": {"copy_items": len(self.copy_items)},
             "changes": [item.to_dict() for item in self.copy_items],
             "issues": [issue.to_dict() for issue in self.issues],
-            "commands": {"apply": "taskledger migrate apply --backup"},
+            "commands": {
+                "apply": (
+                    "taskledger migrate apply "
+                    f"--sibling-ledger-root {self.sibling_root} --backup"
+                )
+            },
             "blockers": blockers,
             "warnings": warnings,
             "ready": self.ready,
@@ -231,7 +237,7 @@ def _legacy_task_id_fields(
                 highest = max(highest, int(token[5:]))
     derived_number = highest + 1
     derived = f"task-{derived_number:04d}"
-    required = ()
+    required: tuple[str, ...] = ()
     if stored is not None and stored > derived_number:
         required = tuple(
             f"task-{number:04d}" for number in range(derived_number, stored)
@@ -249,7 +255,7 @@ def _manifest_document(path: Path) -> dict[str, object]:
     return value
 
 
-def _target_registration() -> dict[str, object]:
+def _target_registration(project_uuid: str | None = None) -> dict[str, object]:
     return {
         "config": {"location": "project", "path": "task/config.toml"},
         "mounts": {
@@ -258,7 +264,9 @@ def _target_registration() -> dict[str, object]:
                 **({"scope": scope} if scope is not None else {}),
                 "path": path,
             }
-            for name, (storage, scope, path) in CANONICAL_MOUNT_SPECS.items()
+            for name, (storage, scope, path) in canonical_mount_specs(
+                project_uuid
+            ).items()
         },
     }
 
@@ -372,7 +380,7 @@ def _resolve_target_layout(
     manifest_doc: dict[str, object] = {
         "schema_version": 2,
         "project": {"uuid": project_uuid, "name": root.name},
-        "ledgers": {CANONICAL_LEDGER_NAME: _target_registration()},
+        "ledgers": {CANONICAL_LEDGER_NAME: _target_registration(project_uuid)},
     }
     manifest = parse_ledger_project_manifest(manifest_doc)
     local = parse_ledger_local_config(
@@ -400,6 +408,28 @@ def _legacy_source(
     if context.mode != "legacy" or context.legacy_locator is None:
         raise LaunchError("No legacy Taskledger project was found.")
     return context, context.legacy_locator
+
+
+def _configured_legacy_source(
+    root: Path,
+) -> tuple[Path, Path, dict[str, object]] | None:
+    config_path = find_project_config(root)
+    if config_path is None or config_path.name not in {
+        ".taskledger.toml",
+        "taskledger.toml",
+    }:
+        return None
+    config_doc = _manifest_document(config_path)
+    raw_path = config_doc.get("taskledger_dir")
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        return None
+    source_data = Path(os.path.expandvars(raw_path)).expanduser()
+    if not source_data.is_absolute():
+        source_data = config_path.parent / source_data
+    source_data = source_data.resolve()
+    if not source_data.exists():
+        return None
+    return source_data, config_path, config_doc
 
 
 def _copy_items(
@@ -451,9 +481,12 @@ def _issue(
 def _is_repository_local_registration(
     registration: Mapping[str, object] | None,
 ) -> bool:
-    if registration is None or not isinstance(registration.get("mounts"), Mapping):
+    if registration is None:
         return False
-    mounts = registration["mounts"]
+    mounts_value = registration.get("mounts")
+    if not isinstance(mounts_value, Mapping):
+        return False
+    mounts = mounts_value
     data = mounts.get("data")
     indexes = mounts.get("indexes")
     return (
@@ -461,6 +494,29 @@ def _is_repository_local_registration(
         and isinstance(indexes, Mapping)
         and data.get("storage") == "repository"
         and data.get("path") == "task/taskledger"
+        and indexes.get("storage") == "cache"
+        and indexes.get("scope") == "checkout"
+        and indexes.get("path") == "task/taskledger-indexes"
+    )
+
+
+def _is_direct_sibling_registration(
+    registration: Mapping[str, object] | None,
+) -> bool:
+    if registration is None:
+        return False
+    mounts_value = registration.get("mounts")
+    if not isinstance(mounts_value, Mapping):
+        return False
+    mounts = mounts_value
+    data = mounts.get("data")
+    indexes = mounts.get("indexes")
+    return (
+        isinstance(data, Mapping)
+        and isinstance(indexes, Mapping)
+        and data.get("storage") == "workspace"
+        and data.get("scope") == "project"
+        and data.get("path") == CANONICAL_DATA_RELATIVE_PATH.as_posix()
         and indexes.get("storage") == "cache"
         and indexes.get("scope") == "checkout"
         and indexes.get("path") == "task/taskledger-indexes"
@@ -520,7 +576,7 @@ def inspect_migration(  # noqa: C901
         if isinstance(project, Mapping) and isinstance(project.get("uuid"), str):
             selected_uuid = str(uuid.UUID(project["uuid"]))
         if _is_old_registration(current_registration):
-            source_kind = "canonical-0.3-namespaced"
+            source_kind = "canonical-0.3-split-checkout"
             try:
                 old_layout = _resolve_old_layout(root, manifest_doc, environ=environ)
                 source_data = old_layout.mounts["data"].path
@@ -529,9 +585,42 @@ def inspect_migration(  # noqa: C901
             except Exception as exc:
                 issues.append(_issue("blocker", "OLD_LAYOUT_UNRESOLVED", str(exc)))
         elif _is_repository_local_registration(current_registration):
-            source_kind = "canonical-repository-local"
-            source_data = root / ".ledger" / "task" / "taskledger"
-            source_logs = source_data
+            configured = _configured_legacy_source(root)
+            if configured is not None:
+                source_data, _source_config, source_config_doc = configured
+                source_kind = (
+                    "legacy-arbitrary-external"
+                    if not source_data.is_relative_to(root)
+                    else "legacy-root"
+                )
+                source_logs = source_data
+                configured_uuid = source_config_doc.get("project_uuid")
+                if (
+                    isinstance(configured_uuid, str)
+                    and selected_uuid is not None
+                    and str(uuid.UUID(configured_uuid)) != selected_uuid
+                ):
+                    issues.append(
+                        _issue(
+                            "blocker",
+                            "PROJECT_UUID_MISMATCH",
+                            "Legacy Taskledger config UUID differs from the "
+                            "canonical project UUID.",
+                        )
+                    )
+            else:
+                source_kind = "canonical-repository-local"
+                source_data = root / ".ledger" / "task" / "taskledger"
+                source_logs = source_data
+        elif _is_direct_sibling_registration(current_registration):
+            source_kind = "direct-sibling-old-schema"
+            try:
+                old_layout = _resolve_old_layout(root, manifest_doc, environ=environ)
+                source_data = old_layout.mounts["data"].path
+                source_logs = source_data
+                checkout_id = old_layout.checkout_id
+            except Exception as exc:
+                issues.append(_issue("blocker", "OLD_LAYOUT_UNRESOLVED", str(exc)))
         else:
             try:
                 context = load_project_context(
@@ -600,8 +689,26 @@ def inspect_migration(  # noqa: C901
                 )
             )
         selected_uuid = requested_uuid
+    if source_kind == "direct-sibling-old-schema" and source_data is not None:
+        source_binding = read_project_binding(source_data)
+        if (
+            source_binding is not None
+            and selected_uuid is not None
+            and source_binding.project_uuid != selected_uuid
+        ):
+            issues.append(
+                _issue(
+                    "blocker",
+                    "BINDING_UUID_MISMATCH",
+                    "Direct sibling source binding belongs to "
+                    f"{source_binding.project_uuid}, expected {selected_uuid}.",
+                )
+            )
     if selected_uuid is None and source_kind != "canonical-0.4-sibling":
         selected_uuid = str(uuid.uuid4())
+    if selected_uuid is not None:
+        target_data = sibling_root / CANONICAL_DATA_RELATIVE_PATH / selected_uuid
+        target_registration = _target_registration(selected_uuid)
 
     if not sibling_root.exists():
         issues.append(
