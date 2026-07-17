@@ -75,6 +75,9 @@ class TestYamlImportBoundary:
 # import ledgercore directly. Other modules should go through the facades.
 # ---------------------------------------------------------------------------
 LEDGERCORE_IMPORT_ALLOWLIST: set[str] = {
+    # Central Ledgercore storage adapter and compatibility context
+    "taskledger/storage/ledgercore_backend.py",
+    "taskledger/storage/project_context.py",
     # Facades
     "taskledger/ids.py",
     "taskledger/refs.py",

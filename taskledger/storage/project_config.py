@@ -420,23 +420,9 @@ def set_project_config_value(config_path: Path, dotted_key: str, value: object) 
 
 
 def load_project_config_overrides(paths: ProjectPaths) -> dict[str, object]:
-    if (
-        paths.config_path.parent.name == "task"
-        and paths.config_path.parent.parent.name == ".ledger"
-    ):
-        try:
-            data = tomllib.loads(paths.config_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise LaunchError(
-                f"Invalid canonical project config {paths.config_path}: {exc}"
-            ) from exc
-        if not isinstance(data, dict) or data.get("config_version") != 3:
-            raise LaunchError(
-                f"Canonical project config {paths.config_path} must have "
-                "config_version = 3.",
-            )
-    else:
-        data = load_project_config_document(paths.config_path)
+    data = load_project_config_document(paths.config_path)
+    if data.get("config_version") == 3:
+        _load_canonical_document(paths.config_path)
     return {key: value for key, value in data.items() if key in WORKFLOW_CONFIG_KEYS}
 
 
@@ -872,9 +858,9 @@ def _validate_project_config_overrides(data: dict[str, object], path: Path) -> N
         if key not in SUPPORTED_PROJECT_CONFIG_KEYS:
             raise LaunchError(f"Unsupported project config key '{key}' in {path}")
     config_version = data.get("config_version")
-    if config_version is not None and config_version not in (1, 2):
+    if config_version is not None and config_version not in (1, 2, 3):
         raise LaunchError(
-            f"Project config key 'config_version' must be 1 or 2 in {path}"
+            f"Project config key 'config_version' must be 1, 2, or 3 in {path}"
         )
     taskledger_dir = data.get("taskledger_dir")
     if taskledger_dir is not None and not isinstance(taskledger_dir, str):

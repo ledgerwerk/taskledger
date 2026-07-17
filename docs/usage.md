@@ -31,17 +31,15 @@ skill, an agent may not know the intended command sequence or gate semantics.
 ## Initialize state
 
 ```bash
-taskledger init --create-sibling-store
+taskledger init
 taskledger storage where
 ```
 
-`taskledger init` writes the shared Ledger manifest at `.ledger/ledger.toml`,
-the local provider selection at `.ledger/ledger.local.toml`, and Taskledger
-configuration at `.ledger/task/config.toml`. The shared sibling base is `../ledger`;
-authoritative state resolves to `../ledger/taskledger/<project-uuid>`, while indexes
-are checkout-scoped cache data. Other registered ledgers use the same project UUID
-and their own direct `<ledger-name>/<project-uuid>` directories. Branch-scoped state
-is selected explicitly with `taskledger ledger fork` and `taskledger ledger switch`.
+`taskledger init` writes a schema-3 Ledger manifest at `.ledger/ledger.toml` and
+Taskledger configuration at `.ledger/taskledger/config.toml`. Default data is
+external at `../ledger`; indexes are cache storage. Use `taskledger storage where`
+and `taskledger storage set` for storage selection. Branch state remains in
+the resolved data mount's `state.toml`.
 
 ## Branch-local task work
 
@@ -652,18 +650,19 @@ taskledger --json review list --task task-0001
 }
 ```
 
-## Shared sibling storage
+## Resolved storage
 
-Use the marked sibling store selected by `.ledger/ledger.local.toml`:
+Use the schema-3 Ledgercore mounts:
 
 ```bash
-taskledger init --create-sibling-store
+taskledger init
 taskledger storage where
+taskledger storage path data
+taskledger storage path indexes
+taskledger storage set data user-data --local --move
 ```
 
-Authoritative Taskledger data is isolated at `../ledger/taskledger/<project-uuid>`. Other ledgers use their own direct sibling directory, such as `../ledger/planledger/<project-uuid>` and `../ledger/archledger/<project-uuid>`.
-Several source projects may share the sibling store without sharing bindings or
-records. See {doc}`sync` for the optional private-Git workflow.
+Default data is external at `../ledger`; indexes are checkout-specific cache data.
 
 ## Integrity and recovery
 
@@ -762,4 +761,4 @@ Evidence import is explicit and auditable through
 
 ## Canonical project layout
 
-Taskledger uses `.ledger/ledger.toml`, `.ledger/ledger.local.toml`, and `.ledger/task/config.toml`. The local `sibling-ledger` provider resolves authoritative data to `../ledger/taskledger/<project-uuid>`, while `data` and `indexes` are reported independently by `taskledger storage where`. Use `taskledger storage path data|indexes` for one mount without initializing lazy mounts. Migration accepts `--sibling-ledger-root PATH` as a base store and targets `PATH/taskledger/<project-uuid>`. Planledger and Archledger use the same shared project UUID under their direct sibling directories.
+Taskledger uses a schema-3 `.ledger/ledger.toml` manifest and `.ledger/taskledger/config.toml`. The default persistent `data` mount is external storage rooted at `../ledger`; `indexes` is cache storage. A machine-local `.ledger/ledger.local.toml` may select `user-data` for `data`. Use `taskledger storage where`, `taskledger storage path data|indexes`, `taskledger storage set`, and `taskledger storage clear-override` to inspect or change mounts.

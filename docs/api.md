@@ -190,6 +190,11 @@ payload = plan_guidance(Path.cwd(), "task-0001")
 - `storage_where`
 - `storage_path`
 - `storage_move`
+- `storage_validate`
+- `storage_set`
+- `storage_clear_override`
+- `storage_migration_status`
+- `storage_migration_recover`
 - `sync_preflight`
 - `sync_status`
 - `sync_commit`

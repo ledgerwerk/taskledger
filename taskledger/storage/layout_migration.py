@@ -14,17 +14,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from ledgercore import (
+from taskledger.errors import LaunchError
+from taskledger.storage.atomic import atomic_write_text
+from taskledger.storage.ledger_manifest import ensure_taskledger_registration
+from taskledger.storage.ledgercore_backend import (
     LedgerProjectLocator,
     ResolvedLedgerLayout,
     parse_ledger_local_config,
     parse_ledger_project_manifest,
     resolve_ledger_layout,
 )
-
-from taskledger.errors import LaunchError
-from taskledger.storage.atomic import atomic_write_text
-from taskledger.storage.ledger_manifest import ensure_taskledger_registration
 from taskledger.storage.paths import ProjectPaths, find_project_config
 from taskledger.storage.project_binding import (
     create_project_binding,
@@ -33,6 +32,7 @@ from taskledger.storage.project_binding import (
 from taskledger.storage.project_context import (
     CANONICAL_DATA_RELATIVE_PATH,
     CANONICAL_LEDGER_NAME,
+    DATA_MOUNT,
     TaskledgerProjectContext,
     canonical_mount_specs,
     load_project_context,
@@ -521,10 +521,11 @@ def _is_direct_sibling_registration(
     old_uuid_path = (
         f"task/taskledger/{project_uuid}" if project_uuid is not None else None
     )
+    uuid_path = f"taskledger/{project_uuid}" if project_uuid is not None else None
     return (
         data.get("storage") == "workspace"
         and data.get("scope") == "project"
-        and data_path in {"task/taskledger", "taskledger", old_uuid_path}
+        and data_path in {"task/taskledger", "taskledger", old_uuid_path, uuid_path}
         and indexes.get("storage") == "cache"
         and indexes.get("scope") == "checkout"
         and indexes.get("path")
@@ -573,11 +574,9 @@ def inspect_migration(  # noqa: C901
 
     locator = None
     try:
-        from ledgercore import locate_ledger_project
+        from taskledger.storage.ledgercore_backend import locate_taskledger_project
 
-        locator = locate_ledger_project(
-            root, legacy_tool_filenames=(".taskledger.toml", "taskledger.toml")
-        )
+        locator = locate_taskledger_project(root)
     except Exception as exc:
         issues.append(_issue("blocker", "DISCOVERY_ERROR", str(exc)))
 
@@ -721,9 +720,12 @@ def inspect_migration(  # noqa: C901
     if selected_uuid is None and source_kind != "canonical-0.4-sibling":
         selected_uuid = str(uuid.uuid4())
     if selected_uuid is not None:
-        target_data = sibling_root / CANONICAL_DATA_RELATIVE_PATH / selected_uuid
+        try:
+            target_layout = _resolve_target_layout(root, selected_uuid, environ)
+            target_data = target_layout.mounts[DATA_MOUNT].path
+        except Exception:
+            target_data = sibling_root / CANONICAL_DATA_RELATIVE_PATH / selected_uuid
         target_registration = _target_registration(selected_uuid)
-
     if not sibling_root.exists():
         issues.append(
             _issue(

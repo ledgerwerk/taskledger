@@ -622,17 +622,13 @@ Plan-materialized todos always use `source=plan`.
 
 ## Storage Compatibility
 
-Taskledger stores canonical project configuration in `.ledger/ledger.toml`,
-`.ledger/ledger.local.toml`, and `.ledger/task/config.toml`. Legacy
-`taskledger.toml` and `.taskledger.toml` remain readable during migration.
+Taskledger stores canonical project configuration in schema-3 `.ledger/ledger.toml`
+and Taskledger config in `.ledger/taskledger/config.toml`. Legacy
+`taskledger.toml` and `.taskledger.toml` remain readable for explicit migration.
 
-Canonical initialization requires the shared `sibling-ledger` provider. The
-fixed sibling store is `../ledger` unless a migration supplies a base with
-`--sibling-ledger-root PATH`. Each project is isolated under
-`<sibling-root>/<ledger-name>/<project-uuid>` with a matching binding. Taskledger
-therefore uses `<sibling-root>/taskledger/<project-uuid>`, while Planledger and
-other registered ledgers use their own direct ledger-name directories. Commands keep
-`--root` scoped to the source workspace, not the storage root.
+The default `data` mount is persistent external storage at `../ledger`; `indexes`
+is cache storage. A local `.ledger/ledger.local.toml` may select `user-data`.
+Commands keep `--root` scoped to the source workspace, not the storage root.
 
 Taskledger uses:
 
@@ -654,9 +650,9 @@ it reports that migration is required.
 To migrate:
 
 ```bash
-taskledger migrate status
+taskledger storage validate
 taskledger migrate plan
-taskledger migrate apply --sibling-ledger-root PATH --backup
+taskledger migrate apply
 ```
 
 After migration to layout 5, verify health with:
@@ -714,4 +710,8 @@ from local process checks; inspect handoffs or ask the user before repairing.
 
 ## Layout and migration commands
 
-`taskledger config path` reports the project-located Taskledger configuration. `taskledger storage path data|indexes` reports a named mount. Legacy layout conversion is explicit: `migrate status`, `migrate plan`, and `migrate apply --sibling-ledger-root PATH --backup` use `PATH` as the base store and target `PATH/taskledger/<project-uuid>`. Canonical `storage move` is rejected because storage mode is selected through explicit Ledger local configuration.
+`taskledger config path` reports the project-located Taskledger configuration.
+`taskledger storage path data|indexes` reports named resolved mounts.
+Use `storage validate`, `storage set`, and `storage clear-override` for schema-3
+storage selection. Legacy layout conversion remains explicit through
+`migrate status`, `migrate plan`, and `migrate apply`.

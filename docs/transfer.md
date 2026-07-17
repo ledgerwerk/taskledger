@@ -48,9 +48,9 @@ taskledger task show task-0040
 
 Rules:
 
-- Keep the project UUID in `.ledger/ledger.toml`; it also scopes the sibling data directory.
-- `.ledger/ledger.local.toml` selects the shared `sibling-ledger` provider.
-- Run `taskledger init --create-sibling-store` after cloning when the sibling store is absent.
+- Keep the project UUID in the schema-3 `.ledger/ledger.toml` manifest.
+- Inspect resolved data and index mounts with `taskledger storage where`.
+- Run `taskledger init` after cloning when the configured mounts are absent.
 - `taskledger export --task TASK_REF` and `taskledger export TASK_REF` export task-scoped archives.
 - `taskledger sync export` and `taskledger sync import` are aliases for the same archive transfer primitives.
 - Task-scoped import is additive by default; if the task id already exists locally, import renumbers and reports an id map.

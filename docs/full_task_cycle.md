@@ -16,15 +16,14 @@ is active, add `--task parser-fix` to each task-scoped command.
 Run this once per workspace:
 
 ```bash
-taskledger init --create-sibling-store
+taskledger init
 taskledger doctor
 taskledger status --full
 ```
 
-`init` writes `.ledger/ledger.toml`, `.ledger/ledger.local.toml`, and
-`.ledger/task/config.toml`. Authoritative data resolves to the UUID-scoped
-sibling path `../ledger/taskledger/<project-uuid>`; indexes are cache data.
-`doctor` checks integrity and `status --full` reports resolved storage paths.
+`init` writes a schema-3 `.ledger/ledger.toml` registration and
+`.ledger/taskledger/config.toml`. Default data is external at `../ledger`;
+indexes are cache data. Use `taskledger storage where` to inspect paths.
 
 ## 2. Create And Activate A Task
 

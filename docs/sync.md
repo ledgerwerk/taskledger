@@ -1,30 +1,31 @@
 # Sync taskledger state across PCs
 
-Taskledger stores durable state in the UUID-scoped sibling data directory resolved
-by Ledgercore's `sibling-ledger` provider. The source repository keeps the
-Ledger manifest and Taskledger config; rebuildable indexes remain in cache.
+Taskledger stores durable state below the Ledgercore-resolved `data` mount. The
+default mount is external storage at `../ledger`; local overrides may select
+`user-data`. Rebuildable indexes are always resolved as cache storage.
 
-## UUID-scoped sibling state
+## Schema-3 project state
 
 The canonical layout is:
 
 ```text
 /home/me/src/project-a/.ledger/ledger.toml
-/home/me/src/project-a/.ledger/ledger.local.toml
-/home/me/src/project-a/.ledger/task/config.toml
-/home/me/src/ledger/.ledger-store
-/home/me/src/ledger/taskledger/<project-uuid>/
+/home/me/src/project-a/.ledger/taskledger/config.toml
+/home/me/src/ledger/taskledger/<project-uuid>/data
+<user-cache>/taskledger/<project-uuid>/<checkout>/indexes
 ```
 
-Initialize the marked sibling store explicitly when needed:
+Initialize and inspect the resolved mounts explicitly:
 
 ```bash
-taskledger init --create-sibling-store
+taskledger init
 taskledger storage where
+taskledger storage path data
+taskledger storage path indexes
+taskledger storage set data user-data --local --move
 ```
 
-The project UUID is part of the authoritative data path and binding, so several
-projects can share one sibling store without mixing records.
+The project UUID and Ledgercore binding keep shared projects isolated.
 
 ## Shared state Git repo
 

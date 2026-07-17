@@ -56,45 +56,31 @@ def build_git_sync_config(
     branch: str | None = None,
 ) -> GitSyncConfig:
     locator = load_project_locator(workspace_root)
-    context = load_project_context(workspace_root)
+    context = load_project_context(workspace_root, require_initialized=False)
     if context.mode == "canonical":
-        if context.store_root is None:
-            raise LaunchError("Canonical Taskledger context has no sibling store root.")
-        if context.project_uuid is None:
-            raise LaunchError("Canonical Taskledger context has no project UUID.")
-        expected_repo = context.store_root.resolve()
-        expected_project_path = f"taskledger/{context.project_uuid}"
-        if repo is not None and repo.expanduser().resolve() != expected_repo:
+        assert context.layout is not None
+        data_path = context.layout.mounts["data"].path.resolve()
+        repository = _git_root(data_path)
+        if repository is None:
             raise LaunchError(
-                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Git repository "
-                f"is fixed to {expected_repo}."
-            )
-        if project_path is not None and project_path != expected_project_path:
-            raise LaunchError(
-                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Taskledger "
-                f"path is fixed to {expected_project_path}."
+                "TASKLEDGER_STORAGE_NOT_GIT_BACKED: resolved data mount is not "
+                "inside a Git worktree."
             )
         sync_config = context.config.sync_git
         if (
-            sync_config.repo is not None
-            and _resolve_path(locator.workspace_root, Path(sync_config.repo)).resolve()
-            != expected_repo
+            repo is not None
+            or project_path is not None
+            or sync_config.repo is not None
+            or sync_config.project_path is not None
         ):
             raise LaunchError(
-                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: sync.git.repo cannot "
-                "select canonical storage."
+                "TASKLEDGER_STORAGE_TARGET_INVALID: sync.git cannot select "
+                "storage; use the resolved data mount."
             )
-        if (
-            sync_config.project_path is not None
-            and sync_config.project_path != expected_project_path
-        ):
-            raise LaunchError(
-                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: sync.git.project_path "
-                "cannot select canonical storage."
-            )
+        relative = data_path.relative_to(repository).as_posix()
         return GitSyncConfig(
-            repo_path=expected_repo,
-            project_path=expected_project_path,
+            repo_path=repository,
+            project_path=relative,
             remote=remote or sync_config.remote,
             branch=branch or sync_config.branch,
             allow_active_locks=sync_config.allow_active_locks,
@@ -246,16 +232,17 @@ def init_git_sync_repo(
         )
         if adopt_existing or mode != "move":
             raise LaunchError(
-                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Git sync init "
-                "cannot move, copy, or adopt storage."
+                "TASKLEDGER_STORAGE_TARGET_INVALID: canonical sync git init "
+                "does not move or adopt storage."
             )
-        assert canonical.store_root is not None
-        target_storage = _storage_path(config)
-        if target_storage.resolve() != canonical.paths.data_root.resolve():
+        assert canonical.layout is not None
+        data_mount = canonical.layout.mounts["data"]
+        if data_mount.storage == "user-data":
             raise LaunchError(
-                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical storage path "
-                "does not match the resolved Taskledger data mount."
+                "TASKLEDGER_STORAGE_NOT_GIT_BACKED: user-data storage requires "
+                "an external Git-backed root."
             )
+        target_storage = data_mount.path
         _ensure_git_repo(
             config.repo_path,
             remote_url=None,
@@ -273,10 +260,7 @@ def init_git_sync_repo(
                     remote_url,
                 )
             elif configured_remote != remote_url:
-                raise LaunchError(
-                    "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: configured Git remote "
-                    "does not match --remote-url."
-                )
+                raise LaunchError("Configured Git remote does not match --remote-url.")
         canonical_hooks_report = None
         if install_hooks or config.hooks:
             canonical_hooks_report = install_git_hooks(

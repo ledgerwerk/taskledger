@@ -18,6 +18,7 @@ from taskledger.storage.task_store import (
     clear_harness_state,
     load_actor_state,
     load_harness_state,
+    resolve_v2_paths,
     save_actor_state,
     save_harness_state,
 )
@@ -134,7 +135,8 @@ def test_actor_state_yaml_on_disk(tmp_path: Path) -> None:
     state = ActiveActorState(actor_type="user", actor_name="alice", role="planner")
     save_actor_state(tmp_path, state)
 
-    actor_path = tmp_path / ".taskledger" / "actor.yaml"
+    paths = resolve_v2_paths(tmp_path)
+    actor_path = paths.actor_path
     assert actor_path.exists()
     data = yaml.safe_load(actor_path.read_text())
     assert data["object_type"] == "active_actor"
@@ -149,7 +151,8 @@ def test_harness_state_yaml_on_disk(tmp_path: Path) -> None:
     state = ActiveHarnessState(name="ci-runner", kind="ci")
     save_harness_state(tmp_path, state)
 
-    harness_path = tmp_path / ".taskledger" / "harness.yaml"
+    paths = resolve_v2_paths(tmp_path)
+    harness_path = paths.harness_path
     assert harness_path.exists()
     data = yaml.safe_load(harness_path.read_text())
     assert data["object_type"] == "active_harness"

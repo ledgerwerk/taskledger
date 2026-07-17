@@ -4,8 +4,6 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, cast
 
-from ledgercore import locate_ledger_project
-
 from taskledger.domain.policies import derive_active_stage
 from taskledger.errors import LaunchError
 from taskledger.exchange import (
@@ -19,6 +17,7 @@ from taskledger.exchange import (
 from taskledger.services.doctor import inspect_v2_project
 from taskledger.services.tree import TreeOptions, build_tree
 from taskledger.storage.init import init_canonical_project_state, init_project_state
+from taskledger.storage.ledgercore_backend import locate_taskledger_project
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.paths import load_project_locator, resolve_project_paths
 from taskledger.storage.project_identity import (
@@ -44,12 +43,12 @@ def init_project(
     taskledger_dir: Path | None = None,
     project_name: str | None = None,
     create_sibling_store: bool = False,
+    data_storage: str = "external",
+    external_root: str | None = "../ledger",
+    local_storage_override: bool = False,
 ) -> dict[str, object]:
     if taskledger_dir is not None:
-        locator = locate_ledger_project(
-            workspace_root,
-            legacy_tool_filenames=(".taskledger.toml", "taskledger.toml"),
-        )
+        locator = locate_taskledger_project(workspace_root)
         if locator is not None and locator.source == "canonical":
             raise LaunchError(
                 "--taskledger-dir is a legacy layout option. Canonical projects use "
@@ -79,21 +78,14 @@ def init_project(
         workspace_root,
         project_name=project_name,
         create_sibling_store=create_sibling_store,
+        data_storage=data_storage,
+        external_root=external_root,
     )
     assert context.layout is not None
     return {
         "kind": "taskledger_init",
-        "schema_version": 1,
+        "schema_version": 2,
         "mode": "canonical",
-        "workspace_provider": "sibling-ledger",
-        "store_root": str(context.store_root),
-        "authoritative_path": str(context.paths.data_root),
-        "index_path": str(context.paths.indexes_root),
-        "binding": "valid",
-        "created_store": create_sibling_store,
-        "root": str(context.paths.data_root),
-        "project_dir": str(context.paths.ledger_data_dir),
-        "workspace_root": str(context.project_root),
         "project_root": str(context.project_root),
         "project_uuid": context.project_uuid,
         "manifest_path": str(context.layout.manifest_path),
@@ -105,11 +97,11 @@ def init_project(
             name: {
                 "path": str(context.layout.mounts[name].path),
                 "storage": str(context.layout.mounts[name].storage),
-                "scope": str(context.layout.mounts[name].scope),
                 "source": str(context.layout.mounts[name].source),
             }
             for name in ("data", "indexes")
         },
+        "local_storage_override": local_storage_override,
     }
 
 

@@ -17,12 +17,17 @@ def scan_project_config(  # noqa: C901
     repair_hints: list[str],
 ) -> None:
     """Scan project configuration, legacy state, and storage layout."""
+    from taskledger.storage.ledgercore_backend import locate_taskledger_project
     from taskledger.storage.project_config import load_canonical_project_config
     from taskledger.storage.project_context import load_project_context
 
+    discovered = locate_taskledger_project(workspace_root)
     try:
         context = load_project_context(workspace_root, require_initialized=False)
-    except Exception:
+    except Exception as exc:
+        if discovered is not None and not discovered.is_legacy:
+            errors.append(str(exc))
+            return
         context = None
     if context is not None and context.mode == "canonical":
         try:
@@ -38,6 +43,12 @@ def scan_project_config(  # noqa: C901
                     "Missing storage.yaml in canonical data mount: "
                     f"{context.paths.data_root}."
                 )
+            if context.storage_validation is not None:
+                for result in context.storage_validation.results:
+                    if not result.valid:
+                        errors.append(
+                            result.reason or f"Invalid storage binding: {result.path}"
+                        )
             if context.legacy_locator is not None:
                 warnings.append(
                     "Verified legacy Taskledger files remain at "

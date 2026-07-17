@@ -7,9 +7,8 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from ledgercore import atomic_create_text
-
 from taskledger.errors import LaunchError
+from taskledger.storage.atomic import atomic_create_text
 
 try:
     tomllib = importlib.import_module("tomllib")

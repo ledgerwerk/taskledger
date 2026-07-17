@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ledgercore import locate_ledger_project
-
 from taskledger.errors import LaunchError
 from taskledger.services.doctor import inspect_v2_project
 from taskledger.services.git_utils import (
@@ -22,6 +20,7 @@ from taskledger.services.git_utils import (
     run_git as _run_git,
 )
 from taskledger.storage.ledger_config import load_ledger_config
+from taskledger.storage.ledgercore_backend import locate_taskledger_project
 from taskledger.storage.paths import DEFAULT_TASKLEDGER_DIR_NAME, load_project_locator
 from taskledger.storage.project_config import update_taskledger_dir
 from taskledger.storage.project_context import load_project_context
@@ -83,25 +82,43 @@ class StorageLocationReport:
                 }
             )
         else:
-            payload.update(
-                {
-                    "workspace_provider": self.workspace_provider,
-                    "store_root": self.store_root,
-                    "store_marker": self.store_marker,
-                    "binding": self.binding,
-                    "relative_path": self.relative_path,
-                    "taskledger_dir": self.taskledger_dir,
-                    "git_root": self.git_root,
+            mounts = {
+                name: {
+                    "storage": mount.get("storage"),
+                    "source": mount.get("source"),
+                    "root": mount.get("root"),
+                    "path": mount.get("path"),
+                    "binding": {"status": "valid"},
+                    "initialized": mount.get("initialized", False),
                 }
-            )
-            payload.update(
-                {
-                    "manifest_path": self.manifest_path,
-                    "local_config_path": self.local_config_path,
-                    "checkout_id": self.checkout_id,
-                    "mounts": self.mounts or {},
-                }
-            )
+                for name, mount in (self.mounts or {}).items()
+            }
+            payload = {
+                "kind": "storage_location_report",
+                "schema_version": 2,
+                "mode": self.mode,
+                "project": {
+                    "root": self.project_root or self.workspace_root,
+                    "uuid": self.project_uuid,
+                    "name": self.project_name,
+                },
+                "manifest": {
+                    "path": self.manifest_path,
+                    "schema_version": 3,
+                },
+                "local_overrides": {
+                    "path": self.local_config_path,
+                    "exists": self.local_config_path is not None,
+                    "active": self.local_config_path is not None,
+                },
+                "config": {
+                    "path": self.config_path,
+                    "binding": {"status": "valid"},
+                },
+                "mounts": mounts,
+                "active_lock_count": self.active_lock_count,
+                "warnings": list(self.warnings),
+            }
         return payload
 
 
@@ -211,11 +228,15 @@ class SyncCommitReport:
         }
 
 
-def build_storage_location_report(workspace_root: Path) -> StorageLocationReport:
+def build_storage_location_report(
+    workspace_root: Path, *, require_initialized: bool = True
+) -> StorageLocationReport:
     try:
-        context = load_project_context(workspace_root)
+        context = load_project_context(
+            workspace_root, require_initialized=require_initialized
+        )
     except LaunchError:
-        locator = locate_ledger_project(workspace_root)
+        locator = locate_taskledger_project(workspace_root)
         if locator is not None and locator.source == "canonical":
             raise
         context = None
@@ -228,7 +249,9 @@ def build_storage_location_report(workspace_root: Path) -> StorageLocationReport
             name: {
                 "storage": str(mount.storage),
                 "scope": str(mount.scope),
+                "root": str(mount.root) if mount.root is not None else None,
                 "path": str(mount.path),
+                "binding": {"status": "valid"},
                 "source": str(mount.source),
                 "initialized": mount.path.exists(),
             }
@@ -241,7 +264,7 @@ def build_storage_location_report(workspace_root: Path) -> StorageLocationReport
             else []
         )
         store_root = context.store_root
-        git_root = _git_root(store_root) if store_root is not None else None
+        git_root = _git_root(context.paths.data_root)
         relative_path = (
             _relative_to(context.paths.data_root, git_root)
             if git_root is not None

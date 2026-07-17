@@ -233,13 +233,14 @@ Restart your shell session after installation.
 Initialize durable state in the current workspace:
 
 ```bash
-taskledger init --create-sibling-store
+taskledger init
 taskledger storage where
-taskledger --root /path/to/repo init --create-sibling-store
+taskledger --root /path/to/repo init
 ```
 
-`init` writes `.ledger/ledger.toml`, `.ledger/ledger.local.toml`, and
-.ledger/task/config.toml`. The shared sibling base is `../ledger`; Taskledger .authoritative data is stored at `../ledger/taskledger/<project-uuid>`, while indexes .remain in checkout-scoped cache storage. A project can register other ledgers such as Planledger and Archledger with the same project UUID, and each ledger uses its own direct `<ledger-name>/<project-uuid>` directory.
+`init` writes a schema-3 `.ledger/ledger.toml` manifest and
+`.ledger/taskledger/config.toml`. Default data is external at `../ledger`; indexes
+are cache storage. Use `storage set data user-data --local` for a local override.
 
 Create and activate a task, ask required planning questions, regenerate the
 plan from answers, approve it, implement todos with evidence, and validate it:
@@ -499,29 +500,28 @@ feature branch's active task and task list. Two ledgers may both contain a logic
 `taskledger ledger adopt --from REF TASK_REF` when branch-local task history
 should be copied into the current ledger.
 
-Canonical Taskledger storage uses the shared sibling store selected by
-`.ledger/ledger.local.toml`:
+Canonical Taskledger storage uses the schema-3 Ledgercore mounts:
 
 ```bash
-taskledger init --create-sibling-store
+taskledger init
 taskledger storage where
+taskledger storage path data
+taskledger storage path indexes
 ```
 
-For a project UUID `PROJECT_UUID`, authoritative data is stored at:
+````
+
+For a project UUID `PROJECT_UUID`, default data is stored at:
 
 ```text
-../ledger/taskledger/PROJECT_UUID/
-```
+../ledger/taskledger/PROJECT_UUID/data
+````
 
-The sibling store may be committed with the explicit Taskledger Git sync commands.
-The UUID-scoped directory prevents unrelated projects from sharing bindings or
-mixing records. Legacy projects are migrated explicitly with:
+The cache path is checkout-specific and ends in `/indexes`. Legacy projects are
+migrated explicitly with `taskledger migrate status`, `taskledger migrate plan`,
+and `taskledger migrate apply`.
 
-```bash
-taskledger migrate status
-taskledger migrate plan
-taskledger migrate apply --sibling-ledger-root ../ledger --backup
-```
+````
 
 Keep one active writer at a time. Before starting on a PC, inspect the shared
 store with `taskledger doctor` and `taskledger next-action`.
@@ -540,7 +540,7 @@ taskledger sync git status
 taskledger sync git pull
 taskledger sync git push
 taskledger sync git push --message "Sync project-a taskledger state"
-```
+````
 
 See `docs/sync.md` for the full second-PC bootstrap, daily sync protocol, and
 Syncthing/rclone caveats.
@@ -795,4 +795,4 @@ source refs, evidence refs, reviews, and handoffs.
 
 ## Canonical Ledger layout
 
-New projects use Ledgercore's canonical `.ledger/` marker. Taskledger configuration is stored at `.ledger/task/config.toml`, with `sibling-ledger` selected in `.ledger/ledger.local.toml`. The shared sibling base is `../ledger`, and Taskledger data resolves to `../ledger/taskledger/<project-uuid>`; indexes remain in checkout-scoped cache storage. Registered ledgers use the same project UUID and direct `<ledger-name>/<project-uuid>` directories. Use `taskledger init --create-sibling-store` when the sibling store needs creation. Legacy projects remain readable during the compatibility window. Migrate them with `taskledger migrate status`, `taskledger migrate plan`, then `taskledger migrate apply --sibling-ledger-root PATH --backup`; `PATH` is the base store and the target is `PATH/taskledger/<project-uuid>`.
+New projects use a schema-3 Ledgercore manifest. Taskledger configuration is stored at `.ledger/taskledger/config.toml`. The default persistent `data` mount is external storage rooted at `../ledger`, while `indexes` is cache storage. A machine-local `.ledger/ledger.local.toml` may select `user-data`; use `taskledger storage where`, `taskledger storage set`, and `taskledger storage clear-override` for storage operations. Legacy projects remain readable for explicit migration.

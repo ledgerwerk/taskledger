@@ -644,6 +644,24 @@ def init_command(
             help="Human-readable project name used in reports.",
         ),
     ] = None,
+    data_storage: Annotated[
+        str,
+        typer.Option(
+            "--data-storage",
+            help="Persistent data storage: external, user-data, or project.",
+        ),
+    ] = "external",
+    external_root: Annotated[
+        str,
+        typer.Option("--external-root", help="External storage root."),
+    ] = "../ledger",
+    local_storage_override: Annotated[
+        bool,
+        typer.Option(
+            "--local-storage-override",
+            help="Write the selected data storage as a local override.",
+        ),
+    ] = False,
 ) -> None:
     state = ctx.obj
     assert isinstance(state, CLIState)
@@ -653,6 +671,9 @@ def init_command(
             taskledger_dir=taskledger_dir,
             create_sibling_store=create_sibling_store,
             project_name=project_name,
+            data_storage=data_storage,
+            external_root=external_root,
+            local_storage_override=local_storage_override,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)
@@ -662,7 +683,8 @@ def init_command(
         payload,
         human="\n".join(
             [
-                f"initialized taskledger: {payload['root']}",
+                "initialized taskledger: "
+                f"{payload.get('root', payload.get('project_root', '?'))}",
                 f"project name: {payload['project_name']}",
                 *[f"- {item}" for item in cast(list[str], payload["created"])],
             ]
