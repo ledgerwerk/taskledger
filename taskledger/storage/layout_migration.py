@@ -30,11 +30,10 @@ from taskledger.storage.project_binding import (
     read_project_binding,
 )
 from taskledger.storage.project_context import (
-    CANONICAL_DATA_RELATIVE_PATH,
     CANONICAL_LEDGER_NAME,
     DATA_MOUNT,
+    INDEX_MOUNT,
     TaskledgerProjectContext,
-    canonical_mount_specs,
     load_project_context,
 )
 from taskledger.storage.yaml_store import write_yaml_object
@@ -256,17 +255,11 @@ def _manifest_document(path: Path) -> dict[str, object]:
 
 
 def _target_registration(project_uuid: str | None = None) -> dict[str, object]:
+    # Schema-3 mounts: data is external (sibling-ledger), indexes are cache.
     return {
-        "config": {"location": "project", "path": "task/config.toml"},
         "mounts": {
-            name: {
-                "storage": storage,
-                **({"scope": scope} if scope is not None else {}),
-                "path": path,
-            }
-            for name, (storage, scope, path) in canonical_mount_specs(
-                project_uuid
-            ).items()
+            DATA_MOUNT: {"storage": "external", "root": "../ledger"},
+            INDEX_MOUNT: {"storage": "cache"},
         },
     }
 
@@ -378,25 +371,18 @@ def _resolve_target_layout(
     root: Path, project_uuid: str, environ: Mapping[str, str] | None
 ) -> ResolvedLedgerLayout:
     manifest_doc: dict[str, object] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "project": {"uuid": project_uuid, "name": root.name},
         "ledgers": {CANONICAL_LEDGER_NAME: _target_registration(project_uuid)},
     }
     manifest = parse_ledger_project_manifest(manifest_doc)
-    local = parse_ledger_local_config(
-        {
-            "schema_version": 1,
-            "storage": {"workspace": {"provider": "sibling-ledger"}},
-        },
-        project_root=root,
-    )
     effective = dict(environ or {})
     effective.pop("LEDGER_WORKSPACE_ROOT", None)
     return resolve_ledger_layout(
         _locator(root),
         manifest,
         CANONICAL_LEDGER_NAME,
-        local_config=local,
+        local_config=None,
         environ=effective,
     )
 
@@ -546,7 +532,7 @@ def inspect_migration(  # noqa: C901
 ) -> TaskledgerMigrationInspection:
     root = start.expanduser().resolve()
     sibling_root, marker = _target_roots(root, sibling_ledger_root)
-    target_data = sibling_root / CANONICAL_DATA_RELATIVE_PATH
+    target_data = sibling_root / "taskledger"
     target_indexes: Path | None = None
     target_registration = _target_registration()
     issues: list[MigrationIssue] = []
@@ -723,8 +709,15 @@ def inspect_migration(  # noqa: C901
         try:
             target_layout = _resolve_target_layout(root, selected_uuid, environ)
             target_data = target_layout.mounts[DATA_MOUNT].path
-        except Exception:
-            target_data = sibling_root / CANONICAL_DATA_RELATIVE_PATH / selected_uuid
+        except LaunchError as exc:
+            issues.append(
+                _issue(
+                    "blocker",
+                    "TARGET_LAYOUT_RESOLUTION_FAILED",
+                    f"Cannot resolve target layout: {exc}",
+                )
+            )
+            target_data = sibling_root / "taskledger" / selected_uuid
         target_registration = _target_registration(selected_uuid)
     if not sibling_root.exists():
         issues.append(
@@ -898,7 +891,7 @@ def _write_tombstones(target: Path, task_ids: tuple[str, ...]) -> None:
 def _write_target_state(target: Path, ref: str = "main") -> None:
     atomic_write_text(
         target / "state.toml",
-        "schema_version = 2\n"
+        "schema_version = 3\n"
         f'ledger_ref = "{ref}"\n'
         'ledger_parent_ref = ""\n'
         'ledger_branch_guard = "off"\n',
@@ -1056,7 +1049,7 @@ def apply_migration(
     )
     from taskledger.storage.project_config import render_canonical_taskledger_config
 
-    config_path = fresh.project_root / ".ledger" / "task" / "config.toml"
+    config_path = fresh.project_root / ".ledger" / "taskledger" / "config.toml"
     if not config_path.exists():
         atomic_write_text(config_path, render_canonical_taskledger_config())
     ensure_sibling_workspace_provider(fresh.project_root)

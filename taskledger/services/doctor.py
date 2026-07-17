@@ -1,105 +1,123 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from taskledger.domain.models import (
+    ActiveTaskState,
+    TaskLock,
+    TaskRecord,
+    TaskRunRecord,
+)
 from taskledger.domain.states import TASKLEDGER_STORAGE_LAYOUT_VERSION
 from taskledger.storage.events import load_events
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.migrations import inspect_records_for_migration
 from taskledger.storage.paths import (
+    ProjectPaths,
     load_project_locator,
     resolve_project_paths,
 )
 from taskledger.storage.task_store import (
+    V2Paths,
     ensure_v2_layout,
-    list_changes,
-    list_plans,
-    list_questions,
-    list_runs,
+    list_changes_from_paths,
+    list_plans_from_paths,
+    list_questions_from_paths,
+    list_runs_from_paths,
     list_tasks,
-    load_active_locks,
+    load_active_locks_from_paths,
     load_active_task_state,
-    resolve_run,
 )
 
 
-def _relative_project_path(workspace_root: Path, path: Path) -> str:
-    """Convert absolute path to relative path from workspace root."""
+@dataclass(frozen=True)
+class DoctorScanContext:
+    """Immutable scan context built once per doctor invocation."""
+
+    workspace_root: Path
+    resolved_paths: ProjectPaths
+    paths: V2Paths
+    locator: object  # ProjectLocator
+    tasks: tuple[TaskRecord, ...]
+    task_by_id: Mapping[str, TaskRecord]
+    locks: tuple[TaskLock, ...]
+    runs_by_task: Mapping[str, tuple[TaskRunRecord, ...]]
+    run_by_key: Mapping[tuple[str, str], TaskRunRecord]
+    active_state: ActiveTaskState | None
+
+
+def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
+    """Build the immutable scan context once at the start of a doctor invocation."""
+    resolved_paths = resolve_project_paths(workspace_root)
+    locator = load_project_locator(workspace_root)
+    paths = ensure_v2_layout(workspace_root)
+
+    tasks = tuple(list_tasks(workspace_root))
+    task_by_id: dict[str, TaskRecord] = {task.id: task for task in tasks}
+
+    locks = tuple(load_active_locks_from_paths(paths))
+
+    runs_by_task: dict[str, tuple[TaskRunRecord, ...]] = {}
+    run_by_key: dict[tuple[str, str], TaskRunRecord] = {}
+    for task in tasks:
+        task_runs = tuple(list_runs_from_paths(paths, task.id))
+        runs_by_task[task.id] = task_runs
+        for run in task_runs:
+            run_by_key[(task.id, run.run_id)] = run
+
     try:
-        return path.relative_to(workspace_root).as_posix()
-    except ValueError:
-        return path.as_posix()
+        active_state = load_active_task_state(workspace_root)
+    except Exception:
+        active_state = None
 
-
-def _add_diagnostic(
-    diagnostics: list[dict[str, object]],
-    messages: list[str],
-    *,
-    severity: str,
-    code: str,
-    message: str,
-    repair_hints: list[str] | None = None,
-    **fields: object,
-) -> None:
-    """Add a structured diagnostic entry."""
-    item: dict[str, object] = {
-        "severity": severity,
-        "code": code,
-        "message": message,
-    }
-    item.update({key: value for key, value in fields.items() if value is not None})
-    if repair_hints:
-        item["repair_hints"] = repair_hints
-    diagnostics.append(item)
-    messages.append(message)
+    return DoctorScanContext(
+        workspace_root=workspace_root,
+        resolved_paths=resolved_paths,
+        paths=paths,
+        locator=locator,
+        tasks=tasks,
+        task_by_id=task_by_id,
+        locks=locks,
+        runs_by_task=runs_by_task,
+        run_by_key=run_by_key,
+        active_state=active_state,
+    )
 
 
 def inspect_v2_project(workspace_root: Path) -> dict[str, object]:  # noqa: C901
-    resolved_paths = resolve_project_paths(workspace_root)
-    locator = load_project_locator(workspace_root)
+    ctx = _build_scan_context(workspace_root)
+
     errors: list[str] = []
     warnings: list[str] = []
     repair_hints: list[str] = []
     run_lock_mismatches: list[dict[str, object]] = []
     diagnostics: list[dict[str, object]] = []
-    paths = ensure_v2_layout(workspace_root)
+    broken_links: list[dict[str, object]] = []
+    expired_locks: list[dict[str, object]] = []
+
     from taskledger.services.doctor_checks.migration_checks import scan_migration_state
     from taskledger.services.doctor_checks.project_scan import scan_project_config
     from taskledger.services.doctor_checks.task_checks import scan_task_integrity
 
     scan_project_config(
         workspace_root=workspace_root,
-        resolved_paths=resolved_paths,
-        locator=locator,
+        resolved_paths=ctx.resolved_paths,
+        locator=ctx.locator,
         errors=errors,
         warnings=warnings,
         repair_hints=repair_hints,
     )
 
-    ensure_v2_layout(workspace_root)
-    tasks = list_tasks(workspace_root)
-    task_map = {task.id: task for task in tasks}
-    locks = load_active_locks(workspace_root)
-    broken_links: list[dict[str, object]] = []
-    expired_locks: list[dict[str, object]] = []
-
-    task_runs = {task.id: list_runs(workspace_root, task.id) for task in tasks}
-    run_map = {
-        (task_id, run.run_id): run
-        for task_id, runs in task_runs.items()
-        for run in runs
-    }
-
-    try:
-        active_state = load_active_task_state(workspace_root)
-    except Exception as exc:
-        active_state = None
-        errors.append(f"Active task state is invalid: {exc}")
-    if active_state is not None:
-        active_task = task_map.get(active_state.task_id)
+    # Active task check
+    if ctx.active_state is not None:
+        active_task = ctx.task_by_id.get(ctx.active_state.task_id)
         if active_task is None:
-            errors.append(f"Active task points to missing task {active_state.task_id}.")
+            errors.append(
+                f"Active task points to missing task {ctx.active_state.task_id}."
+            )
         elif active_task.status_stage in {"cancelled", "done"}:
             warnings.append(
                 f"Active task {active_task.id} is {active_task.status_stage}."
@@ -107,13 +125,13 @@ def inspect_v2_project(workspace_root: Path) -> dict[str, object]:  # noqa: C901
 
     scan_task_integrity(
         workspace_root=workspace_root,
-        paths=paths,
-        tasks=tasks,
-        task_map=task_map,
-        locks=locks,
-        task_runs=task_runs,
-        run_map=run_map,
-        active_state=active_state,
+        paths=ctx.paths,
+        tasks=list(ctx.tasks),
+        task_map=dict(ctx.task_by_id),
+        locks=list(ctx.locks),
+        task_runs={tid: list(runs) for tid, runs in ctx.runs_by_task.items()},
+        run_map=dict(ctx.run_by_key),
+        active_state=ctx.active_state,
         errors=errors,
         warnings=warnings,
         repair_hints=repair_hints,
@@ -122,8 +140,8 @@ def inspect_v2_project(workspace_root: Path) -> dict[str, object]:  # noqa: C901
         diagnostics=diagnostics,
     )
 
-    for lock in locks:
-        lock_task = task_map.get(lock.task_id)
+    for lock in ctx.locks:
+        lock_task = ctx.task_by_id.get(lock.task_id)
         if lock_task is None:
             errors.append(
                 f"Lock {lock.lock_id} references missing task {lock.task_id}."
@@ -134,9 +152,9 @@ def inspect_v2_project(workspace_root: Path) -> dict[str, object]:  # noqa: C901
                 expired_locks.append(lock.to_dict())
         except Exception as exc:
             errors.append(str(exc))
-        try:
-            run = resolve_run(workspace_root, lock.task_id, lock.run_id)
-        except Exception:
+        # Use pre-built run_map instead of resolve_run per task.
+        run = ctx.run_by_key.get((lock.task_id, lock.run_id))
+        if run is None:
             errors.append(
                 f"Lock {lock.lock_id} references missing run {lock.run_id} "
                 f"for task {lock.task_id}."
@@ -158,27 +176,34 @@ def inspect_v2_project(workspace_root: Path) -> dict[str, object]:  # noqa: C901
             )
 
     scan_migration_state(
-        tasks=tasks,
-        paths=paths,
+        tasks=list(ctx.tasks),
+        paths=ctx.paths,
         errors=errors,
         warnings=warnings,
         repair_hints=repair_hints,
     )
-    for task in tasks:
+
+    # Implementation snapshot comparison with one shared workspace capture.
+    from taskledger.services.workspace_snapshot import (
+        capture_current_workspace_state,
+        compare_implementation_snapshot,
+    )
+
+    current_ws = capture_current_workspace_state(workspace_root)
+    for task in ctx.tasks:
         if task.status_stage != "implemented":
             continue
-        impl_run = run_map.get((task.id, task.latest_implementation_run or ""))
+        impl_run = ctx.run_by_key.get((task.id, task.latest_implementation_run or ""))
         if (
             impl_run is None
             or impl_run.run_type != "implementation"
             or impl_run.status != "finished"
         ):
             continue
-        from taskledger.services.workspace_snapshot import (
-            compare_implementation_snapshot,
-        )
 
-        evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
+        evaluation = compare_implementation_snapshot(
+            workspace_root, task, impl_run, current=current_ws
+        )
         if not evaluation.ok:
             warnings.append(
                 f"Task {task.id} is implemented but validation is blocked by "
@@ -206,20 +231,29 @@ def inspect_v2_project(workspace_root: Path) -> dict[str, object]:  # noqa: C901
             '`taskledger repair lock <task> --reason "..."`.'
         )
 
+    # Counts computed via path-bound readers to avoid repeated
+    # ensure_v2_layout / load_project_context calls per task.
+    total_plans = sum(
+        len(list_plans_from_paths(ctx.paths, task.id)) for task in ctx.tasks
+    )
+    total_questions = sum(
+        len(list_questions_from_paths(ctx.paths, task.id)) for task in ctx.tasks
+    )
+    total_runs = sum(len(runs) for runs in ctx.runs_by_task.values())
+    total_changes = sum(
+        len(list_changes_from_paths(ctx.paths, task.id)) for task in ctx.tasks
+    )
+
     return {
         "kind": "taskledger_doctor",
         "counts": {
-            "tasks": len(tasks),
-            "plans": sum(len(list_plans(workspace_root, task.id)) for task in tasks),
-            "questions": sum(
-                len(list_questions(workspace_root, task.id)) for task in tasks
-            ),
-            "runs": sum(len(task_runs[task.id]) for task in tasks),
-            "changes": sum(
-                len(list_changes(workspace_root, task.id)) for task in tasks
-            ),
-            "locks": len(locks),
-            "active_task": 1 if active_state is not None else 0,
+            "tasks": len(ctx.tasks),
+            "plans": total_plans,
+            "questions": total_questions,
+            "runs": total_runs,
+            "changes": total_changes,
+            "locks": len(ctx.locks),
+            "active_task": 1 if ctx.active_state is not None else 0,
         },
         "healthy": not errors,
         "errors": errors,

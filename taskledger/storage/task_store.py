@@ -55,6 +55,29 @@ from taskledger.storage.yaml_store import load_yaml_object, write_yaml_object
 from taskledger.timeutils import utc_now_iso
 
 T = TypeVar("T")
+
+
+def _list_records(
+    directory: Path,
+    *,
+    pattern: str,
+    loader: Callable[[Path], T],
+    sort_key: Callable[[T], object] | None = None,
+) -> list[T]:
+    """Generic sidecar record enumerator: list files matching *pattern*, load, sort."""
+    if not directory.exists():
+        return []
+    records: list[T] = []
+    for path in sorted(directory.glob(pattern)):
+        try:
+            records.append(loader(path))
+        except LaunchError as exc:
+            logging.warning("Skipping malformed record %s: %s", path, exc)
+    if sort_key is not None:
+        records.sort(key=sort_key)
+    return records
+
+
 TaskVisibility = Literal["visible", "archived", "all"]
 
 
@@ -467,14 +490,17 @@ def rewrite_task_refs(task_dir: Path, old_task_id: str, new_task_id: str) -> Non
 
 def list_plans(workspace_root: Path, task_id: str) -> list[PlanRecord]:
     paths = ensure_v2_layout(workspace_root)
+    return list_plans_from_paths(paths, task_id)
+
+
+def list_plans_from_paths(paths: V2Paths, task_id: str) -> list[PlanRecord]:
     directory = task_plans_dir(paths, task_id)
-    plans: list[PlanRecord] = []
-    for path in directory.glob("plan-v*.md"):
-        try:
-            plans.append(_load_plan(path))
-        except LaunchError as exc:
-            logging.warning("Skipping malformed plan file %s: %s", path, exc)
-    return sorted(plans, key=lambda item: item.plan_version)
+    return _list_records(
+        directory,
+        pattern="plan-v*.md",
+        loader=_load_plan,
+        sort_key=lambda item: item.plan_version,
+    )
 
 
 def save_plan(workspace_root: Path, plan: PlanRecord) -> PlanRecord:
@@ -514,10 +540,16 @@ def resolve_plan(
 
 def list_questions(workspace_root: Path, task_id: str) -> list[QuestionRecord]:
     paths = ensure_v2_layout(workspace_root)
+    return list_questions_from_paths(paths, task_id)
+
+
+def list_questions_from_paths(paths: V2Paths, task_id: str) -> list[QuestionRecord]:
     directory = task_questions_dir(paths, task_id)
-    return sorted(
-        [_load_question(path) for path in directory.glob("q-*.md")],
-        key=lambda item: item.id,
+    return _list_records(
+        directory,
+        pattern="q-*.md",
+        loader=_load_question,
+        sort_key=lambda item: item.id,
     )
 
 
@@ -552,10 +584,13 @@ def save_question(workspace_root: Path, question: QuestionRecord) -> QuestionRec
 
 def list_runs(workspace_root: Path, task_id: str) -> list[TaskRunRecord]:
     paths = ensure_v2_layout(workspace_root)
+    return list_runs_from_paths(paths, task_id)
+
+
+def list_runs_from_paths(paths: V2Paths, task_id: str) -> list[TaskRunRecord]:
     directory = task_runs_dir(paths, task_id)
-    return sorted(
-        [_load_run(path) for path in directory.glob("*.md")],
-        key=lambda item: item.run_id,
+    return _list_records(
+        directory, pattern="*.md", loader=_load_run, sort_key=lambda item: item.run_id
     )
 
 
@@ -588,10 +623,16 @@ def save_run(workspace_root: Path, run: TaskRunRecord) -> TaskRunRecord:
 
 def list_changes(workspace_root: Path, task_id: str) -> list[CodeChangeRecord]:
     paths = ensure_v2_layout(workspace_root)
+    return list_changes_from_paths(paths, task_id)
+
+
+def list_changes_from_paths(paths: V2Paths, task_id: str) -> list[CodeChangeRecord]:
     directory = task_changes_dir(paths, task_id)
-    return sorted(
-        [_load_change(path) for path in directory.glob("change-*.md")],
-        key=lambda item: item.change_id,
+    return _list_records(
+        directory,
+        pattern="change-*.md",
+        loader=_load_change,
+        sort_key=lambda item: item.change_id,
     )
 
 
@@ -692,6 +733,10 @@ def resolve_code_review(
 
 def load_active_locks(workspace_root: Path) -> list[TaskLock]:
     paths = ensure_v2_layout(workspace_root)
+    return load_active_locks_from_paths(paths)
+
+
+def load_active_locks_from_paths(paths: V2Paths) -> list[TaskLock]:
     locks: list[TaskLock] = []
     for path in sorted(paths.tasks_dir.glob("task-*/lock.yaml")):
         lock = read_lock(path)
@@ -702,6 +747,10 @@ def load_active_locks(workspace_root: Path) -> list[TaskLock]:
 
 def load_todos(workspace_root: Path, task_id: str) -> TodoCollection:
     paths = ensure_v2_layout(workspace_root)
+    return load_todos_from_paths(paths, task_id)
+
+
+def load_todos_from_paths(paths: V2Paths, task_id: str) -> TodoCollection:
     directory = task_todos_dir(paths, task_id)
     records = sorted(
         [_load_record(p, TaskTodo.from_dict) for p in directory.glob("todo-*.md")],

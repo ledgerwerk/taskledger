@@ -7,7 +7,12 @@ from pathlib import Path
 
 from taskledger.domain.models import ActorRef, HarnessRef, TaskRecord, TaskRunRecord
 from taskledger.services import tasks as _tasks
-from taskledger.services.git_utils import capture_workspace_snapshot, git_root, run_git
+from taskledger.services.git_utils import (
+    WorkspaceSnapshot,
+    capture_workspace_snapshot,
+    git_root,
+    run_git,
+)
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     list_runs,
@@ -18,6 +23,47 @@ from taskledger.storage.task_store import (
 from taskledger.timeutils import utc_now_iso
 
 SNAPSHOT_FORMAT = "worktree-content:v1"
+
+
+@dataclass(slots=True, frozen=True)
+class GitStatusEntry:
+    path: str
+    status: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {"path": self.path, "status": self.status}
+
+
+@dataclass(slots=True, frozen=True)
+class CurrentWorkspaceState:
+    """Immutable current-workspace snapshot captured once per doctor invocation."""
+
+    git_root: Path | None
+    commit: str | None
+    status_entries: tuple[GitStatusEntry, ...]
+    diff_binary: str | None
+    content_entries: tuple[WorktreePathEntry, ...]
+
+    @property
+    def status_hash(self) -> str | None:
+        import hashlib
+
+        if not self.status_entries:
+            return None
+        text = "".join(f"{e.path}\0{e.status}" for e in self.status_entries)
+        return "sha256:" + hashlib.sha256(text.encode()).hexdigest()
+
+    @property
+    def diff_hash(self) -> str | None:
+        import hashlib
+
+        if self.diff_binary is None or not self.diff_binary.strip():
+            return None
+        return "sha256:" + hashlib.sha256(self.diff_binary.encode()).hexdigest()
+
+    @property
+    def dirty(self) -> bool:
+        return bool(self.status_entries)
 
 
 @dataclass(slots=True, frozen=True)
@@ -251,6 +297,65 @@ def capture_workspace_content_snapshot(
     )
 
 
+def capture_current_workspace_state(
+    workspace_root: Path,
+    *,
+    include_diff: bool = False,
+    include_content: bool = False,
+) -> CurrentWorkspaceState:
+    """Capture the current Git workspace state once for reuse across tasks."""
+    root = git_root(workspace_root)
+    if root is None:
+        return CurrentWorkspaceState(None, None, (), None, ())
+
+    commit_result = run_git(root, "rev-parse", "HEAD", check=False)
+    git_commit = commit_result.stdout.strip() if commit_result.returncode == 0 else None
+
+    status_result = run_git(
+        root,
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all",
+        check=False,
+    )
+    status_text = status_result.stdout if status_result.returncode == 0 else ""
+    raw_entries = _parse_status_z(status_text)
+    status_entries = tuple(
+        GitStatusEntry(path=p, status=s)
+        for p, s in raw_entries
+        if not _is_taskledger_state_path(p)
+    )
+
+    diff_binary: str | None = None
+    if include_diff:
+        diff_result = run_git(root, "diff", "--binary", check=False)
+        diff_text = diff_result.stdout if diff_result.returncode == 0 else ""
+        diff_binary = diff_text if diff_text.strip() else None
+
+    content_entries: tuple[WorktreePathEntry, ...] = ()
+    if include_content:
+        entries = tuple(
+            sorted(
+                (
+                    _entry_for_path(root, path, status)
+                    for path, status in raw_entries
+                    if not _is_taskledger_state_path(path)
+                ),
+                key=lambda item: item.path,
+            )
+        )
+        content_entries = entries
+
+    return CurrentWorkspaceState(
+        git_root=root,
+        commit=git_commit,
+        status_entries=status_entries,
+        diff_binary=diff_binary,
+        content_entries=content_entries,
+    )
+
+
 def save_workspace_snapshot_manifest(
     workspace_root: Path,
     task_id: str,
@@ -345,9 +450,29 @@ def compare_implementation_snapshot(
     workspace_root: Path,
     task: TaskRecord,
     impl_run: TaskRunRecord,
+    *,
+    current: CurrentWorkspaceState | None = None,
 ) -> ImplementationSnapshotEvaluation:
-    current_legacy = capture_workspace_snapshot(workspace_root)
-    current_content = capture_workspace_content_snapshot(workspace_root)
+    if current is not None and current.git_root is not None:
+        current_legacy = WorkspaceSnapshot(
+            git_commit=current.commit,
+            dirty=current.dirty,
+            diff_hash=current.diff_hash,
+            status_hash=current.status_hash,
+        )
+        content_entries = current.content_entries
+        current_content = WorkspaceContentSnapshot(
+            git_commit=current.commit,
+            dirty=current.dirty,
+            content_hash=None,  # content hash computed lazily below if needed
+            paths_hash=None,
+            entry_count=len(content_entries),
+            entries=content_entries,
+            captured_at=None,
+        )
+    else:
+        current_legacy = capture_workspace_snapshot(workspace_root)
+        current_content = capture_workspace_content_snapshot(workspace_root)
     expected_commit = impl_run.workspace_git_commit
     current_commit = current_content.git_commit or current_legacy.git_commit
     details: dict[str, object] = {"changed_paths": []}

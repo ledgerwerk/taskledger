@@ -183,37 +183,6 @@ def _read_index(paths: V2Paths) -> dict[str, object] | None:
     return try_load_json_object(_task_index_path(paths), "task index")
 
 
-def _entry_is_stale(entry: dict[str, object], task_path: Path) -> bool:
-    """Check if a single index entry is stale compared to the file on disk."""
-    if not task_path.exists():
-        return True
-    try:
-        stat = task_path.stat()
-    except OSError:
-        return True
-    return (
-        entry.get("size") != stat.st_size or entry.get("mtime_ns") != stat.st_mtime_ns
-    )
-
-
-def _refresh_entry(
-    entry: dict[str, object], paths: V2Paths, task_id: str
-) -> dict[str, object] | None:
-    """Refresh a single stale entry by re-reading the task file."""
-    path = task_markdown_path(paths, task_id)
-    if not path.exists():
-        return None
-    try:
-        task = _load_task(path)
-        stat = path.stat()
-        rel = path.relative_to(paths.ledger_dir).as_posix()
-        summary = _task_summary_from_record(task, rel, stat.st_size, stat.st_mtime_ns)
-        return summary.to_dict()
-    except Exception:
-        logger.warning("Failed to refresh index entry for %s", task_id, exc_info=True)
-        return entry  # keep stale entry rather than dropping
-
-
 def list_task_summaries(
     paths: V2Paths,
     *,
