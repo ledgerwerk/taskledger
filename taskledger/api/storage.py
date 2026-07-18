@@ -134,12 +134,16 @@ def storage_migration_inspect(
     workspace_root: Path,
     *,
     source_checkout: str | None = None,
+    source_checkout_id: str | None = None,
+    source_data_root: Path | None = None,
     project_uuid: str | None = None,
     sibling_ledger_root: Path | None = None,
 ) -> dict[str, object]:
     return _inspect_project_migration(
         workspace_root,
         source_checkout=source_checkout,
+        source_checkout_id=source_checkout_id,
+        source_data_root=source_data_root,
         project_uuid=project_uuid,
         sibling_ledger_root=sibling_ledger_root,
     ).to_dict()
@@ -154,6 +158,8 @@ def storage_migration_apply(
     dry_run: bool = False,
     retire_source: bool = False,
     source_checkout: str | None = None,
+    source_checkout_id: str | None = None,
+    source_data_root: Path | None = None,
     project_uuid: str | None = None,
     sibling_ledger_root: Path | None = None,
 ) -> dict[str, object]:
@@ -165,6 +171,8 @@ def storage_migration_apply(
         dry_run=dry_run,
         retire_source=retire_source,
         source_checkout=source_checkout,
+        source_checkout_id=source_checkout_id,
+        source_data_root=source_data_root,
         project_uuid=project_uuid,
         sibling_ledger_root=sibling_ledger_root,
     )

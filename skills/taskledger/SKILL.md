@@ -51,6 +51,18 @@ and source search helpers as advanced,
 human-oriented, repair, or beta support commands rather than normal lifecycle
 steps.
 
+### Migration safety
+
+For legacy storage migration, run `taskledger migrate plan` before apply. Discovery
+must not depend on the Taskledger registration already being present in the canonical
+manifest. The canonical project UUID wins over a legacy Taskledger UUID, which remains
+recorded as source identity. Use `--source-data-root PATH` for explicit recovery and
+`--source-checkout-id ID` only for checkout identifiers. Backups are automatic.
+Migration preserves other ledger registrations and leaves the source in place by
+default. It refuses authoritative split-brain or foreign-bound targets. Do not create
+bindings manually or copy task directories. `--create-sibling-store` initializes only
+the sibling marker and does not repair target metadata.
+
 ## Fresh context entry protocol
 
 1. Run `taskledger usage`.

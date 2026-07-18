@@ -158,13 +158,18 @@ def locate_taskledger_project(start: Path) -> Any:
     )
 
 
-def _manifest_with_registration(
-    manifest: LedgerProjectManifest,
+def build_taskledger_manifest_with_registration(
+    manifest: LedgerProjectManifest | None,
     *,
+    project_uuid: str,
     project_name: str,
-    data_storage: str,
-    external_root: str | None,
+    data_storage: str = "external",
+    external_root: str | None = "../ledger",
 ) -> LedgerProjectManifest:
+    """Return a canonical manifest while preserving other ledger registrations."""
+    normalized_uuid = str(uuid.UUID(project_uuid))
+    if manifest is not None and manifest.project_uuid != normalized_uuid:
+        raise ValueError("project UUID conflicts with the existing Ledger manifest")
     if data_storage not in {"project", "external", "user-data"}:
         raise ValueError(f"unsupported Taskledger data storage {data_storage!r}")
     mounts: dict[str, MountDefinition] = {
@@ -175,13 +180,30 @@ def _manifest_with_registration(
         ),
         INDEX_MOUNT: MountDefinition(INDEX_MOUNT, "cache", None),
     }
-    registrations = dict(manifest.ledgers)
+    registrations = dict(manifest.ledgers) if manifest is not None else {}
     registrations[TOOL_NAME] = LedgerRegistration(TOOL_NAME, mounts)
     return LedgerProjectManifest(
         schema_version=3,
-        project_uuid=manifest.project_uuid,
-        project_name=manifest.project_name or project_name,
+        project_uuid=normalized_uuid,
+        project_name=(manifest.project_name if manifest is not None else None)
+        or project_name,
         ledgers=registrations,
+    )
+
+
+def _manifest_with_registration(
+    manifest: LedgerProjectManifest,
+    *,
+    project_name: str,
+    data_storage: str,
+    external_root: str | None,
+) -> LedgerProjectManifest:
+    return build_taskledger_manifest_with_registration(
+        manifest,
+        project_uuid=manifest.project_uuid,
+        project_name=project_name,
+        data_storage=data_storage,
+        external_root=external_root,
     )
 
 
@@ -423,4 +445,5 @@ __all__ = [
     "inspect_taskledger_migration",
     "recover_taskledger_migration",
     "set_taskledger_mount_target",
+    "build_taskledger_manifest_with_registration",
 ]

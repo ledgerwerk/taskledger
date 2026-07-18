@@ -24,7 +24,7 @@ def test_canonical_sync_error_has_usage_exit_code() -> None:
     assert error.exit_code == 2
 
 
-def test_init_json_preserves_stable_storage_error_contract(tmp_path: Path) -> None:
+def test_init_json_initializes_default_storage(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     result = CliRunner().invoke(
@@ -32,8 +32,7 @@ def test_init_json_preserves_stable_storage_error_contract(tmp_path: Path) -> No
         ["--cwd", str(workspace), "--json", "init"],
     )
 
-    assert result.exit_code == 6
+    assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
-    assert payload["ok"] is False
-    assert payload["error"]["code"] == "TASKLEDGER_SIBLING_ROOT_MISSING"
-    assert payload["error"]["exit_code"] == 6
+    assert payload["ok"] is True
+    assert payload["result"]["kind"] == "taskledger_init"

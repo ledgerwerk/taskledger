@@ -41,6 +41,24 @@ external at `../ledger`; indexes are cache storage. Use `taskledger storage wher
 and `taskledger storage set` for storage selection. Branch state remains in
 the resolved data mount's `state.toml`.
 
+## Storage migration recovery
+
+Legacy Taskledger data is discovered independently from the canonical Ledger manifest.
+The canonical manifest UUID is authoritative when it differs from the legacy Taskledger
+UUID. Inspect and apply with the same destination and source options:
+
+```bash
+taskledger migrate plan --sibling-ledger-root ../ledger
+taskledger migrate plan --sibling-ledger-root ../ledger --source-data-root ../ledger/taskledger/LEGACY_UUID/data
+taskledger migrate apply --sibling-ledger-root ../ledger
+```
+
+`--source-data-root` selects a data root. `--source-checkout-id` selects a checkout
+identifier and is not a filesystem path. Backups are automatic. Existing ledger
+registrations and the legacy source remain in place by default. Metadata-only targets
+are backed up and replaced atomically; authoritative split-brain targets are blocked.
+Do not create bindings or copy task directories manually.
+
 ## Branch-local task work
 
 When creating a long-lived Git branch, fork the Taskledger ledger pointer so

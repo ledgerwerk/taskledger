@@ -58,7 +58,7 @@ test_command_policy = "must_pass"
 
 def _setup_worker_pipeline_task(tmp_path: Path) -> None:
     _init_project(tmp_path)
-    _append_pipeline_config(tmp_path / ".ledger" / "task" / "config.toml")
+    _append_pipeline_config(tmp_path / ".ledger" / "taskledger" / "config.toml")
     assert (
         runner.invoke(
             app,
@@ -292,9 +292,11 @@ def test_status_json_reports_workspace_and_storage_paths(tmp_path: Path) -> None
     payload = json.loads(result.stdout)
     status = payload["result"]
     assert status["workspace_root"] == str(tmp_path)
-    assert status["config_path"] == str(tmp_path / ".ledger" / "task" / "config.toml")
+    assert status["config_path"] == str(
+        tmp_path / ".ledger" / "taskledger" / "config.toml"
+    )
     assert status["taskledger_dir"] == str(context.paths.data_root)
-    assert status["workspace_provider"] == "sibling-ledger"
+    assert status["workspace_provider"] is None
     assert status["store_root"] == str(tmp_path.parent / "ledger")
     assert status["authoritative_path"] == status["taskledger_dir"]
 

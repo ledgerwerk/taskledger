@@ -521,6 +521,22 @@ The cache path is checkout-specific and ends in `/indexes`. Legacy projects are
 migrated explicitly with `taskledger migrate status`, `taskledger migrate plan`,
 and `taskledger migrate apply`.
 
+Migration discovery is independent of the current manifest registrations. When a canonical
+`.ledger/ledger.toml` already contains another ledger, Taskledger adopts its project UUID
+and records the legacy UUID as the source identity. Use the same options for inspection
+and apply when recovery needs an explicit source:
+
+```bash
+taskledger migrate plan --sibling-ledger-root ../ledger
+taskledger migrate plan --sibling-ledger-root ../ledger --source-data-root ../ledger/taskledger/LEGACY_UUID/data
+taskledger migrate apply --sibling-ledger-root ../ledger
+```
+
+The migration creates automatic backups, preserves other ledger registrations, and
+leaves the legacy source in place. It refuses split-brain or foreign-bound targets.
+Do not manually create bindings or copy task directories. `--create-sibling-store`
+only initializes the sibling root marker.
+
 ````
 
 Keep one active writer at a time. Before starting on a PC, inspect the shared

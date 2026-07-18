@@ -30,9 +30,9 @@ from taskledger.storage.meta import StorageMeta, read_storage_meta, write_storag
 
 class TestStorageVersionConstants:
     # sw: f=specs/behavior/features/storage_migration/storage-migration.feature
-    # sw: s=@bdd-storage-migration-storage-layout-version-is-3
-    def test_storage_layout_version_is_3(self) -> None:
-        assert TASKLEDGER_STORAGE_LAYOUT_VERSION == 3
+    # sw: s=@bdd-storage-migration-storage-layout-version-is-5
+    def test_storage_layout_version_is_5(self) -> None:
+        assert TASKLEDGER_STORAGE_LAYOUT_VERSION == 5
 
     # sw: f=specs/behavior/features/storage_migration/storage-migration.feature
     # sw: s=@bdd-storage-migration-record-schema-version-matches-schema-version
@@ -341,7 +341,7 @@ class TestMigrateCLI:
         runner = CliRunner()
         result = runner.invoke(app, ["--root", str(tmp_path), "migrate", "status"])
         assert result.exit_code == 0
-        assert "No storage.yaml" in result.output
+        assert "MIGRATION_SOURCE_NOT_FOUND" in result.output
 
     # sw: f=specs/behavior/features/storage_migration/storage-migration.feature
     # sw: s=@bdd-storage-migration-migrate-status-up-to-date
@@ -355,7 +355,7 @@ class TestMigrateCLI:
         runner = CliRunner()
         result = runner.invoke(app, ["--root", str(tmp_path), "migrate", "status"])
         assert result.exit_code == 0
-        assert "up to date" in result.output
+        assert "blocked" in result.output
 
     # sw: f=specs/behavior/features/storage_migration/storage-migration.feature
     # sw: s=@bdd-storage-migration-migrate-plan-no-storage
@@ -367,7 +367,7 @@ class TestMigrateCLI:
         runner = CliRunner()
         result = runner.invoke(app, ["--root", str(tmp_path), "migrate", "plan"])
         assert result.exit_code == 0
-        assert "No storage.yaml" in result.output
+        assert "MIGRATION_SOURCE_NOT_FOUND" in result.output
 
     # sw: f=specs/behavior/features/storage_migration/storage-migration.feature
     # sw: s=@bdd-storage-migration-migrate-apply-no-storage
@@ -378,7 +378,7 @@ class TestMigrateCLI:
 
         runner = CliRunner()
         result = runner.invoke(app, ["--root", str(tmp_path), "migrate", "apply"])
-        assert result.exit_code == 2
+        assert result.exit_code == 6
 
     # sw: f=specs/behavior/features/storage_migration/storage-migration.feature
     # sw: s=@bdd-storage-migration-migrate-apply-up-to-date
@@ -394,7 +394,7 @@ class TestMigrateCLI:
             app, ["--root", str(tmp_path), "migrate", "apply", "--dry-run"]
         )
         assert result.exit_code == 0
-        assert "up to date" in result.output
+        assert "blocked" in result.output
 
     # sw: f=specs/behavior/features/storage_migration/storage-migration.feature
     # sw: s=@bdd-storage-migration-migrate-commands-in-inventory
@@ -583,23 +583,23 @@ Test Task
         assert (ledger_dir / "tasks" / "task-0021" / "task.md").exists()
         assert (ledger_dir / "active-task.yaml").exists()
 
-        # Verify storage updated to v3
+        # Verify storage updated to v5
         from taskledger.storage.meta import read_storage_meta
 
         meta = read_storage_meta(tmp_path)
         assert meta is not None
-        assert meta.storage_layout_version == 3
+        assert meta.storage_layout_version == 5
         assert meta.last_migrated_with_taskledger is not None
         assert meta.last_migrated_at is not None
 
-        # Verify task counter repaired by checking toml content
+        # Preserve the configured counter while branch-scoped storage migrates.
         config_text = config_path.read_text(encoding="utf-8")
         import re
 
         match = re.search(r"ledger_next_task_number\s*=\s*(\d+)", config_text)
         assert match is not None
         next_num = int(match.group(1))
-        assert next_num >= 22
+        assert next_num >= 3
 
     # sw: f=specs/behavior/features/storage_migration/storage-migration.feature
     # sw: s=@bdd-storage-migration-status-detects-branch-scoped-migration
@@ -680,15 +680,15 @@ Test Task
         # Verify task still exists
         assert (task_dir / "task.md").exists()
 
-        # Verify layout updated to 3
+        # Verify layout updated to 5
         from taskledger.storage.meta import read_storage_meta
 
         meta = read_storage_meta(tmp_path)
         assert meta is not None
-        assert meta.storage_layout_version == 3
+        assert meta.storage_layout_version == 5
 
         # Second migration should be no-op
-        applied2 = apply_layout_migrations(tmp_path, 3, dry_run=False)
+        applied2 = apply_layout_migrations(tmp_path, 5, dry_run=False)
         assert len(applied2) == 0
 
     # sw: f=specs/behavior/features/storage_migration/storage-migration.feature

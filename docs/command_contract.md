@@ -715,3 +715,20 @@ from local process checks; inspect handoffs or ask the user before repairing.
 Use `storage validate`, `storage set`, and `storage clear-override` for schema-3
 storage selection. Legacy layout conversion remains explicit through
 `migrate status`, `migrate plan`, and `migrate apply`.
+
+Migration inspection and apply share these options:
+
+```text
+--sibling-ledger-root PATH
+--source-data-root PATH
+--source-checkout-id ID
+--project-uuid UUID
+```
+
+The canonical project UUID is selected when a legacy Taskledger UUID differs. The
+legacy UUID is retained as source metadata. `--source-data-root` is the recovery
+override for a specific data root. `--source-checkout-id` accepts an identifier,
+not a filesystem path. Backups are automatic. Other ledger registrations are
+preserved, sources are not retired by default, and authoritative split-brain
+targets are refused without mutation. `--create-sibling-store` only initializes
+the sibling root marker; it does not repair target metadata.

@@ -9,10 +9,10 @@ import os
 import shutil
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from ledgercore import StorageBinding, StorageMigrationItem, StorageMigrationPlan
 from ledgercore.manifest import parse_ledger_manifest_v3
@@ -23,6 +23,7 @@ from taskledger.storage.ledger_manifest import ensure_taskledger_registration
 from taskledger.storage.ledgercore_backend import (
     LedgerProjectLocator,
     ResolvedLedgerLayout,
+    build_taskledger_manifest_with_registration,
     execute_taskledger_layout_migration,
     initialize_config_binding,
     initialize_taskledger_bindings,
@@ -64,6 +65,9 @@ MigrationSourceKind = Literal[
     "invalid",
     "canonical-0.4-sibling",
     "partial-sibling-migration",
+    "legacy-config-external",
+    "legacy-uuid-sibling",
+    "explicit-source",
 ]
 
 
@@ -73,6 +77,7 @@ class MigrationIssue:
     code: str
     message: str
     remediation: tuple[str, ...] = ()
+    details: Mapping[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -80,6 +85,7 @@ class MigrationIssue:
             "code": self.code,
             "message": self.message,
             "remediation": list(self.remediation),
+            "details": dict(self.details),
         }
 
 
@@ -125,6 +131,13 @@ class TaskledgerMigrationInspection:
     tombstones_required: tuple[str, ...] = ()
     ready: bool = False
     migration_required: bool = True
+    canonical_project_uuid: str | None = None
+    legacy_project_uuid: str | None = None
+    identity_transition: str = "none"
+    source_selection_reason: str | None = None
+    source_candidates: tuple[Mapping[str, object], ...] = ()
+    target_classification: str = "ABSENT"
+    would_create_sibling_store: bool = False
 
     @property
     def blockers(self) -> tuple[str, ...]:
@@ -151,7 +164,7 @@ class TaskledgerMigrationInspection:
             issue.to_dict() for issue in self.issues if issue.severity == "warning"
         ]
         status = (
-            "invalid"
+            "blocked"
             if blockers
             else "migration_needed"
             if self.migration_required
@@ -159,14 +172,26 @@ class TaskledgerMigrationInspection:
         )
         return {
             "kind": "taskledger_migration_inspection",
-            "schema_version": 1,
+            "schema_version": 2,
             "status": status,
-            "project": {"root": str(self.project_root), "uuid": self.project_uuid},
+            "ready": self.ready,
+            "migration_required": self.migration_required,
+            "would_create_sibling_store": self.would_create_sibling_store,
+            "project": {
+                "root": str(self.project_root),
+                "uuid": self.project_uuid,
+                "canonical_uuid": self.canonical_project_uuid or self.project_uuid,
+                "legacy_uuid": self.legacy_project_uuid,
+                "identity_transition": self.identity_transition,
+            },
             "source": {
                 "kind": self.source_kind,
                 "data": str(self.source_data_root) if self.source_data_root else None,
                 "logs": str(self.source_logs_root) if self.source_logs_root else None,
                 "checkout_id": self.source_checkout_id,
+                "selected_reason": self.source_selection_reason,
+                "fingerprint": _tree_fingerprint(self.source_data_root),
+                "candidates": [dict(candidate) for candidate in self.source_candidates],
             },
             "target": {
                 "sibling_root": str(self.sibling_root),
@@ -176,25 +201,35 @@ class TaskledgerMigrationInspection:
                 if self.target_indexes_root
                 else None,
                 "binding": str(self.binding_path),
+                "registration": "present"
+                if self.current_registration is not None
+                else "missing; will be added",
+                "classification": self.target_classification,
+                "fingerprint": _tree_fingerprint(self.target_data_root),
+                "authoritative_files": len(_authoritative_files(self.target_data_root)),
             },
             "task_ids": {
                 "legacy_next_task_number": self.legacy_next_task_number,
                 "derived_next_task_id": self.derived_next_task_id,
                 "tombstones_required": list(self.tombstones_required),
             },
-            "counts": {"copy_items": len(self.copy_items)},
+            "counts": {
+                "copy_items": len(self.copy_items),
+                "source_files": _file_count(self.source_data_root),
+                "source_tasks": _task_count(self.source_data_root),
+            },
             "changes": [item.to_dict() for item in self.copy_items],
             "issues": [issue.to_dict() for issue in self.issues],
+            "blockers": blockers,
+            "warnings": warnings,
             "commands": {
                 "apply": (
                     "taskledger migrate apply "
-                    f"--sibling-ledger-root {self.sibling_root} --backup"
+                    f"--sibling-ledger-root {self.sibling_root}"
                 )
-            },
-            "blockers": blockers,
-            "warnings": warnings,
-            "ready": self.ready,
-            "migration_required": self.migration_required,
+            }
+            if self.ready
+            else {},
         }
 
 
@@ -208,6 +243,64 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+_TARGET_METADATA_NAMES = {".ledger-project.toml", "state.toml", "storage.yaml"}
+
+
+def _authoritative_files(root: Path | None) -> tuple[Path, ...]:
+    if root is None or not root.is_dir():
+        return ()
+    return tuple(
+        path
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+        and path.name not in _TARGET_METADATA_NAMES
+        and "indexes" not in path.relative_to(root).parts
+        and "migrations" not in path.relative_to(root).parts
+    )
+
+
+def _file_count(root: Path | None) -> int:
+    if root is None or not root.is_dir():
+        return 0
+    return sum(1 for path in root.rglob("*") if path.is_file())
+
+
+def _task_count(root: Path | None) -> int:
+    if root is None:
+        return 0
+    return sum(
+        1
+        for path in _authoritative_files(root)
+        if "tasks" in path.relative_to(root).parts
+    )
+
+
+def _tree_fingerprint(root: Path | None) -> str | None:
+    if root is None:
+        return None
+    files = _authoritative_files(root)
+    if not files:
+        return None
+    digest = hashlib.sha256()
+    for path in files:
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def _task_fingerprints(root: Path | None) -> dict[str, str]:
+    if root is None:
+        return {}
+    result: dict[str, str] = {}
+    for path in _authoritative_files(root):
+        relative = path.relative_to(root)
+        if "tasks" not in relative.parts:
+            continue
+        task_id = path.stem if path.suffix else path.name
+        result[task_id] = _sha256(path)
+    return result
 
 
 def _legacy_task_id_fields(
@@ -474,8 +567,9 @@ def _issue(
     code: str,
     message: str,
     *remediation: str,
+    details: Mapping[str, object] | None = None,
 ) -> MigrationIssue:
-    return MigrationIssue(severity, code, message, tuple(remediation))
+    return MigrationIssue(severity, code, message, tuple(remediation), details or {})
 
 
 def _is_repository_local_registration(
@@ -538,26 +632,16 @@ def _inspect_migration_phases(  # noqa: C901
     start: Path,
     *,
     source_checkout: str | None = None,
+    source_checkout_id: str | None = None,
+    source_data_root: Path | None = None,
     environ: Mapping[str, str] | None = None,
     project_uuid: str | None = None,
     sibling_ledger_root: Path | None = None,
+    create_sibling_store: bool = False,
 ) -> TaskledgerMigrationInspection:
     root = start.expanduser().resolve()
     sibling_root, marker = _target_roots(root, sibling_ledger_root)
-    target_data = sibling_root / "taskledger"
-    target_indexes: Path | None = None
-    target_registration = _target_registration()
     issues: list[MigrationIssue] = []
-    source_kind: MigrationSourceKind = "uninitialized"
-    source_data: Path | None = None
-    source_logs: Path | None = None
-    selected_uuid: str | None = None
-    checkout_id: str | None = source_checkout
-    current_registration: Mapping[str, object] | None = None
-    legacy_next_task_number: int | None = None
-    derived_next_task_id: str | None = None
-    tombstones_required: tuple[str, ...] = ()
-
     if environ is None:
         environ = os.environ
     if environ.get("LEDGER_WORKSPACE_ROOT"):
@@ -569,260 +653,532 @@ def _inspect_migration_phases(  # noqa: C901
                 "Unset LEDGER_WORKSPACE_ROOT before applying.",
             )
         )
-
-    locator = None
-    try:
-        from taskledger.storage.ledgercore_backend import locate_taskledger_project
-
-        locator = locate_taskledger_project(root)
-    except Exception as exc:
-        issues.append(_issue("blocker", "DISCOVERY_ERROR", str(exc)))
-
-    if locator is not None and locator.source == "canonical":
-        manifest_doc = _manifest_document(locator.manifest_path)
-        current_registration = _old_registration(manifest_doc)
-        project = manifest_doc.get("project")
-        if isinstance(project, Mapping) and isinstance(project.get("uuid"), str):
-            selected_uuid = str(uuid.UUID(project["uuid"]))
-        if _is_old_registration(current_registration):
-            source_kind = "canonical-0.3-split-checkout"
-            try:
-                old_layout = _resolve_old_layout(root, manifest_doc, environ=environ)
-                source_data = old_layout.mounts["data"].path
-                source_logs = old_layout.mounts["logs"].path
-                checkout_id = old_layout.checkout_id
-            except Exception as exc:
-                issues.append(_issue("blocker", "OLD_LAYOUT_UNRESOLVED", str(exc)))
-        elif _is_repository_local_registration(current_registration):
-            configured = _configured_legacy_source(root)
-            if configured is not None:
-                source_data, _source_config, source_config_doc = configured
-                source_kind = (
-                    "legacy-arbitrary-external"
-                    if not source_data.is_relative_to(root)
-                    else "legacy-root"
-                )
-                source_logs = source_data
-                configured_uuid = source_config_doc.get("project_uuid")
-                if (
-                    isinstance(configured_uuid, str)
-                    and selected_uuid is not None
-                    and str(uuid.UUID(configured_uuid)) != selected_uuid
-                ):
-                    issues.append(
-                        _issue(
-                            "blocker",
-                            "PROJECT_UUID_MISMATCH",
-                            "Legacy Taskledger config UUID differs from the "
-                            "canonical project UUID.",
-                        )
-                    )
-            else:
-                source_kind = "canonical-repository-local"
-                source_data = root / ".ledger" / "task" / "taskledger"
-                source_logs = source_data
-        elif _is_direct_sibling_registration(
-            current_registration, project_uuid=selected_uuid
-        ):
-            source_kind = "direct-sibling-old-schema"
-            try:
-                old_layout = _resolve_old_layout(root, manifest_doc, environ=environ)
-                source_data = old_layout.mounts["data"].path
-                source_logs = source_data
-                checkout_id = old_layout.checkout_id
-            except Exception as exc:
-                issues.append(_issue("blocker", "OLD_LAYOUT_UNRESOLVED", str(exc)))
-        else:
-            try:
-                context = load_project_context(
-                    root, require_initialized=False, allow_legacy=False
-                )
-                binding = read_project_binding(context.paths.data_root)
-                meta = context.paths.storage_meta_path.exists()
-                if binding is not None and meta and context.paths.state_path.exists():
-                    source_kind = "canonical-0.4-sibling"
-                    selected_uuid = context.project_uuid
-                else:
-                    source_kind = "partial-sibling-migration"
-                    issues.append(
-                        _issue(
-                            "blocker",
-                            "PARTIAL_MIGRATION",
-                            "Target registration exists but target binding, state, or "
-                            "storage metadata is incomplete.",
-                        )
-                    )
-            except Exception as exc:
-                source_kind = "partial-sibling-migration"
-                issues.append(_issue("blocker", "PARTIAL_MIGRATION", str(exc)))
-    elif locator is not None and locator.source in {"legacy-tool", "legacy"}:
+    checkout_id = source_checkout_id or source_checkout
+    if checkout_id is not None and ("/" in checkout_id or "\\\\" in checkout_id):
+        raise LaunchError(
+            "--source-checkout-id accepts a checkout identifier, not a path.",
+            code="EXPLICIT_SOURCE_INVALID",
+        )
+    manifest_path = root / ".ledger" / "ledger.toml"
+    canonical_uuid: str | None = None
+    legacy_uuid: str | None = None
+    current_registration: Mapping[str, object] | None = None
+    manifest_doc: dict[str, object] = {}
+    if manifest_path.is_file():
         try:
-            context, legacy = _legacy_source(root)
-            source_kind = "legacy-root"
-            source_data = legacy.taskledger_dir
-            source_logs = legacy.taskledger_dir
-            selected_uuid = context.project_uuid
-        except Exception as exc:
-            source_kind = "invalid"
-            issues.append(_issue("blocker", "LEGACY_SOURCE_INVALID", str(exc)))
-    else:
+            manifest_doc = _manifest_document(manifest_path)
+            project = manifest_doc.get("project")
+            if isinstance(project, Mapping) and isinstance(project.get("uuid"), str):
+                canonical_uuid = str(uuid.UUID(project["uuid"]))
+            current_registration = _old_registration(manifest_doc)
+        except (LaunchError, ValueError) as exc:
+            issues.append(
+                _issue(
+                    "blocker",
+                    "CANONICAL_MANIFEST_INVALID",
+                    f"Cannot read canonical Ledger manifest {manifest_path}: {exc}",
+                    "Repair the canonical manifest before migrating.",
+                    details={"path": str(manifest_path)},
+                )
+            )
+    legacy_configs: list[tuple[Path, dict[str, object]]] = []
+    for config_path in (root / ".taskledger.toml", root / "taskledger.toml"):
+        if not config_path.is_file():
+            continue
         try:
-            context, legacy = _legacy_source(root)
-        except LaunchError:
-            context = None
-        if context is not None:
-            source_kind = "legacy-root"
-            source_data = legacy.taskledger_dir
-            source_logs = legacy.taskledger_dir
-            selected_uuid = context.project_uuid
-
-    try:
-        (
-            legacy_next_task_number,
-            derived_next_task_id,
-            tombstones_required,
-        ) = _legacy_task_id_fields(source_data, root)
-    except LaunchError as exc:
-        issues.append(_issue("blocker", "MALFORMED_LEGACY_COUNTER", str(exc)))
+            config_doc = _manifest_document(config_path)
+        except LaunchError as exc:
+            issues.append(_issue("blocker", "LEGACY_CONFIG_INVALID", str(exc)))
+            continue
+        legacy_configs.append((config_path, config_doc))
+        raw_uuid = config_doc.get("project_uuid")
+        if legacy_uuid is None and isinstance(raw_uuid, str):
+            try:
+                legacy_uuid = str(uuid.UUID(raw_uuid))
+            except ValueError:
+                issues.append(
+                    _issue(
+                        "blocker",
+                        "LEGACY_UUID_INVALID",
+                        f"Legacy Taskledger config has an invalid UUID: {config_path}",
+                        details={"path": str(config_path)},
+                    )
+                )
+    selected_uuid = canonical_uuid or legacy_uuid
+    identity_transition = "none"
+    if (
+        canonical_uuid is not None
+        and legacy_uuid is not None
+        and canonical_uuid != legacy_uuid
+    ):
+        identity_transition = "adopt-canonical"
+    elif canonical_uuid is None and legacy_uuid is not None:
+        identity_transition = "legacy-only"
     if project_uuid is not None:
         try:
             requested_uuid = str(uuid.UUID(project_uuid))
         except ValueError as exc:
             raise LaunchError(
-                f"Invalid migration project UUID {project_uuid!r}."
+                f"Invalid migration project UUID {project_uuid!r}.",
+                code="EXPLICIT_PROJECT_UUID_CONFLICT",
             ) from exc
-        if selected_uuid is not None and selected_uuid != requested_uuid:
+        if canonical_uuid is not None and requested_uuid != canonical_uuid:
             issues.append(
                 _issue(
                     "blocker",
-                    "PROJECT_UUID_MISMATCH",
-                    "Requested migration UUID differs from the project UUID.",
+                    "EXPLICIT_PROJECT_UUID_CONFLICT",
+                    "Requested migration UUID differs from the canonical project UUID.",
+                    "Use the canonical UUID or repair the manifest explicitly.",
+                    details={
+                        "canonical_uuid": canonical_uuid,
+                        "requested_uuid": requested_uuid,
+                    },
                 )
             )
         selected_uuid = requested_uuid
-    if source_kind == "direct-sibling-old-schema" and source_data is not None:
-        source_binding = read_project_binding(source_data)
-        if (
-            source_binding is not None
-            and selected_uuid is not None
-            and source_binding.project_uuid != selected_uuid
-        ):
-            issues.append(
-                _issue(
-                    "blocker",
-                    "BINDING_UUID_MISMATCH",
-                    "Direct sibling source binding belongs to "
-                    f"{source_binding.project_uuid}, expected {selected_uuid}.",
-                )
-            )
-    if selected_uuid is None and source_kind != "canonical-0.4-sibling":
+        identity_transition = "explicit"
+    if selected_uuid is None:
         selected_uuid = str(uuid.uuid4())
-    if selected_uuid is not None:
-        try:
-            target_layout = _resolve_target_layout(root, selected_uuid, environ)
-            target_data = target_layout.mounts[DATA_MOUNT].path
-        except LaunchError as exc:
-            issues.append(
-                _issue(
-                    "blocker",
-                    "TARGET_LAYOUT_RESOLUTION_FAILED",
-                    f"Cannot resolve target layout: {exc}",
-                )
+        identity_transition = "explicit"
+    target_data = sibling_root / "taskledger" / selected_uuid / "data"
+    target_indexes = sibling_root / "taskledger" / selected_uuid / "indexes"
+    target_registration = _target_registration(selected_uuid)
+    if not sibling_root.exists() and create_sibling_store:
+        issues.append(
+            _issue(
+                "info",
+                "SIBLING_ROOT_WILL_BE_CREATED",
+                f"Sibling root will be created during apply: {sibling_root}",
+                "Use --dry-run to inspect without creating it.",
+                details={"path": str(sibling_root)},
             )
-            target_data = sibling_root / "taskledger" / selected_uuid
-        target_registration = _target_registration(selected_uuid)
-    if not sibling_root.exists():
+        )
+    elif not sibling_root.exists():
         issues.append(
             _issue(
                 "blocker",
                 "SIBLING_ROOT_MISSING",
                 f"Sibling root is missing: {sibling_root}",
                 "Use --create-sibling-store when applying.",
+                details={"path": str(sibling_root)},
             )
         )
-    elif not marker.exists():
+    elif sibling_root.is_symlink() or not sibling_root.is_dir():
+        issues.append(
+            _issue(
+                "blocker",
+                "SIBLING_ROOT_INVALID",
+                f"Sibling root is not a regular directory: {sibling_root}",
+                details={"path": str(sibling_root)},
+            )
+        )
+    elif not marker.is_file():
         issues.append(
             _issue(
                 "blocker",
                 "SIBLING_ROOT_UNMARKED",
                 f"Sibling root exists without required marker {marker}.",
+                "Use --create-sibling-store when applying.",
+                details={"path": str(marker)},
             )
         )
-    elif marker.is_symlink() or not marker.is_file():
-        issues.append(
-            _issue(
-                "blocker",
-                "SIBLING_MARKER_INVALID",
-                f"Sibling marker is not a regular file: {marker}.",
-            )
-        )
-    try:
-        if selected_uuid is not None:
-            target_layout = _resolve_target_layout(root, selected_uuid, environ)
-            target_indexes = target_layout.mounts["indexes"].path
-    except Exception as exc:
-        target_indexes = None
-        if source_kind != "canonical-0.4-sibling":
-            issues.append(_issue("warning", "TARGET_UNRESOLVED", str(exc)))
-    if sibling_ledger_root is not None and selected_uuid is not None:
-        target_data = sibling_root / "taskledger" / selected_uuid / "data"
+    candidates: list[dict[str, object]] = []
+    candidate_paths: set[Path] = set()
+    candidate_priority: dict[Path, int] = {}
 
-    binding = read_project_binding(target_data) if target_data.exists() else None
-    binding_mismatch = (
-        binding is not None
-        and selected_uuid is not None
-        and binding.project_uuid != selected_uuid
-    )
-    if binding_mismatch:
-        assert binding is not None
-        issues.append(
-            _issue(
-                "blocker",
-                "BINDING_UUID_MISMATCH",
-                "Target binding belongs to "
-                f"{binding.project_uuid}, expected {selected_uuid}.",
-                "Re-run with --sibling-ledger-root PATH for a separate "
-                "migration destination, or keep the existing target unchanged.",
-            )
-        )
-    if (
-        target_data.exists()
-        and not binding
-        and any(target_data.iterdir())
-        and source_kind != "canonical-0.4-sibling"
-    ):
-        issues.append(
-            _issue(
-                "blocker",
-                "BINDING_MISSING",
-                "Non-empty target data root has no .ledger-project.toml: "
-                f"{target_data}",
-            )
+    def add_candidate(
+        kind: str,
+        path: Path,
+        reason: str,
+        candidate_uuid: str | None = None,
+        priority: int = 50,
+    ) -> None:
+        resolved = path.expanduser().resolve(strict=False)
+        if (
+            resolved == target_data
+            or target_data.is_relative_to(resolved)
+            or resolved in candidate_paths
+        ):
+            return
+        candidate_paths.add(resolved)
+        candidate_priority[resolved] = priority
+        exists = resolved.is_dir()
+        candidates.append(
+            {
+                "kind": kind,
+                "path": str(resolved),
+                "exists": exists,
+                "project_uuid": candidate_uuid,
+                "binding_status": "unknown",
+                "storage_status": "present" if exists else "missing",
+                "task_count": _task_count(resolved) if exists else 0,
+                "file_count": _file_count(resolved) if exists else 0,
+                "fingerprint": _tree_fingerprint(resolved) if exists else None,
+                "reason": reason,
+                "selected_reason": None,
+            }
         )
 
-    items = (
-        [] if binding_mismatch else _copy_items(source_data, source_logs, target_data)
-    )
-    for item in items:
-        if item.action == "conflict":
+    if source_data_root is not None:
+        add_candidate(
+            "explicit-source",
+            source_data_root,
+            "explicit source-data-root",
+            legacy_uuid,
+            0,
+        )
+        if not source_data_root.expanduser().resolve(strict=False).is_dir():
             issues.append(
                 _issue(
                     "blocker",
-                    "DESTINATION_CONFLICT",
-                    f"Destination differs from source: {item.destination}",
+                    "EXPLICIT_SOURCE_INVALID",
+                    "Explicit source data root is missing or invalid: "
+                    f"{source_data_root}",
+                    "Pass an existing Taskledger data root to --source-data-root.",
+                    details={"path": str(source_data_root)},
+                )
+            )
+    for config_path, config_doc in legacy_configs:
+        raw_path = config_doc.get("taskledger_dir")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            continue
+        configured = Path(os.path.expandvars(raw_path)).expanduser()
+        if not configured.is_absolute():
+            configured = config_path.parent / configured
+        configured = configured.resolve(strict=False)
+        add_candidate(
+            "legacy-arbitrary-external"
+            if not configured.is_relative_to(root)
+            else "legacy-config-external",
+            configured,
+            "configured legacy source",
+            legacy_uuid,
+            10,
+        )
+        if not configured.is_dir():
+            issues.append(
+                _issue(
+                    "warning",
+                    "LEGACY_CONFIG_PATH_STALE",
+                    f"{config_path} points to missing legacy data: {configured}",
+                    "The migration will use a unique UUID-bound source if one exists.",
+                    details={"config_path": str(config_path), "path": str(configured)},
+                )
+            )
+    add_candidate(
+        "legacy-local", root / ".taskledger", "legacy local storage", legacy_uuid, 30
+    )
+    if legacy_uuid is not None:
+        uuid_data = sibling_root / "taskledger" / legacy_uuid / "data"
+        add_candidate(
+            "legacy-uuid-sibling",
+            uuid_data,
+            "legacy UUID sibling store",
+            legacy_uuid,
+            20,
+        )
+        if not uuid_data.is_dir():
+            add_candidate(
+                "legacy-uuid-sibling",
+                sibling_root / "taskledger" / legacy_uuid,
+                "legacy UUID sibling store",
+                legacy_uuid,
+                21,
+            )
+    add_candidate(
+        "direct-sibling-old-schema",
+        sibling_root / "task" / "taskledger",
+        "direct sibling old-schema path",
+        legacy_uuid,
+        40,
+    )
+    viable = [
+        candidate
+        for candidate in candidates
+        if candidate["exists"] is True
+        and isinstance(candidate["file_count"], int)
+        and candidate["file_count"] > 0
+    ]
+    viable.sort(
+        key=lambda candidate: (
+            int(candidate_priority[Path(str(candidate["path"]))]),
+            str(candidate["path"]),
+        )
+    )
+    selected: dict[str, object] | None = viable[0] if viable else None
+    if len(viable) > 1:
+        fingerprints = {candidate["fingerprint"] for candidate in viable}
+        if len(fingerprints) > 1:
+            issues.append(
+                _issue(
+                    "blocker",
+                    "MIGRATION_SOURCE_AMBIGUOUS",
+                    "Multiple non-identical Taskledger source candidates were found.",
+                    "Use --source-data-root to select one source after "
+                    "inspecting all candidates.",
+                    details={"candidates": viable},
+                )
+            )
+    if selected is not None:
+        selected["selected_reason"] = selected["reason"]
+    source_data = Path(str(selected["path"])) if selected is not None else None
+    source_kind = cast(
+        MigrationSourceKind,
+        str(selected["kind"]) if selected is not None else "uninitialized",
+    )
+    source_reason = str(selected["reason"]) if selected is not None else None
+    if selected is None and current_registration is None:
+        issues.append(
+            _issue(
+                "blocker",
+                "MIGRATION_SOURCE_NOT_FOUND",
+                "No legacy Taskledger source data was found.",
+                "Pass --source-data-root or restore the legacy source "
+                "before migrating.",
+                details={"candidates": candidates},
+            )
+        )
+    elif selected["kind"] == "legacy-uuid-sibling":
+        for candidate in candidates:
+            if (
+                candidate["kind"] == "legacy-config-external"
+                and not candidate["exists"]
+            ):
+                break
+        else:
+            issues.append(
+                _issue(
+                    "info",
+                    "LEGACY_UUID_ADOPTED",
+                    "The canonical project UUID will replace the legacy storage UUID.",
+                    details={
+                        "canonical_uuid": canonical_uuid,
+                        "legacy_uuid": legacy_uuid,
+                    },
                 )
             )
     if (
-        source_kind not in {"canonical-0.4-sibling", "partial-sibling-migration"}
-        and not items
-        and not binding_mismatch
+        canonical_uuid is not None
+        and legacy_uuid is not None
+        and canonical_uuid != legacy_uuid
     ):
         issues.append(
             _issue(
-                "blocker", "SOURCE_MISSING", "No authoritative source files were found."
+                "info",
+                "LEGACY_UUID_ADOPTED",
+                f"Legacy UUID {legacy_uuid} identifies the source; canonical "
+                f"UUID {canonical_uuid} remains authoritative.",
+                details={"canonical_uuid": canonical_uuid, "legacy_uuid": legacy_uuid},
             )
         )
-
+    if current_registration is None and source_data is not None:
+        issues.append(
+            _issue(
+                "info",
+                "TASKLEDGER_REGISTRATION_MISSING",
+                "Taskledger is not registered in the canonical manifest; "
+                "apply will add it.",
+                "Do not add the registration manually; let migration apply it "
+                "after verification.",
+                details={"manifest": str(manifest_path)},
+            )
+        )
+    if current_registration is not None and current_registration != target_registration:
+        issues.append(
+            _issue(
+                "warning",
+                "TASKLEDGER_REGISTRATION_WILL_BE_REPLACED",
+                "The existing Taskledger registration will be replaced with "
+                "the canonical registration.",
+                details={"manifest": str(manifest_path)},
+            )
+        )
+    target_classification = "ABSENT"
+    target_binding = None
+    if target_data.exists() and not target_data.is_dir():
+        target_classification = "INVALID"
+        issues.append(
+            _issue(
+                "blocker",
+                "TARGET_DATA_INVALID",
+                f"Target data root is not a directory: {target_data}",
+                details={"path": str(target_data)},
+            )
+        )
+    elif target_data.is_dir():
+        try:
+            target_binding = read_project_binding(target_data)
+        except LaunchError as exc:
+            target_classification = "INVALID"
+            issues.append(
+                _issue(
+                    "blocker",
+                    "TARGET_DATA_BINDING_INVALID",
+                    str(exc),
+                    "Back up the target before repairing its binding.",
+                    details={"path": str(target_data)},
+                )
+            )
+        authoritative = _authoritative_files(target_data)
+        if target_binding is not None and (
+            target_binding.project_uuid != selected_uuid
+            or target_binding.ledger != "taskledger"
+            or target_binding.mount != "data"
+        ):
+            target_classification = "FOREIGN_BOUND"
+            details = {
+                "path": str(target_data),
+                "actual_uuid": target_binding.project_uuid,
+                "expected_uuid": selected_uuid,
+            }
+            issues.append(
+                _issue(
+                    "blocker",
+                    "BINDING_UUID_MISMATCH",
+                    f"Target binding belongs to {target_binding.project_uuid}; "
+                    f"expected {selected_uuid}.",
+                    "Use a separate destination or resolve the foreign binding "
+                    "explicitly.",
+                    details=details,
+                )
+            )
+            issues.append(
+                _issue(
+                    "blocker",
+                    "FOREIGN_TARGET",
+                    "The target is bound to a different project or mount.",
+                    "Use a separate destination or resolve the foreign binding "
+                    "explicitly.",
+                    details=details,
+                )
+            )
+        elif (
+            source_data is not None
+            and target_binding is not None
+            and _task_count(source_data) == 0
+            and _task_count(target_data) == 0
+        ):
+            target_classification = "IDENTICAL_SOURCE"
+        elif (
+            source_data is None
+            and target_binding is not None
+            and target_binding.project_uuid == selected_uuid
+            and target_binding.ledger == "taskledger"
+            and target_binding.mount == "data"
+            and (target_data / "state.toml").is_file()
+            and (target_data / "storage.yaml").is_file()
+        ):
+            source_kind = "canonical-0.4-sibling"
+            target_classification = "COMPLETE_CANONICAL"
+        elif authoritative:
+            source_tasks = _task_fingerprints(source_data)
+            target_tasks = _task_fingerprints(target_data)
+            conflicts = sorted(
+                task_id
+                for task_id in set(source_tasks) & set(target_tasks)
+                if source_tasks[task_id] != target_tasks[task_id]
+            )
+            if conflicts:
+                target_classification = "AUTHORITATIVE_DATA_CONFLICT"
+                issues.append(
+                    _issue(
+                        "blocker",
+                        "SOURCE_TARGET_SPLIT_BRAIN",
+                        "Source and target contain different authoritative "
+                        "Taskledger records.",
+                        "Back up both datasets and reconcile the conflicting "
+                        "records before applying.",
+                        details={
+                            "conflicting_task_ids": conflicts,
+                            "source": str(source_data) if source_data else None,
+                            "target": str(target_data),
+                        },
+                    )
+                )
+            elif source_data is not None and _tree_fingerprint(
+                source_data
+            ) == _tree_fingerprint(target_data):
+                target_classification = "IDENTICAL_SOURCE"
+            else:
+                target_classification = "AUTHORITATIVE_DATA_CONFLICT"
+                issues.append(
+                    _issue(
+                        "blocker",
+                        "TARGET_AUTHORITATIVE_DATA_PRESENT",
+                        "The target contains authoritative Taskledger data that "
+                        "is not identical to the source.",
+                        "Reconcile the datasets explicitly; migration does not "
+                        "merge task trees.",
+                        details={
+                            "path": str(target_data),
+                            "authoritative_files": len(authoritative),
+                        },
+                    )
+                )
+        elif any(target_data.iterdir()):
+            target_classification = "METADATA_ONLY_REPAIRABLE"
+            issues.append(
+                _issue(
+                    "info",
+                    "TARGET_METADATA_ONLY",
+                    "The target contains only replaceable migration metadata.",
+                    "The target will be backed up and replaced atomically "
+                    "during apply.",
+                    details={"path": str(target_data)},
+                )
+            )
+        else:
+            target_classification = "EMPTY"
+        if target_classification in {
+            "AUTHORITATIVE_DATA_CONFLICT",
+            "FOREIGN_BOUND",
+            "INVALID",
+        }:
+            pass
+        elif target_data.exists() and (
+            target_binding is not None
+            or target_classification == "METADATA_ONLY_REPAIRABLE"
+        ):
+            for name, code in (
+                ("state.toml", "TARGET_STATE_MISSING"),
+                ("storage.yaml", "TARGET_STORAGE_META_MISSING"),
+            ):
+                if not (target_data / name).exists():
+                    issues.append(
+                        _issue(
+                            "warning",
+                            code,
+                            f"Target data root has no {name}: {target_data}",
+                            "The migration will recreate canonical metadata after "
+                            "the mount is installed.",
+                            details={
+                                "target_data_root": str(target_data),
+                                "missing_path": str(target_data / name),
+                            },
+                        )
+                    )
+    source_logs = source_data
+    try:
+        legacy_next_task_number, derived_next_task_id, tombstones_required = (
+            _legacy_task_id_fields(source_data, root)
+        )
+    except LaunchError as exc:
+        issues.append(_issue("blocker", "MALFORMED_LEGACY_COUNTER", str(exc)))
+    items: list[MigrationCopyItem] = []
+    if source_data is not None and target_classification not in {
+        "AUTHORITATIVE_DATA_CONFLICT",
+        "FOREIGN_BOUND",
+        "INVALID",
+        "IDENTICAL_SOURCE",
+    }:
+        items = _copy_items(source_data, source_logs, target_data)
+    migration_required = not (
+        target_classification in {"IDENTICAL_SOURCE", "COMPLETE_CANONICAL"}
+        and current_registration is not None
+    )
+    ready = not any(issue.severity == "blocker" for issue in issues) and (
+        source_data is not None or target_classification == "COMPLETE_CANONICAL"
+    )
     return TaskledgerMigrationInspection(
         project_root=root,
         project_uuid=selected_uuid,
@@ -842,8 +1198,15 @@ def _inspect_migration_phases(  # noqa: C901
         legacy_next_task_number=legacy_next_task_number,
         derived_next_task_id=derived_next_task_id,
         tombstones_required=tombstones_required,
-        ready=not any(issue.severity == "blocker" for issue in issues),
-        migration_required=source_kind != "canonical-0.4-sibling",
+        ready=ready,
+        migration_required=migration_required,
+        canonical_project_uuid=canonical_uuid,
+        legacy_project_uuid=legacy_uuid,
+        identity_transition=identity_transition,
+        source_selection_reason=source_reason,
+        source_candidates=tuple(candidates),
+        target_classification=target_classification,
+        would_create_sibling_store=create_sibling_store and not sibling_root.exists(),
     )
 
 
@@ -851,17 +1214,23 @@ def inspect_migration(
     start: Path,
     *,
     source_checkout: str | None = None,
+    source_checkout_id: str | None = None,
+    source_data_root: Path | None = None,
     environ: Mapping[str, str] | None = None,
     project_uuid: str | None = None,
     sibling_ledger_root: Path | None = None,
+    create_sibling_store: bool = False,
 ) -> TaskledgerMigrationInspection:
     """Inspect migration state through the phase-based implementation."""
     return _inspect_migration_phases(
         start,
         source_checkout=source_checkout,
+        source_checkout_id=source_checkout_id,
+        source_data_root=source_data_root,
         environ=environ,
         project_uuid=project_uuid,
         sibling_ledger_root=sibling_ledger_root,
+        create_sibling_store=create_sibling_store,
     )
 
 
@@ -884,6 +1253,7 @@ def _backup(inspection: TaskledgerMigrationInspection, backup_dir: Path | None) 
     for label, source in (
         ("source-data", inspection.source_data_root),
         ("source-logs", inspection.source_logs_root),
+        ("target-data", inspection.target_data_root),
     ):
         if source is None or not source.exists() or source in copied_roots:
             continue
@@ -958,22 +1328,18 @@ def _ledgercore_migration_plan(
         raise LaunchError(
             "Ledgercore migration requires a project UUID and data source."
         )
-    target_manifest = parse_ledger_manifest_v3(
-        {
-            "schema_version": 3,
-            "project": {
-                "uuid": inspection.project_uuid,
-                "name": inspection.project_root.name,
-            },
-            "ledgers": {
-                CANONICAL_LEDGER_NAME: {
-                    "mounts": {
-                        DATA_MOUNT: {"storage": "external", "root": "../ledger"},
-                        INDEX_MOUNT: {"storage": "cache"},
-                    }
-                }
-            },
-        }
+    existing_manifest = None
+    manifest_path = inspection.project_root / ".ledger" / "ledger.toml"
+    if manifest_path.is_file():
+        document = _manifest_document(manifest_path)
+        if document.get("schema_version") == 3:
+            existing_manifest = parse_ledger_manifest_v3(document)
+    target_manifest = build_taskledger_manifest_with_registration(
+        existing_manifest,
+        project_uuid=inspection.project_uuid,
+        project_name=inspection.project_root.name,
+        data_storage="external",
+        external_root="../ledger",
     )
     source_binding = StorageBinding(
         1,
@@ -993,11 +1359,9 @@ def _ledgercore_migration_plan(
         DATA_MOUNT,
         "external",
     )
-    strategy: Literal["copy", "noop"] = "copy"
-    if inspection.copy_items and all(
-        item.action == "skip-identical" for item in inspection.copy_items
-    ):
-        strategy = "noop"
+    strategy: Literal["copy", "noop"] = (
+        "noop" if inspection.target_classification == "IDENTICAL_SOURCE" else "copy"
+    )
     item = StorageMigrationItem(
         "mount",
         CANONICAL_LEDGER_NAME,
@@ -1025,6 +1389,8 @@ def _apply_migration_phases(
     create_sibling_store: bool = False,
     retire_source: bool = False,
 ) -> dict[str, object]:
+    initial_source_fingerprint = _tree_fingerprint(inspection.source_data_root)
+    initial_target_fingerprint = _tree_fingerprint(inspection.target_data_root)
     if create_sibling_store:
         _ensure_migration_sibling_store(
             inspection.sibling_root,
@@ -1033,24 +1399,51 @@ def _apply_migration_phases(
     fresh = inspect_migration(
         inspection.project_root,
         source_checkout=inspection.source_checkout_id,
+        source_data_root=inspection.source_data_root,
         project_uuid=inspection.project_uuid,
         sibling_ledger_root=inspection.sibling_root,
     )
-    if fresh.source_kind == "canonical-0.4-sibling":
+    if (
+        fresh.source_kind == "canonical-0.4-sibling"
+        or fresh.target_classification == "IDENTICAL_SOURCE"
+    ):
+        receipts = sorted((fresh.target_data_root / "migrations").glob("*.json"))
         return {
             "kind": "migration_apply",
-            "status": "up_to_date",
+            "status": "applied",
             "inspection": fresh.to_dict(),
+            "receipt": str(receipts[-1]) if receipts else None,
         }
     issues = list(fresh.issues)
     if create_sibling_store and fresh.issues:
         fresh = inspect_migration(
             fresh.project_root,
             source_checkout=fresh.source_checkout_id,
+            source_data_root=fresh.source_data_root,
             project_uuid=fresh.project_uuid,
             sibling_ledger_root=fresh.sibling_root,
         )
         issues = list(fresh.issues)
+    current_source_fingerprint = _tree_fingerprint(fresh.source_data_root)
+    current_target_fingerprint = _tree_fingerprint(fresh.target_data_root)
+    if initial_source_fingerprint != current_source_fingerprint:
+        raise LaunchError(
+            "Migration source changed after inspection; rerun migration plan.",
+            code="TASKLEDGER_STORAGE_MIGRATION_BLOCKED",
+            details={
+                "before": initial_source_fingerprint,
+                "after": current_source_fingerprint,
+            },
+        )
+    if initial_target_fingerprint != current_target_fingerprint:
+        raise LaunchError(
+            "Migration target changed after inspection; rerun migration plan.",
+            code="TASKLEDGER_STORAGE_MIGRATION_BLOCKED",
+            details={
+                "before": initial_target_fingerprint,
+                "after": current_target_fingerprint,
+            },
+        )
     if issues and any(issue.severity == "blocker" for issue in issues):
         raise LaunchError(
             "Migration preflight blocked:\n"
@@ -1066,7 +1459,9 @@ def _apply_migration_phases(
                 )
                 for issue in issues
                 if issue.severity == "blocker"
-            )
+            ),
+            code="TASKLEDGER_STORAGE_MIGRATION_BLOCKED",
+            details={"issues": [issue.to_dict() for issue in issues]},
         )
     backup_path = _backup(fresh, backup_dir)
     target = fresh.target_data_root
@@ -1076,6 +1471,27 @@ def _apply_migration_phases(
         manifest_path.read_text(encoding="utf-8") if manifest_path.exists() else None
     )
     (fresh.project_root / ".ledger" / "migrations").mkdir(parents=True, exist_ok=True)
+    if fresh.target_classification == "METADATA_ONLY_REPAIRABLE":
+        verification = inspect_migration(
+            fresh.project_root,
+            source_checkout=fresh.source_checkout_id,
+            source_data_root=fresh.source_data_root,
+            project_uuid=fresh.project_uuid,
+            sibling_ledger_root=fresh.sibling_root,
+        )
+        if verification.target_classification != "METADATA_ONLY_REPAIRABLE":
+            raise LaunchError(
+                "Target changed while preparing metadata-only replacement.",
+                code="TASKLEDGER_STORAGE_MIGRATION_BLOCKED",
+            )
+        shutil.rmtree(target)
+        fresh = inspect_migration(
+            fresh.project_root,
+            source_checkout=fresh.source_checkout_id,
+            source_data_root=fresh.source_data_root,
+            project_uuid=fresh.project_uuid,
+            sibling_ledger_root=fresh.sibling_root,
+        )
     plan = _ledgercore_migration_plan(fresh)
     from taskledger.storage.taskledger_migration import (
         require_no_active_taskledger_locks,
@@ -1100,6 +1516,21 @@ def _apply_migration_phases(
             "last_migrated_at": datetime.now(timezone.utc).isoformat(),
         },
     )
+    verification_report = {
+        "target_exists": target.is_dir(),
+        "binding": (target / ".ledger-project.toml").is_file(),
+        "state": (target / "state.toml").is_file(),
+        "storage_metadata": (target / "storage.yaml").is_file(),
+        "source_preserved": fresh.source_data_root is not None
+        and fresh.source_data_root.exists(),
+        "source_fingerprint": _tree_fingerprint(fresh.source_data_root),
+        "target_fingerprint": _tree_fingerprint(target),
+        "preserved_ledger_registrations": sorted(
+            name
+            for name in plan.config_changes.ledgers
+            if name != CANONICAL_LEDGER_NAME
+        ),
+    }
 
     fixed_sibling_root = (fresh.project_root / ".." / "ledger").resolve(strict=False)
     if fresh.sibling_root != fixed_sibling_root:
@@ -1120,8 +1551,12 @@ def _apply_migration_phases(
                 {
                     "inspection": fresh.to_dict(),
                     "backup": str(backup_path),
-                    "verified": True,
+                    "verified": verification_report,
                     "canonical_activation": False,
+                    "identity": {
+                        "canonical_uuid": fresh.canonical_project_uuid,
+                        "legacy_uuid": fresh.legacy_project_uuid,
+                    },
                 },
                 indent=2,
                 sort_keys=True,
@@ -1185,8 +1620,11 @@ def _apply_migration_phases(
             {
                 "inspection": fresh.to_dict(),
                 "backup": str(backup_path),
-                "verified": True,
-                "retired": retire_source,
+                "verified": verification_report,
+                "identity": {
+                    "canonical_uuid": fresh.canonical_project_uuid,
+                    "legacy_uuid": fresh.legacy_project_uuid,
+                },
             },
             indent=2,
             sort_keys=True,
