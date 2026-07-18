@@ -193,6 +193,8 @@ payload = plan_guidance(Path.cwd(), "task-0001")
 - `storage_validate`
 - `storage_set`
 - `storage_clear_override`
+- `storage_migration_inspect`
+- `storage_migration_apply`
 - `storage_migration_status`
 - `storage_migration_recover`
 - `sync_preflight`

@@ -14,7 +14,10 @@ from taskledger.cli_common import (
     launch_error_exit_code,
 )
 from taskledger.errors import LaunchError
-from taskledger.storage.layout_migration import apply_migration, inspect_migration
+from taskledger.services.storage_migration import (
+    apply_migration,
+    inspect_migration,
+)
 
 migrate_app = typer.Typer(
     add_completion=False, help="Inspect and apply storage migrations."
@@ -159,25 +162,16 @@ def migrate_apply_command(
     assert isinstance(state, CLIState)
     payload: dict[str, object]
     try:
-        inspection = inspect_migration(
+        payload = apply_migration(
             state.cwd,
+            backup=backup,
+            backup_dir=backup_dir,
+            create_sibling_store=create_sibling_store,
+            dry_run=dry_run,
+            retire_source=retire_source,
             source_checkout=source_checkout,
             sibling_ledger_root=sibling_ledger_root,
         )
-        if dry_run:
-            payload = {
-                "kind": "taskledger_migration_inspection",
-                "status": "dry_run",
-                "inspection": inspection.to_dict(),
-            }
-        else:
-            payload = apply_migration(
-                inspection,
-                backup=backup,
-                backup_dir=backup_dir,
-                create_sibling_store=create_sibling_store,
-                retire_source=retire_source,
-            )
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc

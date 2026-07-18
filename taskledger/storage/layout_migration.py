@@ -14,19 +14,25 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
+from ledgercore import StorageBinding, StorageMigrationItem, StorageMigrationPlan
+from ledgercore.manifest import parse_ledger_manifest_v3
+
 from taskledger.errors import LaunchError
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.ledger_manifest import ensure_taskledger_registration
 from taskledger.storage.ledgercore_backend import (
     LedgerProjectLocator,
     ResolvedLedgerLayout,
+    execute_taskledger_layout_migration,
+    initialize_config_binding,
+    initialize_taskledger_bindings,
+    load_taskledger_ledger_layout,
     parse_ledger_local_config,
     parse_ledger_project_manifest,
     resolve_ledger_layout,
 )
 from taskledger.storage.paths import ProjectPaths, find_project_config
 from taskledger.storage.project_binding import (
-    create_project_binding,
     read_project_binding,
 )
 from taskledger.storage.project_context import (
@@ -423,6 +429,7 @@ def _copy_items(
 ) -> list[MigrationCopyItem]:
     items: list[MigrationCopyItem] = []
     seen: set[Path] = set()
+    sources_by_destination: dict[Path, Path] = {}
     for source_root, category in (
         (source_data, "authoritative-data"),
         (source_logs, "durable-log"),
@@ -446,13 +453,18 @@ def _copy_items(
                 destination = (
                     target / "migrations" / "legacy" / Path(*relative.parts[1:])
                 )
-            action = "copy"
-            if destination.exists():
+            if destination in sources_by_destination:
+                action = "conflict"
+            elif destination.exists():
                 action = (
                     "skip-identical"
-                    if _sha256(source) == _sha256(destination)
+                    if relative in {Path("storage.yaml"), Path("state.toml")}
+                    or _sha256(source) == _sha256(destination)
                     else "conflict"
                 )
+            else:
+                action = "copy"
+            sources_by_destination[destination] = source
             items.append(MigrationCopyItem(source, destination, category, action))
     return items
 
@@ -522,7 +534,7 @@ def _is_direct_sibling_registration(
     )
 
 
-def inspect_migration(  # noqa: C901
+def _inspect_migration_phases(  # noqa: C901
     start: Path,
     *,
     source_checkout: str | None = None,
@@ -752,6 +764,8 @@ def inspect_migration(  # noqa: C901
         target_indexes = None
         if source_kind != "canonical-0.4-sibling":
             issues.append(_issue("warning", "TARGET_UNRESOLVED", str(exc)))
+    if sibling_ledger_root is not None and selected_uuid is not None:
+        target_data = sibling_root / "taskledger" / selected_uuid / "data"
 
     binding = read_project_binding(target_data) if target_data.exists() else None
     binding_mismatch = (
@@ -833,28 +847,52 @@ def inspect_migration(  # noqa: C901
     )
 
 
+def inspect_migration(
+    start: Path,
+    *,
+    source_checkout: str | None = None,
+    environ: Mapping[str, str] | None = None,
+    project_uuid: str | None = None,
+    sibling_ledger_root: Path | None = None,
+) -> TaskledgerMigrationInspection:
+    """Inspect migration state through the phase-based implementation."""
+    return _inspect_migration_phases(
+        start,
+        source_checkout=source_checkout,
+        environ=environ,
+        project_uuid=project_uuid,
+        sibling_ledger_root=sibling_ledger_root,
+    )
+
+
 def _backup(inspection: TaskledgerMigrationInspection, backup_dir: Path | None) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     destination = (
         backup_dir
         or inspection.project_root / ".ledger" / "backups" / f"taskledger-{timestamp}"
     )
+    if backup_dir is None:
+        suffix = 1
+        while destination.exists():
+            destination = destination.with_name(
+                f"{destination.name.rsplit('-', 1)[0]}-{timestamp}-{suffix}"
+            )
+            suffix += 1
     destination.mkdir(parents=True, exist_ok=False)
     manifest: list[dict[str, str]] = []
-    for source in (inspection.source_data_root, inspection.source_logs_root):
-        if (
-            source is None
-            or not source.exists()
-            or source in (inspection.source_data_root, inspection.source_logs_root)
-            and source != inspection.source_data_root
-        ):
+    copied_roots: set[Path] = set()
+    for label, source in (
+        ("source-data", inspection.source_data_root),
+        ("source-logs", inspection.source_logs_root),
+    ):
+        if source is None or not source.exists() or source in copied_roots:
             continue
-        target = destination / "source-data"
+        copied_roots.add(source)
+        target = destination / label
         shutil.copytree(source, target, dirs_exist_ok=True)
         for path in source.rglob("*"):
             if path.is_file():
                 manifest.append({"source": str(path), "sha256": _sha256(path)})
-        break
     for source in (
         inspection.project_root / ".ledger" / "ledger.toml",
         inspection.project_root / ".ledger" / "ledger.local.toml",
@@ -891,7 +929,7 @@ def _write_tombstones(target: Path, task_ids: tuple[str, ...]) -> None:
 def _write_target_state(target: Path, ref: str = "main") -> None:
     atomic_write_text(
         target / "state.toml",
-        "schema_version = 3\n"
+        "schema_version = 2\n"
         f'ledger_ref = "{ref}"\n'
         'ledger_parent_ref = ""\n'
         'ledger_branch_guard = "off"\n',
@@ -913,7 +951,73 @@ def _activate_manifest(
         )
 
 
-def apply_migration(
+def _ledgercore_migration_plan(
+    inspection: TaskledgerMigrationInspection,
+) -> StorageMigrationPlan:
+    if inspection.project_uuid is None or inspection.source_data_root is None:
+        raise LaunchError(
+            "Ledgercore migration requires a project UUID and data source."
+        )
+    target_manifest = parse_ledger_manifest_v3(
+        {
+            "schema_version": 3,
+            "project": {
+                "uuid": inspection.project_uuid,
+                "name": inspection.project_root.name,
+            },
+            "ledgers": {
+                CANONICAL_LEDGER_NAME: {
+                    "mounts": {
+                        DATA_MOUNT: {"storage": "external", "root": "../ledger"},
+                        INDEX_MOUNT: {"storage": "cache"},
+                    }
+                }
+            },
+        }
+    )
+    source_binding = StorageBinding(
+        1,
+        3,
+        inspection.project_uuid,
+        None,
+        CANONICAL_LEDGER_NAME,
+        DATA_MOUNT,
+        "project",
+    )
+    destination_binding = StorageBinding(
+        1,
+        3,
+        inspection.project_uuid,
+        None,
+        CANONICAL_LEDGER_NAME,
+        DATA_MOUNT,
+        "external",
+    )
+    strategy: Literal["copy", "noop"] = "copy"
+    if inspection.copy_items and all(
+        item.action == "skip-identical" for item in inspection.copy_items
+    ):
+        strategy = "noop"
+    item = StorageMigrationItem(
+        "mount",
+        CANONICAL_LEDGER_NAME,
+        DATA_MOUNT,
+        inspection.source_data_root,
+        inspection.target_data_root,
+        source_binding,
+        destination_binding,
+        strategy,
+    )
+    return StorageMigrationPlan(
+        uuid.uuid4().hex,
+        inspection.project_uuid,
+        (item,),
+        target_manifest,
+        ("indexes are rebuilt by Taskledger after data migration",),
+    )
+
+
+def _apply_migration_phases(
     inspection: TaskledgerMigrationInspection,
     *,
     backup: bool = True,
@@ -966,34 +1070,27 @@ def apply_migration(
         )
     backup_path = _backup(fresh, backup_dir)
     target = fresh.target_data_root
-    staging = target.parent / (
-        f".taskledger-migration-{fresh.project_uuid}-"
-        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path = fresh.project_root / ".ledger" / "ledger.toml"
+    manifest_before = (
+        manifest_path.read_text(encoding="utf-8") if manifest_path.exists() else None
     )
-    if target.exists() and read_project_binding(target) is not None:
-        staging = target
-    else:
-        staging.mkdir(parents=True, exist_ok=False)
-    create_project_binding(staging, project_uuid=fresh.project_uuid or "")
-    for item in fresh.copy_items:
-        if item.action == "skip-identical":
-            continue
-        if item.action == "conflict":
-            raise LaunchError(f"Destination conflict: {item.destination}")
-        destination = staging / item.destination.relative_to(target)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(item.source, destination)
-    for item in fresh.copy_items:
-        destination = staging / item.destination.relative_to(target)
-        if not destination.is_file() or _sha256(item.source) != _sha256(destination):
-            raise LaunchError(
-                f"Migration verification failed: {item.source} -> {destination}"
-            )
-    staging.mkdir(parents=True, exist_ok=True)
-    _write_tombstones(staging, fresh.tombstones_required)
-    _write_target_state(staging)
+    (fresh.project_root / ".ledger" / "migrations").mkdir(parents=True, exist_ok=True)
+    plan = _ledgercore_migration_plan(fresh)
+    from taskledger.storage.taskledger_migration import (
+        require_no_active_taskledger_locks,
+    )
+
+    execute_taskledger_layout_migration(
+        plan,
+        mode="copy",
+        quiescence_check=lambda: require_no_active_taskledger_locks(fresh.project_root),
+        project_root=fresh.project_root,
+    )
+    _write_tombstones(target, fresh.tombstones_required)
+    _write_target_state(target)
     write_yaml_object(
-        staging / "storage.yaml",
+        target / "storage.yaml",
         {
             "storage_layout_version": 5,
             "record_schema_version": 1,
@@ -1003,12 +1100,13 @@ def apply_migration(
             "last_migrated_at": datetime.now(timezone.utc).isoformat(),
         },
     )
-    if staging != target:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        staging.rename(target)
 
     fixed_sibling_root = (fresh.project_root / ".." / "ledger").resolve(strict=False)
     if fresh.sibling_root != fixed_sibling_root:
+        if manifest_before is None:
+            manifest_path.unlink(missing_ok=True)
+        else:
+            atomic_write_text(manifest_path, manifest_before)
         if retire_source:
             raise LaunchError(
                 "--retire-source is not supported with a migration-only "
@@ -1053,6 +1151,19 @@ def apply_migration(
     if not config_path.exists():
         atomic_write_text(config_path, render_canonical_taskledger_config())
     ensure_sibling_workspace_provider(fresh.project_root)
+    local_config_path = fresh.project_root / ".ledger" / "ledger.local.toml"
+    if local_config_path.exists():
+        local_config_path.unlink()
+    layout = load_taskledger_ledger_layout(
+        fresh.project_root, validate_storage=False
+    ).resolved_layout
+    initialize_config_binding(layout)
+    initialize_taskledger_bindings(
+        layout,
+        initialize_config=False,
+        initialize_data=False,
+        initialize_indexes=True,
+    )
     _activate_manifest(
         fresh.project_root,
         fresh.project_uuid or "",
@@ -1100,6 +1211,24 @@ def apply_migration(
         "receipt": str(receipt),
         "retired": retire_source,
     }
+
+
+def apply_migration(
+    inspection: TaskledgerMigrationInspection,
+    *,
+    backup: bool = True,
+    backup_dir: Path | None = None,
+    create_sibling_store: bool = False,
+    retire_source: bool = False,
+) -> dict[str, object]:
+    """Apply migration through the phase-based implementation."""
+    return _apply_migration_phases(
+        inspection,
+        backup=backup,
+        backup_dir=backup_dir,
+        create_sibling_store=create_sibling_store,
+        retire_source=retire_source,
+    )
 
 
 def build_layout_migration_plan(

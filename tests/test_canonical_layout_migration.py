@@ -36,7 +36,9 @@ def test_migration_plan_is_read_only_and_targets_fixed_sibling(tmp_path: Path) -
     )
     assert before == after
     assert plan.project_uuid == UUID
-    assert plan.target_data_root == tmp_path.parent / "ledger" / "taskledger" / UUID
+    assert plan.target_data_root == (
+        tmp_path.parent / "ledger" / "taskledger" / UUID / "data"
+    )
     assert plan.legacy_next_task_number == 4
     assert plan.tombstones_required == ("task-0001", "task-0002", "task-0003")
 
@@ -45,20 +47,23 @@ def test_migration_creates_automatic_backup_and_preserves_legacy(
     tmp_path: Path,
 ) -> None:
     _legacy_project(tmp_path)
+    sibling_root = tmp_path / "sibling"
     result = apply_layout_migration(
         tmp_path,
+        sibling_ledger_root=sibling_root,
         backup=True,
         create_sibling_store=True,
     )
     assert result["status"] == "applied"
     assert Path(str(result["backup"])).exists()
-    target = tmp_path.parent / "ledger" / "taskledger" / UUID
+    target = sibling_root / "taskledger" / UUID / "data"
     assert (target / ".ledger-project.toml").is_file()
     assert (target / "state.toml").is_file()
     assert (target / "ledgers" / "main" / "tombstones" / "task-0003.toml").is_file()
     assert (tmp_path / "taskledger.toml").exists()
     assert (tmp_path / ".taskledger").exists()
     assert list((target / "migrations").glob("*.json"))
+    assert list((tmp_path / ".ledger" / "migrations").glob("*.toml"))
 
 
 def test_migration_does_not_compare_against_foreign_bound_target(
@@ -68,7 +73,7 @@ def test_migration_does_not_compare_against_foreign_bound_target(
     project.mkdir()
     _legacy_project(project)
     sibling = tmp_path / "ledger"
-    target = sibling / "taskledger" / UUID
+    target = sibling / "taskledger" / UUID / "data"
     target.mkdir(parents=True)
     (sibling / ".ledger-store").write_text("", encoding="utf-8")
     (target / ".ledger-project.toml").write_text(
@@ -106,7 +111,7 @@ def test_migration_override_copies_without_canonical_activation(
     assert result["status"] == "applied"
     assert result["canonical_activation"] is False
     assert result["inspection"]["target"]["data"] == str(
-        destination / "taskledger" / UUID
+        destination / "taskledger" / UUID / "data"
     )
     assert (destination / ".ledger-store").is_file()
     assert not (project / ".ledger" / "task" / "config.toml").exists()
@@ -167,18 +172,19 @@ def test_migration_rehomes_existing_direct_sibling_project(tmp_path: Path) -> No
 
     plan = build_layout_migration_plan(project)
     assert plan.source_kind == "direct-sibling-old-schema"
-    assert plan.target_data_root == sibling / "taskledger" / UUID
+    assert plan.target_data_root == sibling / "taskledger" / UUID / "data"
 
     result = apply_layout_migration(project)
-    target = sibling / "taskledger" / UUID
+    target = sibling / "taskledger" / UUID / "data"
     assert result["status"] == "applied"
     assert (target / ".ledger-project.toml").is_file()
     assert direct.is_dir()
     context = load_project_context(project)
     assert context.paths.data_root == target
-    assert f"taskledger/{UUID}" in (project / ".ledger" / "ledger.toml").read_text(
-        encoding="utf-8"
-    )
+    manifest = (project / ".ledger" / "ledger.toml").read_text(encoding="utf-8")
+    assert "schema_version = 3" in manifest
+    assert "[ledgers.taskledger.mounts.data]" in manifest
+    assert 'root = "../ledger"' in manifest
 
 
 def test_foreign_binding_at_shared_base_does_not_block_uuid_target(
@@ -199,7 +205,7 @@ def test_foreign_binding_at_shared_base_does_not_block_uuid_target(
     )
     plan = build_layout_migration_plan(project)
     assert "BINDING_UUID_MISMATCH" not in {issue.code for issue in plan.issues}
-    assert plan.target_data_root == base / UUID
+    assert plan.target_data_root == base / UUID / "data"
 
 
 def test_repository_local_registration_uses_legacy_external_source(

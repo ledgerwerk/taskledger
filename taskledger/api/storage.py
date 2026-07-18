@@ -10,6 +10,12 @@ from taskledger.services.storage_locations import (
     move_taskledger_storage,
     sync_commit_storage,
 )
+from taskledger.services.storage_migration import (
+    apply_migration as _apply_project_migration,
+)
+from taskledger.services.storage_migration import (
+    inspect_migration as _inspect_project_migration,
+)
 from taskledger.storage.ledgercore_backend import (
     inspect_taskledger_migration,
     load_taskledger_ledger_layout,
@@ -124,6 +130,46 @@ def storage_clear_override(
     )
 
 
+def storage_migration_inspect(
+    workspace_root: Path,
+    *,
+    source_checkout: str | None = None,
+    project_uuid: str | None = None,
+    sibling_ledger_root: Path | None = None,
+) -> dict[str, object]:
+    return _inspect_project_migration(
+        workspace_root,
+        source_checkout=source_checkout,
+        project_uuid=project_uuid,
+        sibling_ledger_root=sibling_ledger_root,
+    ).to_dict()
+
+
+def storage_migration_apply(
+    workspace_root: Path,
+    *,
+    backup: bool = True,
+    backup_dir: Path | None = None,
+    create_sibling_store: bool = False,
+    dry_run: bool = False,
+    retire_source: bool = False,
+    source_checkout: str | None = None,
+    project_uuid: str | None = None,
+    sibling_ledger_root: Path | None = None,
+) -> dict[str, object]:
+    return _apply_project_migration(
+        workspace_root,
+        backup=backup,
+        backup_dir=backup_dir,
+        create_sibling_store=create_sibling_store,
+        dry_run=dry_run,
+        retire_source=retire_source,
+        source_checkout=source_checkout,
+        project_uuid=project_uuid,
+        sibling_ledger_root=sibling_ledger_root,
+    )
+
+
 def storage_migration_status(journal_path: Path) -> dict[str, object]:
     journal = inspect_taskledger_migration(journal_path)
     return {
@@ -159,6 +205,10 @@ def sync_commit(workspace_root: Path, *, message: str) -> dict[str, object]:
 
 __all__ = [
     "storage_clear_override",
+    "storage_migration_apply",
+    "storage_migration_inspect",
+    "storage_migration_recover",
+    "storage_migration_status",
     "storage_move",
     "storage_path",
     "storage_set",
@@ -167,6 +217,4 @@ __all__ = [
     "sync_commit",
     "sync_preflight",
     "sync_status",
-    "storage_migration_recover",
-    "storage_migration_status",
 ]

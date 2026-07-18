@@ -18,7 +18,7 @@ from taskledger.storage.project_config import load_worker_pipeline_config
 from taskledger.storage.task_store import V2Paths
 
 
-def scan_task_integrity(  # noqa: C901
+def _scan_task_integrity_phases(  # noqa: C901
     *,
     workspace_root: Path,
     paths: V2Paths,
@@ -354,6 +354,42 @@ def scan_task_integrity(  # noqa: C901
                             ),
                         ],
                     )
+
+
+def scan_task_integrity(
+    *,
+    workspace_root: Path,
+    paths: V2Paths,
+    tasks: list[TaskRecord],
+    task_map: dict[str, TaskRecord],
+    locks: list[TaskLock],
+    task_runs: dict[str, list[TaskRunRecord]],
+    run_map: dict[tuple[str, str], TaskRunRecord],
+    active_state: ActiveTaskState | None,
+    errors: list[str],
+    warnings: list[str],
+    repair_hints: list[str],
+    broken_links: list[dict[str, object]],
+    run_lock_mismatches: list[dict[str, object]],
+    diagnostics: list[dict[str, object]],
+) -> None:
+    """Run the phase-based per-task integrity scan."""
+    _scan_task_integrity_phases(
+        workspace_root=workspace_root,
+        paths=paths,
+        tasks=tasks,
+        task_map=task_map,
+        locks=locks,
+        task_runs=task_runs,
+        run_map=run_map,
+        active_state=active_state,
+        errors=errors,
+        warnings=warnings,
+        repair_hints=repair_hints,
+        broken_links=broken_links,
+        run_lock_mismatches=run_lock_mismatches,
+        diagnostics=diagnostics,
+    )
 
 
 def _relative_project_path(workspace_root: Path, path: Path) -> str:

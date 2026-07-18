@@ -15,7 +15,7 @@ def test_canonical_config_is_version_three_without_topology_state(
     project = tmp_path / "project"
     project.mkdir()
     init_canonical_project_state(project, create_sibling_store=True)
-    config = project / ".ledger" / "task" / "config.toml"
+    config = project / ".ledger" / "taskledger" / "config.toml"
     text = config.read_text(encoding="utf-8")
     assert "config_version = 3" in text
     assert "taskledger_dir" not in text

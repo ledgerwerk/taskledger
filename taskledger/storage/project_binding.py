@@ -48,7 +48,7 @@ def read_project_binding(data_root: Path) -> TaskledgerProjectBinding | None:
     schema_version = document.get("schema_version")
     raw_uuid = document.get("project_uuid")
     project_name = document.get("project_name")
-    ledger = document.get("ledger")
+    ledger = document.get("ledger", document.get("tool"))
     mount = document.get("mount")
     if schema_version != 1:
         raise LaunchError(

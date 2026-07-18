@@ -87,7 +87,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
     )
 
 
-def inspect_v2_project(workspace_root: Path) -> dict[str, object]:  # noqa: C901
+def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:  # noqa: C901
     ctx = _build_scan_context(workspace_root)
 
     errors: list[str] = []
@@ -264,6 +264,11 @@ def inspect_v2_project(workspace_root: Path) -> dict[str, object]:  # noqa: C901
         "run_lock_mismatches": run_lock_mismatches,
         "diagnostics": diagnostics,
     }
+
+
+def inspect_v2_project(workspace_root: Path) -> dict[str, object]:
+    """Run doctor checks through the phase-based scan implementation."""
+    return _inspect_v2_project_phases(workspace_root)
 
 
 def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
