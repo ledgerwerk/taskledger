@@ -16,6 +16,7 @@ from taskledger.storage.events import load_events
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.migrations import inspect_records_for_migration
 from taskledger.storage.paths import (
+    ProjectLocator,
     ProjectPaths,
     load_project_locator,
     resolve_project_paths,
@@ -40,7 +41,7 @@ class DoctorScanContext:
     workspace_root: Path
     resolved_paths: ProjectPaths
     paths: V2Paths
-    locator: object  # ProjectLocator
+    locator: ProjectLocator  # ProjectLocator
     tasks: tuple[TaskRecord, ...]
     task_by_id: Mapping[str, TaskRecord]
     locks: tuple[TaskLock, ...]

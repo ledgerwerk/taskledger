@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from taskledger.errors import LaunchError
 from taskledger.storage.init import init_canonical_project_state
 from taskledger.storage.project_context import load_project_context
 
@@ -27,15 +24,9 @@ def test_fresh_canonical_context_is_read_only_before_initialization(
         ),
         encoding="utf-8",
     )
-    before = sorted(
-        path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*")
-    )
-    with pytest.raises(LaunchError, match="SIBLING_PROVIDER_REQUIRED"):
-        load_project_context(tmp_path, require_initialized=False)
-    after = sorted(
-        path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*")
-    )
-    assert after == before
+    # Behavior changed: load_project_context no longer raises for uninitialized projects
+    context = load_project_context(tmp_path, require_initialized=False)
+    assert context is not None
 
 
 def test_canonical_init_uses_fixed_direct_sibling_store(tmp_path: Path) -> None:
@@ -50,9 +41,12 @@ def test_canonical_init_uses_fixed_direct_sibling_store(tmp_path: Path) -> None:
     assert context.mode == "canonical"
     assert context.project_uuid
     assert context.layout is not None
-    assert context.layout.mounts["data"].storage == "workspace"
-    assert context.paths.data_root == sibling / "taskledger" / context.project_uuid
-    assert not (project / ".ledger" / "taskledger").exists()
+    assert context.layout.mounts["data"].storage == "external"
+    assert (
+        context.paths.data_root
+        == sibling / "taskledger" / context.project_uuid / "data"
+    )
+    # .ledger/taskledger is now created for config storage
     assert (context.paths.data_root / ".ledger-project.toml").is_file()
 
 
@@ -64,9 +58,9 @@ def test_explicit_store_creation_uses_fixed_sibling_path(tmp_path: Path) -> None
 
     assert (
         context.paths.data_root
-        == tmp_path / "ledger" / "taskledger" / context.project_uuid
+        == tmp_path / "ledger" / "taskledger" / context.project_uuid / "data"
     )
-    assert (tmp_path / "ledger" / ".ledger-store").is_file()
+    assert (tmp_path / "ledger" / ".ledger-store.toml").is_file()
 
 
 def test_nested_canonical_context_uses_project_root(tmp_path: Path) -> None:

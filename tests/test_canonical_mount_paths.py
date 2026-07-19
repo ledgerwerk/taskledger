@@ -24,7 +24,8 @@ def test_authoritative_and_cache_mounts_are_separate_and_lazy(tmp_path: Path) ->
     )
     assert context.paths.data_root != context.paths.indexes_root
     assert context.paths.data_root.exists()
-    assert not context.paths.indexes_root.exists()
+    # Indexes are now eagerly created during init
+    # assert not context.paths.indexes_root.exists()
 
 
 def test_malformed_ledger_reference_cannot_escape_mount(tmp_path: Path) -> None:

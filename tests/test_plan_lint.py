@@ -45,7 +45,7 @@ def _start_planning(tmp_path: Path, slug: str = "lint-task") -> None:
 
 
 def _enable_planning_guidance(tmp_path: Path) -> None:
-    config_path = tmp_path / "taskledger.toml"
+    config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8")
         + "\n"

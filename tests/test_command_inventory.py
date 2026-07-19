@@ -191,6 +191,8 @@ def test_no_other_deprecated_commands() -> None:
     deprecated = sorted(k for k, v in COMMAND_METADATA.items() if v.deprecated)
     assert deprecated == [
         "lock break",
+        "sync git export-local",
+        "sync git import-local",
         "sync git sync",
     ]
 

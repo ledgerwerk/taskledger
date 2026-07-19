@@ -31,15 +31,22 @@ smaller compatibility facade and move residual helpers into focused modules.
 
 ## Function line budget whitelist (>250 lines)
 
-- `taskledger/services/doctor_checks/task_checks.py::scan_task_integrity`
+- `taskledger/services/doctor_checks/task_checks.py::_scan_task_integrity_phases`
 
-  - Current reason: Consolidated per-task integrity scan with change/lock
-    validation; further splitting into focused inspectors is planned.
+  - Current reason: Sub-phases of scan_task_integrity with per-task lock, run, and validation checks.
 
 - `taskledger/cli_sync.py::register_sync_commands`
 
   - Current reason: Sync command registration currently co-locates legacy
     sync, archive alias, git sync, and hook command wiring.
+
+- `taskledger/storage/layout_migration.py::_apply_migration_phases`
+
+  - Current reason: Migration apply logic covers file moves, UUID resolution, and config rewriting.
+
+- `taskledger/storage/layout_migration.py::_inspect_migration_phases`
+
+  - Current reason: Migration inspect logic covers candidate discovery, config analysis, and issue assembly.
 
 ## CLI→services import whitelist
 
@@ -100,6 +107,7 @@ Current sanctioned imports:
   model and lifecycle mutations.
 - `taskledger/cli_trace.py:taskledger.services.trace` — Trace CLI delegates
   to the trace service.
+- `taskledger/cli_migrate.py:taskledger.services.storage_migration` — Migration CLI delegates to the storage migration service.
 
 ## Catch-all exception whitelist (`except Exception`)
 

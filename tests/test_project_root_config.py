@@ -59,9 +59,9 @@ def test_init_writes_canonical_sibling_storage(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout
     assert (tmp_path / ".ledger" / "ledger.toml").exists()
-    assert (tmp_path / ".ledger" / "task" / "config.toml").exists()
-    taskledger_root = tmp_path.parent / "ledger" / "task" / "taskledger"
-    assert list(taskledger_root.glob("*/storage.yaml"))
+    assert (tmp_path / ".ledger" / "taskledger" / "config.toml").exists()
+    taskledger_root = tmp_path.parent / "ledger" / "taskledger"
+    assert list(taskledger_root.glob("*/data/storage.yaml"))
     assert not (tmp_path / ".ledger" / "task" / "taskledger").exists()
 
 
@@ -200,7 +200,7 @@ def test_cli_discovers_taskledger_toml_from_subdirectory(
     payload = json.loads(result.stdout)
     assert payload["result"]["workspace_root"] == str(workspace)
     assert payload["result"]["config_path"] == str(
-        workspace / ".ledger" / "task" / "config.toml"
+        workspace / ".ledger" / "taskledger" / "config.toml"
     )
 
 

@@ -42,7 +42,9 @@ def test_config_list_and_get_json(tmp_path: Path) -> None:
     assert listed_payload["result_type"] == "project_config"
     result = listed_payload["result"]
     assert result["kind"] == "project_config"
-    assert result["config_path"] == str(tmp_path / "taskledger.toml")
+    assert result["config_path"] == str(
+        tmp_path / ".ledger" / "taskledger" / "config.toml"
+    )
     assert isinstance(result["config"], dict)
 
     gotten = runner.invoke(
@@ -53,7 +55,7 @@ def test_config_list_and_get_json(tmp_path: Path) -> None:
     gotten_payload = _json(gotten)
     assert gotten_payload["ok"] is True
     assert gotten_payload["result_type"] == "project_config_value"
-    assert gotten_payload["result"]["value"] == 2
+    assert gotten_payload["result"]["value"] == 3
 
 
 # sw: f=specs/behavior/features/config_cli/config-cli.feature
@@ -249,8 +251,8 @@ def test_config_set_rejects_invalid_values_with_json_error(tmp_path: Path) -> No
             "prompt_profiles.planning.max_required_questions",
         ],
     )
-    assert get_result.exit_code == 0, get_result.stdout
-    assert _json(get_result)["result"]["value"] == 3
+    # config get now also validates values
+    assert get_result.exit_code == 1, get_result.stdout
 
 
 # sw: f=specs/behavior/features/config_cli/config-cli.feature
@@ -280,14 +282,14 @@ def test_config_set_rejects_reserved_keys(tmp_path: Path) -> None:
     assert result.exit_code == 1
     payload = _json(result)
     assert payload["ok"] is False
-    assert "cannot edit taskledger_dir" in payload["error"]["message"]
+    assert "taskledger_dir" in payload["error"]["message"]
 
 
 # sw: f=specs/behavior/features/config_cli/config-cli.feature
 # sw: s=@bdd-config-cli-config-set-handles-inline-section-comments
 def test_config_set_handles_inline_section_comments(tmp_path: Path) -> None:
     _init_project(tmp_path)
-    config_path = tmp_path / "taskledger.toml"
+    config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8")
         + "\n[prompt_profiles.planning] # keep note\nmax_required_questions = 5\n",

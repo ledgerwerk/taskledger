@@ -7,10 +7,11 @@ import yaml
 from typer.testing import CliRunner
 
 from taskledger.cli import app
+from taskledger.storage.project_context import load_project_context
 
 
 def _enable_event_logging(tmp_path: Path) -> None:
-    config_path = tmp_path / "taskledger.toml"
+    config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8") + "\n[event_logging]\nenabled = true\n",
         encoding="utf-8",
@@ -30,6 +31,11 @@ runner = _make_runner()
 def _init_project(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
     assert result.exit_code == 0
+
+
+def _data_root(tmp_path: Path) -> Path:
+    context = load_project_context(tmp_path)
+    return context.paths.data_root
 
 
 def _json(result) -> dict[str, object]:
@@ -84,7 +90,7 @@ def test_break_lock_writes_audit_file_and_repair_event(tmp_path: Path) -> None:
         "tasks/task-0001/audit/broken-lock-"
     )
 
-    project_dir = tmp_path / ".taskledger" / "ledgers" / "main"
+    project_dir = _data_root(tmp_path) / "ledgers" / "main"
     audit_path = project_dir / payload["result"]["audit_path"]
     audit_payload = yaml.safe_load(audit_path.read_text(encoding="utf-8"))
     assert audit_payload["broken_reason"] == "recover stale planning lock"
@@ -126,13 +132,7 @@ def test_stale_lock_blocks_new_run_until_explicit_break(tmp_path: Path) -> None:
     )
 
     lock_path = (
-        tmp_path
-        / ".taskledger"
-        / "ledgers"
-        / "main"
-        / "tasks"
-        / "task-0001"
-        / "lock.yaml"
+        _data_root(tmp_path) / "ledgers" / "main" / "tasks" / "task-0001" / "lock.yaml"
     )
     lock_payload = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
     lock_payload["expires_at"] = "2000-01-01T00:00:00+00:00"

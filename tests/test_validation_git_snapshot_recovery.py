@@ -39,7 +39,9 @@ def _invoke_json(args: list[str], *, cwd: Path, ok: bool = True) -> dict[str, An
 
 
 def _write_local_config(tmp_path: Path) -> None:
-    (tmp_path / "taskledger.toml").write_text(
+    config_dir = tmp_path / ".ledger" / "taskledger"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.toml").write_text(
         "config_version = 2\n"
         'taskledger_dir = ".taskledger"\n'
         'ledger_ref = "main"\n'
@@ -52,7 +54,6 @@ def _write_local_config(tmp_path: Path) -> None:
 
 
 def _init_git_project(tmp_path: Path) -> None:
-    _write_local_config(tmp_path)
     _run_git(tmp_path, "init")
     _run_git(tmp_path, "config", "user.email", "test@example.invalid")
     _run_git(tmp_path, "config", "user.name", "Taskledger Test")
@@ -60,7 +61,6 @@ def _init_git_project(tmp_path: Path) -> None:
     _run_git(tmp_path, "add", ".")
     _run_git(tmp_path, "commit", "-m", "initial")
     _invoke(["init"], cwd=tmp_path)
-    _write_local_config(tmp_path)
 
 
 def _prepare_implemented_task(

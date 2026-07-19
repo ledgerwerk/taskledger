@@ -59,7 +59,7 @@ kind = "review"
 def _setup_planning_task(workspace: Path, *, with_pipeline: bool) -> None:
     assert runner.invoke(app, ["--cwd", str(workspace), "init"]).exit_code == 0
     if with_pipeline:
-        _append_pipeline_config(workspace / "taskledger.toml")
+        _append_pipeline_config(workspace / ".ledger" / "taskledger" / "config.toml")
     assert (
         runner.invoke(
             app,

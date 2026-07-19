@@ -48,7 +48,7 @@ description = "Add failing tests first."
 
 def _setup_active_task(workspace: Path) -> None:
     assert runner.invoke(app, ["--cwd", str(workspace), "init"]).exit_code == 0
-    _append_pipeline_config(workspace / "taskledger.toml")
+    _append_pipeline_config(workspace / ".ledger" / "taskledger" / "config.toml")
     assert (
         runner.invoke(
             app,

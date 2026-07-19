@@ -938,7 +938,7 @@ def _inspect_migration_phases(  # noqa: C901
                 details={"candidates": candidates},
             )
         )
-    elif selected["kind"] == "legacy-uuid-sibling":
+    elif selected is not None and selected["kind"] == "legacy-uuid-sibling":
         for candidate in candidates:
             if (
                 candidate["kind"] == "legacy-config-external"

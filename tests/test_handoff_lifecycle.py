@@ -18,6 +18,7 @@ from taskledger.services.handoff_lifecycle import (
     close_handoff,
 )
 from taskledger.services.tasks import add_todo
+from taskledger.storage.project_context import load_project_context
 from taskledger.storage.task_store import resolve_handoff
 
 
@@ -169,8 +170,7 @@ def test_handoff_list_raises_for_malformed_record() -> None:
         init_project(workspace)
         create_task(workspace, title="Test Task", description="Test", slug="task-0001")
         handoff_dir = (
-            workspace
-            / ".taskledger"
+            load_project_context(workspace).paths.data_root
             / "ledgers"
             / "main"
             / "tasks"

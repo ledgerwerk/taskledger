@@ -91,6 +91,7 @@ LEDGERCORE_IMPORT_ALLOWLIST: set[str] = {
     "taskledger/storage/project_config.py",
     "taskledger/storage/project_identity.py",
     "taskledger/storage/yaml_store.py",
+    "taskledger/storage/layout_migration.py",
 }
 
 

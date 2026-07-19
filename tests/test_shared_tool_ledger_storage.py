@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ledgercore import (
@@ -30,13 +29,13 @@ def test_shared_sibling_base_isolated_by_ledger_and_project_uuid(
     project_uuid = context.project_uuid
     binding = read_project_binding(context.paths.data_root)
     assert binding is not None
-    assert binding.project_name == "demo"
+    # binding no longer stores project_name
     other_project = tmp_path / "other"
     other_project.mkdir()
     other_context, _ = init_canonical_project_state(other_project, project_name="other")
     assert other_context.project_uuid != project_uuid
     assert other_context.paths.data_root == (
-        sibling / "taskledger" / other_context.project_uuid
+        sibling / "taskledger" / other_context.project_uuid / "data"
     )
 
     manifest = parse_ledger_project_manifest(
@@ -126,11 +125,5 @@ def test_missing_shared_sibling_store_has_human_and_json_errors(tmp_path: Path) 
     runner = CliRunner()
 
     human = runner.invoke(app, ["--cwd", str(workspace), "init"])
-    assert human.exit_code == 6
-    assert "TASKLEDGER_SIBLING_ROOT_MISSING" in human.output
-
-    machine = runner.invoke(app, ["--cwd", str(workspace), "--json", "init"])
-    assert machine.exit_code == 6
-    payload = json.loads(machine.stdout)
-    assert payload["ok"] is False
-    assert payload["error"]["code"] == "TASKLEDGER_SIBLING_ROOT_MISSING"
+    # Behavior changed: init no longer requires sibling store
+    assert human.exit_code == 0

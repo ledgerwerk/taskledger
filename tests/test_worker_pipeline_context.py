@@ -151,7 +151,7 @@ def test_context_for_implementer_unchanged_without_worker_pipeline(
     )
     assert before.exit_code == 0, before.stdout
 
-    _append_pipeline_config(tmp_path / "taskledger.toml")
+    _append_pipeline_config(tmp_path / ".ledger" / "taskledger" / "config.toml")
 
     after = runner.invoke(
         app,
@@ -175,7 +175,7 @@ def test_worker_context_renders_base_context_plus_worker_guidance(
     tmp_path: Path,
 ) -> None:
     _setup_task_with_accepted_plan(tmp_path)
-    _append_pipeline_config(tmp_path / "taskledger.toml")
+    _append_pipeline_config(tmp_path / ".ledger" / "taskledger" / "config.toml")
 
     result = runner.invoke(
         app,
@@ -207,7 +207,7 @@ def test_worker_context_renders_base_context_plus_worker_guidance(
 # sw: s=@bdd-worker-pipeline-context-pipeline-context-command-renders-worker-context
 def test_pipeline_context_command_renders_worker_context(tmp_path: Path) -> None:
     _setup_task_with_accepted_plan(tmp_path)
-    _append_pipeline_config(tmp_path / "taskledger.toml")
+    _append_pipeline_config(tmp_path / ".ledger" / "taskledger" / "config.toml")
 
     result = runner.invoke(
         app,

@@ -9,7 +9,7 @@ from taskledger.cli import app
 
 
 def _enable_event_logging(tmp_path: Path) -> None:
-    config_path = tmp_path / "taskledger.toml"
+    config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8") + "\n[event_logging]\nenabled = true\n",
         encoding="utf-8",

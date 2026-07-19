@@ -6,6 +6,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from taskledger.cli import app
+from taskledger.storage.project_context import load_project_context
 
 
 def _make_runner() -> CliRunner:
@@ -23,8 +24,13 @@ def _init_project(tmp_path: Path) -> None:
     assert result.exit_code == 0
 
 
+def _data_root(tmp_path: Path) -> Path:
+    context = load_project_context(tmp_path)
+    return context.paths.data_root
+
+
 def _disable_event_logging(tmp_path: Path) -> None:
-    config_path = tmp_path / "taskledger.toml"
+    config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
     text = config_path.read_text(encoding="utf-8")
     config_path.write_text(
         text + "\n[event_logging]\nenabled = false\n",
@@ -68,7 +74,9 @@ def test_runtime_events_enabled_by_default_writes_events(tmp_path: Path) -> None
     _init_project(tmp_path)
     _create_and_activate_task(tmp_path)
 
-    event_files = sorted((tmp_path / ".taskledger").glob("**/events/*.ndjson"))
+    event_files = sorted(
+        (_data_root(tmp_path) / "ledgers" / "main").glob("**/events/*.ndjson")
+    )
     assert event_files
 
     events = []
@@ -138,7 +146,9 @@ def test_lock_break_writes_events_by_default(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0
 
-    event_files = sorted((tmp_path / ".taskledger").glob("**/events/*.ndjson"))
+    event_files = sorted(
+        (_data_root(tmp_path) / "ledgers" / "main").glob("**/events/*.ndjson")
+    )
     assert event_files
     events = []
     for path in event_files:
@@ -158,7 +168,9 @@ def test_event_logging_false_disables_new_action_events(tmp_path: Path) -> None:
     _disable_event_logging(tmp_path)
     _create_and_activate_task(tmp_path)
 
-    event_files = sorted((tmp_path / ".taskledger").glob("**/events/*.ndjson"))
+    event_files = sorted(
+        (_data_root(tmp_path) / "ledgers" / "main").glob("**/events/*.ndjson")
+    )
     assert event_files == []
 
     result = runner.invoke(
@@ -178,7 +190,9 @@ def test_existing_events_readable_after_disable(tmp_path: Path) -> None:
     _create_and_activate_task(tmp_path)
 
     # Verify events were written (default-on)
-    event_files = sorted((tmp_path / ".taskledger").glob("**/events/*.ndjson"))
+    event_files = sorted(
+        (_data_root(tmp_path) / "ledgers" / "main").glob("**/events/*.ndjson")
+    )
     assert len(event_files) > 0
 
     # Disable event logging

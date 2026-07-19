@@ -13,7 +13,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypeVar
+from typing import Any, Literal, TypeVar
 
 from taskledger.domain.models import (
     ActiveActorState,
@@ -62,7 +62,7 @@ def _list_records(
     *,
     pattern: str,
     loader: Callable[[Path], T],
-    sort_key: Callable[[T], object] | None = None,
+    sort_key: Callable[[T], Any] | None = None,
 ) -> list[T]:
     """Generic sidecar record enumerator: list files matching *pattern*, load, sort."""
     if not directory.exists():

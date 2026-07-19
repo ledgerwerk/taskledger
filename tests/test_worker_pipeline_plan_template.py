@@ -117,7 +117,9 @@ def test_plan_template_requires_opt_in_flag_for_worker_pipeline_hints(
     tmp_path: Path,
 ) -> None:
     _setup_planning_task(tmp_path)
-    _append_pipeline_config(tmp_path / "taskledger.toml", mode="template")
+    _append_pipeline_config(
+        tmp_path / ".ledger" / "taskledger" / "config.toml", mode="template"
+    )
 
     result = runner.invoke(
         app,
@@ -143,7 +145,9 @@ def test_worker_plan_template_uses_configured_steps_not_hardcoded_names(
     tmp_path: Path,
 ) -> None:
     _setup_planning_task(tmp_path)
-    _append_pipeline_config(tmp_path / "taskledger.toml", mode="template")
+    _append_pipeline_config(
+        tmp_path / ".ledger" / "taskledger" / "config.toml", mode="template"
+    )
 
     result = runner.invoke(
         app,
@@ -179,7 +183,9 @@ def test_plan_template_worker_hints_require_template_or_guided_mode(
     tmp_path: Path,
 ) -> None:
     _setup_planning_task(tmp_path)
-    _append_pipeline_config(tmp_path / "taskledger.toml", mode="available")
+    _append_pipeline_config(
+        tmp_path / ".ledger" / "taskledger" / "config.toml", mode="available"
+    )
 
     result = runner.invoke(
         app,

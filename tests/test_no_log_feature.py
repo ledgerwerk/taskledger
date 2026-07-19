@@ -34,7 +34,7 @@ def _init_project(tmp_path: Path) -> None:
 
 
 def _enable_agent_logging(tmp_path: Path) -> None:
-    config_path = tmp_path / "taskledger.toml"
+    config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8")
         + "\n"
@@ -335,7 +335,7 @@ class TestConfigFiltering:
     # sw: s=@bdd-no-log-feature-capture-safe-read-only-false-skips-view
     def test_capture_safe_read_only_false_skips_view(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
-        config_path = tmp_path / "taskledger.toml"
+        config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
         config_path.write_text(
             config_path.read_text(encoding="utf-8")
             + "\n"
@@ -362,7 +362,7 @@ class TestConfigFiltering:
         self, tmp_path: Path
     ) -> None:
         _init_project(tmp_path)
-        config_path = tmp_path / "taskledger.toml"
+        config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
         config_path.write_text(
             config_path.read_text(encoding="utf-8")
             + "\n"
@@ -393,7 +393,7 @@ class TestConfigFiltering:
         # because filtering is only applied at the app level, not within command groups.
         # Nested commands will be filtered in a future enhancement.
         _init_project(tmp_path)
-        config_path = tmp_path / "taskledger.toml"
+        config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
         config_path.write_text(
             config_path.read_text(encoding="utf-8")
             + "\n"
