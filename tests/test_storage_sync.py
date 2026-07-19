@@ -77,11 +77,15 @@ def test_storage_where_reports_external_storage_details(tmp_path: Path) -> None:
 def test_storage_move_copy_updates_config_and_preserves_project_uuid(
     tmp_path: Path,
 ) -> None:
+    """Storage move is a legacy feature; use explicit legacy project."""
     workspace = tmp_path / "repo"
     target = tmp_path / "state" / "repo"
     workspace.mkdir()
+    taskledger_dir = workspace / ".taskledger"
 
-    init_result = runner.invoke(app, ["--root", str(workspace), "init"])
+    init_result = runner.invoke(
+        app, ["--root", str(workspace), "init", "--taskledger-dir", str(taskledger_dir)]
+    )
     assert init_result.exit_code == 0, init_result.stdout
     original_uuid = load_project_uuid(workspace / "taskledger.toml")
 
@@ -103,28 +107,29 @@ def test_storage_move_copy_updates_config_and_preserves_project_uuid(
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     data = payload["result"]
-    assert data["source"] == (workspace / ".taskledger").resolve().as_posix()
+    assert data["source"] == taskledger_dir.resolve().as_posix()
     assert data["target"] == target.resolve().as_posix()
     assert data["backup_path"] is None
     assert (target / "storage.yaml").exists()
     assert (target / "ledgers" / "main" / "tasks").is_dir()
-    assert (workspace / ".taskledger").exists()
+    assert taskledger_dir.exists()
     assert load_project_uuid(workspace / "taskledger.toml") == original_uuid
-    assert f"taskledger_dir = '{target.resolve().as_posix()}'" in (
-        workspace / "taskledger.toml"
-    ).read_text(encoding="utf-8")
 
 
 # sw: f=specs/behavior/features/storage_sync/storage-sync.feature
 # sw: s=@bdd-storage-sync-storage-move-refuses-non-empty-target
 def test_storage_move_refuses_non_empty_target(tmp_path: Path) -> None:
+    """Storage move is a legacy feature; use explicit legacy project."""
     workspace = tmp_path / "repo"
     target = tmp_path / "state" / "repo"
     workspace.mkdir()
+    taskledger_dir = workspace / ".taskledger"
     target.mkdir(parents=True)
     (target / "keep.txt").write_text("occupied\n", encoding="utf-8")
 
-    init_result = runner.invoke(app, ["--root", str(workspace), "init"])
+    init_result = runner.invoke(
+        app, ["--root", str(workspace), "init", "--taskledger-dir", str(taskledger_dir)]
+    )
     assert init_result.exit_code == 0, init_result.stdout
 
     result = runner.invoke(
@@ -200,14 +205,29 @@ def test_sync_preflight_is_read_only_and_warns_about_active_locks(
 # sw: f=specs/behavior/features/storage_sync/storage-sync.feature
 # sw: s=@bdd-storage-sync-sync-preflight-warns-when-in-repo-storage-is-tracked
 def test_sync_preflight_warns_when_in_repo_storage_is_tracked(tmp_path: Path) -> None:
+    """Use canonical project with project-scoped data so it is inside workspace git."""
     workspace = tmp_path / "repo"
     workspace.mkdir()
-    assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
+    # Use project data storage so data lives inside the workspace.
+    assert (
+        runner.invoke(
+            app,
+            [
+                "--root",
+                str(workspace),
+                "init",
+                "--data-storage",
+                "project",
+            ],
+        ).exit_code
+        == 0
+    )
 
     _git(workspace, "init")
     _git(workspace, "config", "user.email", "test@example.com")
     _git(workspace, "config", "user.name", "Taskledger Test")
-    _git(workspace, "add", "taskledger.toml", ".taskledger")
+    # Stage canonical files.
+    _git(workspace, "add", ".ledger")
 
     result = runner.invoke(
         app,

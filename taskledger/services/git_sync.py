@@ -54,6 +54,7 @@ def build_git_sync_config(
     project_path: str | None = None,
     remote: str | None = None,
     branch: str | None = None,
+    allow_uninitialized: bool = False,
 ) -> GitSyncConfig:
     locator = load_project_locator(workspace_root)
     context = load_project_context(workspace_root, require_initialized=False)
@@ -62,10 +63,23 @@ def build_git_sync_config(
         data_path = context.layout.mounts["data"].path.resolve()
         repository = _git_root(data_path)
         if repository is None:
-            raise LaunchError(
-                "TASKLEDGER_STORAGE_NOT_GIT_BACKED: resolved data mount is not "
-                "inside a Git worktree."
-            )
+            if not allow_uninitialized:
+                raise LaunchError(
+                    "TASKLEDGER_STORAGE_NOT_GIT_BACKED: resolved data mount is not "
+                    "inside a Git worktree."
+                )
+            # Derive repo root from mount semantics for fresh canonical init.
+            # External mount: use the external root as repo root.
+            mount = context.layout.mounts["data"]
+            if mount.storage == "external" and mount.root is not None:
+                repository = Path(mount.root).resolve()
+            elif mount.storage == "project":
+                repository = Path(context.project_root).resolve()
+            else:
+                raise LaunchError(
+                    "TASKLEDGER_STORAGE_NOT_GIT_BACKED: cannot derive repository "
+                    f"root for storage type {mount.storage!r}."
+                )
         sync_config = context.config.sync_git
         if (
             repo is not None
@@ -74,8 +88,11 @@ def build_git_sync_config(
             or sync_config.project_path is not None
         ):
             raise LaunchError(
-                "TASKLEDGER_STORAGE_TARGET_INVALID: sync.git cannot select "
-                "storage; use the resolved data mount."
+                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: Canonical Taskledger storage "
+                "fixes the Git sync repository and project path. "
+                "Do not pass --repo or --project-path."
+                f"\nResolved data mount: {data_path}"
+                + (f"\nResolved repository root: {repository}" if repository else "")
             )
         relative = data_path.relative_to(repository).as_posix()
         return GitSyncConfig(
@@ -229,6 +246,7 @@ def init_git_sync_repo(
             project_path=project_path,
             remote=remote,
             branch=branch,
+            allow_uninitialized=True,
         )
         if adopt_existing or mode != "move":
             raise LaunchError(
@@ -424,27 +442,17 @@ def git_sync_import_local(
     }
 
 
-def git_sync_commit(
+def _git_sync_commit_with_config(
     workspace_root: Path,
+    config: GitSyncConfig,
     *,
-    repo: Path | None = None,
-    project_path: str | None = None,
-    remote: str | None = None,
-    branch: str | None = None,
+    canonical: bool,
     message: str | None = None,
     allow_active_locks: bool = False,
     require_clean_repo: bool = False,
     include_outside_project: bool = False,
 ) -> dict[str, object]:
-    context = load_project_context(workspace_root)
-    canonical = context.mode == "canonical"
-    config = build_git_sync_config(
-        workspace_root,
-        repo=repo,
-        project_path=project_path,
-        remote=remote,
-        branch=branch,
-    )
+    """Commit using an already-resolved config (no public selector parsing)."""
     locator = load_project_locator(workspace_root)
     storage_path = _storage_path(config)
     if locator.taskledger_dir.resolve() != storage_path.resolve():
@@ -540,6 +548,37 @@ def git_sync_commit(
         "outside_status_lines": outside_dirty,
         "warnings": warnings,
     }
+
+
+def git_sync_commit(
+    workspace_root: Path,
+    *,
+    repo: Path | None = None,
+    project_path: str | None = None,
+    remote: str | None = None,
+    branch: str | None = None,
+    message: str | None = None,
+    allow_active_locks: bool = False,
+    require_clean_repo: bool = False,
+    include_outside_project: bool = False,
+) -> dict[str, object]:
+    context = load_project_context(workspace_root)
+    config = build_git_sync_config(
+        workspace_root,
+        repo=repo,
+        project_path=project_path,
+        remote=remote,
+        branch=branch,
+    )
+    return _git_sync_commit_with_config(
+        workspace_root,
+        config,
+        canonical=context.mode == "canonical",
+        message=message,
+        allow_active_locks=allow_active_locks,
+        require_clean_repo=require_clean_repo,
+        include_outside_project=include_outside_project,
+    )
 
 
 def git_sync_export_local(
@@ -653,12 +692,10 @@ def git_sync_push(
         remote=remote,
         branch=branch,
     )
-    exported = git_sync_commit(
+    exported = _git_sync_commit_with_config(
         workspace_root,
-        repo=config.repo_path,
-        project_path=config.project_path,
-        remote=config.remote,
-        branch=config.branch,
+        config,
+        canonical=context.mode == "canonical",
         message=message,
         allow_active_locks=allow_active_locks,
         include_outside_project=context.mode != "canonical",
@@ -696,20 +733,13 @@ def git_sync(
         remote=remote,
         branch=branch,
     )
+    # Call pull/push without passing selectors; they build their own config.
     pull_payload = git_sync_pull(
         workspace_root,
-        repo=config.repo_path,
-        project_path=config.project_path,
-        remote=config.remote,
-        branch=config.branch,
         allow_dirty=allow_dirty,
     )
     push_payload = git_sync_push(
         workspace_root,
-        repo=config.repo_path,
-        project_path=config.project_path,
-        remote=config.remote,
-        branch=config.branch,
         message=message,
         allow_dirty=allow_dirty,
         allow_active_locks=allow_active_locks,

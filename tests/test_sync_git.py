@@ -47,21 +47,23 @@ def _output(result: object) -> str:
     return f"{stdout}{stderr}"
 
 
-def _init_sync_workspace(
+def _init_legacy_sync_workspace(
     tmp_path: Path,
     *,
     workspace_name: str = "repo",
     sync_repo: Path | None = None,
     project_path: str = "project-a",
 ) -> tuple[Path, Path]:
+    """Create an explicit legacy project for sync testing."""
     workspace = tmp_path / workspace_name
     if workspace.exists():
         raise AssertionError(f"workspace already exists: {workspace}")
     workspace.mkdir()
+    taskledger_dir = workspace / ".taskledger"
     assert (
         runner.invoke(
             app,
-            ["--root", str(workspace), "init", "--create-sibling-store"],
+            ["--root", str(workspace), "init", "--taskledger-dir", str(taskledger_dir)],
         ).exit_code
         == 0
     )
@@ -99,6 +101,10 @@ def _init_sync_workspace(
     return workspace, sync_repo
 
 
+# Keep old name as alias for existing test references
+_init_sync_workspace = _init_legacy_sync_workspace
+
+
 # sw: f=specs/behavior/features/sync_git/sync-git.feature
 # sw: s=@bdd-sync-git-sync-git-help-promotes-pull-and-push
 def test_sync_git_help_promotes_pull_and_push(
@@ -106,10 +112,11 @@ def test_sync_git_help_promotes_pull_and_push(
 ) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
+    taskledger_dir = workspace / ".taskledger"
     assert (
         runner.invoke(
             app,
-            ["--root", str(workspace), "init", "--create-sibling-store"],
+            ["--root", str(workspace), "init", "--taskledger-dir", str(taskledger_dir)],
         ).exit_code
         == 0
     )

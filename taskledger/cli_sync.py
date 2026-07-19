@@ -36,17 +36,32 @@ from taskledger.cli_common import (
 from taskledger.errors import LaunchError
 
 
+def _sync_location_data_path(location: dict[str, object]) -> str:
+    """Return the data path from a storage location, handling legacy and canonical."""
+    legacy = location.get("taskledger_dir")
+    if isinstance(legacy, str) and legacy:
+        return legacy
+    mounts = location.get("mounts")
+    if isinstance(mounts, dict):
+        data = mounts.get("data")
+        if isinstance(data, dict):
+            path = data.get("path")
+            if isinstance(path, str) and path:
+                return path
+    return "<unresolved>"
+
+
 def _render_sync_preflight(payload: dict[str, object]) -> str:
     location = payload["location"]
     assert isinstance(location, dict)
     lines = [
-        f"Storage: {location['taskledger_dir']}",
-        f"Exists: {'yes' if payload['taskledger_dir_exists'] else 'no'}",
-        f"Doctor: {'healthy' if payload['doctor_healthy'] else 'issues found'}",
-        f"Active locks: {location['active_lock_count']}",
+        f"Storage: {_sync_location_data_path(location)}",
+        f"Exists: {'yes' if payload.get('taskledger_dir_exists') else 'no'}",
+        f"Doctor: {'healthy' if payload.get('doctor_healthy') else 'issues found'}",
+        f"Active locks: {location.get('active_lock_count', 0)}",
         (
             "Tracked in workspace Git: "
-            f"{'yes' if payload['tracked_in_workspace_git'] else 'no'}"
+            f"{'yes' if payload.get('tracked_in_workspace_git') else 'no'}"
         ),
     ]
     git_status_lines = payload.get("git_status_lines", [])

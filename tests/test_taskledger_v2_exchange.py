@@ -42,10 +42,21 @@ def _init_project(tmp_path: Path) -> None:
 
 
 def _copy_project_uuid(src_root: Path, dst_root: Path) -> None:
-    """Make dst_root project use the same project_uuid as src_root."""
+    """Make dst_root project use the same project_uuid as src_root.
+
+    Works for both canonical and legacy projects.
+    """
     from shutil import copy2
 
-    copy2(src_root / "taskledger.toml", dst_root / "taskledger.toml")
+    src_config = src_root / "taskledger.toml"
+    if src_config.exists():
+        copy2(src_config, dst_root / "taskledger.toml")
+        return
+    # Canonical: copy the manifest which holds the project UUID.
+    src_manifest = src_root / ".ledger" / "ledger.toml"
+    dst_ledger_dir = dst_root / ".ledger"
+    dst_ledger_dir.mkdir(parents=True, exist_ok=True)
+    copy2(src_manifest, dst_ledger_dir / "ledger.toml")
 
 
 def _set_ledger_next_task_number(root: Path, value: int) -> None:
@@ -1391,6 +1402,11 @@ def test_import_single_task_id_policy_fail_on_conflict(tmp_path: Path) -> None:
 # sw: f=specs/behavior/features/taskledger_v2_exchange/taskledger-v2-exchange.feature
 # sw: s=@bdd-taskledger-v2-exchange-import-advances-task-counter
 def test_import_single_task_updates_ledger_next_task_number(tmp_path: Path) -> None:
+    """After importing a high-numbered task, the next created task has a safe ID.
+
+    In canonical mode, IDs are derived from existing task inventory, not a
+    mutable counter. This test verifies the inventory-derived behavior.
+    """
     source_root = tmp_path / "source"
     dest_root = tmp_path / "dest"
     source_root.mkdir()
@@ -1398,49 +1414,35 @@ def test_import_single_task_updates_ledger_next_task_number(tmp_path: Path) -> N
     _init_project(source_root)
     _init_project(dest_root)
     _copy_project_uuid(source_root, dest_root)
-    _set_ledger_next_task_number(source_root, 87)
-    assert (
-        runner.invoke(
-            app,
-            [
-                "--cwd",
-                str(source_root),
-                "task",
-                "create",
-                "source-high-id",
-                "--description",
-                "Source state.",
-            ],
-        ).exit_code
-        == 0
-    )
+    # Create 3 tasks in source to get task-0001, task-0002, task-0003.
+    for i in range(1, 4):
+        assert (
+            runner.invoke(
+                app,
+                ["--cwd", str(source_root), "task", "create", f"task-{i}"],
+            ).exit_code
+            == 0
+        )
+    # Export task-0003.
     export_payload = _json(
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "--json", "export", "task-0087", "--overwrite"],
+            ["--cwd", str(source_root), "--json", "export", "task-0003", "--overwrite"],
         )
     )
     archive_path = Path(cast(str, export_payload["result"]["path"]))
-    import_payload = _json(
+    # Import into dest.
+    _json(
         runner.invoke(
             app,
             ["--cwd", str(dest_root), "--json", "import", str(archive_path)],
         )
     )
-    assert import_payload["result"]["ledger_next_task_number"] >= 88
+    # After importing task-0003, the next task should be task-0004.
     _json(
         runner.invoke(
             app,
-            [
-                "--cwd",
-                str(dest_root),
-                "--json",
-                "task",
-                "create",
-                "after-import",
-                "--description",
-                "Counter repair check.",
-            ],
+            ["--cwd", str(dest_root), "--json", "task", "create", "after-import"],
         )
     )
     show = _json(
@@ -1449,7 +1451,7 @@ def test_import_single_task_updates_ledger_next_task_number(tmp_path: Path) -> N
             ["--cwd", str(dest_root), "--json", "task", "show", "after-import"],
         )
     )
-    assert show["result"]["task"]["id"] == "task-0088"
+    assert show["result"]["task"]["id"] == "task-0004"
 
 
 # sw: f=specs/behavior/features/taskledger_v2_exchange/taskledger-v2-exchange.feature

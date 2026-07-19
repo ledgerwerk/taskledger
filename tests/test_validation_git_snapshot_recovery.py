@@ -217,9 +217,8 @@ def test_refresh_implementation_snapshot_requires_reason(tmp_path: Path) -> None
 
 
 def test_no_git_workspace_remains_compatible(tmp_path: Path) -> None:
-    _write_local_config(tmp_path)
+    # Create a canonical project without initializing Git.
     _invoke(["init"], cwd=tmp_path)
-    _write_local_config(tmp_path)
     task_id = _prepare_implemented_task(tmp_path)
 
     result = _invoke(["validate", "start", "--task", task_id], cwd=tmp_path)

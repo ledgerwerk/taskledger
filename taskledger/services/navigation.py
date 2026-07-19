@@ -116,103 +116,17 @@ def next_action_for_task(
     if is_archived_task(task):
         return _archived_next_action_payload(task)
     if active_stage == "planning":
-        questions = list_questions(workspace_root, task.id)
-        open_questions = _required_open_question_ids(questions)
-        answered_questions = [
-            item.id
-            for item in questions
-            if item.status == "answered" and item.required_for_plan
-        ]
-        latest_plan = _latest_plan_or_none(workspace_root, task.id)
-        stale_answers = (
-            _stale_answer_question_ids(questions, latest_plan)
-            if latest_plan is not None
-            else answered_questions
+        action, reason, next_item, blockers, progress = _planning_next_action(
+            workspace_root, task
         )
-        if open_questions:
-            action, reason = (
-                "question-answer",
-                "Required planning questions are open.",
-            )
-            question = _first_question_by_ids(questions, open_questions)
-            next_item = _question_next_item(question) if question is not None else None
-            progress["questions"] = {
-                "required_open": len(open_questions),
-                "required_open_ids": open_questions,
-            }
-            blockers.append(
-                {
-                    "kind": "open_questions",
-                    "question_ids": open_questions,
-                    "message": "Required planning questions must be answered.",
-                }
-            )
-        elif stale_answers:
-            action, reason = (
-                "plan-regenerate",
-                "Answered planning questions should be reflected in the plan.",
-            )
-            question = _first_question_by_ids(questions, stale_answers)
-            next_item = (
-                _answered_question_next_item(question) if question is not None else None
-            )
-            progress["questions"] = {
-                "required_open": 0,
-                "required_open_ids": [],
-                "answered_since_latest_plan": stale_answers,
-            }
-        else:
-            action, reason = (
-                "plan-propose",
-                "Planning is active; propose the next plan.",
-            )
     elif active_stage == "implementation":
-        todo_report = _build_todo_gate_report(workspace_root, task)
-        open_todo_ids = cast(list[str], todo_report.get("open_todos", []))
-        open_todo_count = len(open_todo_ids)
-        total_todos = todo_report.get("total", 0)
-        done_todos = todo_report.get("done", 0)
-        progress["todos"] = {
-            "total": total_todos if isinstance(total_todos, int) else 0,
-            "done": done_todos if isinstance(done_todos, int) else 0,
-            "open": open_todo_count,
-            "open_ids": open_todo_ids,
-        }
-        if open_todo_count > 0:
-            todo = _first_open_todo_from_report(workspace_root, task, open_todo_ids)
-            next_item = _todo_next_item(todo) if todo is not None else None
-            action, reason = (
-                "todo-work",
-                f"Implementation is in progress; {open_todo_count} todos remain.",
-            )
-        else:
-            action, reason = (
-                "implement-finish",
-                "All todos done; ready to finish implementation.",
-            )
-            next_item = _task_next_item(task)
+        action, reason, next_item, blockers, progress = _implementation_next_action(
+            workspace_root, task
+        )
     elif active_stage == "validation":
-        gate_report = build_validation_gate_report(workspace_root, task)
-        report_blockers = cast(list[dict[str, object]], gate_report.get("blockers", []))
-        blockers.extend(_compact_next_action_blockers(report_blockers))
-        progress["validation"] = _validation_progress(gate_report)
-        if report_blockers:
-            action, reason = (
-                "validate-check",
-                "Validation is in progress; required checks remain.",
-            )
-            next_item = _next_validation_item(
-                workspace_root,
-                task,
-                gate_report,
-                report_blockers,
-            )
-        else:
-            action, reason = (
-                "validate-finish",
-                "Validation is complete enough to finish.",
-            )
-            next_item = _task_next_item(task)
+        action, reason, next_item, blockers, progress = _validation_next_action(
+            workspace_root, task
+        )
     else:
         (
             action,
@@ -277,7 +191,184 @@ def next_action_for_task(
             }
         )
         next_item = _lock_next_item(task, lock)
+    return _build_next_action_payload(
+        workspace_root,
+        task,
+        action=action,
+        reason=reason,
+        next_item=next_item,
+        blockers=blockers,
+        progress=progress,
+        active_stage=active_stage,
+        runs=runs,
+        lock_diagnostics_dict=lock_diagnostics_dict,
+        lock_warning=lock_warning,
+    )
+
+
+def _planning_next_action(
+    workspace_root: Path,
+    task: TaskRecord,
+) -> tuple[
+    str,
+    str,
+    dict[str, object] | None,
+    list[dict[str, object]],
+    dict[str, object],
+]:
+    blockers: list[dict[str, object]] = []
+    progress: dict[str, object] = {}
+    next_item: dict[str, object] | None = None
+    questions = list_questions(workspace_root, task.id)
+    open_questions = _required_open_question_ids(questions)
+    answered_questions = [
+        item.id
+        for item in questions
+        if item.status == "answered" and item.required_for_plan
+    ]
+    latest_plan = _latest_plan_or_none(workspace_root, task.id)
+    stale_answers = (
+        _stale_answer_question_ids(questions, latest_plan)
+        if latest_plan is not None
+        else answered_questions
+    )
+    if open_questions:
+        action, reason = (
+            "question-answer",
+            "Required planning questions are open.",
+        )
+        question = _first_question_by_ids(questions, open_questions)
+        next_item = _question_next_item(question) if question is not None else None
+        progress["questions"] = {
+            "required_open": len(open_questions),
+            "required_open_ids": open_questions,
+        }
+        blockers.append(
+            {
+                "kind": "open_questions",
+                "question_ids": open_questions,
+                "message": "Required planning questions must be answered.",
+            }
+        )
+    elif stale_answers:
+        action, reason = (
+            "plan-regenerate",
+            "Answered planning questions should be reflected in the plan.",
+        )
+        question = _first_question_by_ids(questions, stale_answers)
+        next_item = (
+            _answered_question_next_item(question) if question is not None else None
+        )
+        progress["questions"] = {
+            "required_open": 0,
+            "required_open_ids": [],
+            "answered_since_latest_plan": stale_answers,
+        }
+    else:
+        action, reason = (
+            "plan-propose",
+            "Planning is active; propose the next plan.",
+        )
+    return action, reason, next_item, blockers, progress
+
+
+def _implementation_next_action(
+    workspace_root: Path,
+    task: TaskRecord,
+) -> tuple[
+    str,
+    str,
+    dict[str, object] | None,
+    list[dict[str, object]],
+    dict[str, object],
+]:
+    blockers: list[dict[str, object]] = []
+    progress: dict[str, object] = {}
+    todo_report = _build_todo_gate_report(workspace_root, task)
+    open_todo_ids = cast(list[str], todo_report.get("open_todos", []))
+    open_todo_count = len(open_todo_ids)
+    total_todos = todo_report.get("total", 0)
+    done_todos = todo_report.get("done", 0)
+    progress["todos"] = {
+        "total": total_todos if isinstance(total_todos, int) else 0,
+        "done": done_todos if isinstance(done_todos, int) else 0,
+        "open": open_todo_count,
+        "open_ids": open_todo_ids,
+    }
+    if open_todo_count > 0:
+        todo = _first_open_todo_from_report(workspace_root, task, open_todo_ids)
+        next_item = _todo_next_item(todo) if todo is not None else None
+        action, reason = (
+            "todo-work",
+            f"Implementation is in progress; {open_todo_count} todos remain.",
+        )
+    else:
+        action, reason = (
+            "implement-finish",
+            "All todos done; ready to finish implementation.",
+        )
+        next_item = _task_next_item(task)
+    return action, reason, next_item, blockers, progress
+
+
+def _validation_next_action(
+    workspace_root: Path,
+    task: TaskRecord,
+) -> tuple[
+    str,
+    str,
+    dict[str, object] | None,
+    list[dict[str, object]],
+    dict[str, object],
+]:
+    blockers: list[dict[str, object]] = []
+    progress: dict[str, object] = {}
+    gate_report = build_validation_gate_report(workspace_root, task)
+    report_blockers = cast(list[dict[str, object]], gate_report.get("blockers", []))
+    blockers.extend(_compact_next_action_blockers(report_blockers))
+    progress["validation"] = _validation_progress(gate_report)
+    if report_blockers:
+        action, reason = (
+            "validate-check",
+            "Validation is in progress; required checks remain.",
+        )
+        next_item = _next_validation_item(
+            workspace_root,
+            task,
+            gate_report,
+            report_blockers,
+        )
+    else:
+        action, reason = (
+            "validate-finish",
+            "Validation is complete enough to finish.",
+        )
+        next_item = _task_next_item(task)
+    return action, reason, next_item, blockers, progress
+
+
+def _build_next_action_payload(
+    workspace_root: Path,
+    task: TaskRecord,
+    *,
+    action: str,
+    reason: str,
+    next_item: dict[str, object] | None,
+    blockers: list[dict[str, object]],
+    progress: dict[str, object],
+    active_stage: str | None,
+    runs: list[TaskRunRecord],
+    lock_diagnostics_dict: dict[str, object] | None,
+    lock_warning: str | None,
+) -> dict[str, object]:
     next_command = _primary_command_for_next_item(action, next_item)
+    # Derive next_command from blocker hints when the static mapping has no entry.
+    if next_command is None and blockers:
+        for blocker in blockers:
+            hint = blocker.get("command_hint")
+            if isinstance(hint, str) and hint.strip():
+                next_command = hint.strip()
+                break
     commands = _commands_for_next_item(action, next_item)
     guidance_command = _guidance_command(
         workspace_root=workspace_root,

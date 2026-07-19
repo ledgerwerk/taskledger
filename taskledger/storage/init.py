@@ -112,16 +112,27 @@ def init_project_state(
     return paths, created
 
 
+def _reject_legacy_json_indexes(
+    data_root: Path,
+    *,
+    mode: str,
+) -> None:
+    """Reject obsolete JSON item/memory indexes for canonical and legacy projects."""
+    for name, label in (("items", "item"), ("memories", "memory")):
+        legacy_index = data_root / name / "index.json"
+        if legacy_index.exists():
+            raise LaunchError(
+                f"Legacy {label} JSON storage is unsupported: {legacy_index}. "
+                f"Project mode: {mode}. Data root: {data_root}. "
+                "Remove or migrate the obsolete index before continuing."
+            )
+
+
 def ensure_project_exists(workspace_root: Path) -> ProjectPaths:
     locator = load_project_locator(workspace_root)
     if locator.source == "canonical":
         context = load_project_context(workspace_root)
-        for name, label in (("items", "item"), ("memories", "memory")):
-            legacy_index = context.paths.data_root / name / "index.json"
-            if legacy_index.exists():
-                raise LaunchError(
-                    f"Legacy {label} JSON storage is unsupported: {legacy_index}"
-                )
+        _reject_legacy_json_indexes(context.paths.data_root, mode="canonical")
         return project_paths_for_root(
             context.project_root,
             context.paths.data_root,
@@ -133,6 +144,7 @@ def ensure_project_exists(workspace_root: Path) -> ProjectPaths:
         locator.taskledger_dir,
         config_path=locator.config_path,
     )
+    _reject_legacy_json_indexes(paths.taskledger_dir, mode="legacy")
     required = (
         paths.project_dir / "tasks",
         paths.project_dir / "intros",

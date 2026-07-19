@@ -269,13 +269,13 @@ def initialize_taskledger_bindings(
     if initialize_data:
         results[DATA_MOUNT] = _call(
             lambda: initialize_storage_binding(
-                layout.mounts[DATA_MOUNT], require_empty=False
+                layout.mounts[DATA_MOUNT], require_empty=True
             )
         )
     if initialize_indexes:
         results[INDEX_MOUNT] = _call(
             lambda: initialize_storage_binding(
-                layout.mounts[INDEX_MOUNT], require_empty=False
+                layout.mounts[INDEX_MOUNT], require_empty=True
             )
         )
     return results

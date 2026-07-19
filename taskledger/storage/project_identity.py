@@ -219,9 +219,19 @@ def _load_toml(path: Path) -> dict[object, object]:
 
 
 def _canonical_manifest_identity(config_path: Path) -> dict[object, object] | None:
-    if config_path.parent.name != "task" or config_path.parent.parent.name != ".ledger":
+    """Resolve project identity from .ledger/ledger.toml.
+
+    Recognizes the canonical shape ``<project>/.ledger/<tool>/config.toml``
+    generically, not only ``.ledger/task/config.toml``.
+    """
+    config_path = config_path.resolve()
+    if config_path.name != "config.toml":
         return None
-    manifest_path = config_path.parent.parent / "ledger.toml"
+    tool_dir = config_path.parent
+    ledger_dir = tool_dir.parent
+    if ledger_dir.name != ".ledger":
+        return None
+    manifest_path = ledger_dir / "ledger.toml"
     if not manifest_path.exists():
         return None
     data = _load_toml(manifest_path)
