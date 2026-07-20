@@ -1,12 +1,12 @@
-@area-config_cli @feature-config-cli @generated @needs-review
+@area-config_cli @feature-config-cli @generated
 Feature: Config Cli
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-config-cli
   Rule: Config Cli
 
-    @bdd-config-cli-config-list-and-get-json @needs-review
+    @req-REQ-0014 @ac-AC-0130
     Example: Config List And Get Json
       Given the pytest test setup is prepared
       When config list and get json is executed
@@ -14,7 +14,7 @@ Feature: Config Cli
       Then isinstance succeeds
       Then gotten.exit_code equals 0
 
-    @bdd-config-cli-config-keys-lists-known-paths @needs-review
+    @req-REQ-0014 @ac-AC-0129
     Example: Config Keys Lists Known Paths
       Given the pytest test setup is prepared
       When config keys lists known paths is executed
@@ -24,34 +24,34 @@ Feature: Config Cli
       Then 'prompt_profiles.<profile>.question_policy' is in key_names
       Then 'default_memory_update_mode' is in key_names
 
-    @bdd-config-cli-config-describe-shows-allowed-values-and-current-value @needs-review
+    @req-REQ-0014 @ac-AC-0126
     Example: Config Describe Shows Allowed Values And Current Value
       Given the pytest test setup is prepared
       When config describe shows allowed values and current value is executed
       Then set_result.exit_code equals 0
       Then describe_result.exit_code equals 0
 
-    @bdd-config-cli-config-describe-unknown-key-returns-error @needs-review
+    @req-REQ-0014 @ac-AC-0127
     Example: Config Describe Unknown Key Returns Error
       Given the pytest test setup is prepared
       When config describe unknown key returns error is executed
       Then result.exit_code equals 1
 
-    @bdd-config-cli-config-set-updates-prompt-profile-numbers @needs-review
+    @req-REQ-0014 @ac-AC-0135
     Example: Config Set Updates Prompt Profile Numbers
       Given the pytest test setup is prepared
       When config set updates prompt profile numbers is executed
       Then set_result.exit_code equals 0
       Then get_result.exit_code equals 0
 
-    @bdd-config-cli-config-set-parses-bare-string-value @needs-review
+    @req-REQ-0014 @ac-AC-0132
     Example: Config Set Parses Bare String Value
       Given the pytest test setup is prepared
       When config set parses bare string value is executed
       Then set_result.exit_code equals 0
       Then get_result.exit_code equals 0
 
-    @bdd-config-cli-config-set-rejects-invalid-values-with-json-error @needs-review
+    @req-REQ-0014 @ac-AC-0133
     Example: Config Set Rejects Invalid Values With Json Error
       Given the pytest test setup is prepared
       When config set rejects invalid values with json error is executed
@@ -59,19 +59,19 @@ Feature: Config Cli
       Then invalid_set.exit_code equals 1
       Then get_result.exit_code equals 0
 
-    @bdd-config-cli-config-get-missing-key-returns-error @needs-review
+    @req-REQ-0014 @ac-AC-0128
     Example: Config Get Missing Key Returns Error
       Given the pytest test setup is prepared
       When config get missing key returns error is executed
       Then result.exit_code equals 1
 
-    @bdd-config-cli-config-set-rejects-reserved-keys @needs-review
+    @req-REQ-0014 @ac-AC-0134
     Example: Config Set Rejects Reserved Keys
       Given the pytest test setup is prepared
       When config set rejects reserved keys is executed
       Then result.exit_code equals 1
 
-    @bdd-config-cli-config-set-handles-inline-section-comments @needs-review
+    @req-REQ-0014 @ac-AC-0131
     Example: Config Set Handles Inline Section Comments
       Given the pytest test setup is prepared
       When config set handles inline section comments is executed

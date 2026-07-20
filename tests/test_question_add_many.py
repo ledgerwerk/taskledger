@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from taskledger.cli import app
@@ -50,8 +49,7 @@ def _init_planning_task(tmp_path: Path, slug: str = "question-batch") -> None:
     assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
 
 
-# sw: f=specs/behavior/features/question_add_many/question-add-many.feature
-# sw: s=@bdd-question-add-many-question-add-many-adds-required-questions-to-active-task
+# specmason: req=REQ-0042 ac=AC-0482
 def test_question_add_many_adds_required_questions_to_active_task(
     tmp_path: Path,
 ) -> None:
@@ -78,8 +76,7 @@ def test_question_add_many_adds_required_questions_to_active_task(
     assert [item["required_for_plan"] for item in added] == [True, True]
 
 
-# sw: f=specs/behavior/features/question_add_many/question-add-many.feature
-# sw: s=@bdd-question-add-many-question-add-many-supports-yaml-file-and-explicit-task
+# specmason: req=REQ-0042 ac=AC-0485
 def test_question_add_many_supports_yaml_file_and_explicit_task(tmp_path: Path) -> None:
     _init_planning_task(tmp_path, slug="yaml-batch")
     questions_file = tmp_path / "questions.yaml"
@@ -111,13 +108,7 @@ def test_question_add_many_supports_yaml_file_and_explicit_task(tmp_path: Path) 
     assert [item["required_for_plan"] for item in added] == [True, False]
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/question_add_many/question-add-many.feature"),
-    scenario=(
-        "@bdd-question-add-many-question-add-many-rejects-blank-lines-without-"
-        "partial-write"
-    ),
-)
+# specmason: req=REQ-0042 ac=AC-0483
 def test_question_add_many_rejects_blank_lines_without_partial_write(
     tmp_path: Path,
 ) -> None:
@@ -145,13 +136,7 @@ def test_question_add_many_rejects_blank_lines_without_partial_write(
     assert _json(listed)["result"] == []
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/question_add_many/question-add-many.feature"),
-    scenario=(
-        "@bdd-question-add-many-question-add-many-rejects-duplicates-without-"
-        "partial-write"
-    ),
-)
+# specmason: req=REQ-0042 ac=AC-0484
 def test_question_add_many_rejects_duplicates_without_partial_write(
     tmp_path: Path,
 ) -> None:

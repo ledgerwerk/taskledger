@@ -126,8 +126,7 @@ Capture a managed shell transcript.
     return "task-0001"
 
 
-# sw: f=specs/behavior/features/agent_command_logging/agent-command-logging.feature
-# sw: s=@bdd-agent-command-logging-agent-logging-config-validation-and-defaults
+# specmason: req=REQ-0004 ac=AC-0052
 def test_agent_logging_config_validation_and_defaults() -> None:
     config = merge_project_config({})
     assert config.agent_logging.enabled is False
@@ -142,6 +141,7 @@ def test_agent_logging_config_validation_and_defaults() -> None:
     _validate_project_config_overrides(valid, Path("taskledger.toml"))
 
 
+# specmason: req=REQ-0004 ac=AC-0052
 def test_agent_logging_config_rejects_unknown_and_bad_regex() -> None:
     bad_key = {"agent_logging": {"enabled": True, "unexpected": True}}
     with pytest.raises(LaunchError, match="Unknown agent_logging keys"):
@@ -152,8 +152,7 @@ def test_agent_logging_config_rejects_unknown_and_bad_regex() -> None:
         _validate_project_config_overrides(bad_regex, Path("taskledger.toml"))
 
 
-# sw: f=specs/behavior/features/agent_command_logging/agent-command-logging.feature
-# sw: s=@bdd-agent-command-logging-cli-success-command-is-captured-when-enabled
+# specmason: req=REQ-0004 ac=AC-0054
 def test_cli_success_command_is_captured_when_enabled(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_agent_logging(tmp_path)
@@ -184,8 +183,7 @@ def test_cli_success_command_is_captured_when_enabled(tmp_path: Path) -> None:
     assert "created task" in record.visible_stdout_excerpt
 
 
-# sw: f=specs/behavior/features/agent_command_logging/agent-command-logging.feature
-# sw: s=@bdd-agent-command-logging-cli-error-command-is-captured-when-enabled
+# specmason: req=REQ-0004 ac=AC-0053
 def test_cli_error_command_is_captured_when_enabled(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_agent_logging(tmp_path)
@@ -213,8 +211,7 @@ def test_cli_error_command_is_captured_when_enabled(tmp_path: Path) -> None:
     assert "Task not found" in record.error_summary
 
 
-# sw: f=specs/behavior/features/agent_command_logging/agent-command-logging.feature
-# sw: s=@bdd-agent-command-logging-managed-shell-capture-and-transcript-report-rendering
+# specmason: req=REQ-0004 ac=AC-0057
 def test_managed_shell_capture_and_transcript_report_rendering(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_agent_logging(tmp_path)
@@ -282,8 +279,7 @@ def test_managed_shell_capture_and_transcript_report_rendering(tmp_path: Path) -
     assert "| Time | Exit | Command | Result |" in report.stdout
 
 
-# sw: f=specs/behavior/features/agent_command_logging/agent-command-logging.feature
-# sw: s=@bdd-agent-command-logging-task-transcript-json-contract
+# specmason: req=REQ-0004 ac=AC-0061
 def test_task_transcript_json_contract(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_agent_logging(tmp_path)
@@ -314,15 +310,7 @@ def test_task_transcript_json_contract(tmp_path: Path) -> None:
     assert payload["result"]["kind"] == "task_transcript"
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/agent_command_logging/agent-command-logging.feature"
-    ),
-    scenario=(
-        "@bdd-agent-command-logging-task-transcript-review-mode-groups-"
-        "wrapper-and-managed-shell"
-    ),
-)
+# specmason: req=REQ-0004 ac=AC-0062
 def test_task_transcript_review_mode_groups_wrapper_and_managed_shell(
     tmp_path: Path,
 ) -> None:
@@ -403,15 +391,7 @@ def test_task_transcript_review_mode_groups_wrapper_and_managed_shell(
     assert "failed, wrapper mismatch" in transcript.stdout
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/agent_command_logging/agent-command-logging.feature"
-    ),
-    scenario=(
-        "@bdd-agent-command-logging-task-transcript-failures-mode-renders-"
-        "failed-rows-only"
-    ),
-)
+# specmason: req=REQ-0004 ac=AC-0060
 def test_task_transcript_failures_mode_renders_failed_rows_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -461,8 +441,7 @@ def test_task_transcript_failures_mode_renders_failed_rows_only(
     assert "| - | 3 |" in failures.stdout
 
 
-# sw: f=specs/behavior/features/agent_command_logging/agent-command-logging.feature
-# sw: s=@bdd-agent-command-logging-transcript-tolerates-duplicate-log-ids-by-default
+# specmason: req=REQ-0004 ac=AC-0063
 def test_transcript_tolerates_duplicate_log_ids_by_default(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert (
@@ -514,8 +493,7 @@ def test_transcript_tolerates_duplicate_log_ids_by_default(tmp_path: Path) -> No
     assert "- dup-0001" in transcript.stdout
 
 
-# sw: f=specs/behavior/features/agent_command_logging/agent-command-logging.feature
-# sw: s=@bdd-agent-command-logging-default-transcript-produces-review-output
+# specmason: req=REQ-0004 ac=AC-0055
 def test_default_transcript_produces_review_output(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_agent_logging(tmp_path)
@@ -560,8 +538,7 @@ def test_default_transcript_produces_review_output(tmp_path: Path) -> None:
     assert "### Summary" in transcript.stdout
 
 
-# sw: f=specs/behavior/features/agent_command_logging/agent-command-logging.feature
-# sw: s=@bdd-agent-command-logging-raw-flag-produces-raw-table-output
+# specmason: req=REQ-0004 ac=AC-0058
 def test_raw_flag_produces_raw_table_output(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_agent_logging(tmp_path)
@@ -605,8 +582,7 @@ def test_raw_flag_produces_raw_table_output(tmp_path: Path) -> None:
     assert "## Transcript Review" not in transcript.stdout
 
 
-# sw: f=specs/behavior/features/agent_command_logging/agent-command-logging.feature
-# sw: s=@bdd-agent-command-logging-report-command-log-uses-logical-rows
+# specmason: req=REQ-0004 ac=AC-0059
 def test_report_command_log_uses_logical_rows(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_agent_logging(tmp_path)
@@ -666,8 +642,7 @@ def test_report_command_log_uses_logical_rows(tmp_path: Path) -> None:
     assert "| Time | Exit | Kind | Command | Output |" not in report.stdout
 
 
-# sw: f=specs/behavior/features/agent_command_logging/agent-command-logging.feature
-# sw: s=@bdd-agent-command-logging-duplicate-log-id-warning-in-raw-mode
+# specmason: req=REQ-0004 ac=AC-0056
 def test_duplicate_log_id_warning_in_raw_mode(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert (

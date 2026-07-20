@@ -1,12 +1,12 @@
-@area-worker_pipeline_context @feature-worker-pipeline-context @generated @needs-review
+@area-worker_pipeline_context @feature-worker-pipeline-context @generated
 Feature: Worker Pipeline Context
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-worker-pipeline-context
   Rule: Worker Pipeline Context
 
-    @bdd-worker-pipeline-context-context-for-implementer-unchanged-without-worker-pipeline @needs-review
+    @req-REQ-0073 @ac-AC-0812
     Example: Context For Implementer Unchanged Without Worker Pipeline
       Given the pytest test setup is prepared
       When context for implementer unchanged without worker pipeline is executed
@@ -14,7 +14,7 @@ Feature: Worker Pipeline Context
       Then after.exit_code equals 0
       Then after.stdout equals before.stdout
 
-    @bdd-worker-pipeline-context-worker-context-renders-base-context-plus-worker-guidance @needs-review
+    @req-REQ-0073 @ac-AC-0815
     Example: Worker Context Renders Base Context Plus Worker Guidance
       Given the pytest test setup is prepared
       When worker context renders base context plus worker guidance is executed
@@ -33,7 +33,7 @@ Feature: Worker Pipeline Context
       Then 'Must not:' is in result.stdout
       Then 'Do not implement production behavior to make the test pass.' is in result.stdout
 
-    @bdd-worker-pipeline-context-pipeline-context-command-renders-worker-context @needs-review
+    @req-REQ-0073 @ac-AC-0814
     Example: Pipeline Context Command Renders Worker Context
       Given the pytest test setup is prepared
       When pipeline context command renders worker context is executed
@@ -41,7 +41,7 @@ Feature: Worker Pipeline Context
       Then '## Worker step' is in result.stdout
       Then 'Test Writer' is in result.stdout
 
-    @bdd-worker-pipeline-context-context-worker-requires-enabled-pipeline @needs-review
+    @req-REQ-0073 @ac-AC-0813
     Example: Context Worker Requires Enabled Pipeline
       Given the pytest test setup is prepared
       When context worker requires enabled pipeline is executed

@@ -1,19 +1,19 @@
-@area-services_dashboard @feature-services-dashboard @generated @needs-review
+@area-services_dashboard @feature-services-dashboard @generated
 Feature: Services Dashboard
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-services-dashboard
   Rule: Services Dashboard
 
-    @bdd-services-dashboard-dashboard-next-action @needs-review
+    @req-REQ-0049 @ac-AC-0534
     Example: Dashboard Next Action
       Given the pytest test setup is prepared
       When dashboard next action is executed
       Then isinstance succeeds
       Then 'action' is in na
 
-    @bdd-services-dashboard-render-dashboard-text-basic @needs-review
+    @req-REQ-0049 @ac-AC-0535
     Example: Render Dashboard Text Basic
       Given the pytest test setup is prepared
       When render dashboard text basic is executed
@@ -24,7 +24,7 @@ Feature: Services Dashboard
       Then 'Changes: none' is in text
       Then 'Lock: none' is in text
 
-    @bdd-services-dashboard-render-dashboard-text-with-plan @needs-review
+    @req-REQ-0049 @ac-AC-0540
     Example: Render Dashboard Text With Plan
       Given the pytest test setup is prepared
       When render dashboard text with plan is executed
@@ -39,7 +39,7 @@ Feature: Services Dashboard
       Then '[ ] todo-0004  Clean up' is in text
       Then 'Files: 3 linked' is in text
 
-    @bdd-services-dashboard-render-dashboard-text-with-next-action @needs-review
+    @req-REQ-0049 @ac-AC-0539
     Example: Render Dashboard Text With Next Action
       Given the pytest test setup is prepared
       When render dashboard text with next action is executed
@@ -52,7 +52,7 @@ Feature: Services Dashboard
       Then 'progress: 2/3 todos done' is in text
       Then 'blocker: Missing requirement X' is in text
 
-    @bdd-services-dashboard-render-dashboard-text-with-runs @needs-review
+    @req-REQ-0049 @ac-AC-0541
     Example: Render Dashboard Text With Runs
       Given the pytest test setup is prepared
       When render dashboard text with runs is executed
@@ -62,7 +62,7 @@ Feature: Services Dashboard
       Then 'Did some work' is in text
       Then '[passed]' is in text
 
-    @bdd-services-dashboard-render-dashboard-text-with-changes @needs-review
+    @req-REQ-0049 @ac-AC-0536
     Example: Render Dashboard Text With Changes
       Given the pytest test setup is prepared
       When render dashboard text with changes is executed
@@ -71,13 +71,13 @@ Feature: Services Dashboard
       Then 'src/main.py' is in text
       Then 'Fixed bug' is in text
 
-    @bdd-services-dashboard-render-dashboard-text-with-lock @needs-review
+    @req-REQ-0049 @ac-AC-0537
     Example: Render Dashboard Text With Lock
       Given the pytest test setup is prepared
       When render dashboard text with lock is executed
       Then 'Lock: implementing (run-0001)' is in text
 
-    @bdd-services-dashboard-render-dashboard-text-with-metadata @needs-review
+    @req-REQ-0049 @ac-AC-0538
     Example: Render Dashboard Text With Metadata
       Given the pytest test setup is prepared
       When render dashboard text with metadata is executed
@@ -88,13 +88,13 @@ Feature: Services Dashboard
       Then 'Owner: alice' is in text
       Then 'implementing' is in text
 
-    @bdd-services-dashboard-resolves-active-or-explicit-task
+    @req-REQ-0049 @ac-AC-0542
     Example: Dashboard resolves the active or explicitly selected task
       Given a project has an active task and another addressable task
       When dashboard data is requested with or without an explicit task reference
       Then the selected task dashboard is returned
 
-    @bdd-services-dashboard-aggregates-task-resource-counts
+    @req-REQ-0049 @ac-AC-0533
     Example: Dashboard aggregates task resource counts
       Given a task has todos, files, and questions
       When dashboard data is requested

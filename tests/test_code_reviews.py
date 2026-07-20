@@ -70,8 +70,7 @@ def _invoke(cwd: Path, args: list[str]) -> object:
     return result
 
 
-# sw: f=specs/behavior/features/code_reviews/code-reviews.feature
-# sw: s=@bdd-code-reviews-code-review-record-round-trip
+# specmason: req=REQ-0009 ac=AC-0096
 def test_code_review_record_round_trip() -> None:
     item = CodeReviewRecord(
         review_id="review-0001",
@@ -92,6 +91,7 @@ def test_code_review_record_round_trip() -> None:
     assert loaded.git_changed_paths == ("taskledger/services/tasks.py",)
 
 
+# specmason: req=REQ-0009 ac=AC-0096
 def test_code_review_record_rejects_invalid_result_and_source() -> None:
     payload = CodeReviewRecord(
         review_id="review-0001",
@@ -108,8 +108,7 @@ def test_code_review_record_rejects_invalid_result_and_source() -> None:
         CodeReviewRecord.from_dict(payload)
 
 
-# sw: f=specs/behavior/features/code_reviews/code-reviews.feature
-# sw: s=@bdd-code-reviews-storage-save-list-resolve-code-reviews
+# specmason: req=REQ-0009 ac=AC-0101
 def test_storage_save_list_resolve_code_reviews(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     review = CodeReviewRecord(
@@ -128,8 +127,7 @@ def test_storage_save_list_resolve_code_reviews(tmp_path: Path) -> None:
     assert resolved.review_id == "review-0001"
 
 
-# sw: f=specs/behavior/features/code_reviews/code-reviews.feature
-# sw: s=@bdd-code-reviews-service-records-and-lists-manual-review
+# specmason: req=REQ-0009 ac=AC-0097
 def test_service_records_and_lists_manual_review(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_id = create_implemented_task(ws, allow_lint_errors=True)
@@ -148,8 +146,7 @@ def test_service_records_and_lists_manual_review(tmp_path: Path) -> None:
     assert shown.body == "No blocking issues."
 
 
-# sw: f=specs/behavior/features/code_reviews/code-reviews.feature
-# sw: s=@bdd-code-reviews-service-records-review-after-task-is-done
+# specmason: req=REQ-0009 ac=AC-0099
 def test_service_records_review_after_task_is_done(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_id = create_done_task(ws, allow_lint_errors=True)
@@ -167,6 +164,7 @@ def test_service_records_review_after_task_is_done(tmp_path: Path) -> None:
     assert shown.body == "Post-completion code review."
 
 
+# specmason: req=REQ-0009 ac=AC-0099
 def test_service_rejects_review_record_outside_allowed_stages(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(
@@ -179,6 +177,7 @@ def test_service_rejects_review_record_outside_allowed_stages(tmp_path: Path) ->
         record_code_review(ws, task.id, result="blocked", body="missing run")
 
 
+# specmason: req=REQ-0009 ac=AC-0099
 def test_service_rejects_archived_task(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_id = create_implemented_task(ws, allow_lint_errors=True)
@@ -187,8 +186,7 @@ def test_service_rejects_archived_task(tmp_path: Path) -> None:
         record_code_review(ws, task_id, result="pass", body="archived")
 
 
-# sw: f=specs/behavior/features/code_reviews/code-reviews.feature
-# sw: s=@bdd-code-reviews-service-records-working-tree-git-metadata
+# specmason: req=REQ-0009 ac=AC-0100
 def test_service_records_working_tree_git_metadata(tmp_path: Path) -> None:
     _git_required()
     ws = init_workspace(tmp_path)
@@ -217,8 +215,7 @@ def test_service_records_working_tree_git_metadata(tmp_path: Path) -> None:
     assert "sample.txt" in review.git_changed_paths
 
 
-# sw: f=specs/behavior/features/code_reviews/code-reviews.feature
-# sw: s=@bdd-code-reviews-service-records-commit-git-metadata
+# specmason: req=REQ-0009 ac=AC-0098
 def test_service_records_commit_git_metadata(tmp_path: Path) -> None:
     _git_required()
     ws = init_workspace(tmp_path)
@@ -244,8 +241,7 @@ def test_service_records_commit_git_metadata(tmp_path: Path) -> None:
     assert "sample.txt" in review.git_changed_paths
 
 
-# sw: f=specs/behavior/features/code_reviews/code-reviews.feature
-# sw: s=@bdd-code-reviews-cli-review-record-list-show-and-json
+# specmason: req=REQ-0009 ac=AC-0094
 def test_cli_review_record_list_show_and_json(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_id = create_implemented_task(ws, allow_lint_errors=True)
@@ -288,8 +284,7 @@ def test_cli_review_record_list_show_and_json(tmp_path: Path) -> None:
     assert payload["result"]["review_id"] == "review-0002"
 
 
-# sw: f=specs/behavior/features/code_reviews/code-reviews.feature
-# sw: s=@bdd-code-reviews-cli-review-record-summary-and-file-are-mutually-exclusive
+# specmason: req=REQ-0009 ac=AC-0095
 def test_cli_review_record_summary_and_file_are_mutually_exclusive(
     tmp_path: Path,
 ) -> None:

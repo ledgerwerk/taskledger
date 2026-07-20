@@ -35,8 +35,7 @@ def _create_task_and_activate(tmp_path: Path) -> TaskRecord:
     return task
 
 
-# sw: f=specs/behavior/features/services_dashboard/services-dashboard.feature
-# sw: s=@bdd-services-dashboard-resolves-active-or-explicit-task
+# specmason: req=REQ-0049 ac=AC-0534
 def test_dashboard_with_active_task(tmp_path: Path) -> None:
     _create_task_and_activate(tmp_path)
     result = dashboard(tmp_path)
@@ -55,12 +54,14 @@ def test_dashboard_with_active_task(tmp_path: Path) -> None:
     assert result["validation"]["kind"] == "validation_status"
 
 
+# specmason: req=REQ-0049 ac=AC-0541
 def test_dashboard_with_ref(tmp_path: Path) -> None:
     _create_task_and_activate(tmp_path)
     result = dashboard(tmp_path, ref="task-0001")
     assert result["task"]["id"] == "task-0001"
 
 
+# specmason: req=REQ-0049 ac=AC-0534
 def test_dashboard_todos_counts(tmp_path: Path) -> None:
     _create_task_and_activate(tmp_path)
     result = dashboard(tmp_path)
@@ -69,8 +70,7 @@ def test_dashboard_todos_counts(tmp_path: Path) -> None:
     assert result["todos"]["items"] == []
 
 
-# sw: f=specs/behavior/features/services_dashboard/services-dashboard.feature
-# sw: s=@bdd-services-dashboard-aggregates-task-resource-counts
+# specmason: req=REQ-0049 ac=AC-0538
 def test_dashboard_todos_counts_with_saved_todos(tmp_path: Path) -> None:
     _create_task_and_activate(tmp_path)
     col = TodoCollection(
@@ -88,12 +88,16 @@ def test_dashboard_todos_counts_with_saved_todos(tmp_path: Path) -> None:
     assert len(result["todos"]["items"]) == 3
 
 
+# specmason: req=REQ-0049 ac=AC-0533
+# specmason: req=REQ-0049 ac=AC-0534
+# specmason: req=REQ-0049 ac=AC-0542
 def test_dashboard_files_counts(tmp_path: Path) -> None:
     _create_task_and_activate(tmp_path)
     result = dashboard(tmp_path)
     assert result["files"]["total"] == 0
 
 
+# specmason: req=REQ-0049 ac=AC-0534
 def test_dashboard_questions_counts(tmp_path: Path) -> None:
     _create_task_and_activate(tmp_path)
     result = dashboard(tmp_path)
@@ -101,8 +105,7 @@ def test_dashboard_questions_counts(tmp_path: Path) -> None:
     assert result["questions"]["open"] == 0
 
 
-# sw: f=specs/behavior/features/services_dashboard/services-dashboard.feature
-# sw: s=@bdd-services-dashboard-dashboard-next-action
+# specmason: req=REQ-0049 ac=AC-0534
 def test_dashboard_next_action(tmp_path: Path) -> None:
     _create_task_and_activate(tmp_path)
     result = dashboard(tmp_path)
@@ -114,8 +117,7 @@ def test_dashboard_next_action(tmp_path: Path) -> None:
 # -- render_dashboard_text tests --
 
 
-# sw: f=specs/behavior/features/services_dashboard/services-dashboard.feature
-# sw: s=@bdd-services-dashboard-render-dashboard-text-basic
+# specmason: req=REQ-0049 ac=AC-0535
 def test_render_dashboard_text_basic() -> None:
     payload = {
         "task": {
@@ -149,8 +151,7 @@ def test_render_dashboard_text_basic() -> None:
     assert "Lock: none" in text
 
 
-# sw: f=specs/behavior/features/services_dashboard/services-dashboard.feature
-# sw: s=@bdd-services-dashboard-render-dashboard-text-with-plan
+# specmason: req=REQ-0049 ac=AC-0540
 def test_render_dashboard_text_with_plan() -> None:
     payload = {
         "task": {
@@ -205,8 +206,7 @@ def test_render_dashboard_text_with_plan() -> None:
     assert "Files: 3 linked" in text
 
 
-# sw: f=specs/behavior/features/services_dashboard/services-dashboard.feature
-# sw: s=@bdd-services-dashboard-render-dashboard-text-with-next-action
+# specmason: req=REQ-0049 ac=AC-0539
 def test_render_dashboard_text_with_next_action() -> None:
     payload = {
         "task": {
@@ -265,8 +265,7 @@ def test_render_dashboard_text_with_next_action() -> None:
     assert "blocker: Missing requirement X" in text
 
 
-# sw: f=specs/behavior/features/services_dashboard/services-dashboard.feature
-# sw: s=@bdd-services-dashboard-render-dashboard-text-with-runs
+# specmason: req=REQ-0049 ac=AC-0541
 def test_render_dashboard_text_with_runs() -> None:
     payload = {
         "task": {
@@ -308,8 +307,7 @@ def test_render_dashboard_text_with_runs() -> None:
     assert "[passed]" in text
 
 
-# sw: f=specs/behavior/features/services_dashboard/services-dashboard.feature
-# sw: s=@bdd-services-dashboard-render-dashboard-text-with-changes
+# specmason: req=REQ-0049 ac=AC-0536
 def test_render_dashboard_text_with_changes() -> None:
     payload = {
         "task": {
@@ -348,8 +346,7 @@ def test_render_dashboard_text_with_changes() -> None:
     assert "Fixed bug" in text
 
 
-# sw: f=specs/behavior/features/services_dashboard/services-dashboard.feature
-# sw: s=@bdd-services-dashboard-render-dashboard-text-with-lock
+# specmason: req=REQ-0049 ac=AC-0537
 def test_render_dashboard_text_with_lock() -> None:
     payload = {
         "task": {
@@ -381,8 +378,7 @@ def test_render_dashboard_text_with_lock() -> None:
     assert "Lock: implementing (run-0001)" in text
 
 
-# sw: f=specs/behavior/features/services_dashboard/services-dashboard.feature
-# sw: s=@bdd-services-dashboard-render-dashboard-text-with-metadata
+# specmason: req=REQ-0049 ac=AC-0538
 def test_render_dashboard_text_with_metadata() -> None:
     payload = {
         "task": {

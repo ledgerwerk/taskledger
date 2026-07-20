@@ -30,8 +30,7 @@ def test_priority_rank_none() -> None:
     assert priority_rank(None) == (99, "")
 
 
-# sw: f=specs/behavior/features/ready_work/ready-work.feature
-# sw: s=@bdd-ready-work-filters-to-actionable-statuses
+# specmason: req=REQ-0045 ac=AC-0506
 def test_ready_work_items_filters_by_ready_statuses(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_approved = create_approved_task(ws, title="Approved", slug="approved-task")
@@ -57,8 +56,7 @@ def test_ready_work_items_filters_by_ready_statuses(tmp_path: Path) -> None:
     assert draft not in ready_ids
 
 
-# sw: f=specs/behavior/features/ready_work/ready-work.feature
-# sw: s=@bdd-ready-work-includes-next-action-and-command
+# specmason: req=REQ-0045 ac=AC-0507
 def test_ready_work_items_includes_next_and_command(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_approved = create_approved_task(ws, title="Approved", slug="approved-task")
@@ -76,6 +74,7 @@ def test_ready_work_items_includes_next_and_command(tmp_path: Path) -> None:
     assert task_approved in item["command"]
 
 
+# specmason: req=REQ-0045 ac=AC-0507
 def test_ready_work_items_stage_commands_are_explicit(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     pr = create_task(ws, title="PR", slug="pr-task", description="x")
@@ -95,8 +94,7 @@ def test_ready_work_items_stage_commands_are_explicit(tmp_path: Path) -> None:
     assert f"--task {pr.id}" in command
 
 
-# sw: f=specs/behavior/features/ready_work/ready-work.feature
-# sw: s=@bdd-ready-work-respects-result-limit
+# specmason: req=REQ-0045 ac=AC-0508
 def test_ready_work_items_respects_max_items(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     create_approved_task(ws, title="A", slug="task-a")
@@ -109,6 +107,7 @@ def test_ready_work_items_respects_max_items(tmp_path: Path) -> None:
     assert len(items) == 1
 
 
+# specmason: req=REQ-0045 ac=AC-0507
 def test_ready_work_items_without_next_action(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     create_approved_task(ws, title="A", slug="task-a")
@@ -125,6 +124,7 @@ def test_ready_work_items_without_next_action(tmp_path: Path) -> None:
     assert isinstance(item.get("command"), str)
 
 
+# specmason: req=REQ-0045 ac=AC-0506
 def test_ready_statuses_includes_plan_review() -> None:
     assert "plan_review" in READY_STATUSES
 

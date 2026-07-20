@@ -7,6 +7,7 @@ from ledgercore import atomic as ledgercore_atomic
 from taskledger.storage import atomic
 
 
+# specmason: req=REQ-0006 ac=AC-0082
 def test_atomic_write_skips_fsync_when_fast_test_io_enabled(
     tmp_path: Path,
     monkeypatch,
@@ -21,8 +22,7 @@ def test_atomic_write_skips_fsync_when_fast_test_io_enabled(
     assert calls == []
 
 
-# sw: f=specs/behavior/features/atomic_fast_io/atomic-fast-io.feature
-# sw: s=@bdd-atomic-fast-io-atomic-write-uses-fsync-by-default
+# specmason: req=REQ-0006 ac=AC-0082
 def test_atomic_write_uses_fsync_by_default(tmp_path: Path, monkeypatch) -> None:
     calls: list[int] = []
     monkeypatch.delenv("TASKLEDGER_TEST_FAST_IO", raising=False)

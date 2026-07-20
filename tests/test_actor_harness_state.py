@@ -44,8 +44,7 @@ def _init_project(tmp_path: Path) -> None:
 # --- Storage layer tests ---
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-save-and-load-actor-state
+# specmason: req=REQ-0002 ac=AC-0036
 def test_save_and_load_actor_state(tmp_path: Path) -> None:
     _init_project(tmp_path)
     state = ActiveActorState(
@@ -66,15 +65,13 @@ def test_save_and_load_actor_state(tmp_path: Path) -> None:
     assert loaded.session_id == "sess-1"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-missing-state-loads-empty
+# specmason: req=REQ-0002 ac=AC-0011
 def test_load_actor_state_missing(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert load_actor_state(tmp_path) is None
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-clear-actor-state
+# specmason: req=REQ-0002 ac=AC-0011
 def test_clear_actor_state(tmp_path: Path) -> None:
     _init_project(tmp_path)
     save_actor_state(tmp_path, ActiveActorState(actor_type="user", actor_name="bob"))
@@ -84,13 +81,13 @@ def test_clear_actor_state(tmp_path: Path) -> None:
     assert load_actor_state(tmp_path) is None
 
 
+# specmason: req=REQ-0002 ac=AC-0011
 def test_clear_actor_state_missing(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert clear_actor_state(tmp_path) is None
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-save-and-load-harness-state
+# specmason: req=REQ-0002 ac=AC-0037
 def test_save_and_load_harness_state(tmp_path: Path) -> None:
     _init_project(tmp_path)
     state = ActiveHarnessState(
@@ -107,13 +104,13 @@ def test_save_and_load_harness_state(tmp_path: Path) -> None:
     assert loaded.session_id == "sess-2"
 
 
+# specmason: req=REQ-0002 ac=AC-0012
 def test_load_harness_state_missing(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert load_harness_state(tmp_path) is None
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-clear-harness-state
+# specmason: req=REQ-0002 ac=AC-0012
 def test_clear_harness_state(tmp_path: Path) -> None:
     _init_project(tmp_path)
     save_harness_state(tmp_path, ActiveHarnessState(name="my-harness"))
@@ -123,13 +120,13 @@ def test_clear_harness_state(tmp_path: Path) -> None:
     assert load_harness_state(tmp_path) is None
 
 
+# specmason: req=REQ-0002 ac=AC-0012
 def test_clear_harness_state_missing(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert clear_harness_state(tmp_path) is None
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-actor-state-yaml-on-disk
+# specmason: req=REQ-0002 ac=AC-0010
 def test_actor_state_yaml_on_disk(tmp_path: Path) -> None:
     _init_project(tmp_path)
     state = ActiveActorState(actor_type="user", actor_name="alice", role="planner")
@@ -144,8 +141,7 @@ def test_actor_state_yaml_on_disk(tmp_path: Path) -> None:
     assert data["actor_name"] == "alice"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-harness-state-yaml-on-disk
+# specmason: req=REQ-0002 ac=AC-0025
 def test_harness_state_yaml_on_disk(tmp_path: Path) -> None:
     _init_project(tmp_path)
     state = ActiveHarnessState(name="ci-runner", kind="ci")
@@ -159,8 +155,7 @@ def test_harness_state_yaml_on_disk(tmp_path: Path) -> None:
     assert data["name"] == "ci-runner"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-actor-state-roundtrip
+# specmason: req=REQ-0002 ac=AC-0009
 def test_actor_state_roundtrip(tmp_path: Path) -> None:
     _init_project(tmp_path)
     original = ActiveActorState(
@@ -175,8 +170,7 @@ def test_actor_state_roundtrip(tmp_path: Path) -> None:
     assert loaded == original
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-harness-state-roundtrip
+# specmason: req=REQ-0002 ac=AC-0024
 def test_harness_state_roundtrip(tmp_path: Path) -> None:
     _init_project(tmp_path)
     original = ActiveHarnessState(
@@ -192,8 +186,7 @@ def test_harness_state_roundtrip(tmp_path: Path) -> None:
 # --- Resolution priority tests ---
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-resolve-actor-uses-stored-when-no-env-vars
+# specmason: req=REQ-0002 ac=AC-0031
 def test_resolve_actor_uses_stored_when_no_env_vars(tmp_path: Path) -> None:
     _init_project(tmp_path)
     save_actor_state(
@@ -210,8 +203,7 @@ def test_resolve_actor_uses_stored_when_no_env_vars(tmp_path: Path) -> None:
     assert actor.role == "reviewer"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-resolve-actor-env-overrides-stored
+# specmason: req=REQ-0002 ac=AC-0029
 def test_resolve_actor_env_overrides_stored(tmp_path: Path) -> None:
     _init_project(tmp_path)
     save_actor_state(
@@ -232,8 +224,7 @@ def test_resolve_actor_env_overrides_stored(tmp_path: Path) -> None:
     assert actor.actor_type == "system"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-resolve-actor-explicit-overrides-all
+# specmason: req=REQ-0002 ac=AC-0030
 def test_resolve_actor_explicit_overrides_all(tmp_path: Path) -> None:
     _init_project(tmp_path)
     save_actor_state(
@@ -258,8 +249,7 @@ def test_resolve_actor_explicit_overrides_all(tmp_path: Path) -> None:
     assert actor.actor_type == "agent"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-resolution-without-workspace-uses-defaults
+# specmason: req=REQ-0002 ac=AC-0029
 def test_resolve_actor_no_workspace_no_stored() -> None:
     """Without workspace_root, stored state is not checked."""
     actor = resolve_actor()
@@ -267,8 +257,7 @@ def test_resolve_actor_no_workspace_no_stored() -> None:
     assert actor.actor_type in ("agent", "user", "system")
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-resolve-harness-uses-stored-when-no-env-vars
+# specmason: req=REQ-0002 ac=AC-0035
 def test_resolve_harness_uses_stored_when_no_env_vars(tmp_path: Path) -> None:
     _init_project(tmp_path)
     save_harness_state(
@@ -284,8 +273,7 @@ def test_resolve_harness_uses_stored_when_no_env_vars(tmp_path: Path) -> None:
     assert harness.kind == "ci"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-resolve-harness-env-overrides-stored
+# specmason: req=REQ-0002 ac=AC-0033
 def test_resolve_harness_env_overrides_stored(tmp_path: Path) -> None:
     _init_project(tmp_path)
     save_harness_state(tmp_path, ActiveHarnessState(name="stored-harness"))
@@ -296,8 +284,7 @@ def test_resolve_harness_env_overrides_stored(tmp_path: Path) -> None:
     assert harness.name == "env-harness"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-resolve-harness-explicit-overrides-all
+# specmason: req=REQ-0002 ac=AC-0034
 def test_resolve_harness_explicit_overrides_all(tmp_path: Path) -> None:
     _init_project(tmp_path)
     save_harness_state(tmp_path, ActiveHarnessState(name="stored-harness"))
@@ -308,8 +295,7 @@ def test_resolve_harness_explicit_overrides_all(tmp_path: Path) -> None:
     assert harness.name == "explicit"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-resolve-actor-after-clear
+# specmason: req=REQ-0002 ac=AC-0028
 def test_resolve_actor_after_clear(tmp_path: Path) -> None:
     _init_project(tmp_path)
     save_actor_state(
@@ -324,8 +310,7 @@ def test_resolve_actor_after_clear(tmp_path: Path) -> None:
     assert actor.actor_name != "to-clear"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-resolve-harness-after-clear
+# specmason: req=REQ-0002 ac=AC-0032
 def test_resolve_harness_after_clear(tmp_path: Path) -> None:
     _init_project(tmp_path)
     save_harness_state(tmp_path, ActiveHarnessState(name="to-clear"))
@@ -337,8 +322,8 @@ def test_resolve_harness_after_clear(tmp_path: Path) -> None:
 # --- CLI command tests ---
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-actor-set
+# specmason: req=REQ-0002 ac=AC-0016
+# specmason: req=REQ-0002 ac=AC-0017
 def test_cli_actor_set(tmp_path: Path) -> None:
     _init_project(tmp_path)
     result = runner.invoke(
@@ -366,8 +351,8 @@ def test_cli_actor_set(tmp_path: Path) -> None:
     assert state.actor_name == "cli-agent"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-actor-set-json
+# specmason: req=REQ-0002 ac=AC-0016
+# specmason: req=REQ-0002 ac=AC-0017
 def test_cli_actor_set_json(tmp_path: Path) -> None:
     _init_project(tmp_path)
     result = runner.invoke(
@@ -389,8 +374,9 @@ def test_cli_actor_set_json(tmp_path: Path) -> None:
     assert '"json-user"' in result.output
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-actor-clear
+# specmason: req=REQ-0002 ac=AC-0013
+# specmason: req=REQ-0002 ac=AC-0014
+# specmason: req=REQ-0002 ac=AC-0015
 def test_cli_actor_clear(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -412,8 +398,8 @@ def test_cli_actor_clear(tmp_path: Path) -> None:
     assert load_actor_state(tmp_path) is None
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-actor-clear-empty
+# specmason: req=REQ-0002 ac=AC-0013
+# specmason: req=REQ-0002 ac=AC-0014
 def test_cli_actor_clear_empty(tmp_path: Path) -> None:
     _init_project(tmp_path)
     result = runner.invoke(app, ["--cwd", str(tmp_path), "actor", "clear"])
@@ -421,8 +407,8 @@ def test_cli_actor_clear_empty(tmp_path: Path) -> None:
     assert "No stored actor to clear." in result.output
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-actor-clear-json
+# specmason: req=REQ-0002 ac=AC-0013
+# specmason: req=REQ-0002 ac=AC-0015
 def test_cli_actor_clear_json(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -452,8 +438,8 @@ def test_cli_actor_clear_json(tmp_path: Path) -> None:
     assert '"actor_clear"' in result.output
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-harness-set
+# specmason: req=REQ-0002 ac=AC-0020
+# specmason: req=REQ-0002 ac=AC-0021
 def test_cli_harness_set(tmp_path: Path) -> None:
     _init_project(tmp_path)
     result = runner.invoke(
@@ -477,8 +463,8 @@ def test_cli_harness_set(tmp_path: Path) -> None:
     assert state.name == "cli-harness"
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-harness-set-json
+# specmason: req=REQ-0002 ac=AC-0020
+# specmason: req=REQ-0002 ac=AC-0021
 def test_cli_harness_set_json(tmp_path: Path) -> None:
     _init_project(tmp_path)
     result = runner.invoke(
@@ -498,8 +484,8 @@ def test_cli_harness_set_json(tmp_path: Path) -> None:
     assert '"json-harness"' in result.output
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-harness-clear
+# specmason: req=REQ-0002 ac=AC-0018
+# specmason: req=REQ-0002 ac=AC-0019
 def test_cli_harness_clear(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -519,8 +505,8 @@ def test_cli_harness_clear(tmp_path: Path) -> None:
     assert load_harness_state(tmp_path) is None
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-harness-clear-empty
+# specmason: req=REQ-0002 ac=AC-0018
+# specmason: req=REQ-0002 ac=AC-0019
 def test_cli_harness_clear_empty(tmp_path: Path) -> None:
     _init_project(tmp_path)
     result = runner.invoke(app, ["--cwd", str(tmp_path), "harness", "clear"])
@@ -528,8 +514,7 @@ def test_cli_harness_clear_empty(tmp_path: Path) -> None:
     assert "No stored harness to clear." in result.output
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-whoami-uses-stored
+# specmason: req=REQ-0002 ac=AC-0023
 def test_cli_whoami_uses_stored(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -563,8 +548,7 @@ def test_cli_whoami_uses_stored(tmp_path: Path) -> None:
     assert "stored-harness-whoami" in result.output
 
 
-# sw: f=specs/behavior/features/actor_harness_state/actor-harness-state.feature
-# sw: s=@bdd-actor-harness-state-cli-whoami-json-uses-stored
+# specmason: req=REQ-0002 ac=AC-0022
 def test_cli_whoami_json_uses_stored(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -598,6 +582,9 @@ def test_cli_whoami_json_uses_stored(tmp_path: Path) -> None:
 # --- Model serialization tests ---
 
 
+# specmason: req=REQ-0002 ac=AC-0009
+# specmason: req=REQ-0002 ac=AC-0026
+# specmason: req=REQ-0002 ac=AC-0027
 def test_active_actor_state_from_dict_rejects_bad_type() -> None:
     import pytest
 
@@ -605,6 +592,7 @@ def test_active_actor_state_from_dict_rejects_bad_type() -> None:
         ActiveActorState.from_dict({"object_type": "wrong", "schema_version": 1})
 
 
+# specmason: req=REQ-0002 ac=AC-0024
 def test_active_harness_state_from_dict_rejects_bad_type() -> None:
     import pytest
 

@@ -1,19 +1,19 @@
-@area-locks_audit @feature-locks-audit @generated @needs-review
+@area-locks_audit @feature-locks-audit @generated
 Feature: Locks Audit
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-locks-audit
   Rule: Locks Audit
 
-    @bdd-locks-audit-break-lock-writes-audit-file-and-repair-event @needs-review
+    @req-REQ-0031 @ac-AC-0358
     Example: Break Lock Writes Audit File And Repair Event
       Given the pytest test setup is prepared
       When break lock writes audit file and repair event is executed
       Then result.exit_code equals 0
       Then any succeeds
 
-    @bdd-locks-audit-stale-lock-blocks-new-run-until-explicit-break @needs-review
+    @req-REQ-0031 @ac-AC-0359
     Example: Stale Lock Blocks New Run Until Explicit Break
       Given the pytest test setup is prepared
       When stale lock blocks new run until explicit break is executed

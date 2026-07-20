@@ -1,24 +1,24 @@
-@area-command_example_linter @feature-command-example-linter @generated @needs-review
+@area-command_example_linter @feature-command-example-linter @generated
 Feature: Command Example Linter
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-command-example-linter
   Rule: Command Example Linter
 
-    @bdd-command-example-linter-docs-do-not-reference-removed-commands @needs-review
+    @req-REQ-0010 @ac-AC-0103
     Example: Docs Do Not Reference Removed Commands
       Given the pytest test setup is prepared
       When docs do not reference removed commands is executed
       Then needle is not in text
 
-    @bdd-command-example-linter-command-examples-in-docs-use-valid-commands @needs-review
+    @req-REQ-0010 @ac-AC-0102
     Example: Command Examples In Docs Use Valid Commands
       Given the pytest test setup is prepared
       When command examples in docs use valid commands is executed
       Then failures is falsy
 
-    @bdd-command-example-linter-readme-skill-path-matches-repository @needs-review
+    @req-REQ-0010 @ac-AC-0104
     Example: Readme Skill Path Matches Repository
       Given the pytest test setup is prepared
       When readme skill path matches repository is executed

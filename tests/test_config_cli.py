@@ -30,8 +30,7 @@ def _init_project(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
 
 
-# sw: f=specs/behavior/features/config_cli/config-cli.feature
-# sw: s=@bdd-config-cli-config-list-and-get-json
+# specmason: req=REQ-0014 ac=AC-0130
 def test_config_list_and_get_json(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -58,8 +57,7 @@ def test_config_list_and_get_json(tmp_path: Path) -> None:
     assert gotten_payload["result"]["value"] == 3
 
 
-# sw: f=specs/behavior/features/config_cli/config-cli.feature
-# sw: s=@bdd-config-cli-config-keys-lists-known-paths
+# specmason: req=REQ-0014 ac=AC-0129
 def test_config_keys_lists_known_paths(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -77,8 +75,7 @@ def test_config_keys_lists_known_paths(tmp_path: Path) -> None:
     assert "default_memory_update_mode" in key_names
 
 
-# sw: f=specs/behavior/features/config_cli/config-cli.feature
-# sw: s=@bdd-config-cli-config-describe-shows-allowed-values-and-current-value
+# specmason: req=REQ-0014 ac=AC-0126
 def test_config_describe_shows_allowed_values_and_current_value(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -118,8 +115,7 @@ def test_config_describe_shows_allowed_values_and_current_value(tmp_path: Path) 
     assert result["has_explicit_value"] is True
 
 
-# sw: f=specs/behavior/features/config_cli/config-cli.feature
-# sw: s=@bdd-config-cli-config-describe-unknown-key-returns-error
+# specmason: req=REQ-0014 ac=AC-0127
 def test_config_describe_unknown_key_returns_error(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -133,8 +129,7 @@ def test_config_describe_unknown_key_returns_error(tmp_path: Path) -> None:
     assert "Config key help not found" in payload["error"]["message"]
 
 
-# sw: f=specs/behavior/features/config_cli/config-cli.feature
-# sw: s=@bdd-config-cli-config-set-updates-prompt-profile-numbers
+# specmason: req=REQ-0014 ac=AC-0135
 def test_config_set_updates_prompt_profile_numbers(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -171,8 +166,7 @@ def test_config_set_updates_prompt_profile_numbers(tmp_path: Path) -> None:
     assert _json(get_result)["result"]["value"] == 3
 
 
-# sw: f=specs/behavior/features/config_cli/config-cli.feature
-# sw: s=@bdd-config-cli-config-set-parses-bare-string-value
+# specmason: req=REQ-0014 ac=AC-0132
 def test_config_set_parses_bare_string_value(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -205,8 +199,7 @@ def test_config_set_parses_bare_string_value(tmp_path: Path) -> None:
     assert _json(get_result)["result"]["value"] == "always_before_plan"
 
 
-# sw: f=specs/behavior/features/config_cli/config-cli.feature
-# sw: s=@bdd-config-cli-config-set-rejects-invalid-values-with-json-error
+# specmason: req=REQ-0014 ac=AC-0133
 def test_config_set_rejects_invalid_values_with_json_error(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -255,8 +248,7 @@ def test_config_set_rejects_invalid_values_with_json_error(tmp_path: Path) -> No
     assert get_result.exit_code == 1, get_result.stdout
 
 
-# sw: f=specs/behavior/features/config_cli/config-cli.feature
-# sw: s=@bdd-config-cli-config-get-missing-key-returns-error
+# specmason: req=REQ-0014 ac=AC-0128
 def test_config_get_missing_key_returns_error(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -270,8 +262,7 @@ def test_config_get_missing_key_returns_error(tmp_path: Path) -> None:
     assert "Config key not found" in payload["error"]["message"]
 
 
-# sw: f=specs/behavior/features/config_cli/config-cli.feature
-# sw: s=@bdd-config-cli-config-set-rejects-reserved-keys
+# specmason: req=REQ-0014 ac=AC-0134
 def test_config_set_rejects_reserved_keys(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -285,8 +276,7 @@ def test_config_set_rejects_reserved_keys(tmp_path: Path) -> None:
     assert "taskledger_dir" in payload["error"]["message"]
 
 
-# sw: f=specs/behavior/features/config_cli/config-cli.feature
-# sw: s=@bdd-config-cli-config-set-handles-inline-section-comments
+# specmason: req=REQ-0014 ac=AC-0131
 def test_config_set_handles_inline_section_comments(tmp_path: Path) -> None:
     _init_project(tmp_path)
     config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"

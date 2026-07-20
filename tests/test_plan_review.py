@@ -72,8 +72,7 @@ def _setup_review_task(tmp_path: Path) -> str:
     return task.id
 
 
-# sw: f=specs/behavior/features/plan_review/plan-review.feature
-# sw: s=@bdd-plan-review-plan-review-markdown-includes-proposed-plan-body
+# specmason: req=REQ-0038 ac=AC-0439
 def test_plan_review_markdown_includes_proposed_plan_body(tmp_path: Path) -> None:
     task_id = _setup_review_task(tmp_path)
     payload = render_plan_review(tmp_path, task_id, version=1)
@@ -87,8 +86,7 @@ def test_plan_review_markdown_includes_proposed_plan_body(tmp_path: Path) -> Non
     assert "No required planning decision remains" in content
 
 
-# sw: f=specs/behavior/features/plan_review/plan-review.feature
-# sw: s=@bdd-plan-review-plan-review-includes-machine-commitments
+# specmason: req=REQ-0038 ac=AC-0436
 def test_plan_review_includes_machine_commitments(tmp_path: Path) -> None:
     task_id = _setup_review_task(tmp_path)
     payload = render_plan_review(tmp_path, task_id, version=1)
@@ -106,8 +104,7 @@ def test_plan_review_includes_machine_commitments(tmp_path: Path) -> None:
     assert "All plan review tests pass." in content
 
 
-# sw: f=specs/behavior/features/plan_review/plan-review.feature
-# sw: s=@bdd-plan-review-plan-review-reports-ready-when-lint-passes-and-no-blockers
+# specmason: req=REQ-0038 ac=AC-0444
 def test_plan_review_reports_ready_when_lint_passes_and_no_blockers(
     tmp_path: Path,
 ) -> None:
@@ -127,8 +124,7 @@ def test_plan_review_reports_ready_when_lint_passes_and_no_blockers(
     assert "No required planning decision remains" in payload["decision_status"]
 
 
-# sw: f=specs/behavior/features/plan_review/plan-review.feature
-# sw: s=@bdd-plan-review-plan-review-reports-blocked-for-open-questions
+# specmason: req=REQ-0038 ac=AC-0442
 def test_plan_review_reports_blocked_for_open_questions(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(
@@ -158,8 +154,7 @@ def test_plan_review_reports_blocked_for_open_questions(tmp_path: Path) -> None:
     assert "Should this be optional?" in rendered
 
 
-# sw: f=specs/behavior/features/plan_review/plan-review.feature
-# sw: s=@bdd-plan-review-plan-review-reports-blocked-for-stale-answers
+# specmason: req=REQ-0038 ac=AC-0443
 def test_plan_review_reports_blocked_for_stale_answers(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(
@@ -190,8 +185,7 @@ def test_plan_review_reports_blocked_for_stale_answers(tmp_path: Path) -> None:
     )
 
 
-# sw: f=specs/behavior/features/plan_review/plan-review.feature
-# sw: s=@bdd-plan-review-plan-review-reports-blocked-for-missing-todos
+# specmason: req=REQ-0038 ac=AC-0441
 def test_plan_review_reports_blocked_for_missing_todos(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(
@@ -223,8 +217,7 @@ No todos were defined here.
     assert payload["approval_ready"] is False
 
 
-# sw: f=specs/behavior/features/plan_review/plan-review.feature
-# sw: s=@bdd-plan-review-plan-review-json-payload-is-structured
+# specmason: req=REQ-0038 ac=AC-0438
 def test_plan_review_json_payload_is_structured(tmp_path: Path) -> None:
     task_id = _setup_review_task(tmp_path)
     payload = render_plan_review(tmp_path, task_id, version=1, format_name="json")
@@ -239,8 +232,7 @@ def test_plan_review_json_payload_is_structured(tmp_path: Path) -> None:
     assert payload["question_status"]["required_total"] == 0
 
 
-# sw: f=specs/behavior/features/plan_review/plan-review.feature
-# sw: s=@bdd-plan-review-plan-review-stdout-markdown
+# specmason: req=REQ-0038 ac=AC-0445
 def test_plan_review_stdout_markdown(tmp_path: Path) -> None:
     _setup_review_task(tmp_path)
     runner = _runner()
@@ -253,8 +245,7 @@ def test_plan_review_stdout_markdown(tmp_path: Path) -> None:
     assert "## Review Summary" in result.stdout
 
 
-# sw: f=specs/behavior/features/plan_review/plan-review.feature
-# sw: s=@bdd-plan-review-plan-review-output-writes-file
+# specmason: req=REQ-0038 ac=AC-0440
 def test_plan_review_output_writes_file(tmp_path: Path) -> None:
     _setup_review_task(tmp_path)
     output_path = tmp_path / "plan-review.md"
@@ -279,8 +270,7 @@ def test_plan_review_output_writes_file(tmp_path: Path) -> None:
     assert "## Review Summary" in written
 
 
-# sw: f=specs/behavior/features/plan_review/plan-review.feature
-# sw: s=@bdd-plan-review-plan-review-json-output
+# specmason: req=REQ-0038 ac=AC-0437
 def test_plan_review_json_output(tmp_path: Path) -> None:
     _setup_review_task(tmp_path)
     runner = _runner()
@@ -298,6 +288,7 @@ def test_plan_review_json_output(tmp_path: Path) -> None:
     assert isinstance(result["content"], str)
 
 
+# specmason: req=REQ-0038 ac=AC-0440
 def test_plan_review_defaults_to_latest_plan(tmp_path: Path) -> None:
     task_id = _setup_review_task(tmp_path)
     start_planning(tmp_path, task_id)

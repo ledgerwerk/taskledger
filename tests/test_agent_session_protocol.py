@@ -99,8 +99,7 @@ def _prepare_proposed_plan_no_todos(
 # --- Lock break no-lock message ---
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-lock-break-no-lock-message-mentions-next-action
+# specmason: req=REQ-0005 ac=AC-0067
 def test_lock_break_no_lock_message_mentions_next_action(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert (
@@ -199,8 +198,7 @@ def test_plan_propose_releases_planning_lock(tmp_path: Path) -> None:
 # --- Escape hatch reason requirements ---
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-allow-empty-criteria-requires-reason
+# specmason: req=REQ-0005 ac=AC-0064
 def test_allow_empty_criteria_requires_reason(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan_with_todos(tmp_path)
@@ -230,8 +228,7 @@ def test_allow_empty_criteria_requires_reason(tmp_path: Path) -> None:
     assert "reason" in payload["error"]["message"].lower()
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-allow-open-questions-requires-reason
+# specmason: req=REQ-0005 ac=AC-0066
 def test_allow_open_questions_requires_reason(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan_with_todos(tmp_path)
@@ -261,8 +258,7 @@ def test_allow_open_questions_requires_reason(tmp_path: Path) -> None:
     assert "reason" in payload["error"]["message"].lower()
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-allow-empty-criteria-with-reason-succeeds
+# specmason: req=REQ-0005 ac=AC-0065
 def test_allow_empty_criteria_with_reason_succeeds(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan_with_todos(tmp_path)
@@ -294,8 +290,7 @@ def test_allow_empty_criteria_with_reason_succeeds(tmp_path: Path) -> None:
 # --- Empty todos gate ---
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-plan-approval-blocks-when-no-todos
+# specmason: req=REQ-0005 ac=AC-0070
 def test_plan_approval_blocks_when_no_todos(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan_no_todos(tmp_path)
@@ -325,8 +320,7 @@ def test_plan_approval_blocks_when_no_todos(tmp_path: Path) -> None:
     assert "todo" in message
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-plan-approval-empty-todos-with-reason-succeeds
+# specmason: req=REQ-0005 ac=AC-0071
 def test_plan_approval_empty_todos_with_reason_succeeds(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan_no_todos(tmp_path)
@@ -355,8 +349,7 @@ def test_plan_approval_empty_todos_with_reason_succeeds(tmp_path: Path) -> None:
     assert result.exit_code == 0
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-plan-approval-empty-todos-without-reason-fails
+# specmason: req=REQ-0005 ac=AC-0072
 def test_plan_approval_empty_todos_without_reason_fails(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan_no_todos(tmp_path)
@@ -389,8 +382,7 @@ def test_plan_approval_empty_todos_without_reason_fails(tmp_path: Path) -> None:
 # --- Plan command ---
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-plan-command-records-exit-code
+# specmason: req=REQ-0005 ac=AC-0077
 def test_plan_command_records_exit_code(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -440,8 +432,7 @@ def test_plan_command_records_exit_code(
     assert payload["result"]["exit_code"] == 0
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-plan-command-fails-without-active-planning
+# specmason: req=REQ-0005 ac=AC-0074
 def test_plan_command_fails_without_active_planning(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert (
@@ -481,8 +472,7 @@ def test_plan_command_fails_without_active_planning(tmp_path: Path) -> None:
     assert payload["ok"] is False
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-plan-command-no-change-records
+# specmason: req=REQ-0005 ac=AC-0076
 def test_plan_command_no_change_records(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -552,8 +542,7 @@ def test_plan_command_no_change_records(
     )
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-plan-command-mirrors-inner-exit-code-by-default
+# specmason: req=REQ-0005 ac=AC-0075
 def test_plan_command_mirrors_inner_exit_code_by_default(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -600,8 +589,7 @@ def test_plan_command_mirrors_inner_exit_code_by_default(
     assert result.exit_code == 6
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-plan-command-allow-failure-keeps-wrapper-exit-zero
+# specmason: req=REQ-0005 ac=AC-0073
 def test_plan_command_allow_failure_keeps_wrapper_exit_zero(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -662,15 +650,7 @@ def test_plan_command_allow_failure_keeps_wrapper_exit_zero(
 # --- Validation finish gate ---
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/agent_session_protocol/agent-session-protocol.feature"
-    ),
-    scenario=(
-        "@bdd-agent-session-protocol-validate-finish-passed-blocks-unchecked-"
-        "mandatory-criteria"
-    ),
-)
+# specmason: req=REQ-0005 ac=AC-0081
 def test_validate_finish_passed_blocks_unchecked_mandatory_criteria(
     tmp_path: Path,
 ) -> None:
@@ -784,8 +764,7 @@ def test_validate_finish_passed_blocks_unchecked_mandatory_criteria(
 # --- --no-materialize-todos reason gate ---
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-no-materialize-todos-without-reason-fails
+# specmason: req=REQ-0005 ac=AC-0069
 def test_no_materialize_todos_without_reason_fails(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan_with_todos(tmp_path)
@@ -815,8 +794,7 @@ def test_no_materialize_todos_without_reason_fails(tmp_path: Path) -> None:
     assert "reason" in payload["error"]["message"].lower()
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-no-materialize-todos-with-reason-succeeds
+# specmason: req=REQ-0005 ac=AC-0068
 def test_no_materialize_todos_with_reason_succeeds(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan_with_todos(tmp_path)
@@ -848,15 +826,7 @@ def test_no_materialize_todos_with_reason_succeeds(tmp_path: Path) -> None:
 # --- Todo source inference ---
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/agent_session_protocol/agent-session-protocol.feature"
-    ),
-    scenario=(
-        "@bdd-agent-session-protocol-todo-added-during-implementation-is-"
-        "implementer-sourced"
-    ),
-)
+# specmason: req=REQ-0005 ac=AC-0078
 def test_todo_added_during_implementation_is_implementer_sourced(
     tmp_path: Path,
 ) -> None:
@@ -915,8 +885,7 @@ def test_todo_added_during_implementation_is_implementer_sourced(
     assert added_todo["source"] == "implementer"
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-todo-added-during-planning-is-planner-sourced
+# specmason: req=REQ-0005 ac=AC-0079
 def test_todo_added_during_planning_is_planner_sourced(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert (
@@ -963,8 +932,7 @@ def test_todo_added_during_planning_is_planner_sourced(tmp_path: Path) -> None:
     assert added_todo["source"] == "planner"
 
 
-# sw: f=specs/behavior/features/agent_session_protocol/agent-session-protocol.feature
-# sw: s=@bdd-agent-session-protocol-todo-added-without-active-stage-defaults-to-user
+# specmason: req=REQ-0005 ac=AC-0080
 def test_todo_added_without_active_stage_defaults_to_user(
     tmp_path: Path,
 ) -> None:

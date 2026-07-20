@@ -1,0 +1,1170 @@
+{
+  "items": [
+    {
+      "nodeid": "tests/test_active_task.py::test_no_ref_plan_implementation_validation_flow",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_agent_session_protocol.py::test_plan_propose_releases_planning_lock",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_canonical_config_split.py::test_canonical_config_is_version_three_without_topology_state",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_config_split.py::test_canonical_parser_rejects_legacy_state_fields",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_layout_migration.py::test_foreign_binding_at_shared_base_does_not_block_uuid_target",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_layout_migration.py::test_migration_creates_automatic_backup_and_preserves_legacy",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_layout_migration.py::test_migration_does_not_compare_against_foreign_bound_target",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_layout_migration.py::test_migration_override_copies_without_canonical_activation",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_layout_migration.py::test_migration_plan_is_read_only_and_targets_fixed_sibling",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_layout_migration.py::test_migration_rehomes_existing_direct_sibling_project",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_layout_migration.py::test_repository_local_registration_uses_legacy_external_source",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_mount_paths.py::test_authoritative_and_cache_mounts_are_separate_and_lazy",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_mount_paths.py::test_malformed_ledger_reference_cannot_escape_mount",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_mount_paths.py::test_task_records_survive_cache_mount_deletion",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_project_context.py::test_canonical_init_uses_fixed_direct_sibling_store",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_project_context.py::test_explicit_store_creation_uses_fixed_sibling_path",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_project_context.py::test_fresh_canonical_context_is_read_only_before_initialization",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_canonical_project_context.py::test_nested_canonical_context_uses_project_root",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_cli_runner_compatibility.py::test_cached_command_cache_disables_cleanly_without_typer_hook",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_cli_runner_compatibility.py::test_cached_command_tree_uses_typer_get_command",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_cli_runner_compatibility.py::test_cli_runner_accepts_legacy_mix_stderr_argument",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_cli_runner_compatibility.py::test_cli_runner_invoke_does_not_raise_missing_attribute",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_cli_runner_compatibility.py::test_cli_runner_invoke_is_typer_owned",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_cli_runner_compatibility.py::test_command_tree_is_cached_across_invocations",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_cli_runner_compatibility.py::test_runner_with_mix_stderr_false_writes_both_streams",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_command_inventory.py::test_agent_golden_path_is_explicit_and_budgeted",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_command_inventory.py::test_critical_tier_count_under_26",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_command_inventory.py::test_critical_tier_is_primary_surface",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_command_inventory.py::test_ledger_effect_values_are_valid",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_command_inventory.py::test_sync_git_command_metadata_matches_revised_surface",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_command_inventory.py::test_targeting_values_are_valid",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_command_inventory.py::test_tier_values_are_valid",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_docs_and_skill.py::test_docs_directory_uses_markdown_only",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_docs_and_skill.py::test_skill_has_single_repair_warning",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_docs_and_skill.py::test_skill_is_single_file_without_examples_dir",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_docs_and_skill.py::test_taskledger_runtime_has_no_bdd_or_archledger_coupling",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_error_contracts.py::test_canonical_sync_error_has_usage_exit_code",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_error_contracts.py::test_init_json_initializes_default_storage",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_error_contracts.py::test_stable_storage_error_has_storage_exit_code",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_handoff_lifecycle.py::test_cannot_claim_already_claimed",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_help_subprocess.py::test_help_subprocess_exits_quickly",
+      "owner": "taskledger-maintainers",
+      "reason": "Parametrized subprocess matrix is covered by the mapped help behavior tests; SpecMason AST discovery cannot associate comments across multiline decorators."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_empty",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_mypy",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_nox",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_npm_test",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_pnpm_test",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_pyre",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_pyright",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_pytest_direct",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_python_m_pytest",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_ruff_check",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_ruff_format",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_tox",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_unknown",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_implementation_checks.py::TestClassifyCheckCommand::test_yarn_test",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_import_boundaries.py::TestLedgercoreImportBoundary::test_direct_ledgercore_imports_are_whitelisted",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_import_boundaries.py::TestYamlImportBoundary::test_direct_yaml_imports_are_whitelisted",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_ledger_manifest_mutation.py::test_conflicting_mount_is_rejected",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_ledger_manifest_mutation.py::test_existing_registration_and_comments_survive",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_ledger_manifest_mutation.py::test_registration_is_idempotent",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_ledgercore_dependency.py::test_taskledger_uses_ledgercore_id_facade",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_legacy_cleanup_contracts.py::test_legacy_modules_are_removed",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_lifecycle_policies.py::test_active_stage_requires_matching_running_run",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_models_v1_schema.py::test_release_record_rejects_wrong_object_type_and_schema",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_models_v1_schema.py::test_task_record_rejects_unknown_schema_version",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_no_log_feature.py::TestCommandKeyParsing::test_empty_argv",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_performance_caching.py::test_missing_task_index_triggers_rebuild",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_performance_caching.py::test_monitor_uses_summaries_for_in_progress",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_performance_caching.py::test_next_event_id_does_not_load_events",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_performance_caching.py::test_ready_work_skip_next_action",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_performance_caching.py::test_resolve_task_by_id_reads_one_file",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_performance_caching.py::test_resolve_task_by_slug_reads_all",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_performance_caching.py::test_save_task_updates_task_index",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestCheckPlanInput::test_json_envelope_shape",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestCheckPlanInput::test_task_id_included_when_provided",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestCheckPlanInput::test_task_id_optional",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestCriterionIdUniqueness::test_duplicate_criterion_id_is_error",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestDescriptionAlias::test_description_alias_accepted_with_warning",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestDescriptionAlias::test_single_key_shorthand",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestDescriptionAlias::test_string_criteria_fallback",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestDescriptionAlias::test_text_wins_when_both_present",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestKeysets::test_criterion_keys_include_description",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestKeysets::test_todo_keys_include_supported",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestMissingContent::test_criterion_missing_text_is_error",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestMissingContent::test_malformed_yaml_raises_plan_input_error",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestMissingContent::test_non_list_criteria_raises_plan_input_error",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestMissingContent::test_non_list_todos_raises_plan_input_error",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestMissingContent::test_todo_missing_text_is_error",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestMissingContent::test_unterminated_front_matter_raises",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestPlanInputError::test_error_has_remediation_and_data",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestPlanInputError::test_error_message_has_indexed_location",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestRunHtmlRegression::test_check_passes_with_description_and_todo_files",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestRunHtmlRegression::test_check_strict_fails_with_todo_files",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestRunHtmlRegression::test_description_only_plan_upsert_succeeds",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestTodoFiles::test_todo_files_errors_in_strict_mode",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestTodoFiles::test_todo_files_warns_in_normal_mode",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestUnknownFields::test_unknown_criterion_key_errors_in_strict_mode",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestUnknownFields::test_unknown_criterion_key_warns_in_normal_mode",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestUnknownFields::test_unknown_todo_key_errors_in_strict_mode",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestUnknownFields::test_unknown_todo_key_warns_in_normal_mode",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input.py::TestWorkerPipeline::test_worker_step_without_pipeline_is_error",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input_cli.py::test_next_action_planning_without_profile_includes_plan_input_command_sequence",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input_cli.py::test_plan_check_invalid_input_returns_nonzero",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input_cli.py::test_plan_check_passes_with_warnings_on_recoverable_fixture",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input_cli.py::test_plan_check_strict_fails_on_recoverable_fixture",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input_cli.py::test_plan_guidance_without_profile_prints_builtin_contract",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input_cli.py::test_plan_start_prints_next_step_hints",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input_cli.py::test_plan_template_contains_checklist_and_single_body_comment",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input_cli.py::test_plan_upsert_accepts_recoverable_plan_input_fixture_with_warnings",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_plan_input_cli.py::test_plan_upsert_invalid_input_returns_nonzero",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_project_root_config.py::test_load_ledger_identity_defaults_when_table_missing",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_project_root_config.py::test_load_ledger_identity_normalizes_uppercase_code",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_project_root_config.py::test_validate_prompt_profile_rejects_invalid_plan_body_detail",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_project_root_config.py::test_validate_sync_git_allows_valid_config",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_project_root_config.py::test_validate_sync_git_rejects_absolute_project_path",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_question_filter_answers.py::test_list_with_comma_separated_status",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_ready_work.py::test_priority_rank_non_p_defaults_to_50",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_ready_work.py::test_priority_rank_none",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_ready_work.py::test_priority_rank_parses_p_style",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_ready_work.py::test_stage_commands_cover_all_ready_statuses",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_resource_refs.py::test_custom_ledger_code_derives_refs",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_resource_refs.py::test_default_task_global_ref",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_resource_refs.py::test_file_ref_for_task",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_resource_refs.py::test_parse_canonical_task_ref_to_local",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_resource_refs.py::test_parse_file_safe_alias_to_local",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_resource_refs.py::test_wrong_kind_is_rejected",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_resource_refs.py::test_wrong_ledger_is_rejected",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_search.py::test_read_text_file_returns_none_on_decode_error",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_service_boundaries.py::test_tasks_implementation_entrypoints_delegate_to_implementation_flow",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_service_boundaries.py::test_tasks_planning_entrypoints_delegate_to_planning_flow",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_shared_tool_ledger_storage.py::test_missing_shared_sibling_store_has_human_and_json_errors",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_shared_tool_ledger_storage.py::test_shared_sibling_base_isolated_by_ledger_and_project_uuid",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_load_json_array_empty_file",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_load_json_array_filters_non_dicts",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_load_json_array_missing_file",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_load_json_array_rejects_invalid_json",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_load_json_array_rejects_non_array",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_load_json_array_valid",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_load_json_object_empty_file",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_load_json_object_rejects_array",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_load_json_object_rejects_invalid_json",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_load_json_object_valid",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_relative_to_project",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_relative_to_workspace",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_relative_to_workspace_outside_root",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_common.py::test_write_json_creates_file",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal helper and edge-case coverage; public behavior is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration.py::TestMigrationFramework::test_required_layout_migrations_empty_when_current",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration.py::TestSidecarVersionEnforcement::test_todo_rejects_too_new_schema",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration.py::TestSidecarVersionEnforcement::test_todo_rejects_wrong_object_type",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration.py::TestStorageMeta::test_invalid_yaml_raises",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration.py::TestStorageMeta::test_missing_required_field_raises",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration.py::TestStorageMeta::test_non_mapping_raises",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration_coordinator.py::test_api_and_service_use_the_same_apply_coordinator",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration_coordinator.py::test_api_and_service_use_the_same_inspection_coordinator",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration_coordinator.py::test_migration_backup_contains_distinct_data_and_log_roots",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration_coordinator.py::test_migration_collision_tracking_uses_destination_paths",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration_coordinator.py::test_migration_post_steps_are_idempotent",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_migration_coordinator.py::test_migration_rejects_symlinked_source_files",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_repos.py::test_add_repo_rejects_duplicate_name",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_repos.py::test_add_repo_rejects_invalid_kind",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_repos.py::test_add_repo_rejects_nonexistent_path",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_repos.py::test_add_repo_rejects_preferred_readonly",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestLoadYamlObject::test_empty_file_empty_returns_empty",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestLoadYamlObject::test_invalid_yaml_raises",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestLoadYamlObject::test_missing_file_empty_returns_empty",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestLoadYamlObject::test_missing_file_error_raises",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestLoadYamlObject::test_non_mapping_raises",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestLoadYamlObject::test_valid_mapping",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestWriteYamlObject::test_creates_parent_directories",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestWriteYamlObject::test_deterministic_output",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestWriteYamlObject::test_final_newline",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestWriteYamlObject::test_write_then_load_roundtrip",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_storage_yaml_store.py::TestWriteYamlObject::test_writes_mapping",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_task_archive.py::test_can_validate_archived_implemented_task_is_false",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_task_archive.py::test_task_show_exact_id_marks_archived_task",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_task_archive.py::test_task_show_visible_task_has_visibility_visible",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_task_archive.py::test_unarchive_implemented_reopen_for_work_blocks_direct_validation",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_task_ids.py::test_task_ids_are_derived_without_reusing_gaps",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_task_ids.py::test_tombstones_require_schema_and_reserve_numbers",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_taskledger_canonical_sync.py::test_canonical_git_commit_limits_committed_paths",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_taskledger_canonical_sync.py::test_canonical_git_init_does_not_move_storage",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_taskledger_canonical_sync.py::test_canonical_hooks_reindex_fixed_sibling_store",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_taskledger_canonical_sync.py::test_canonical_local_sync_aliases_are_rejected",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_taskledger_canonical_sync.py::test_canonical_sync_derives_sibling_repo_and_path",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_taskledger_canonical_sync.py::test_canonical_sync_rejects_storage_selectors",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_taskledger_ledgercore_050_adapter.py::test_ledgercore_dependency_is_050_and_adapter_exports_contract",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_ledgercore_050_adapter.py::test_registration_preserves_other_tools",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_ledgercore_050_context.py::test_schema3_default_external_context",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_ledgercore_050_context.py::test_schema3_project_storage_is_resolved_without_writes",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_ledgercore_050_context.py::test_schema3_user_data_override_is_local",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_ledgercore_050_migration_topology.py::test_ancestor_to_child_migration_stages_outside_source",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_ledgercore_050_sync.py::test_git_sync_derives_repository_and_data_relative_path",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_ledgercore_050_sync.py::test_user_data_without_git_has_clear_error",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_migration_v3.py::test_migration_quiescence_allows_empty_lock_set",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_taskledger_migration_v3.py::test_migration_quiescence_reports_active_locks",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_migration.py::test_canonical_manifest_does_not_hide_legacy_source",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_migration.py::test_cli_renders_remediation_and_shared_source_options",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_migration.py::test_create_sibling_store_dry_run_is_read_only",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_migration.py::test_explicit_source_data_root_is_reported",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_migration.py::test_issue_serialization_preserves_structured_details",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_migration.py::test_manifest_merge_preserves_existing_ledger_registrations",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_migration.py::test_metadata_only_target_is_backed_up_and_replaced",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_migration.py::test_source_checkout_rejects_paths",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_migration.py::test_split_brain_target_reports_conflicting_task_ids_without_apply_command",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_migration.py::test_stale_config_falls_back_to_unique_uuid_store",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_storage.py::test_binding_accepts_populated_matching_bound_target",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_storage.py::test_binding_rejects_nonempty_unbound_target",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_storage.py::test_existing_marked_store_resolves_direct_data_and_lazy_cache",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_storage.py::test_missing_store_is_created_by_init",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_sibling_storage.py::test_projects_share_store_without_sharing_uuid_scoped_data",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal canonical-storage or Ledgercore regression detail without a retained behavior scenario."
+    },
+    {
+      "nodeid": "tests/test_taskledger_storage_commands_v3.py::test_storage_v3_local_override_and_clear",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_taskledger_storage_commands_v3.py::test_storage_v3_reports_and_paths",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_trace.py::test_trace_task_basic_fields",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_tree_command.py::TestEmptyLedger::test_json_envelope_ok",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_tree_command.py::TestEmptyLedger::test_json_payload_structure",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_usage_cli.py::test_usage_ready_work_human_render_shows_command_hint",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_usage_cli.py::test_usage_ready_work_includes_command_hint_for_plan_review",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_validation_git_snapshot_recovery.py::test_can_validate_and_next_action_report_snapshot_mismatch",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_validation_git_snapshot_recovery.py::test_no_git_workspace_remains_compatible",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_validation_git_snapshot_recovery.py::test_refresh_implementation_snapshot_requires_reason",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_validation_git_snapshot_recovery.py::test_refresh_implementation_snapshot_unblocks_validation_and_logs_event",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_validation_git_snapshot_recovery.py::test_validate_start_blocks_actual_content_change_after_finish",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_validation_git_snapshot_recovery.py::test_validate_start_ignores_staging_only_snapshot_change",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_worker_pipeline_todos.py::test_worker_todo_materialization_stores_worker_step_id_sparse",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_workflow_guidance.py::test_builtin_planning_guidance_includes_approval_ready_body_structure",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_workflow_guidance.py::test_has_planning_profile_no_config",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_workflow_guidance.py::test_plan_body_detail_label_known",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_workflow_guidance.py::test_profile_label_known",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_workflow_guidance.py::test_profile_label_unknown_fallback",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_workflow_guidance.py::test_question_policy_label_known",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_workflow_guidance.py::test_todo_granularity_label_known",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_workspace_snapshot.py::test_snapshot_deserialization_round_trip",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    },
+    {
+      "nodeid": "tests/test_workspace_snapshot.py::test_snapshot_deserialization_uses_fallbacks_for_invalid_values",
+      "owner": "taskledger-maintainers",
+      "reason": "Internal or redundant edge-case coverage; the observable contract is covered by mapped scenarios."
+    }
+  ],
+  "schema_version": 1
+}

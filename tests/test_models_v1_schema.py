@@ -22,6 +22,7 @@ from taskledger.domain.models import (
 from taskledger.errors import LaunchError
 
 
+# specmason: req=REQ-0032 ac=AC-0360
 def test_persisted_models_round_trip_with_schema_metadata() -> None:
     actor = ActorRef(
         actor_type="agent",
@@ -139,6 +140,7 @@ def test_persisted_models_round_trip_with_schema_metadata() -> None:
         assert payload["object_type"]
 
 
+# specmason: req=REQ-0032 ac=AC-0360
 def test_task_record_requires_object_type() -> None:
     payload = {
         "schema_version": 1,
@@ -167,13 +169,7 @@ def test_task_record_rejects_unknown_schema_version() -> None:
         TaskRecord.from_dict(payload)
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/models_v1_schema/models-v1-schema.feature"),
-    scenario=(
-        "@bdd-models-v1-schema-plan-record-round-trips-acceptance-criteria-"
-        "and-approval-metadata"
-    ),
-)
+# specmason: req=REQ-0032 ac=AC-0361
 def test_plan_record_round_trips_acceptance_criteria_and_approval_metadata() -> None:
     plan = PlanRecord(
         task_id="task-0001",
@@ -209,8 +205,7 @@ def test_release_record_rejects_wrong_object_type_and_schema() -> None:
         ReleaseRecord.from_dict(too_new)
 
 
-# sw: f=specs/behavior/features/models_v1_schema/models-v1-schema.feature
-# sw: s=@bdd-models-v1-schema-handoff-record-round-trips-focused-context-metadata
+# specmason: req=REQ-0032 ac=AC-0360
 def test_handoff_record_round_trips_focused_context_metadata() -> None:
     handoff = TaskHandoffRecord(
         handoff_id="handoff-0001",
@@ -254,8 +249,7 @@ def test_handoff_record_round_trips_focused_context_metadata() -> None:
     assert legacy.generated_at is None
 
 
-# sw: f=specs/behavior/features/models_v1_schema/models-v1-schema.feature
-# sw: s=@bdd-models-v1-schema-validation-check-requires-criterion-id-unless-not-run
+# specmason: req=REQ-0032 ac=AC-0362
 def test_validation_check_requires_criterion_id_unless_not_run() -> None:
     with pytest.raises(LaunchError, match="criterion_id"):
         ValidationCheck.from_dict(

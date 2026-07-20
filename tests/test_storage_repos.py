@@ -27,8 +27,7 @@ def _paths(tmp_path: Path):
     return paths
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-repository-records-round-trip
+# specmason: req=REQ-0055 ac=AC-0595
 def test_save_and_load_repos(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo = ProjectRepo(
@@ -47,8 +46,12 @@ def test_save_and_load_repos(tmp_path: Path) -> None:
     assert loaded[0].name == "test-repo"
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-add-repo
+# specmason: req=REQ-0055 ac=AC-0595
+# specmason: req=REQ-0055 ac=AC-0597
+# specmason: req=REQ-0055 ac=AC-0598
+# specmason: req=REQ-0055 ac=AC-0600
+# specmason: req=REQ-0055 ac=AC-0603
+# specmason: req=REQ-0055 ac=AC-0606
 def test_add_repo(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "my-code"
@@ -60,8 +63,6 @@ def test_add_repo(tmp_path: Path) -> None:
     assert len(loaded) == 1
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-invalid-repository-config-is-rejected
 def test_add_repo_rejects_duplicate_name(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "my-code"
@@ -79,6 +80,7 @@ def test_add_repo_rejects_invalid_kind(tmp_path: Path) -> None:
         add_repo(paths, name="code", path=repo_dir, kind="invalid", role="read")
 
 
+# specmason: req=REQ-0055 ac=AC-0605
 def test_add_repo_rejects_invalid_role(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "code"
@@ -114,8 +116,8 @@ def test_add_repo_rejects_nonexistent_path(tmp_path: Path) -> None:
         )
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-resolve-repo
+# specmason: req=REQ-0055 ac=AC-0601
+# specmason: req=REQ-0055 ac=AC-0602
 def test_resolve_repo(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "my-code"
@@ -125,8 +127,8 @@ def test_resolve_repo(tmp_path: Path) -> None:
     assert found.name == "my-code"
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-resolve-repo-by-slugified-ref
+# specmason: req=REQ-0055 ac=AC-0601
+# specmason: req=REQ-0055 ac=AC-0602
 def test_resolve_repo_by_slugified_ref(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "My Code"
@@ -136,16 +138,14 @@ def test_resolve_repo_by_slugified_ref(tmp_path: Path) -> None:
     assert found.name == "My Code"
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-unknown-reference-is-rejected
+# specmason: req=REQ-0055 ac=AC-0601
 def test_resolve_repo_unknown_raises(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     with pytest.raises(LaunchError, match="Unknown"):
         resolve_repo(paths, "nope")
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-root-reference-resolves-project-root
+# specmason: req=REQ-0055 ac=AC-0601
 def test_resolve_repo_root(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "my-code"
@@ -155,8 +155,7 @@ def test_resolve_repo_root(tmp_path: Path) -> None:
     assert root == repo_dir.resolve()
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-remove-repo
+# specmason: req=REQ-0055 ac=AC-0599
 def test_remove_repo(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "my-code"
@@ -167,8 +166,7 @@ def test_remove_repo(tmp_path: Path) -> None:
     assert load_repos(paths) == []
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-set-repo-role
+# specmason: req=REQ-0055 ac=AC-0605
 def test_set_repo_role(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "code"
@@ -178,6 +176,7 @@ def test_set_repo_role(tmp_path: Path) -> None:
     assert updated.role == "both"
 
 
+# specmason: req=REQ-0055 ac=AC-0605
 def test_set_repo_role_rejects_invalid(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "code"
@@ -187,6 +186,7 @@ def test_set_repo_role_rejects_invalid(tmp_path: Path) -> None:
         set_repo_role(paths, "code", role="nope")
 
 
+# specmason: req=REQ-0055 ac=AC-0605
 def test_set_repo_role_rejects_readonly_if_preferred(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "code"
@@ -197,8 +197,7 @@ def test_set_repo_role_rejects_readonly_if_preferred(tmp_path: Path) -> None:
         set_repo_role(paths, "code", role="read")
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-set-default-execution-repo
+# specmason: req=REQ-0055 ac=AC-0604
 def test_set_default_execution_repo(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "code"
@@ -208,8 +207,7 @@ def test_set_default_execution_repo(tmp_path: Path) -> None:
     assert result.preferred_for_execution is True
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-readonly-repo-cannot-be-execution-default
+# specmason: req=REQ-0055 ac=AC-0604
 def test_set_default_execution_repo_rejects_readonly(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "code"
@@ -219,8 +217,7 @@ def test_set_default_execution_repo_rejects_readonly(tmp_path: Path) -> None:
         set_default_execution_repo(paths, "code")
 
 
-# sw: f=specs/behavior/features/storage_repos/storage-repos.feature
-# sw: s=@bdd-storage-repos-clear-default-execution-repo
+# specmason: req=REQ-0055 ac=AC-0596
 def test_clear_default_execution_repo(tmp_path: Path) -> None:
     paths = _paths(tmp_path)
     repo_dir = tmp_path / "code"

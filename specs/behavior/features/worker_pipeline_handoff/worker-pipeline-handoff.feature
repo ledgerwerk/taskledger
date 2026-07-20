@@ -1,12 +1,12 @@
-@area-worker_pipeline_handoff @feature-worker-pipeline-handoff @generated @needs-review
+@area-worker_pipeline_handoff @feature-worker-pipeline-handoff @generated
 Feature: Worker Pipeline Handoff
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-worker-pipeline-handoff
   Rule: Worker Pipeline Handoff
 
-    @bdd-worker-pipeline-handoff-worker-handoff-stores-worker-step-id-sparse @needs-review
+    @req-REQ-0074 @ac-AC-0818
     Example: Worker Handoff Stores Worker Step Id Sparse
       Given the pytest test setup is prepared
       When worker handoff stores worker step id sparse is executed
@@ -14,14 +14,14 @@ Feature: Worker Pipeline Handoff
       Then normal_result.exit_code equals 0
       Then 'worker_step_id' is not in normal_payload
 
-    @bdd-worker-pipeline-handoff-worker-handoff-rejects-conflicting-mode-override @needs-review
+    @req-REQ-0074 @ac-AC-0817
     Example: Worker Handoff Rejects Conflicting Mode Override
       Given the pytest test setup is prepared
       When worker handoff rejects conflicting mode override is executed
       Then result.exit_code does not equal 0
       Then "requires mode 'implementation'" is in output
 
-    @bdd-worker-pipeline-handoff-worker-handoff-rejects-conflicting-context-override @needs-review
+    @req-REQ-0074 @ac-AC-0816
     Example: Worker Handoff Rejects Conflicting Context Override
       Given the pytest test setup is prepared
       When worker handoff rejects conflicting context override is executed

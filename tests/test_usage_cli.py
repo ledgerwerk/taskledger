@@ -35,8 +35,7 @@ def _make_runner() -> CliRunner:
 runner = _make_runner()
 
 
-# sw: f=specs/behavior/features/usage_cli/usage-cli.feature
-# sw: s=@bdd-usage-cli-usage-works-in-empty-initialized-project
+# specmason: req=REQ-0070 ac=AC-0794
 def test_usage_works_in_empty_initialized_project(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     result = runner.invoke(app, ["--cwd", str(ws), "--no-log", "usage"])
@@ -45,8 +44,7 @@ def test_usage_works_in_empty_initialized_project(tmp_path: Path) -> None:
     assert "ACTIVE" in result.stdout
 
 
-# sw: f=specs/behavior/features/usage_cli/usage-cli.feature
-# sw: s=@bdd-usage-cli-usage-json-emits-usage-result
+# specmason: req=REQ-0070 ac=AC-0791
 def test_usage_json_emits_usage_result(empty_workspace: Path) -> None:
     result = runner.invoke(
         app,
@@ -58,8 +56,7 @@ def test_usage_json_emits_usage_result(empty_workspace: Path) -> None:
     assert payload["result"]["active"] is None
 
 
-# sw: f=specs/behavior/features/usage_cli/usage-cli.feature
-# sw: s=@bdd-usage-cli-usage-reports-active-implementation-and-next-action
+# specmason: req=REQ-0070 ac=AC-0792
 def test_usage_reports_active_implementation_and_next_action(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_id = create_approved_task(ws, title="Impl task", slug="impl-task")
@@ -78,6 +75,7 @@ def test_usage_reports_active_implementation_and_next_action(tmp_path: Path) -> 
     assert "next:" in result.stdout
 
 
+# specmason: req=REQ-0070 ac=AC-0792
 def test_usage_lists_claimable_handoffs_without_claiming(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_id = create_approved_task(ws, title="Handoff task", slug="handoff-task")
@@ -99,8 +97,7 @@ def test_usage_lists_claimable_handoffs_without_claiming(tmp_path: Path) -> None
     assert list_handoffs(ws, task_id)[0].status == "open"
 
 
-# sw: f=specs/behavior/features/usage_cli/usage-cli.feature
-# sw: s=@bdd-usage-cli-usage-does-not-mark-latest-run-review-ready-when-review-exists
+# specmason: req=REQ-0070 ac=AC-0790
 def test_usage_does_not_mark_latest_run_review_ready_when_review_exists(
     tmp_path: Path,
 ) -> None:
@@ -125,8 +122,7 @@ def test_usage_does_not_mark_latest_run_review_ready_when_review_exists(
     assert reviewed_task not in review_ready_ids
 
 
-# sw: f=specs/behavior/features/usage_cli/usage-cli.feature
-# sw: s=@bdd-usage-cli-usage-reports-expired-lock-in-inbox
+# specmason: req=REQ-0070 ac=AC-0793
 def test_usage_reports_expired_lock_in_inbox(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_id = create_approved_task(
@@ -149,6 +145,7 @@ def test_usage_reports_expired_lock_in_inbox(tmp_path: Path) -> None:
     assert any(item["task_id"] == task_id for item in stale_locks)
 
 
+# specmason: req=REQ-0070 ac=AC-0794
 def test_usage_ready_work_includes_command_hint_for_approved_task(
     tmp_path: Path,
 ) -> None:

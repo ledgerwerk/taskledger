@@ -1,12 +1,12 @@
-@area-plan_review @feature-plan-review @generated @needs-review
+@area-plan_review @feature-plan-review @generated
 Feature: Plan Review
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-plan-review
   Rule: Plan Review
 
-    @bdd-plan-review-plan-review-markdown-includes-proposed-plan-body @needs-review
+    @req-REQ-0038 @ac-AC-0439
     Example: Plan Review Markdown Includes Proposed Plan Body
       Given the pytest test setup is prepared
       When plan review markdown includes proposed plan body is executed
@@ -15,7 +15,7 @@ Feature: Plan Review
       Then '## Proposed Plan' is in content
       Then 'Render a concise approval-focused review artifact.' is in content
 
-    @bdd-plan-review-plan-review-includes-machine-commitments @needs-review
+    @req-REQ-0038 @ac-AC-0436
     Example: Plan Review Includes Machine Commitments
       Given the pytest test setup is prepared
       When plan review includes machine commitments is executed
@@ -31,31 +31,31 @@ Feature: Plan Review
       Then '### Expected Outputs' is in content
       Then 'All plan review tests pass.' is in content
 
-    @bdd-plan-review-plan-review-reports-ready-when-lint-passes-and-no-blockers @needs-review
+    @req-REQ-0038 @ac-AC-0444
     Example: Plan Review Reports Ready When Lint Passes And No Blockers
       Given the pytest test setup is prepared
       When plan review reports ready when lint passes and no blockers is executed
       Then isinstance succeeds
 
-    @bdd-plan-review-plan-review-reports-blocked-for-open-questions @needs-review
+    @req-REQ-0038 @ac-AC-0442
     Example: Plan Review Reports Blocked For Open Questions
       Given the pytest test setup is prepared
       When plan review reports blocked for open questions is executed
       Then 'open_questions' is in kinds
 
-    @bdd-plan-review-plan-review-reports-blocked-for-stale-answers @needs-review
+    @req-REQ-0038 @ac-AC-0443
     Example: Plan Review Reports Blocked For Stale Answers
       Given the pytest test setup is prepared
       When plan review reports blocked for stale answers is executed
       Then 'stale_answers' is in kinds
 
-    @bdd-plan-review-plan-review-reports-blocked-for-missing-todos @needs-review
+    @req-REQ-0038 @ac-AC-0441
     Example: Plan Review Reports Blocked For Missing Todos
       Given the pytest test setup is prepared
       When plan review reports blocked for missing todos is executed
       Then 'missing_todos' is in kinds
 
-    @bdd-plan-review-plan-review-json-payload-is-structured @needs-review
+    @req-REQ-0038 @ac-AC-0438
     Example: Plan Review Json Payload Is Structured
       Given the pytest test setup is prepared
       When plan review json payload is structured is executed
@@ -63,7 +63,7 @@ Feature: Plan Review
       Then isinstance succeeds
       Then isinstance succeeds
 
-    @bdd-plan-review-plan-review-stdout-markdown @needs-review
+    @req-REQ-0038 @ac-AC-0445
     Example: Plan Review Stdout Markdown
       Given the pytest test setup is prepared
       When plan review stdout markdown is executed
@@ -71,7 +71,7 @@ Feature: Plan Review
       Then '# Proposed Plan:' is in result.stdout
       Then '## Review Summary' is in result.stdout
 
-    @bdd-plan-review-plan-review-output-writes-file @needs-review
+    @req-REQ-0038 @ac-AC-0440
     Example: Plan Review Output Writes File
       Given the pytest test setup is prepared
       When plan review output writes file is executed
@@ -80,7 +80,7 @@ Feature: Plan Review
       Then '# Proposed Plan:' is in written
       Then '## Review Summary' is in written
 
-    @bdd-plan-review-plan-review-json-output @needs-review
+    @req-REQ-0038 @ac-AC-0437
     Example: Plan Review Json Output
       Given the pytest test setup is prepared
       When plan review json output is executed

@@ -10,8 +10,7 @@ from taskledger.errors import LaunchError
 from taskledger.storage.init import ensure_project_exists, init_project_state
 
 
-# sw: f=specs/behavior/features/storage_init/storage-init.feature
-# sw: s=@bdd-storage-init-init-project-state-creates-structure
+# specmason: req=REQ-0053 ac=AC-0560
 def test_init_project_state_creates_structure(tmp_path: Path) -> None:
     paths, created = init_project_state(tmp_path)
     assert paths.project_dir.exists()
@@ -26,25 +25,27 @@ def test_init_project_state_creates_structure(tmp_path: Path) -> None:
     assert len(created) > 0
 
 
+# specmason: req=REQ-0053 ac=AC-0560
 def test_init_project_state_idempotent(tmp_path: Path) -> None:
     init_project_state(tmp_path)
     _, created = init_project_state(tmp_path)
     assert created == []
 
 
-# sw: f=specs/behavior/features/storage_init/storage-init.feature
-# sw: s=@bdd-storage-init-ensure-project-exists-after-init
+# specmason: req=REQ-0053 ac=AC-0558
 def test_ensure_project_exists_after_init(tmp_path: Path) -> None:
     init_project_state(tmp_path)
     paths = ensure_project_exists(tmp_path)
     assert paths.workspace_root == tmp_path
 
 
+# specmason: req=REQ-0053 ac=AC-0558
 def test_ensure_project_exists_raises_without_init(tmp_path: Path) -> None:
     with pytest.raises(LaunchError, match="not initialized"):
         ensure_project_exists(tmp_path)
 
 
+# specmason: req=REQ-0053 ac=AC-0558
 def test_ensure_project_exists_rejects_legacy_item_index(tmp_path: Path) -> None:
     init_project_state(tmp_path)
     paths, _ = init_project_state(tmp_path)
@@ -55,6 +56,7 @@ def test_ensure_project_exists_rejects_legacy_item_index(tmp_path: Path) -> None
         ensure_project_exists(tmp_path)
 
 
+# specmason: req=REQ-0053 ac=AC-0558
 def test_ensure_project_exists_rejects_legacy_memory_index(tmp_path: Path) -> None:
     init_project_state(tmp_path)
     paths, _ = init_project_state(tmp_path)
@@ -65,8 +67,7 @@ def test_ensure_project_exists_rejects_legacy_memory_index(tmp_path: Path) -> No
         ensure_project_exists(tmp_path)
 
 
-# sw: f=specs/behavior/features/storage_init/storage-init.feature
-# sw: s=@bdd-storage-init-init-creates-expected-directories
+# specmason: req=REQ-0053 ac=AC-0559
 def test_init_creates_expected_directories(tmp_path: Path) -> None:
     paths, _ = init_project_state(tmp_path)
     assert (paths.project_dir / "intros").is_dir()

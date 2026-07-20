@@ -125,8 +125,7 @@ Use task bundles instead of derived task, plan, and run indexes.
         )
 
 
-# sw: f=specs/behavior/features/storage_bundle_layout/storage-bundle-layout.feature
-# sw: s=@bdd-storage-bundle-layout-task-create-uses-task-bundle-layout
+# specmason: req=REQ-0051 ac=AC-0551
 def test_task_create_uses_task_bundle_layout(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -180,8 +179,7 @@ def test_task_create_uses_task_bundle_layout(tmp_path: Path) -> None:
     assert list((task_dir / "requirements").glob("req-*.md")) == []
 
 
-# sw: f=specs/behavior/features/storage_bundle_layout/storage-bundle-layout.feature
-# sw: s=@bdd-storage-bundle-layout-task-list-scans-task-markdown-without-indexes
+# specmason: req=REQ-0051 ac=AC-0553
 def test_task_list_scans_task_markdown_without_indexes(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -206,8 +204,7 @@ def test_task_list_scans_task_markdown_without_indexes(tmp_path: Path) -> None:
     assert "scan-layout" in result.stdout
 
 
-# sw: f=specs/behavior/features/storage_bundle_layout/storage-bundle-layout.feature
-# sw: s=@bdd-storage-bundle-layout-task-list-ignores-removed-legacy-indexes
+# specmason: req=REQ-0051 ac=AC-0552
 def test_task_list_ignores_removed_legacy_indexes(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert (
@@ -233,12 +230,14 @@ def test_task_list_ignores_removed_legacy_indexes(tmp_path: Path) -> None:
     assert "legacy-indexes" in result.stdout
 
 
+# specmason: req=REQ-0051 ac=AC-0552
 def test_ensure_v2_layout_does_not_create_removed_indexes(tmp_path: Path) -> None:
     ensure_v2_layout(tmp_path)
     for path in _removed_index_paths(tmp_path):
         assert not path.exists()
 
 
+# specmason: req=REQ-0051 ac=AC-0552
 def test_plan_list_does_not_need_removed_indexes(tmp_path: Path) -> None:
     _prepare_task_with_plan(tmp_path, slug="plan-scan")
     for path in _removed_index_paths(tmp_path):
@@ -250,6 +249,7 @@ def test_plan_list_does_not_need_removed_indexes(tmp_path: Path) -> None:
     assert payload["result"]["plans"][0]["plan_version"] == 1
 
 
+# specmason: req=REQ-0051 ac=AC-0552
 def test_implement_status_does_not_need_removed_indexes(tmp_path: Path) -> None:
     _prepare_task_with_plan(
         tmp_path,
@@ -268,6 +268,7 @@ def test_implement_status_does_not_need_removed_indexes(tmp_path: Path) -> None:
     assert payload["result"]["done"] == 0
 
 
+# specmason: req=REQ-0051 ac=AC-0552
 def test_reindex_does_not_create_removed_indexes(tmp_path: Path) -> None:
     ensure_v2_layout(tmp_path)
     paths = resolve_v2_paths(tmp_path)
@@ -278,8 +279,7 @@ def test_reindex_does_not_create_removed_indexes(tmp_path: Path) -> None:
         assert not path.exists()
 
 
-# sw: f=specs/behavior/features/storage_bundle_layout/storage-bundle-layout.feature
-# sw: s=@bdd-storage-bundle-layout-task-create-no-orphan-slug-directory
+# specmason: req=REQ-0051 ac=AC-0550
 def test_task_create_no_orphan_slug_directory(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -304,8 +304,7 @@ def test_task_create_no_orphan_slug_directory(tmp_path: Path) -> None:
     assert not (tasks_dir / "slug-orphan-check").exists()
 
 
-# sw: f=specs/behavior/features/storage_bundle_layout/storage-bundle-layout.feature
-# sw: s=@bdd-storage-bundle-layout-repair-task-dirs-removes-orphans
+# specmason: req=REQ-0051 ac=AC-0546
 def test_repair_task_dirs_removes_orphans(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -334,8 +333,7 @@ def test_repair_task_dirs_removes_orphans(tmp_path: Path) -> None:
     assert not (tasks_dir / "orphan-parent").exists()
 
 
-# sw: f=specs/behavior/features/storage_bundle_layout/storage-bundle-layout.feature
-# sw: s=@bdd-storage-bundle-layout-list-plans-skips-malformed-plan-files
+# specmason: req=REQ-0051 ac=AC-0545
 def test_list_plans_skips_malformed_plan_files(tmp_path: Path) -> None:
     """list_plans should skip plan files with missing required fields."""
     _init_project(tmp_path)
@@ -370,8 +368,7 @@ def test_list_plans_skips_malformed_plan_files(tmp_path: Path) -> None:
     assert len(plans) == 0
 
 
-# sw: f=specs/behavior/features/storage_bundle_layout/storage-bundle-layout.feature
-# sw: s=@bdd-storage-bundle-layout-list-plans-loads-valid-plan-with-malformed-sibling
+# specmason: req=REQ-0051 ac=AC-0544
 def test_list_plans_loads_valid_plan_with_malformed_sibling(tmp_path: Path) -> None:
     """list_plans loads valid plans even when a sibling plan is malformed."""
     _init_project(tmp_path)
@@ -418,8 +415,7 @@ def test_list_plans_loads_valid_plan_with_malformed_sibling(tmp_path: Path) -> N
     assert plans[0].plan_version == 2
 
 
-# sw: f=specs/behavior/features/storage_bundle_layout/storage-bundle-layout.feature
-# sw: s=@bdd-storage-bundle-layout-rewrite-task-refs-updates-id-and-task-id
+# specmason: req=REQ-0051 ac=AC-0549
 def test_rewrite_task_refs_updates_id_and_task_id(tmp_path: Path) -> None:
     """rewrite_task_refs updates id and task_id in all child records."""
     _init_project(tmp_path)
@@ -473,8 +469,7 @@ def test_rewrite_task_refs_updates_id_and_task_id(tmp_path: Path) -> None:
     assert q_meta["task_id"] == "task-0005"
 
 
-# sw: f=specs/behavior/features/storage_bundle_layout/storage-bundle-layout.feature
-# sw: s=@bdd-storage-bundle-layout-rewrite-task-refs-adds-missing-task-id
+# specmason: req=REQ-0051 ac=AC-0547
 def test_rewrite_task_refs_adds_missing_task_id(tmp_path: Path) -> None:
     """rewrite_task_refs adds task_id when it is missing from front matter."""
     _init_project(tmp_path)
@@ -513,8 +508,7 @@ def test_rewrite_task_refs_adds_missing_task_id(tmp_path: Path) -> None:
     assert plan_meta["task_id"] == "task-0003"
 
 
-# sw: f=specs/behavior/features/storage_bundle_layout/storage-bundle-layout.feature
-# sw: s=@bdd-storage-bundle-layout-rewrite-task-refs-noop-on-same-id
+# specmason: req=REQ-0051 ac=AC-0548
 def test_rewrite_task_refs_noop_on_same_id(tmp_path: Path) -> None:
     """rewrite_task_refs does nothing when old and new IDs match."""
     _init_project(tmp_path)

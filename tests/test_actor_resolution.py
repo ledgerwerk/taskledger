@@ -11,8 +11,7 @@ from taskledger.services.actors import resolve_actor
 
 
 class TestActorRefPidScope:
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-round-trip-command-pid-and-pid-scope
+    # specmason: req=REQ-0003 ac=AC-0049
     def test_round_trip_command_pid_and_pid_scope(self) -> None:
         a = ActorRef(
             actor_type="agent",
@@ -29,8 +28,7 @@ class TestActorRefPidScope:
         assert b.command_pid == 123
         assert b.pid_scope == "unverifiable_harness"
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-round-trip-owner-pid-scope
+    # specmason: req=REQ-0003 ac=AC-0050
     def test_round_trip_owner_pid_scope(self) -> None:
         a = ActorRef(
             pid=99999,
@@ -43,8 +41,7 @@ class TestActorRefPidScope:
         assert b.command_pid == 123
         assert b.pid_scope == "owner"
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-missing-pid-scope-is-none
+    # specmason: req=REQ-0003 ac=AC-0044
     def test_missing_pid_scope_is_none(self) -> None:
         a = ActorRef(pid=123)
         d = a.to_dict()
@@ -56,8 +53,7 @@ class TestActorRefPidScope:
         assert b.pid_scope is None
         assert b.command_pid is None
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-invalid-pid-scope-is-ignored
+    # specmason: req=REQ-0003 ac=AC-0043
     def test_invalid_pid_scope_is_ignored(self) -> None:
         d = ActorRef(pid=123).to_dict()
         d["pid_scope"] = "invalid_value"
@@ -66,8 +62,7 @@ class TestActorRefPidScope:
 
 
 class TestResolveActorHarnessContext:
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-pi-context-without-owner-pid-stores-none-pid
+    # specmason: req=REQ-0003 ac=AC-0048
     def test_pi_context_without_owner_pid_stores_none_pid(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -83,8 +78,7 @@ class TestResolveActorHarnessContext:
         assert actor.command_pid == os.getpid()
         assert actor.pid_scope == "unverifiable_harness"
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-pi-context-with-owner-pid-env
+    # specmason: req=REQ-0003 ac=AC-0047
     def test_pi_context_with_owner_pid_env(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -98,8 +92,7 @@ class TestResolveActorHarnessContext:
         assert actor.command_pid == os.getpid()
         assert actor.pid_scope == "owner"
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-harness-pid-alias-env
+    # specmason: req=REQ-0003 ac=AC-0041
     def test_harness_pid_alias_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("PI_VERSION", "1")
         monkeypatch.setenv("TASKLEDGER_HARNESS_PID", "54321")
@@ -109,8 +102,7 @@ class TestResolveActorHarnessContext:
         assert actor.pid == 54321
         assert actor.pid_scope == "owner"
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-owner-pid-takes-priority-over-harness-pid
+    # specmason: req=REQ-0003 ac=AC-0046
     def test_owner_pid_takes_priority_over_harness_pid(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -122,8 +114,7 @@ class TestResolveActorHarnessContext:
 
         assert actor.pid == 111
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-codex-context-without-owner-pid
+    # specmason: req=REQ-0003 ac=AC-0038
     def test_codex_context_without_owner_pid(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -137,8 +128,7 @@ class TestResolveActorHarnessContext:
         assert actor.pid is None
         assert actor.pid_scope == "unverifiable_harness"
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-opencode-context-without-owner-pid
+    # specmason: req=REQ-0003 ac=AC-0045
     def test_opencode_context_without_owner_pid(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -150,8 +140,7 @@ class TestResolveActorHarnessContext:
         assert actor.pid is None
         assert actor.pid_scope == "unverifiable_harness"
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-env-actor-with-harness-session
+    # specmason: req=REQ-0003 ac=AC-0040
     def test_env_actor_with_harness_session(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -166,8 +155,7 @@ class TestResolveActorHarnessContext:
         assert actor.command_pid == os.getpid()
         assert actor.pid_scope == "unverifiable_harness"
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-default-agent-gets-command-pid-as-owner
+    # specmason: req=REQ-0003 ac=AC-0039
     def test_default_agent_gets_command_pid_as_owner(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -190,8 +178,7 @@ class TestResolveActorHarnessContext:
         assert actor.pid == os.getpid()
         assert actor.pid_scope == "owner"
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-invalid-owner-pid-ignored
+    # specmason: req=REQ-0003 ac=AC-0042
     def test_invalid_owner_pid_ignored(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("PI_VERSION", "1")
         monkeypatch.setenv("TASKLEDGER_OWNER_PID", "not-a-number")
@@ -201,8 +188,7 @@ class TestResolveActorHarnessContext:
         assert actor.pid is None
         assert actor.pid_scope == "unverifiable_harness"
 
-    # sw: f=specs/behavior/features/actor_resolution/actor-resolution.feature
-    # sw: s=@bdd-actor-resolution-zero-owner-pid-ignored
+    # specmason: req=REQ-0003 ac=AC-0051
     def test_zero_owner_pid_ignored(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("PI_VERSION", "1")
         monkeypatch.setenv("TASKLEDGER_OWNER_PID", "0")

@@ -1,12 +1,12 @@
-@area-sidecar_collections @feature-sidecar-collections @generated @needs-review
+@area-sidecar_collections @feature-sidecar-collections @generated
 Feature: Sidecar Collections
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-sidecar-collections
   Rule: Sidecar Collections
 
-    @bdd-sidecar-collections-todos-links-and-requirements-use-per-record-markdown @needs-review
+    @req-REQ-0050 @ac-AC-0543
     Example: Todos Links And Requirements Use Per Record Markdown
       Given the pytest test setup is prepared
       When todos links and requirements use per record markdown is executed

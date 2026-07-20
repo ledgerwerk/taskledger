@@ -73,8 +73,7 @@ def _setup_active_task(workspace: Path) -> None:
     )
 
 
-# sw: f=specs/behavior/features/worker_pipeline_handoff/worker-pipeline-handoff.feature
-# sw: s=@bdd-worker-pipeline-handoff-worker-handoff-stores-worker-step-id-sparse
+# specmason: req=REQ-0074 ac=AC-0818
 def test_worker_handoff_stores_worker_step_id_sparse(tmp_path: Path) -> None:
     _setup_active_task(tmp_path)
 
@@ -121,8 +120,7 @@ def test_worker_handoff_stores_worker_step_id_sparse(tmp_path: Path) -> None:
     assert "worker_step_id:" not in normal_handoff_path.read_text(encoding="utf-8")
 
 
-# sw: f=specs/behavior/features/worker_pipeline_handoff/worker-pipeline-handoff.feature
-# sw: s=@bdd-worker-pipeline-handoff-worker-handoff-rejects-conflicting-mode-override
+# specmason: req=REQ-0074 ac=AC-0817
 def test_worker_handoff_rejects_conflicting_mode_override(tmp_path: Path) -> None:
     _setup_active_task(tmp_path)
 
@@ -145,8 +143,7 @@ def test_worker_handoff_rejects_conflicting_mode_override(tmp_path: Path) -> Non
     assert "requires mode 'implementation'" in output
 
 
-# sw: f=specs/behavior/features/worker_pipeline_handoff/worker-pipeline-handoff.feature
-# sw: s=@bdd-worker-pipeline-handoff-worker-handoff-rejects-conflicting-context-override
+# specmason: req=REQ-0074 ac=AC-0816
 def test_worker_handoff_rejects_conflicting_context_override(tmp_path: Path) -> None:
     _setup_active_task(tmp_path)
 

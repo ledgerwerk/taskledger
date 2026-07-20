@@ -35,6 +35,7 @@ def _strip_ansi(text: str) -> str:
     return _ANSI_ESCAPE_RE.sub("", text)
 
 
+# specmason: req=REQ-0024 ac=AC-0309
 @pytest.mark.parametrize(
     "argv",
     [
@@ -53,22 +54,21 @@ def _strip_ansi(text: str) -> str:
         ["harness", "--help"],
     ],
 )
-# sw: f=specs/behavior/features/help_subprocess/help-subprocess.feature
-# sw: s=@bdd-help-subprocess-help-subprocess-exits-quickly
 def test_help_subprocess_exits_quickly(argv: list[str], tmp_path: Path) -> None:
     result = _run_help(tmp_path, *argv)
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert "Usage:" in result.stdout
 
 
+# specmason: req=REQ-0024 ac=AC-0307
+# specmason: req=REQ-0024 ac=AC-0309
 def test_help_is_not_agent_logged(tmp_path: Path) -> None:
     _run_help(tmp_path, "plan", "--help")
     agent_logs = tmp_path / ".taskledger" / "agent-logs"
     assert not agent_logs.exists(), f"agent-logs dir exists: {agent_logs}"
 
 
-# sw: f=specs/behavior/features/help_subprocess/help-subprocess.feature
-# sw: s=@bdd-help-subprocess-root-help-shows-completion-options
+# specmason: req=REQ-0024 ac=AC-0308
 def test_root_help_shows_completion_options(tmp_path: Path) -> None:
     result = _run_help(tmp_path, "--help")
     assert result.returncode == 0, f"stderr: {result.stderr}"
@@ -81,13 +81,7 @@ def test_root_help_shows_completion_options(tmp_path: Path) -> None:
     assert completion.returncode == 0, f"stderr: {completion.stderr}"
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/help_subprocess/help-subprocess.feature"),
-    scenario=(
-        "@bdd-help-subprocess-show-completion-exits-quickly-and-does-not-"
-        "create-agent-logs"
-    ),
-)
+# specmason: req=REQ-0024 ac=AC-0309
 def test_show_completion_exits_quickly_and_does_not_create_agent_logs(
     tmp_path: Path,
 ) -> None:

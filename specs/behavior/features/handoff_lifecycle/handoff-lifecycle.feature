@@ -1,12 +1,12 @@
-@area-handoff_lifecycle @feature-handoff-lifecycle @generated @needs-review
+@area-handoff_lifecycle @feature-handoff-lifecycle @generated
 Feature: Handoff Lifecycle
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-handoff-lifecycle
   Rule: Handoff Lifecycle
 
-    @bdd-handoff-lifecycle-handoff-claim @needs-review
+    @req-REQ-0023 @ac-AC-0298
     Example: Handoff Claim
       Given the pytest test setup is prepared
       When handoff claim is executed
@@ -14,33 +14,33 @@ Feature: Handoff Lifecycle
       Then claimed.claimed_by is not None
       Then claimed.claimed_at is not None
 
-    @bdd-handoff-lifecycle-handoff-close @needs-review
+    @req-REQ-0023 @ac-AC-0299
     Example: Handoff Close
       Given the pytest test setup is prepared
       When handoff close is executed
       Then closed.status equals 'closed'
 
-    @bdd-handoff-lifecycle-handoff-cancel @needs-review
+    @req-REQ-0023 @ac-AC-0297
     Example: Handoff Cancel
       Given the pytest test setup is prepared
       When handoff cancel is executed
       Then cancelled.status equals 'cancelled'
 
-    @bdd-handoff-lifecycle-handoff-lifecycle-sequence @needs-review
+    @req-REQ-0023 @ac-AC-0302
     Example: Handoff Lifecycle Sequence
       Given the pytest test setup is prepared
       When handoff lifecycle sequence is executed
       Then claimed.status equals 'claimed'
       Then closed.status equals 'closed'
 
-    @bdd-handoff-lifecycle-handoff-create-stores-generated-context-for-todo @needs-review
+    @req-REQ-0023 @ac-AC-0300
     Example: Handoff Create Stores Generated Context For Todo
       Given the pytest test setup is prepared
       When handoff create stores generated context for todo is executed
       Then '## Focused Todo' is in handoff.context_body
       Then 'todo-0001' is in handoff.context_body
 
-    @bdd-handoff-lifecycle-handoff-lifecycle-preserves-context-metadata-on-claim-close-cancel @needs-review
+    @req-REQ-0023 @ac-AC-0301
     Example: Handoff Lifecycle Preserves Context Metadata On Claim Close Cancel
       Given the pytest test setup is prepared
       When handoff lifecycle preserves context metadata on claim close cancel is executed
@@ -56,37 +56,37 @@ Feature: Handoff Lifecycle
       Then cancelled.scope equals 'todo'
       Then cancelled.todo_id equals 'todo-0001'
 
-    @bdd-handoff-lifecycle-create-persists-open-handoff
+    @req-REQ-0023 @ac-AC-0296
     Example: Creating a handoff persists an open handoff
       Given a task is ready to transfer context
       When a handoff is created
       Then the handoff is stored with open status and actor intent
 
-    @bdd-handoff-lifecycle-claimed-handoff-cannot-be-claimed-again
+    @req-REQ-0023 @ac-AC-0295
     Example: A claimed handoff cannot be claimed again
       Given a handoff has already been claimed
       When another claim is attempted
       Then the claim is rejected
 
-    @bdd-handoff-lifecycle-invalid-actor-intent-is-rejected
+    @req-REQ-0023 @ac-AC-0303
     Example: Invalid handoff actor intent is rejected
       Given a handoff uses an unsupported intended actor
       When the handoff is created or updated
       Then validation rejects the actor intent
 
-    @bdd-handoff-lifecycle-list-returns-task-handoffs
+    @req-REQ-0023 @ac-AC-0304
     Example: Handoff listing returns the task handoffs
       Given a task contains handoff records
       When its handoffs are listed
       Then the stored handoffs are returned
 
-    @bdd-handoff-lifecycle-malformed-record-is-reported
+    @req-REQ-0023 @ac-AC-0305
     Example: Malformed handoff records are reported
       Given a task contains a malformed handoff record
       When its handoffs are listed
       Then loading fails with a record validation error
 
-    @bdd-handoff-lifecycle-supported-modes-are-preserved
+    @req-REQ-0023 @ac-AC-0306
     Example: Supported handoff modes are preserved
       Given handoffs are created for supported lifecycle modes
       When the handoffs are loaded

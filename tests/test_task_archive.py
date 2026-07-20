@@ -89,8 +89,7 @@ def _archive(tmp_path: Path, ref: str, *, force: bool = False) -> None:
     assert result.exit_code == 0, result.stdout
 
 
-# sw: f=specs/behavior/features/task_archive/archive.feature
-# sw: s=@bdd-task-archive-archive-hides-task-from-default-list
+# specmason: req=REQ-0058 ac=AC-0626
 def test_archive_hides_task_from_default_list(tmp_path: Path) -> None:
     _init(tmp_path)
     task_id = _record_done(tmp_path, title="Legacy task", slug="legacy-task")
@@ -109,8 +108,7 @@ def test_archive_hides_task_from_default_list(tmp_path: Path) -> None:
     assert "archived" in archived.stdout
 
 
-# sw: f=specs/behavior/features/task_archive/archive.feature
-# sw: s=@bdd-task-archive-archived-slug-can-be-reused-and-archived-slug-can-be-ambiguous
+# specmason: req=REQ-0058 ac=AC-0627
 def test_archived_slug_can_be_reused_and_archived_slug_can_be_ambiguous(
     tmp_path: Path,
 ) -> None:
@@ -152,8 +150,7 @@ def test_archived_slug_can_be_reused_and_archived_slug_can_be_ambiguous(
     assert "ambiguous" in ambiguous.output.lower()
 
 
-# sw: f=specs/behavior/features/task_archive/archive.feature
-# sw: s=@bdd-task-archive-unarchive-rejects-visible-slug-conflict-and-accepts-new-slug
+# specmason: req=REQ-0058 ac=AC-0630
 def test_unarchive_rejects_visible_slug_conflict_and_accepts_new_slug(
     tmp_path: Path,
 ) -> None:
@@ -195,8 +192,7 @@ def test_unarchive_rejects_visible_slug_conflict_and_accepts_new_slug(
     assert restored.exit_code == 0, restored.stdout
 
 
-# sw: f=specs/behavior/features/task_archive/archive.feature
-# sw: s=@bdd-task-archive-archiving-all-tasks-does-not-reset-next-task-number
+# specmason: req=REQ-0058 ac=AC-0629
 def test_archiving_all_tasks_does_not_reset_next_task_number(tmp_path: Path) -> None:
     _init(tmp_path)
     first = _record_done(tmp_path, title="Done one", slug="done-one")
@@ -206,8 +202,7 @@ def test_archiving_all_tasks_does_not_reset_next_task_number(tmp_path: Path) -> 
     assert second == "task-0002"
 
 
-# sw: f=specs/behavior/features/task_archive/archive.feature
-# sw: s=@bdd-task-archive-archived-task-mutation-is-rejected-and-exact-id-still-reads
+# specmason: req=REQ-0058 ac=AC-0628
 def test_archived_task_mutation_is_rejected_and_exact_id_still_reads(
     tmp_path: Path,
 ) -> None:
@@ -283,6 +278,7 @@ def test_task_show_visible_task_has_visibility_visible(tmp_path: Path) -> None:
 
 
 # AC2: archive no-op reports no change
+# specmason: req=REQ-0058 ac=AC-0626
 def test_archive_already_archived_task_reports_noop(tmp_path: Path) -> None:
     _init(tmp_path)
     task_id = _record_done(tmp_path, title="Already archived", slug="already-archived")
@@ -306,6 +302,7 @@ def test_archive_already_archived_task_reports_noop(tmp_path: Path) -> None:
 
 
 # AC2: unarchive visible task reports no-op
+# specmason: req=REQ-0058 ac=AC-0630
 def test_unarchive_visible_task_reports_noop(tmp_path: Path) -> None:
     _init(tmp_path)
     task_id = _record_done(tmp_path, title="Already visible", slug="already-visible")
@@ -346,6 +343,7 @@ def test_can_validate_archived_implemented_task_is_false(tmp_path: Path) -> None
 
 
 # AC3: next-action reports archived for archived task
+# specmason: req=REQ-0058 ac=AC-0626
 def test_next_action_archived_task_reports_archived(tmp_path: Path) -> None:
     _init(tmp_path)
     task_id = _record_done(tmp_path, title="Archived done", slug="archived-done")
@@ -368,6 +366,7 @@ def test_next_action_archived_task_reports_archived(tmp_path: Path) -> None:
 
 
 # AC4: non-terminal unarchive requires --reopen-for-work
+# specmason: req=REQ-0058 ac=AC-0626
 def test_unarchive_implemented_task_requires_recovery_mode(
     tmp_path: Path,
 ) -> None:

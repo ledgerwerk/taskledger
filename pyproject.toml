@@ -16,7 +16,6 @@ addopts = "--strict-markers --strict-config"
 testpaths = ["tests"]
 python_files = "test_*.py"
 markers = [
-    "specweave: links a pytest test to a canonical behavior scenario",
     "unit: pure domain/service/storage tests without full CLI workflows",
     "cli: exercises the Typer CLI surface",
     "integration: exercises multiple taskledger layers or a full lifecycle",

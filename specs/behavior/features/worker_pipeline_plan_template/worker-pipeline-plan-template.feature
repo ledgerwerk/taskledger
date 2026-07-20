@@ -1,12 +1,12 @@
-@area-worker_pipeline_plan_template @feature-worker-pipeline-plan-template @generated @needs-review
+@area-worker_pipeline_plan_template @feature-worker-pipeline-plan-template @generated
 Feature: Worker Pipeline Plan Template
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-worker-pipeline-plan-template
   Rule: Worker Pipeline Plan Template
 
-    @bdd-worker-pipeline-plan-template-plan-template-unchanged-without-worker-pipeline @needs-review
+    @req-REQ-0075 @ac-AC-0820
     Example: Plan Template Unchanged Without Worker Pipeline
       Given the pytest test setup is prepared
       When plan template unchanged without worker pipeline is executed
@@ -14,7 +14,7 @@ Feature: Worker Pipeline Plan Template
       Then '## Optional worker pipeline todo hints' is not in result.stdout
       Then 'worker_step:' is not in result.stdout
 
-    @bdd-worker-pipeline-plan-template-plan-template-requires-opt-in-flag-for-worker-pipeline-hints @needs-review
+    @req-REQ-0075 @ac-AC-0819
     Example: Plan Template Requires Opt In Flag For Worker Pipeline Hints
       Given the pytest test setup is prepared
       When plan template requires opt in flag for worker pipeline hints is executed
@@ -22,7 +22,7 @@ Feature: Worker Pipeline Plan Template
       Then '## Optional worker pipeline todo hints' is not in result.stdout
       Then 'api-designer' is not in result.stdout
 
-    @bdd-worker-pipeline-plan-template-worker-plan-template-uses-configured-steps-not-hardcoded-names @needs-review
+    @req-REQ-0075 @ac-AC-0822
     Example: Worker Plan Template Uses Configured Steps Not Hardcoded Names
       Given the pytest test setup is prepared
       When worker plan template uses configured steps not hardcoded names is executed
@@ -32,7 +32,7 @@ Feature: Worker Pipeline Plan Template
       Then 'worker_step: "coder"' is in result.stdout
       Then 'skeletor' is not in result.stdout
 
-    @bdd-worker-pipeline-plan-template-plan-template-worker-hints-require-template-or-guided-mode @needs-review
+    @req-REQ-0075 @ac-AC-0821
     Example: Plan Template Worker Hints Require Template Or Guided Mode
       Given the pytest test setup is prepared
       When plan template worker hints require template or guided mode is executed

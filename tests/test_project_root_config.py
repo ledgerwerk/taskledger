@@ -51,8 +51,7 @@ def _write_storage_root(path: Path) -> None:
     )
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-init-writes-root-taskledger-toml-and-default-storage
+# specmason: req=REQ-0041 ac=AC-0464
 def test_init_writes_canonical_sibling_storage(tmp_path: Path) -> None:
     result = runner.invoke(
         app, ["--root", str(tmp_path), "init", "--create-sibling-store"]
@@ -65,8 +64,7 @@ def test_init_writes_canonical_sibling_storage(tmp_path: Path) -> None:
     assert not (tmp_path / ".ledger" / "task" / "taskledger").exists()
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-init-writes-project-name-from-workspace-basename
+# specmason: req=REQ-0041 ac=AC-0463
 def test_init_writes_project_name_from_workspace_basename(tmp_path: Path) -> None:
     workspace = tmp_path / "odoo17-addon"
     workspace.mkdir()
@@ -82,8 +80,7 @@ def test_init_writes_project_name_from_workspace_basename(tmp_path: Path) -> Non
     assert payload["result"]["project_name"] == "odoo17-addon"
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-init-project-name-option-overrides-basename
+# specmason: req=REQ-0041 ac=AC-0461
 def test_init_project_name_option_overrides_basename(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
@@ -103,13 +100,7 @@ def test_init_project_name_option_overrides_basename(tmp_path: Path) -> None:
     assert 'name = "Odoo 17 Addons"' in manifest_text
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/project_root_config/project-root-config.feature"),
-    scenario=(
-        "@bdd-project-root-config-init-with-external-taskledger-dir-uses-"
-        "directory-directly"
-    ),
-)
+# specmason: req=REQ-0041 ac=AC-0462
 def test_init_with_external_taskledger_dir_uses_directory_directly(
     tmp_path: Path,
 ) -> None:
@@ -131,8 +122,7 @@ def test_init_with_external_taskledger_dir_uses_directory_directly(
     assert not (workspace / ".taskledger").exists()
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-task-create-uses-configured-external-storage
+# specmason: req=REQ-0041 ac=AC-0481
 def test_task_create_uses_configured_external_storage(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     storage = tmp_path / "cloud" / "taskledger" / "repo"
@@ -162,8 +152,7 @@ def test_task_create_uses_configured_external_storage(tmp_path: Path) -> None:
     assert not (workspace / ".taskledger" / "tasks").exists()
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-relative-storage-resolves-from-config
+# specmason: req=REQ-0041 ac=AC-0478
 def test_relative_taskledger_dir_is_relative_to_config_path(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
@@ -177,8 +166,7 @@ def test_relative_taskledger_dir_is_relative_to_config_path(tmp_path: Path) -> N
     assert paths.taskledger_dir == (tmp_path / "state" / "repo").resolve()
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-cli-discovers-taskledger-toml-from-subdirectory
+# specmason: req=REQ-0041 ac=AC-0455
 def test_cli_discovers_taskledger_toml_from_subdirectory(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -204,8 +192,7 @@ def test_cli_discovers_taskledger_toml_from_subdirectory(
     )
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-legacy-config-fallbacks-remain-readable
+# specmason: req=REQ-0041 ac=AC-0455
 def test_legacy_dot_taskledger_without_root_config_still_resolves(
     tmp_path: Path,
 ) -> None:
@@ -217,6 +204,7 @@ def test_legacy_dot_taskledger_without_root_config_still_resolves(
     assert paths.config_path == tmp_path / "taskledger.toml"
 
 
+# specmason: req=REQ-0041 ac=AC-0469
 def test_legacy_project_toml_is_used_as_fallback_config(tmp_path: Path) -> None:
     legacy_dir = tmp_path / ".taskledger"
     _write_storage_root(legacy_dir)
@@ -230,8 +218,7 @@ def test_legacy_project_toml_is_used_as_fallback_config(tmp_path: Path) -> None:
     assert load_project_config_overrides(paths)["default_source_max_chars"] == 42
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-invalid-taskledger-toml-returns-json-error
+# specmason: req=REQ-0041 ac=AC-0468
 def test_invalid_taskledger_toml_returns_json_error(tmp_path: Path) -> None:
     (tmp_path / "taskledger.toml").write_text(
         "taskledger_dir = [1, 2, 3]\n", encoding="utf-8"
@@ -245,8 +232,7 @@ def test_invalid_taskledger_toml_returns_json_error(tmp_path: Path) -> None:
     assert "taskledger_dir" in payload["error"]["message"]
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-dot-taskledger-toml-wins-and-doctor-warns
+# specmason: req=REQ-0041 ac=AC-0459
 def test_dot_taskledger_toml_wins_and_doctor_warns(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
@@ -273,8 +259,7 @@ def test_dot_taskledger_toml_wins_and_doctor_warns(tmp_path: Path) -> None:
     )
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-doctor-warns-on-legacy-project-toml
+# specmason: req=REQ-0041 ac=AC-0458
 def test_doctor_warns_on_legacy_project_toml(tmp_path: Path) -> None:
     legacy_dir = tmp_path / ".taskledger"
     _write_storage_root(legacy_dir)
@@ -288,8 +273,7 @@ def test_doctor_warns_on_legacy_project_toml(tmp_path: Path) -> None:
 # --- prompt_profile tests ---
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-merge-project-config-with-valid-prompt-profile
+# specmason: req=REQ-0041 ac=AC-0477
 def test_merge_project_config_with_valid_prompt_profile() -> None:
     overrides = {
         "prompt_profiles": {
@@ -327,20 +311,13 @@ def test_merge_project_config_with_valid_prompt_profile() -> None:
     assert p.extra_guidance == "Always include a migration plan."
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-merge-project-config-no-prompt-profile-is-none
+# specmason: req=REQ-0041 ac=AC-0470
 def test_merge_project_config_no_prompt_profile_is_none() -> None:
     config = merge_project_config({})
     assert config.prompt_profile is None
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/project_root_config/project-root-config.feature"),
-    scenario=(
-        "@bdd-project-root-config-merge-project-config-partial-prompt-profile-"
-        "uses-defaults"
-    ),
-)
+# specmason: req=REQ-0041 ac=AC-0471
 def test_merge_project_config_partial_prompt_profile_uses_defaults() -> None:
     overrides = {
         "prompt_profiles": {
@@ -357,8 +334,7 @@ def test_merge_project_config_partial_prompt_profile_uses_defaults() -> None:
     assert p.require_files is True
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-merge-project-config-preserves-base-prompt-profile
+# specmason: req=REQ-0041 ac=AC-0474
 def test_merge_project_config_preserves_base_prompt_profile() -> None:
     base = ProjectConfig()
     overrides: dict[str, object] = {}
@@ -378,8 +354,7 @@ def test_merge_project_config_preserves_base_prompt_profile() -> None:
     assert config.prompt_profile.question_policy == "minimal"
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-invalid-prompt-profile-is-rejected
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_prompt_profile_rejects_unknown_keys() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -396,6 +371,7 @@ def test_validate_prompt_profile_rejects_unknown_keys() -> None:
     assert "unknown" in str(exc.value).lower()
 
 
+# specmason: req=REQ-0041 ac=AC-0467
 def test_validate_prompt_profile_rejects_invalid_profile_enum() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -405,6 +381,7 @@ def test_validate_prompt_profile_rejects_invalid_profile_enum() -> None:
     assert "profile" in str(exc.value).lower()
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_prompt_profile_rejects_invalid_question_policy() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -416,6 +393,7 @@ def test_validate_prompt_profile_rejects_invalid_question_policy() -> None:
     assert "question_policy" in str(exc.value).lower()
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_prompt_profile_rejects_invalid_todo_granularity() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -438,6 +416,7 @@ def test_validate_prompt_profile_rejects_invalid_plan_body_detail() -> None:
     assert "plan_body_detail" in str(exc.value).lower()
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_prompt_profile_rejects_non_integer_max_questions() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -449,6 +428,7 @@ def test_validate_prompt_profile_rejects_non_integer_max_questions() -> None:
     assert "max_required_questions" in str(exc.value).lower()
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_prompt_profile_rejects_non_boolean_field() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -460,6 +440,7 @@ def test_validate_prompt_profile_rejects_non_boolean_field() -> None:
     assert "require_files" in str(exc.value).lower()
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_prompt_profile_rejects_excessive_extra_guidance() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -471,6 +452,7 @@ def test_validate_prompt_profile_rejects_excessive_extra_guidance() -> None:
     assert "extra_guidance" in str(exc.value).lower()
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_prompt_profile_rejects_non_list_topics() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -482,6 +464,7 @@ def test_validate_prompt_profile_rejects_non_list_topics() -> None:
     assert "required_question_topics" in str(exc.value).lower()
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_prompt_profile_rejects_negative_integer() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -493,6 +476,7 @@ def test_validate_prompt_profile_rejects_negative_integer() -> None:
     assert "positive" in str(exc.value).lower()
 
 
+# specmason: req=REQ-0041 ac=AC-0470
 def test_prompt_profile_to_dict() -> None:
     p = PromptProfile(
         name="planning",
@@ -521,8 +505,7 @@ def test_prompt_profile_to_dict() -> None:
     assert d["extra_guidance"] == "Test guidance."
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-merge-project-config-with-agent-logging-override
+# specmason: req=REQ-0041 ac=AC-0475
 def test_merge_project_config_with_agent_logging_override() -> None:
     config = merge_project_config(
         {
@@ -538,8 +521,7 @@ def test_merge_project_config_with_agent_logging_override() -> None:
     assert config.agent_logging.redact_patterns == ("(?i)token=\\S+",)
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-merge-project-config-preserves-base-agent-logging
+# specmason: req=REQ-0041 ac=AC-0472
 def test_merge_project_config_preserves_base_agent_logging() -> None:
     base = ProjectConfig(
         agent_logging=AgentLoggingConfig(
@@ -552,13 +534,7 @@ def test_merge_project_config_preserves_base_agent_logging() -> None:
     assert config.agent_logging.max_inline_chars == 2048
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/project_root_config/project-root-config.feature"),
-    scenario=(
-        "@bdd-project-root-config-default-taskledger-toml-includes-commented-"
-        "planning-guidance"
-    ),
-)
+# specmason: req=REQ-0041 ac=AC-0457
 def test_default_taskledger_toml_includes_commented_planning_guidance() -> None:
     rendered = render_default_taskledger_toml()
     assert "[ledger]" in rendered
@@ -573,8 +549,7 @@ def test_default_taskledger_toml_includes_commented_planning_guidance() -> None:
     )
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-invalid-project-name-is-rejected
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_project_name_rejects_non_string() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -582,6 +557,7 @@ def test_validate_project_name_rejects_non_string() -> None:
         _validate_project_config_overrides({"project_name": 123}, Path("test.toml"))
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_project_name_rejects_blank() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -589,6 +565,7 @@ def test_validate_project_name_rejects_blank() -> None:
         _validate_project_config_overrides({"project_name": "   "}, Path("test.toml"))
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_project_name_rejects_newline() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -599,13 +576,7 @@ def test_validate_project_name_rejects_newline() -> None:
         )
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/project_root_config/project-root-config.feature"),
-    scenario=(
-        "@bdd-project-root-config-render-default-taskledger-toml-includes-"
-        "project-name-when-given"
-    ),
-)
+# specmason: req=REQ-0041 ac=AC-0479
 def test_render_default_taskledger_toml_includes_project_name_when_given() -> None:
     rendered = render_default_taskledger_toml(
         project_uuid="u",
@@ -614,6 +585,7 @@ def test_render_default_taskledger_toml_includes_project_name_when_given() -> No
     assert 'project_name = "taskledger"' in rendered
 
 
+# specmason: req=REQ-0041 ac=AC-0475
 def test_validate_project_config_allows_ledger_table() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -623,6 +595,7 @@ def test_validate_project_config_allows_ledger_table() -> None:
     )
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_project_config_rejects_unknown_ledger_keys() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -633,6 +606,7 @@ def test_validate_project_config_rejects_unknown_ledger_keys() -> None:
         )
 
 
+# specmason: req=REQ-0041 ac=AC-0466
 def test_validate_project_config_rejects_invalid_ledger_code() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -683,6 +657,7 @@ def test_validate_sync_git_allows_valid_config() -> None:
     _validate_project_config_overrides(data, Path("taskledger.toml"))
 
 
+# specmason: req=REQ-0041 ac=AC-0480
 def test_validate_sync_git_rejects_unknown_key() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -693,8 +668,6 @@ def test_validate_sync_git_rejects_unknown_key() -> None:
         )
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-sync-git-path-cannot-escape-project
 def test_validate_sync_git_rejects_absolute_project_path() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -705,6 +678,7 @@ def test_validate_sync_git_rejects_absolute_project_path() -> None:
         )
 
 
+# specmason: req=REQ-0041 ac=AC-0480
 def test_validate_sync_git_rejects_parent_path_escape() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -718,44 +692,33 @@ def test_validate_sync_git_rejects_parent_path_escape() -> None:
 # -- event_logging config tests --
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-action-logging-enabled-by-default
+# specmason: req=REQ-0041 ac=AC-0460
 def test_action_logging_enabled_by_default() -> None:
     config = merge_project_config({})
     assert config.event_logging.enabled is True
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-merge-project-config-can-disable-action-logging
+# specmason: req=REQ-0041 ac=AC-0476
 def test_merge_project_config_can_disable_action_logging() -> None:
     config = merge_project_config({"event_logging": {"enabled": False}})
     assert config.event_logging.enabled is False
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-merge-project-config-preserves-base-event-logging
+# specmason: req=REQ-0041 ac=AC-0473
 def test_merge_project_config_preserves_base_event_logging() -> None:
     base = ProjectConfig(event_logging=EventLoggingConfig(enabled=True))
     config = merge_project_config({}, base=base)
     assert config.event_logging.enabled is True
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/project_root_config/project-root-config.feature"),
-    scenario=(
-        "@bdd-project-root-config-default-taskledger-toml-includes-commented-"
-        "event-logging"
-    ),
-)
+# specmason: req=REQ-0041 ac=AC-0456
 def test_default_taskledger_toml_includes_commented_event_logging() -> None:
     rendered = render_default_taskledger_toml()
     assert "# [event_logging]" in rendered
     assert "# enabled = true" in rendered
 
 
-# sw: f=specs/behavior/features/project_root_config/project-root-config.feature
-# sw: s=@bdd-project-root-config-invalid-event-logging-config-is-rejected
+# specmason: req=REQ-0041 ac=AC-0465
 def test_validate_event_logging_rejects_non_table() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -766,6 +729,7 @@ def test_validate_event_logging_rejects_non_table() -> None:
         )
 
 
+# specmason: req=REQ-0041 ac=AC-0465
 def test_validate_event_logging_rejects_non_boolean_enabled() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 
@@ -776,6 +740,7 @@ def test_validate_event_logging_rejects_non_boolean_enabled() -> None:
         )
 
 
+# specmason: req=REQ-0041 ac=AC-0465
 def test_validate_event_logging_rejects_unknown_keys() -> None:
     from taskledger.storage.project_config import _validate_project_config_overrides
 

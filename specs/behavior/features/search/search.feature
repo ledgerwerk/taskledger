@@ -1,12 +1,12 @@
-@area-search @feature-search @generated @needs-review
+@area-search @feature-search @generated
 Feature: Search
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-search
   Rule: Search
 
-    @bdd-search-search-grep-and-symbols-basic @needs-review
+    @req-REQ-0047 @ac-AC-0525
     Example: Search Grep And Symbols Basic
       Given the pytest test setup is prepared
       When search grep and symbols basic is executed
@@ -17,7 +17,7 @@ Feature: Search
       Then 'file2.txt' is in seen
       Then all succeeds
 
-    @bdd-search-module-dependencies-and-errors @needs-review
+    @req-REQ-0047 @ac-AC-0524
     Example: Module Dependencies And Errors
       Given the pytest test setup is prepared
       When module dependencies and errors is executed
@@ -25,7 +25,7 @@ Feature: Search
       Then info.module equals 'mymodule'
       Then '__manifest__.py' is in info.manifest_path
 
-    @bdd-search-discovery-tokens-and-discover-files @needs-review
+    @req-REQ-0047 @ac-AC-0523
     Example: Discovery Tokens And Discover Files
       Given the pytest test setup is prepared
       When discovery tokens and discover files is executed

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from taskledger.cli import app
@@ -23,16 +22,7 @@ def _json(result) -> dict[str, object]:
     return json.loads(result.stdout)
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/plan_todo_materialization/plan-todo-"
-        "materialization.feature"
-    ),
-    scenario=(
-        "@bdd-plan-todo-materialization-plan-approval-materializes-structured-"
-        "todos-once"
-    ),
-)
+# specmason: req=REQ-0040 ac=AC-0454
 def test_plan_approval_materializes_structured_todos_once(tmp_path: Path) -> None:
     assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
     assert (

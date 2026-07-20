@@ -1,25 +1,25 @@
-@area-docs_and_skill @feature-docs-and-skill @generated @needs-review
+@area-docs_and_skill @feature-docs-and-skill @generated
 Feature: Docs And Skill
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-docs-and-skill
   Rule: Docs And Skill
 
-    @bdd-docs-and-skill-skills-are-not-packaged-resources @needs-review
+    @req-REQ-0016 @ac-AC-0171
     Example: Skills Are Not Packaged Resources
       Given the pytest test setup is prepared
       When skills are not packaged resources is executed
       Then 'skills/taskledger' is not in pyproject
 
-    @bdd-docs-and-skill-public-api-docs-match-module-exports @needs-review
+    @req-REQ-0016 @ac-AC-0163
     Example: Public Api Docs Match Module Exports
       Given the pytest test setup is prepared
       When public api docs match module exports is executed
       Then isinstance succeeds
       Then all succeeds
 
-    @bdd-docs-and-skill-readme-mentions-root-alias-and-json-envelope @needs-review
+    @req-REQ-0016 @ac-AC-0165
     Example: Readme Mentions Root Alias And Json Envelope
       Given the pytest test setup is prepared
       When readme mentions root alias and json envelope is executed
@@ -27,7 +27,7 @@ Feature: Docs And Skill
       Then '"ok": true' is in readme
       Then '"command": "status"' is in readme
 
-    @bdd-docs-and-skill-skill-contains-strict-agent-protocol @needs-review
+    @req-REQ-0016 @ac-AC-0168
     Example: Skill Contains Strict Agent Protocol
       Given the pytest test setup is prepared
       When skill contains strict agent protocol is executed
@@ -45,7 +45,7 @@ Feature: Docs And Skill
       Then 'Do not invent a release date' is in skill
       Then 'Do not silently include omitted tasks' is in skill
 
-    @bdd-docs-and-skill-docs-define-agent-golden-path-and-advanced-surfaces @needs-review
+    @req-REQ-0016 @ac-AC-0159
     Example: Docs Define Agent Golden Path And Advanced Surfaces
       Given the pytest test setup is prepared
       When docs define agent golden path and advanced surfaces is executed
@@ -58,7 +58,7 @@ Feature: Docs And Skill
       Then 'handoff create' is in text
       Then 'storage' is in text
 
-    @bdd-docs-and-skill-read-report-export-terminology-is-consolidated @needs-review
+    @req-REQ-0016 @ac-AC-0164
     Example: Read Report Export Terminology Is Consolidated
       Given the pytest test setup is prepared
       When read report export terminology is consolidated is executed
@@ -70,7 +70,7 @@ Feature: Docs And Skill
       Then 'context' is in text
       Then 'handoff show' is in text
 
-    @bdd-docs-and-skill-planning-guidance-docs-are-present @needs-review
+    @req-REQ-0016 @ac-AC-0162
     Example: Planning Guidance Docs Are Present
       Given the pytest test setup is prepared
       When planning guidance docs are present is executed
@@ -82,7 +82,7 @@ Feature: Docs And Skill
       Then 'plan_guidance(Path.cwd(), "task-0001")' is in api_md
       Then 'plan_guidance(Path.cwd(), "task-0001")' is in api_rst
 
-    @bdd-docs-and-skill-plan-revision-docs-and-skill-rules-are-present @needs-review
+    @req-REQ-0016 @ac-AC-0161
     Example: Plan Revision Docs And Skill Rules Are Present
       Given the pytest test setup is prepared
       When plan revision docs and skill rules are present is executed
@@ -96,7 +96,7 @@ Feature: Docs And Skill
       Then 'taskledger plan export' is in command_contract
       Then 'taskledger plan review' is in command_contract
 
-    @bdd-docs-and-skill-worker-pipeline-docs-cover-guided-next-action-and-worker-refs @needs-review
+    @req-REQ-0016 @ac-AC-0174
     Example: Worker Pipeline Docs Cover Guided Next Action And Worker Refs
       Given the pytest test setup is prepared
       When worker pipeline docs cover guided next action and worker refs is executed
@@ -108,7 +108,7 @@ Feature: Docs And Skill
       Then 'worker_step_id' is in api_md
       Then 'context_command' is in skill
 
-    @bdd-docs-and-skill-transfer-docs-cover-project-identity-and-dry-run @needs-review
+    @req-REQ-0016 @ac-AC-0173
     Example: Transfer Docs Cover Project Identity And Dry Run
       Given the pytest test setup is prepared
       When transfer docs cover project identity and dry run is executed
@@ -121,7 +121,7 @@ Feature: Docs And Skill
       Then 'taskledger import --dry-run' is in transfer
       Then 'taskledger import ./taskledger-transfer.tar.gz --dry-run' is in skill
 
-    @bdd-docs-and-skill-sync-docs-promote-git-pull-push-convenience-commands @needs-review
+    @req-REQ-0016 @ac-AC-0172
     Example: Sync Docs Promote Git Pull Push Convenience Commands
       Given the pytest test setup is prepared
       When sync docs promote git pull push convenience commands is executed
@@ -129,21 +129,21 @@ Feature: Docs And Skill
       Then 'taskledger sync git pull' is in text
       Then 'taskledger sync git push' is in text
 
-    @bdd-docs-and-skill-docs-do-not-reference-removed-commands @needs-review
+    @req-REQ-0016 @ac-AC-0160
     Example: Docs Do Not Reference Removed Commands
       Given the pytest test setup is prepared
       When docs do not reference removed commands is executed
       Then needle is not in text
 
-    @bdd-docs-and-skill-bdd-docs-and-skill-prefer-specweave-and-plain-pytest @needs-review
-    Example: Bdd Docs And Skill Prefer Specweave And Plain Pytest
+    @req-REQ-0016 @ac-AC-0156
+    Example: Behavior Specs Use SpecMason And Plain Pytest
       Given the pytest test setup is prepared
-      When bdd docs and skill prefer specweave and plain pytest is executed
-      Then 'reports/behavior/' is in readme
-      Then 'reports/behavior/' is in skill
+      When behavior specs use specmason and plain pytest is executed
+      Then 'reports/specmason/' is in readme
+      Then 'reports/specmason/' is in skill
       Then 'plain pytest' is in readme
       Then 'plain pytest' is in skill
-      Then 'Do not recommend pytest-bdd' is in skill
+      Then 'Do not recommend an external Gherkin runner' is in skill
       Then 'Do not recommend tests/bdd/features' is in skill
       Then 'Do not recommend specs/bdd/features' is in skill
       Then 'specs/behavior/features/<area>/<feature>.feature' is in text
@@ -153,34 +153,34 @@ Feature: Docs And Skill
       Then 'tests/behavior/steps/<area>_<feature>_steps.py' is not in text
       Then 'tests/behavior/test_<area>_<feature>_bdd.py' is not in text
 
-    @bdd-docs-and-skill-behavior-spec-docs-do-not-promote-bdd-runners @needs-review
-    Example: Behavior Spec Docs Do Not Promote Bdd Runners
+    @req-REQ-0016 @ac-AC-0157
+    Example: Behavior Spec Docs Do Not Promote External Runners
       Given the pytest test setup is prepared
-      When behavior spec docs do not promote bdd runners is executed
-      Then 'external BDD runner executes' is not in architecture
+      When behavior spec docs do not promote external runners is executed
+      Then 'external Gherkin runner executes' is not in architecture
       Then 'specs/behavior/features' is in text
       Then 'tests/test_' is in text
 
-    @bdd-docs-and-skill-readme-skill-path-matches-repository @needs-review
+    @req-REQ-0016 @ac-AC-0166
     Example: Readme Skill Path Matches Repository
       Given the pytest test setup is prepared
       When readme skill path matches repository is executed
       Then 'skills/taskledger/SKILL.md' is in readme
       Then 'taskledger/skills/taskledger/SKILL.md' is not in readme
 
-    @bdd-docs-and-skill-skill-uses-only-canonical-handoff-group @needs-review
+    @req-REQ-0016 @ac-AC-0170
     Example: Skill Uses Only Canonical Handoff Group
       Given the pytest test setup is prepared
       When skill uses only canonical handoff group is executed
       Then 'handoff-protocol' is not in skill
 
-    @bdd-docs-and-skill-command-examples-reference-registered-commands @needs-review
+    @req-REQ-0016 @ac-AC-0158
     Example: Command Examples Reference Registered Commands
       Given the pytest test setup is prepared
       When command examples reference registered commands is executed
       Then command is in COMMAND_METADATA
 
-    @bdd-docs-and-skill-service-boundary-whitelist-doc-matches-test-constants @needs-review
+    @req-REQ-0016 @ac-AC-0167
     Example: Service Boundary Whitelist Doc Matches Test Constants
       Given the pytest test setup is prepared
       When service boundary whitelist doc matches test constants is executed
@@ -188,7 +188,7 @@ Feature: Docs And Skill
       Then func_path is in doc
       Then module_ref is in doc
 
-    @bdd-docs-and-skill-skill-requires-user-requested-reviews-to-be-recorded @needs-review
+    @req-REQ-0016 @ac-AC-0169
     Example: Skill Requires User Requested Reviews To Be Recorded
       Given the pytest test setup is prepared
       When skill requires user requested reviews to be recorded is executed

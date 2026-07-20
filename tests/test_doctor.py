@@ -5,8 +5,6 @@ from __future__ import annotations
 import py_compile
 from pathlib import Path
 
-import pytest
-
 from taskledger.domain.handoff import TaskHandoffRecord
 from taskledger.domain.models import (
     AcceptanceCriterion,
@@ -107,8 +105,7 @@ def _append_pipeline_config(path: Path, text: str) -> None:
     path.write_text(f"{current.rstrip()}\n\n{text.strip()}\n", encoding="utf-8")
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-healthy-project-has-no-findings
+# specmason: req=REQ-0017 ac=AC-0188
 def test_inspect_healthy_project(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     result = inspect_v2_project(tmp_path)
@@ -118,10 +115,12 @@ def test_inspect_healthy_project(tmp_path: Path) -> None:
     assert counts["tasks"] == 1
 
 
+# specmason: req=REQ-0017 ac=AC-0179
 def test_doctor_module_compiles_without_syntaxwarning() -> None:
     py_compile.compile("taskledger/services/doctor.py", doraise=True)
 
 
+# specmason: req=REQ-0017 ac=AC-0197
 def test_inspect_project_with_active_task(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     task = _task()
@@ -133,8 +132,7 @@ def test_inspect_project_with_active_task(tmp_path: Path) -> None:
     assert result["healthy"] is True
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-project-reports-malformed-handoff-record
+# specmason: req=REQ-0017 ac=AC-0198
 def test_inspect_project_reports_malformed_handoff_record(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     paths = ensure_v2_layout(tmp_path)
@@ -151,8 +149,7 @@ def test_inspect_project_reports_malformed_handoff_record(tmp_path: Path) -> Non
     assert any("handoff-0001.md" in error for error in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-project-warns-for-unsupported-legacy-sidecar
+# specmason: req=REQ-0017 ac=AC-0199
 def test_inspect_project_warns_for_unsupported_legacy_sidecar(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     paths = ensure_v2_layout(tmp_path)
@@ -170,8 +167,7 @@ def test_inspect_project_warns_for_unsupported_legacy_sidecar(tmp_path: Path) ->
     assert any("one-off migration script" in hint for hint in result["repair_hints"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-project-active-task-missing
+# specmason: req=REQ-0017 ac=AC-0197
 def test_inspect_project_active_task_missing(tmp_path: Path) -> None:
     ensure_v2_layout(tmp_path)
     save_active_task_state(
@@ -182,8 +178,7 @@ def test_inspect_project_active_task_missing(tmp_path: Path) -> None:
     assert any("missing task task-9999" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-project-active-task-done-warns
+# specmason: req=REQ-0017 ac=AC-0196
 def test_inspect_project_active_task_done_warns(tmp_path: Path) -> None:
     task = _task(status_stage="done")
     save_task(tmp_path, task)
@@ -194,8 +189,7 @@ def test_inspect_project_active_task_done_warns(tmp_path: Path) -> None:
     assert any("done" in w for w in result["warnings"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-broken-introduction-ref
+# specmason: req=REQ-0017 ac=AC-0184
 def test_inspect_broken_introduction_ref(tmp_path: Path) -> None:
     task = _task(introduction_ref="intro-9999")
     save_task(tmp_path, task)
@@ -203,8 +197,7 @@ def test_inspect_broken_introduction_ref(tmp_path: Path) -> None:
     assert any("broken references" in str(e) for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-broken-requirement-ref
+# specmason: req=REQ-0017 ac=AC-0185
 def test_inspect_broken_requirement_ref(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -221,8 +214,7 @@ def test_inspect_broken_requirement_ref(tmp_path: Path) -> None:
     assert any("broken references" in str(e) for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-accepted-plan-version-missing
+# specmason: req=REQ-0017 ac=AC-0182
 def test_inspect_accepted_plan_version_missing(tmp_path: Path) -> None:
     task = _task(accepted_plan_version=3)
     save_task(tmp_path, task)
@@ -230,8 +222,7 @@ def test_inspect_accepted_plan_version_missing(tmp_path: Path) -> None:
     assert any("missing accepted plan" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-multiple-accepted-plans
+# specmason: req=REQ-0017 ac=AC-0194
 def test_inspect_multiple_accepted_plans(tmp_path: Path) -> None:
     task = _task(accepted_plan_version=1)
     save_task(tmp_path, task)
@@ -261,8 +252,7 @@ def test_inspect_multiple_accepted_plans(tmp_path: Path) -> None:
     assert any("multiple accepted plans" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-accepted-plan-version-points-to-wrong-plan
+# specmason: req=REQ-0017 ac=AC-0183
 def test_inspect_accepted_plan_version_points_to_wrong_plan(tmp_path: Path) -> None:
     task = _task(accepted_plan_version=2)
     save_task(tmp_path, task)
@@ -285,8 +275,7 @@ def test_inspect_accepted_plan_version_points_to_wrong_plan(tmp_path: Path) -> N
     )
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-duplicate-todo-ids-are-reported
+# specmason: req=REQ-0017 ac=AC-0180
 def test_inspect_duplicate_todo_ids(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -297,8 +286,7 @@ def test_inspect_duplicate_todo_ids(tmp_path: Path) -> None:
     assert not any("duplicate todo" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-doctor-warns-for-worker-refs-without-enabled-pipeline
+# specmason: req=REQ-0017 ac=AC-0179
 def test_doctor_warns_for_worker_refs_without_enabled_pipeline(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     save_todos(
@@ -336,8 +324,7 @@ def test_doctor_warns_for_worker_refs_without_enabled_pipeline(tmp_path: Path) -
     } >= {"todo.stale_worker_step", "handoff.stale_worker_step"}
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-doctor-warns-for-worker-refs-missing-from-pipeline
+# specmason: req=REQ-0017 ac=AC-0178
 def test_doctor_warns_for_worker_refs_missing_from_pipeline(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     _append_pipeline_config(
@@ -373,8 +360,7 @@ def test_doctor_warns_for_worker_refs_missing_from_pipeline(tmp_path: Path) -> N
     )
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-transient-stage-in-status
+# specmason: req=REQ-0017 ac=AC-0201
 def test_inspect_transient_stage_in_status(tmp_path: Path) -> None:
     task = _task(status_stage="planning")
     save_task(tmp_path, task)
@@ -382,8 +368,7 @@ def test_inspect_transient_stage_in_status(tmp_path: Path) -> None:
     assert any("persists transient stage" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-multiple-running-runs
+# specmason: req=REQ-0017 ac=AC-0195
 def test_inspect_multiple_running_runs(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -393,8 +378,7 @@ def test_inspect_multiple_running_runs(tmp_path: Path) -> None:
     assert any("multiple running runs" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-running-run-without-matching-lock
+# specmason: req=REQ-0017 ac=AC-0200
 def test_inspect_running_run_without_matching_lock(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -419,8 +403,9 @@ def test_inspect_running_run_without_matching_lock(tmp_path: Path) -> None:
     ]
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-run-lock-mismatch-is-reported
+# specmason: req=REQ-0017 ac=AC-0181
+# specmason: req=REQ-0017 ac=AC-0192
+# specmason: req=REQ-0017 ac=AC-0204
 def test_doctor_locks_reports_run_lock_mismatch(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -433,13 +418,7 @@ def test_doctor_locks_reports_run_lock_mismatch(tmp_path: Path) -> None:
     assert result["run_lock_mismatches"][0]["run_id"] == "run-0001"
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/doctor/doctor.feature"),
-    scenario=(
-        "@bdd-doctor-doctor-reports-missing-lock-for-running-implementation-"
-        "with-recovery-hint"
-    ),
-)
+# specmason: req=REQ-0017 ac=AC-0175
 def test_doctor_reports_missing_lock_for_running_implementation_with_recovery_hint(
     tmp_path: Path,
 ) -> None:
@@ -478,8 +457,7 @@ def test_doctor_reports_missing_lock_for_running_implementation_with_recovery_hi
     assert mismatch["next_command"] != "taskledger doctor"
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-lock-without-running-run
+# specmason: req=REQ-0017 ac=AC-0193
 def test_inspect_lock_without_running_run(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -492,8 +470,7 @@ def test_inspect_lock_without_running_run(tmp_path: Path) -> None:
     assert any("without a running run" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-change-references-missing-run
+# specmason: req=REQ-0017 ac=AC-0186
 def test_inspect_change_references_missing_run(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -513,8 +490,7 @@ def test_inspect_change_references_missing_run(tmp_path: Path) -> None:
     assert any("references missing" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-change-references-non-implementation-run
+# specmason: req=REQ-0017 ac=AC-0187
 def test_inspect_change_references_non_implementation_run(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -536,8 +512,7 @@ def test_inspect_change_references_non_implementation_run(tmp_path: Path) -> Non
     assert any("non-implementation run" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-validation-run-references-missing-impl
+# specmason: req=REQ-0017 ac=AC-0202
 def test_inspect_validation_run_references_missing_impl(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -555,8 +530,7 @@ def test_inspect_validation_run_references_missing_impl(tmp_path: Path) -> None:
     assert any("references missing" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-validation-run-references-non-impl-run
+# specmason: req=REQ-0017 ac=AC-0203
 def test_inspect_validation_run_references_non_impl_run(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -576,8 +550,7 @@ def test_inspect_validation_run_references_non_impl_run(tmp_path: Path) -> None:
     assert any("non-implementation run" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-lock-references-missing-task
+# specmason: req=REQ-0017 ac=AC-0190
 def test_inspect_lock_references_missing_task(tmp_path: Path) -> None:
     paths = ensure_v2_layout(tmp_path)
     from taskledger.storage.task_store import task_lock_path
@@ -588,8 +561,7 @@ def test_inspect_lock_references_missing_task(tmp_path: Path) -> None:
     assert any("missing task" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-lock-references-non-running-run
+# specmason: req=REQ-0017 ac=AC-0191
 def test_inspect_lock_references_non_running_run(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -604,8 +576,7 @@ def test_inspect_lock_references_non_running_run(tmp_path: Path) -> None:
     assert any("non-running run" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-lock-stage-run-type-mismatch
+# specmason: req=REQ-0017 ac=AC-0192
 def test_inspect_lock_stage_run_type_mismatch(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -620,8 +591,7 @@ def test_inspect_lock_stage_run_type_mismatch(tmp_path: Path) -> None:
     assert any("does not match" in e for e in result["errors"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-expired-lock
+# specmason: req=REQ-0017 ac=AC-0188
 def test_inspect_expired_lock(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -640,8 +610,7 @@ def test_inspect_expired_lock(tmp_path: Path) -> None:
     assert any("Expired" in w for w in result["warnings"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-inspect-lock-references-missing-run
+# specmason: req=REQ-0017 ac=AC-0189
 def test_inspect_lock_references_missing_run(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -654,6 +623,7 @@ def test_inspect_lock_references_missing_run(tmp_path: Path) -> None:
     assert any("missing run" in e for e in result["errors"])
 
 
+# specmason: req=REQ-0017 ac=AC-0188
 def test_inspect_v2_locks_no_expired(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     result = inspect_v2_locks(tmp_path)
@@ -661,12 +631,14 @@ def test_inspect_v2_locks_no_expired(tmp_path: Path) -> None:
     assert result["expired_locks"] == []
 
 
+# specmason: req=REQ-0017 ac=AC-0191
 def test_inspect_v2_schema_no_errors(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     result = inspect_v2_schema(tmp_path)
     assert result["healthy"] is True
 
 
+# specmason: req=REQ-0017 ac=AC-0188
 def test_inspect_v2_indexes_all_present(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     result = inspect_v2_indexes(tmp_path)
@@ -674,6 +646,7 @@ def test_inspect_v2_indexes_all_present(tmp_path: Path) -> None:
     assert result["missing_indexes"] == []
 
 
+# specmason: req=REQ-0017 ac=AC-0199
 def test_inspect_v2_indexes_ignores_removed_legacy_indexes(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     indexes_dir = ensure_v2_layout(tmp_path).indexes_dir
@@ -688,6 +661,7 @@ def test_inspect_v2_indexes_ignores_removed_legacy_indexes(tmp_path: Path) -> No
     assert "indexes/latest_runs.json" not in result["missing_indexes"]
 
 
+# specmason: req=REQ-0017 ac=AC-0185
 def test_inspect_v2_indexes_event_error(tmp_path: Path) -> None:
     paths = ensure_v2_layout(tmp_path)
     # Write invalid event data
@@ -703,6 +677,7 @@ def test_inspect_v2_indexes_event_error(tmp_path: Path) -> None:
     )
 
 
+# specmason: req=REQ-0017 ac=AC-0182
 def test_inspect_counts_include_plans_and_questions(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
@@ -723,8 +698,7 @@ def test_inspect_counts_include_plans_and_questions(tmp_path: Path) -> None:
     assert counts["runs"] == 1
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-doctor-warns-about-empty-orphan-slug-dir
+# specmason: req=REQ-0017 ac=AC-0176
 def test_doctor_warns_about_empty_orphan_slug_dir(tmp_path: Path) -> None:
     task = _task(slug="my-feature")
     save_task(tmp_path, task)
@@ -738,8 +712,7 @@ def test_doctor_warns_about_empty_orphan_slug_dir(tmp_path: Path) -> None:
     assert any("repair task-dirs" in h for h in result["repair_hints"])
 
 
-# sw: f=specs/behavior/features/doctor/doctor.feature
-# sw: s=@bdd-doctor-doctor-warns-about-non-empty-legacy-sidecar
+# specmason: req=REQ-0017 ac=AC-0177
 def test_doctor_warns_about_non_empty_legacy_sidecar(tmp_path: Path) -> None:
     task = _task(slug="my-feature")
     save_task(tmp_path, task)
@@ -755,6 +728,7 @@ def test_doctor_warns_about_non_empty_legacy_sidecar(tmp_path: Path) -> None:
     assert not any("repair task-dirs" in h for h in result["repair_hints"])
 
 
+# specmason: req=REQ-0017 ac=AC-0176
 def test_doctor_no_warning_for_canonical_task_dir(tmp_path: Path) -> None:
     task = _task(slug="my-feature")
     save_task(tmp_path, task)

@@ -328,8 +328,7 @@ def _close_spec_review_handoff(workspace: Path) -> None:
     assert close.exit_code == 0, close.stdout
 
 
-# sw: f=specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature
-# sw: s=@bdd-worker-pipeline-cli-pipeline-commands-print-no-config-message
+# specmason: req=REQ-0071 ac=AC-0798
 def test_pipeline_commands_print_no_config_message(tmp_path: Path) -> None:
     init_workspace(tmp_path)
 
@@ -339,8 +338,7 @@ def test_pipeline_commands_print_no_config_message(tmp_path: Path) -> None:
         assert result.stdout.strip() == "No worker pipeline configured."
 
 
-# sw: f=specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature
-# sw: s=@bdd-worker-pipeline-cli-pipeline-commands-print-disabled-message
+# specmason: req=REQ-0071 ac=AC-0797
 def test_pipeline_commands_print_disabled_message(tmp_path: Path) -> None:
     init_workspace(tmp_path)
     _append_pipeline_config(tmp_path / "taskledger.toml", _disabled_pipeline_config())
@@ -351,8 +349,7 @@ def test_pipeline_commands_print_disabled_message(tmp_path: Path) -> None:
         assert result.stdout.strip() == "Worker pipeline is disabled."
 
 
-# sw: f=specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature
-# sw: s=@bdd-worker-pipeline-cli-pipeline-show-and-list-render-enabled-config
+# specmason: req=REQ-0071 ac=AC-0805
 def test_pipeline_show_and_list_render_enabled_config(tmp_path: Path) -> None:
     init_workspace(tmp_path)
     _append_pipeline_config(tmp_path / "taskledger.toml", _enabled_pipeline_config())
@@ -374,8 +371,7 @@ def test_pipeline_show_and_list_render_enabled_config(tmp_path: Path) -> None:
     assert "reviewer" in list_result.stdout
 
 
-# sw: f=specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature
-# sw: s=@bdd-worker-pipeline-cli-pipeline-next-returns-planner-before-plan-acceptance
+# specmason: req=REQ-0071 ac=AC-0804
 def test_pipeline_next_returns_planner_before_plan_acceptance(tmp_path: Path) -> None:
     init_workspace(tmp_path)
     _append_pipeline_config(tmp_path / "taskledger.toml", _enabled_pipeline_config())
@@ -410,13 +406,7 @@ def test_pipeline_next_returns_planner_before_plan_acceptance(tmp_path: Path) ->
     assert payload["result"]["reason"] == "No accepted plan exists yet."
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature"),
-    scenario=(
-        "@bdd-worker-pipeline-cli-pipeline-next-advances-after-closed-worker-"
-        "review-handoff"
-    ),
-)
+# specmason: req=REQ-0071 ac=AC-0799
 def test_pipeline_next_advances_after_closed_worker_review_handoff(
     tmp_path: Path,
 ) -> None:
@@ -433,8 +423,7 @@ def test_pipeline_next_advances_after_closed_worker_review_handoff(
     assert _json(second)["result"]["step"]["id"] == "code-review"
 
 
-# sw: f=specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature
-# sw: s=@bdd-worker-pipeline-cli-pipeline-next-advances-after-passing-code-review-record
+# specmason: req=REQ-0071 ac=AC-0800
 def test_pipeline_next_advances_after_passing_code_review_record(
     tmp_path: Path,
 ) -> None:
@@ -467,13 +456,7 @@ def test_pipeline_next_advances_after_passing_code_review_record(
     assert _json(after)["result"]["step"]["id"] == "validator"
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature"),
-    scenario=(
-        "@bdd-worker-pipeline-cli-pipeline-next-keeps-code-review-when-latest-"
-        "review-failed"
-    ),
-)
+# specmason: req=REQ-0071 ac=AC-0803
 def test_pipeline_next_keeps_code_review_when_latest_review_failed(
     tmp_path: Path,
 ) -> None:
@@ -505,8 +488,7 @@ def test_pipeline_next_keeps_code_review_when_latest_review_failed(
     assert _json(next_step)["result"]["step"]["id"] == "code-review"
 
 
-# sw: f=specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature
-# sw: s=@bdd-worker-pipeline-cli-pipeline-next-ignores-cancelled-worker-review-handoff
+# specmason: req=REQ-0071 ac=AC-0801
 def test_pipeline_next_ignores_cancelled_worker_review_handoff(tmp_path: Path) -> None:
     _setup_implemented_review_task(tmp_path)
 
@@ -547,8 +529,7 @@ def test_pipeline_next_ignores_cancelled_worker_review_handoff(tmp_path: Path) -
     assert _json(result)["result"]["step"]["id"] == "spec-review"
 
 
-# sw: f=specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature
-# sw: s=@bdd-worker-pipeline-cli-next-action-guided-worker-pipeline-payload-and-commands
+# specmason: req=REQ-0071 ac=AC-0796
 def test_next_action_guided_worker_pipeline_payload_and_commands(
     tmp_path: Path,
 ) -> None:
@@ -603,8 +584,7 @@ def test_next_action_guided_worker_pipeline_payload_and_commands(
     }
 
 
-# sw: f=specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature
-# sw: s=@bdd-worker-pipeline-cli-next-action-guided-worker-pipeline-human-output
+# specmason: req=REQ-0071 ac=AC-0795
 def test_next_action_guided_worker_pipeline_human_output(tmp_path: Path) -> None:
     _setup_guided_implementation_task(tmp_path)
 
@@ -619,8 +599,7 @@ def test_next_action_guided_worker_pipeline_human_output(tmp_path: Path) -> None
     )
 
 
-# sw: f=specs/behavior/features/worker_pipeline_cli/worker-pipeline-cli.feature
-# sw: s=@bdd-worker-pipeline-cli-pipeline-next-ignores-normal-review-handoff
+# specmason: req=REQ-0071 ac=AC-0802
 def test_pipeline_next_ignores_normal_review_handoff(tmp_path: Path) -> None:
     _setup_implemented_review_task(tmp_path)
 

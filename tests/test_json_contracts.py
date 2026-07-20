@@ -5,7 +5,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from taskledger.cli import app
@@ -132,8 +131,7 @@ Keep worker pipeline JSON payloads explicit and stable.
     )
 
 
-# sw: f=specs/behavior/features/json_contracts/json-contracts.feature
-# sw: s=@bdd-json-contracts-json-success-envelope-uses-ok-command-result-and-events
+# specmason: req=REQ-0027 ac=AC-0326
 def test_json_success_envelope_uses_ok_command_result_and_events(
     tmp_path: Path,
 ) -> None:
@@ -165,8 +163,7 @@ def test_json_success_envelope_uses_ok_command_result_and_events(
     assert payload["result"]["slug"] == "json-contract-task"
 
 
-# sw: f=specs/behavior/features/json_contracts/json-contracts.feature
-# sw: s=@bdd-json-contracts-json-failure-envelope-includes-structured-error
+# specmason: req=REQ-0027 ac=AC-0325
 def test_json_failure_envelope_includes_structured_error(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -234,8 +231,7 @@ def test_json_failure_envelope_includes_structured_error(tmp_path: Path) -> None
     assert payload["error"]["exit_code"] == 3
 
 
-# sw: f=specs/behavior/features/json_contracts/json-contracts.feature
-# sw: s=@bdd-json-contracts-context-missing-todo-focus-returns-json-error
+# specmason: req=REQ-0027 ac=AC-0323
 def test_context_missing_todo_focus_returns_json_error(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -272,8 +268,7 @@ def test_context_missing_todo_focus_returns_json_error(tmp_path: Path) -> None:
     assert payload["error"]["message"] == "--scope todo requires --todo"
 
 
-# sw: f=specs/behavior/features/json_contracts/json-contracts.feature
-# sw: s=@bdd-json-contracts-status-json-reports-workspace-and-storage-paths
+# specmason: req=REQ-0027 ac=AC-0330
 def test_status_json_reports_workspace_and_storage_paths(tmp_path: Path) -> None:
     _init_project(tmp_path)
     context = load_project_context(tmp_path)
@@ -301,8 +296,7 @@ def test_status_json_reports_workspace_and_storage_paths(tmp_path: Path) -> None
     assert status["authoritative_path"] == status["taskledger_dir"]
 
 
-# sw: f=specs/behavior/features/json_contracts/json-contracts.feature
-# sw: s=@bdd-json-contracts-worker-pipeline-json-contracts-cover-guided-surfaces
+# specmason: req=REQ-0027 ac=AC-0331
 def test_worker_pipeline_json_contracts_cover_guided_surfaces(tmp_path: Path) -> None:
     _setup_worker_pipeline_task(tmp_path)
 
@@ -374,8 +368,7 @@ def test_worker_pipeline_json_contracts_cover_guided_surfaces(tmp_path: Path) ->
     )
 
 
-# sw: f=specs/behavior/features/json_contracts/json-contracts.feature
-# sw: s=@bdd-json-contracts-python-m-taskledger-uses-canonical-json-command-names
+# specmason: req=REQ-0027 ac=AC-0329
 def test_python_m_taskledger_uses_canonical_json_command_names(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -399,13 +392,7 @@ def test_python_m_taskledger_uses_canonical_json_command_names(tmp_path: Path) -
     assert payload["command"] == "status"
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/json_contracts/json-contracts.feature"),
-    scenario=(
-        "@bdd-json-contracts-workflow-positional-task-ref-returns-json-usage-"
-        "error-envelope"
-    ),
-)
+# specmason: req=REQ-0027 ac=AC-0332
 def test_workflow_positional_task_ref_returns_json_usage_error_envelope(
     tmp_path: Path,
 ) -> None:
@@ -422,8 +409,7 @@ def test_workflow_positional_task_ref_returns_json_usage_error_envelope(
     assert "plan start --task task-0001" in " ".join(payload["error"]["remediation"])
 
 
-# sw: f=specs/behavior/features/json_contracts/json-contracts.feature
-# sw: s=@bdd-json-contracts-python-m-taskledger-json-parse-error-envelope
+# specmason: req=REQ-0027 ac=AC-0328
 def test_python_m_taskledger_json_parse_error_envelope(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -451,8 +437,7 @@ def test_python_m_taskledger_json_parse_error_envelope(tmp_path: Path) -> None:
     assert payload["error"]["exit_code"] == 2
 
 
-# sw: f=specs/behavior/features/json_contracts/json-contracts.feature
-# sw: s=@bdd-json-contracts-plan-lint-usage-error-includes-waiver-hint
+# specmason: req=REQ-0027 ac=AC-0327
 def test_plan_lint_usage_error_includes_waiver_hint(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -481,8 +466,7 @@ def test_plan_lint_usage_error_includes_waiver_hint(tmp_path: Path) -> None:
     assert "allow-lint-errors" in remediation
 
 
-# sw: f=specs/behavior/features/json_contracts/json-contracts.feature
-# sw: s=@bdd-json-contracts-doctor-usage-error-for-errors-argument-has-specific-hint
+# specmason: req=REQ-0027 ac=AC-0324
 def test_doctor_usage_error_for_errors_argument_has_specific_hint(
     tmp_path: Path,
 ) -> None:

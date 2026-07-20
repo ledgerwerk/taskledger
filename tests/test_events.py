@@ -10,8 +10,7 @@ from taskledger.errors import LaunchError
 from taskledger.storage.events import append_event, load_events, load_recent_events
 
 
-# sw: f=specs/behavior/features/events/events.feature
-# sw: s=@bdd-events-load-events-sorts-by-timestamp-and-event-id
+# specmason: req=REQ-0020 ac=AC-0283
 def test_load_events_sorts_by_timestamp_and_event_id(tmp_path: Path) -> None:
     events_dir = tmp_path / "events"
     actor = ActorRef(actor_type="agent", actor_name="taskledger")
@@ -55,8 +54,7 @@ def test_load_events_sorts_by_timestamp_and_event_id(tmp_path: Path) -> None:
     ]
 
 
-# sw: f=specs/behavior/features/events/events.feature
-# sw: s=@bdd-events-load-events-rejects-duplicate-event-ids
+# specmason: req=REQ-0020 ac=AC-0282
 def test_load_events_rejects_duplicate_event_ids(tmp_path: Path) -> None:
     events_dir = tmp_path / "events"
     events_dir.mkdir(parents=True)
@@ -81,8 +79,7 @@ def test_load_events_rejects_duplicate_event_ids(tmp_path: Path) -> None:
         load_events(events_dir)
 
 
-# sw: f=specs/behavior/features/events/events.feature
-# sw: s=@bdd-events-load-recent-events-returns-chronological-task-tail
+# specmason: req=REQ-0020 ac=AC-0284
 def test_load_recent_events_returns_chronological_task_tail(tmp_path: Path) -> None:
     events_dir = tmp_path / "events"
     actor = ActorRef(actor_type="agent", actor_name="taskledger")

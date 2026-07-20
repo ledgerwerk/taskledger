@@ -23,8 +23,7 @@ def _init_project(tmp_path: Path) -> None:
     assert result.exit_code == 0
 
 
-# sw: f=specs/behavior/features/sidecar_collections/sidecar-collections.feature
-# sw: s=@bdd-sidecar-collections-todos-links-and-requirements-use-per-record-markdown
+# specmason: req=REQ-0050 ac=AC-0543
 def test_todos_links_and_requirements_use_per_record_markdown(tmp_path: Path) -> None:
     _init_project(tmp_path)
 

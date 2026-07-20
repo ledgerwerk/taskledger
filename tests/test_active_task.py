@@ -52,6 +52,7 @@ def _json(result) -> dict[str, object]:
     return payload
 
 
+# specmason: req=REQ-0001 ac=AC-0004
 def test_active_task_state_round_trips(tmp_path: Path) -> None:
     create_task(tmp_path, title="Active", description="desc", slug="active")
 
@@ -71,8 +72,7 @@ def test_active_task_state_round_trips(tmp_path: Path) -> None:
         raise AssertionError("resolve_active_task should require an active task")
 
 
-# sw: f=specs/behavior/features/active_task/active-task.feature
-# sw: s=@bdd-active-task-task-scoped-command-without-active-task-fails-json
+# specmason: req=REQ-0001 ac=AC-0008
 def test_task_scoped_command_without_active_task_fails_json(tmp_path: Path) -> None:
     _init_project(tmp_path)
     result = runner.invoke(
@@ -85,8 +85,7 @@ def test_task_scoped_command_without_active_task_fails_json(tmp_path: Path) -> N
     assert payload["error"]["code"] == "NO_ACTIVE_TASK"
 
 
-# sw: f=specs/behavior/features/active_task/active-task.feature
-# sw: s=@bdd-active-task-single-task-without-active-task-fails-for-task-scoped-defaults
+# specmason: req=REQ-0001 ac=AC-0003
 def test_single_task_without_active_task_fails_for_task_scoped_defaults(
     tmp_path: Path,
 ) -> None:
@@ -111,8 +110,7 @@ def test_single_task_without_active_task_fails_for_task_scoped_defaults(
         assert payload["error"]["code"] == "NO_ACTIVE_TASK"
 
 
-# sw: f=specs/behavior/features/active_task/active-task.feature
-# sw: s=@bdd-active-task-single-task-without-active-task-can-still-be-used-explicitly
+# specmason: req=REQ-0001 ac=AC-0002
 def test_single_task_without_active_task_can_still_be_used_explicitly(
     tmp_path: Path,
 ) -> None:
@@ -127,8 +125,7 @@ def test_single_task_without_active_task_can_still_be_used_explicitly(
     assert result.exit_code == 0, result.stdout
 
 
-# sw: f=specs/behavior/features/active_task/active-task.feature
-# sw: s=@bdd-active-task-task-activate-sets-active-task
+# specmason: req=REQ-0001 ac=AC-0005
 def test_task_activate_sets_active_task(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _create_task(tmp_path, "one")
@@ -250,6 +247,7 @@ def test_no_ref_plan_implementation_validation_flow(tmp_path: Path) -> None:
     )
 
 
+# specmason: req=REQ-0001 ac=AC-0007
 def test_secondary_positional_commands_default_to_active_task(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _create_task(tmp_path)
@@ -297,8 +295,7 @@ def test_secondary_positional_commands_default_to_active_task(tmp_path: Path) ->
     )
 
 
-# sw: f=specs/behavior/features/active_task/active-task.feature
-# sw: s=@bdd-active-task-task-option-overrides-active-task
+# specmason: req=REQ-0001 ac=AC-0007
 def test_task_option_overrides_active_task(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _create_task(tmp_path, "task-a")
@@ -317,8 +314,7 @@ def test_task_option_overrides_active_task(tmp_path: Path) -> None:
     assert payload["result"]["task_id"] == "task-0002"
 
 
-# sw: f=specs/behavior/features/active_task/active-task.feature
-# sw: s=@bdd-active-task-export-import-preserves-active-task
+# specmason: req=REQ-0001 ac=AC-0001
 def test_export_import_preserves_active_task(tmp_path: Path) -> None:
     source = tmp_path / "source"
     dest = tmp_path / "dest"
@@ -356,8 +352,7 @@ def test_export_import_preserves_active_task(tmp_path: Path) -> None:
     assert active["result"]["task_id"] == "task-0001"
 
 
-# sw: f=specs/behavior/features/active_task/active-task.feature
-# sw: s=@bdd-active-task-task-list-marks-active-task-without-active-stage
+# specmason: req=REQ-0001 ac=AC-0006
 def test_task_list_marks_active_task_without_active_stage(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _create_task(tmp_path, "list-active")
@@ -374,8 +369,7 @@ def test_task_list_marks_active_task_without_active_stage(tmp_path: Path) -> Non
     assert "active" in result.stdout
 
 
-# sw: f=specs/behavior/features/active_task/active-task.feature
-# sw: s=@bdd-active-task-status-human-output-shows-active-task-before-counts
+# specmason: req=REQ-0001 ac=AC-0004
 def test_status_human_output_shows_active_task_before_counts(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _create_task(tmp_path, "status-active")

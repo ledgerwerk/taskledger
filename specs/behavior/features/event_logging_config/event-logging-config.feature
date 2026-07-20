@@ -1,43 +1,43 @@
-@area-event_logging_config @feature-event-logging-config @generated @needs-review
+@area-event_logging_config @feature-event-logging-config @generated
 Feature: Event Logging Config
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-event-logging-config
   Rule: Event Logging Config
 
-    @bdd-event-logging-config-runtime-events-disabled-by-default @needs-review
-    Example: Runtime Events Disabled By Default
+    @req-REQ-0019 @ac-AC-0279
+    Example: Runtime Events Enabled By Default
       Given the pytest test setup is prepared
-      When runtime events disabled by default is executed
+      When runtime events enabled by default is executed
       Then result.exit_code equals 0
 
-    @bdd-event-logging-config-task-events-shows-empty-when-disabled @needs-review
-    Example: Task Events Shows Empty When Disabled
+    @req-REQ-0019 @ac-AC-0281
+    Example: Task Events Shows Default Action Events
       Given the pytest test setup is prepared
-      When task events shows empty when disabled is executed
+      When task events shows default action events is executed
       Then result.exit_code equals 0
 
-    @bdd-event-logging-config-lock-break-no-events-by-default @needs-review
-    Example: Lock Break No Events By Default
+    @req-REQ-0019 @ac-AC-0277
+    Example: Lock Break Writes Events By Default
       Given the pytest test setup is prepared
-      When lock break no events by default is executed
+      When lock break writes events by default is executed
       Then result.exit_code equals 0
 
-    @bdd-event-logging-config-runtime-events-enabled-writes-events @needs-review
-    Example: Runtime Events Enabled Writes Events
+    @req-REQ-0019 @ac-AC-0280
+    Example: Event Logging Override Disables New Events
       Given the pytest test setup is prepared
-      When runtime events enabled writes events is executed
+      When event logging override disables new events is executed
       Then any succeeds
 
-    @bdd-event-logging-config-lock-break-writes-events-when-enabled @needs-review
-    Example: Lock Break Writes Events When Enabled
+    @req-REQ-0019 @ac-AC-0278
+    Example: Lock Break Writes Events With Default Configuration
       Given the pytest test setup is prepared
-      When lock break writes events when enabled is executed
+      When lock break writes events with default configuration is executed
       Then result.exit_code equals 0
       Then any succeeds
 
-    @bdd-event-logging-config-existing-events-readable-after-disable @needs-review
+    @req-REQ-0019 @ac-AC-0276
     Example: Existing Events Readable After Disable
       Given the pytest test setup is prepared
       When existing events readable after disable is executed

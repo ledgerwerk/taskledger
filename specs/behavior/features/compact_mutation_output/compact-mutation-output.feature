@@ -1,12 +1,12 @@
-@area-compact_mutation_output @feature-compact-mutation-output @generated @needs-review
+@area-compact_mutation_output @feature-compact-mutation-output @generated
 Feature: Compact Mutation Output
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-compact-mutation-output
   Rule: Compact Mutation Output
 
-    @bdd-compact-mutation-output-human-mode-does-not-contain-full-task @needs-review
+    @req-REQ-0013 @ac-AC-0120
     Example: Human Mode Does Not Contain Full Task
       Given the pytest test setup is prepared
       When human mode does not contain full task is executed
@@ -14,7 +14,7 @@ Feature: Compact Mutation Output
       Then '"task"' is not in result.stdout
       Then 'accepted_plan' is not in result.stdout
 
-    @bdd-compact-mutation-output-json-mode-compact-payload @needs-review
+    @req-REQ-0013 @ac-AC-0123
     Example: Json Mode Compact Payload
       Given the pytest test setup is prepared
       When json mode compact payload is executed
@@ -24,7 +24,7 @@ Feature: Compact Mutation Output
       Then 'next_command' is in result_data
       Then 'accepted_plan' is not in result_data
 
-    @bdd-compact-mutation-output-human-mode-does-not-contain-full-task-2 @needs-review
+    @req-REQ-0013 @ac-AC-0121
     Example: Human Mode Does Not Contain Full Task
       Given the pytest test setup is prepared
       When human mode does not contain full task is executed
@@ -33,7 +33,7 @@ Feature: Compact Mutation Output
       Then '"task"' is not in result.stdout
       Then 'accepted_plan' is not in result.stdout
 
-    @bdd-compact-mutation-output-json-mode-compact-payload-2 @needs-review
+    @req-REQ-0013 @ac-AC-0124
     Example: Json Mode Compact Payload
       Given the pytest test setup is prepared
       When json mode compact payload is executed
@@ -43,7 +43,7 @@ Feature: Compact Mutation Output
       Then 'next_command' is in result_data
       Then 'accepted_plan' is not in result_data
 
-    @bdd-compact-mutation-output-human-mode-does-not-contain-full-task-3 @needs-review
+    @req-REQ-0013 @ac-AC-0122
     Example: Human Mode Does Not Contain Full Task
       Given the pytest test setup is prepared
       When human mode does not contain full task is executed
@@ -51,7 +51,7 @@ Feature: Compact Mutation Output
       Then '"task"' is not in result.stdout
       Then 'accepted_plan' is not in result.stdout
 
-    @bdd-compact-mutation-output-json-mode-compact-payload-3 @needs-review
+    @req-REQ-0013 @ac-AC-0125
     Example: Json Mode Compact Payload
       Given the pytest test setup is prepared
       When json mode compact payload is executed
@@ -61,7 +61,7 @@ Feature: Compact Mutation Output
       Then 'next_command' is in result_data
       Then 'accepted_plan' is not in result_data
 
-    @bdd-compact-mutation-output-cli-implement-no-raw-render-json-payload @needs-review
+    @req-REQ-0013 @ac-AC-0119
     Example: Cli Implement No Raw Render Json Payload
       Given the pytest test setup is prepared
       When cli implement no raw render json payload is executed

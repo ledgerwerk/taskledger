@@ -22,8 +22,7 @@ from taskledger.storage.project_context import load_project_context
 from taskledger.storage.task_store import resolve_handoff
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-create-persists-open-handoff
+# specmason: req=REQ-0023 ac=AC-0298
 def test_handoff_creation():
     """Test creating a handoff."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -45,8 +44,7 @@ def test_handoff_creation():
         assert result["intended_actor_name"] == "alice"
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-handoff-claim
+# specmason: req=REQ-0023 ac=AC-0298
 def test_handoff_claim():
     """Test claiming a handoff."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -63,8 +61,7 @@ def test_handoff_claim():
         assert claimed.claimed_at is not None
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-handoff-close
+# specmason: req=REQ-0023 ac=AC-0299
 def test_handoff_close():
     """Test closing a handoff."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -82,8 +79,7 @@ def test_handoff_close():
         assert closed.status == "closed"
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-handoff-cancel
+# specmason: req=REQ-0023 ac=AC-0297
 def test_handoff_cancel():
     """Test cancelling a handoff."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -100,8 +96,6 @@ def test_handoff_cancel():
         assert cancelled.status == "cancelled"
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-claimed-handoff-cannot-be-claimed-again
 def test_cannot_claim_already_claimed():
     """Test that claiming twice fails."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -117,8 +111,11 @@ def test_cannot_claim_already_claimed():
             claim_handoff(workspace, "task-0001", handoff["handoff_id"])
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-invalid-actor-intent-is-rejected
+# specmason: req=REQ-0023 ac=AC-0295
+# specmason: req=REQ-0023 ac=AC-0296
+# specmason: req=REQ-0023 ac=AC-0303
+# specmason: req=REQ-0023 ac=AC-0305
+# specmason: req=REQ-0023 ac=AC-0306
 def test_actor_intent_validation():
     """Test that actor intent is validated on claim."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -144,8 +141,7 @@ def test_actor_intent_validation():
             )
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-list-returns-task-handoffs
+# specmason: req=REQ-0023 ac=AC-0298
 def test_handoff_list():
     """Test listing handoffs."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -162,8 +158,7 @@ def test_handoff_list():
         assert len(handoffs) == 3
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-malformed-record-is-reported
+# specmason: req=REQ-0023 ac=AC-0300
 def test_handoff_list_raises_for_malformed_record() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace = Path(tmpdir)
@@ -187,8 +182,7 @@ def test_handoff_list_raises_for_malformed_record() -> None:
             list_all_handoffs(workspace, "task-0001")
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-supported-modes-are-preserved
+# specmason: req=REQ-0023 ac=AC-0299
 def test_handoff_modes():
     """Test different handoff modes."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -205,6 +199,7 @@ def test_handoff_modes():
             create_handoff(workspace, "task-0001", mode="delivery")
 
 
+# specmason: req=REQ-0023 ac=AC-0298
 def test_handoff_with_summary():
     """Test creating handoff with summary."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -223,6 +218,7 @@ def test_handoff_with_summary():
         assert result["summary"] == summary
 
 
+# specmason: req=REQ-0023 ac=AC-0304
 def test_handoff_list_empty_task():
     """Test listing handoffs for task with no handoffs."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -235,8 +231,7 @@ def test_handoff_list_empty_task():
         assert len(handoffs) == 0
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-handoff-lifecycle-sequence
+# specmason: req=REQ-0023 ac=AC-0302
 def test_handoff_lifecycle_sequence():
     """Test full handoff lifecycle: create -> claim -> close."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -262,8 +257,7 @@ def test_handoff_lifecycle_sequence():
         assert closed.status == "closed"
 
 
-# sw: f=specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature
-# sw: s=@bdd-handoff-lifecycle-handoff-create-stores-generated-context-for-todo
+# specmason: req=REQ-0023 ac=AC-0300
 def test_handoff_create_stores_generated_context_for_todo() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace = Path(tmpdir)
@@ -294,13 +288,7 @@ def test_handoff_create_stores_generated_context_for_todo() -> None:
         assert "todo-0001" in handoff.context_body
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/handoff_lifecycle/handoff-lifecycle.feature"),
-    scenario=(
-        "@bdd-handoff-lifecycle-handoff-lifecycle-preserves-context-metadata-"
-        "on-claim-close-cancel"
-    ),
-)
+# specmason: req=REQ-0023 ac=AC-0301
 def test_handoff_lifecycle_preserves_context_metadata_on_claim_close_cancel() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace = Path(tmpdir)

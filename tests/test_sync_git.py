@@ -105,8 +105,7 @@ def _init_legacy_sync_workspace(
 _init_sync_workspace = _init_legacy_sync_workspace
 
 
-# sw: f=specs/behavior/features/sync_git/sync-git.feature
-# sw: s=@bdd-sync-git-sync-git-help-promotes-pull-and-push
+# specmason: req=REQ-0057 ac=AC-0620
 def test_sync_git_help_promotes_pull_and_push(
     tmp_path: Path,
 ) -> None:
@@ -145,8 +144,7 @@ def test_sync_git_help_promotes_pull_and_push(
     assert "uninstall" in hooks_help.stdout
 
 
-# sw: f=specs/behavior/features/sync_git/sync-git.feature
-# sw: s=@bdd-sync-git-sync-git-status-splits-project-and-outside-dirty-state
+# specmason: req=REQ-0057 ac=AC-0625
 def test_sync_git_status_splits_project_and_outside_dirty_state(tmp_path: Path) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
     (sync_repo / "project-a" / "local-note.txt").write_text(
@@ -187,8 +185,7 @@ def test_sync_git_status_splits_project_and_outside_dirty_state(tmp_path: Path) 
     assert any("project-b" in line for line in payload["outside_status_lines"])
 
 
-# sw: f=specs/behavior/features/sync_git/sync-git.feature
-# sw: s=@bdd-sync-git-sync-git-commit-ignores-unrelated-dirty-paths
+# specmason: req=REQ-0057 ac=AC-0618
 def test_sync_git_commit_ignores_unrelated_dirty_paths(tmp_path: Path) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
     (sync_repo / "project-a" / "local-note.txt").write_text(
@@ -234,8 +231,7 @@ def test_sync_git_commit_ignores_unrelated_dirty_paths(tmp_path: Path) -> None:
     assert "project-b" in _git(sync_repo, "status", "--short", "--", "project-b").stdout
 
 
-# sw: f=specs/behavior/features/sync_git/sync-git.feature
-# sw: s=@bdd-sync-git-sync-git-export-local-remains-compatibility-alias
+# specmason: req=REQ-0057 ac=AC-0619
 def test_sync_git_export_local_remains_compatibility_alias(tmp_path: Path) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
     (sync_repo / "project-a" / "alias-note.txt").write_text(
@@ -267,8 +263,7 @@ def test_sync_git_export_local_remains_compatibility_alias(tmp_path: Path) -> No
     assert payload["committed"] is True
 
 
-# sw: f=specs/behavior/features/sync_git/sync-git.feature
-# sw: s=@bdd-sync-git-sync-git-cd-and-path-report-expected-locations
+# specmason: req=REQ-0057 ac=AC-0617
 def test_sync_git_cd_and_path_report_expected_locations(tmp_path: Path) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
 
@@ -336,8 +331,7 @@ def test_sync_git_cd_and_path_report_expected_locations(tmp_path: Path) -> None:
     assert Path(path_payload["selected_path"]) == sync_repo / "project-a"
 
 
-# sw: f=specs/behavior/features/sync_git/sync-git.feature
-# sw: s=@bdd-sync-git-sync-git-pull-fails-fast-for-dirty-shared-repo
+# specmason: req=REQ-0057 ac=AC-0622
 def test_sync_git_pull_fails_fast_for_dirty_shared_repo(tmp_path: Path) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
     (sync_repo / "project-b").mkdir()
@@ -364,8 +358,7 @@ def test_sync_git_pull_fails_fast_for_dirty_shared_repo(tmp_path: Path) -> None:
     assert "--allow-dirty" in output
 
 
-# sw: f=specs/behavior/features/sync_git/sync-git.feature
-# sw: s=@bdd-sync-git-sync-git-push-commits-all-sync-repo-changes-and-pushes
+# specmason: req=REQ-0057 ac=AC-0624
 def test_sync_git_push_commits_all_sync_repo_changes_and_pushes(tmp_path: Path) -> None:
     remote = tmp_path / "remote.git"
     _git(tmp_path, "init", "--bare", str(remote))
@@ -422,8 +415,7 @@ def test_sync_git_push_commits_all_sync_repo_changes_and_pushes(tmp_path: Path) 
     )
 
 
-# sw: f=specs/behavior/features/sync_git/sync-git.feature
-# sw: s=@bdd-sync-git-sync-git-pull-runs-git-pull-without-manual-cd
+# specmason: req=REQ-0057 ac=AC-0623
 def test_sync_git_pull_runs_git_pull_without_manual_cd(tmp_path: Path) -> None:
     remote = tmp_path / "remote.git"
     _git(tmp_path, "init", "--bare", str(remote))
@@ -468,8 +460,7 @@ def test_sync_git_pull_runs_git_pull_without_manual_cd(tmp_path: Path) -> None:
     assert (sync_repo / "project-a" / "pulled-note.txt").exists()
 
 
-# sw: f=specs/behavior/features/sync_git/sync-git.feature
-# sw: s=@bdd-sync-git-sync-git-hooks-install-rejects-cross-project-managed-hook
+# specmason: req=REQ-0057 ac=AC-0621
 def test_sync_git_hooks_install_rejects_cross_project_managed_hook(
     tmp_path: Path,
 ) -> None:

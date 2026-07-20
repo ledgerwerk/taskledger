@@ -82,8 +82,7 @@ def _create_done_task(
     )
 
 
-# sw: f=specs/behavior/features/release_changelog/release-changelog.feature
-# sw: s=@bdd-release-changelog-release-tag-persists-release-record
+# specmason: req=REQ-0046 ac=AC-0520
 def test_release_tag_persists_release_record(tmp_path: Path) -> None:
     _init_project(tmp_path)
     task_id = _create_done_task(
@@ -113,8 +112,7 @@ def test_release_tag_persists_release_record(tmp_path: Path) -> None:
     assert metadata["boundary_task_id"] == task_id
 
 
-# sw: f=specs/behavior/features/release_changelog/release-changelog.feature
-# sw: s=@bdd-release-changelog-release-tag-rejects-non-done-boundary
+# specmason: req=REQ-0046 ac=AC-0522
 def test_release_tag_rejects_non_done_boundary(tmp_path: Path) -> None:
     _init_project(tmp_path)
     result = runner.invoke(
@@ -149,8 +147,7 @@ def test_release_tag_rejects_non_done_boundary(tmp_path: Path) -> None:
     assert "done tasks" in tag_result.stdout or "done tasks" in tag_result.stderr
 
 
-# sw: f=specs/behavior/features/release_changelog/release-changelog.feature
-# sw: s=@bdd-release-changelog-release-tag-rejects-duplicate-version
+# specmason: req=REQ-0046 ac=AC-0521
 def test_release_tag_rejects_duplicate_version(tmp_path: Path) -> None:
     _init_project(tmp_path)
     task_id = _create_done_task(
@@ -188,8 +185,7 @@ def test_release_tag_rejects_duplicate_version(tmp_path: Path) -> None:
     assert "already exists" in result.stdout or "already exists" in result.stderr
 
 
-# sw: f=specs/behavior/features/release_changelog/release-changelog.feature
-# sw: s=@bdd-release-changelog-release-list-sorts-by-boundary
+# specmason: req=REQ-0046 ac=AC-0518
 def test_release_list_is_sorted_by_boundary_task(tmp_path: Path) -> None:
     _init_project(tmp_path)
     first = _create_done_task(
@@ -221,8 +217,7 @@ def test_release_list_is_sorted_by_boundary_task(tmp_path: Path) -> None:
     assert versions == ["0.4.1", "0.4.2"]
 
 
-# sw: f=specs/behavior/features/release_changelog/release-changelog.feature
-# sw: s=@bdd-release-changelog-release-show-returns-record
+# specmason: req=REQ-0046 ac=AC-0519
 def test_release_show_returns_persisted_record(tmp_path: Path) -> None:
     _init_project(tmp_path)
     task_id = _create_done_task(
@@ -258,6 +253,15 @@ def test_release_show_returns_persisted_record(tmp_path: Path) -> None:
     assert release["note"] == "0.4.1 released"
 
 
+# specmason: req=REQ-0046 ac=AC-0509
+# specmason: req=REQ-0046 ac=AC-0510
+# specmason: req=REQ-0046 ac=AC-0511
+# specmason: req=REQ-0046 ac=AC-0512
+# specmason: req=REQ-0046 ac=AC-0513
+# specmason: req=REQ-0046 ac=AC-0514
+# specmason: req=REQ-0046 ac=AC-0515
+# specmason: req=REQ-0046 ac=AC-0516
+# specmason: req=REQ-0046 ac=AC-0517
 def test_release_changelog_subcommand_is_not_registered(tmp_path: Path) -> None:
     """release changelog was removed; release tag/list/show remain."""
     _init_project(tmp_path)

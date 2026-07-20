@@ -37,23 +37,15 @@ def _pipeline(*steps: dict[str, object], **extra: object) -> dict[str, object]:
     }
 
 
-# sw: f=specs/behavior/features/worker_pipeline_config/worker-pipeline-config.feature
-# sw: s=@bdd-worker-pipeline-config-no-worker-pipeline-section-preserves-default-config
+# specmason: req=REQ-0072 ac=AC-0808
 def test_no_worker_pipeline_section_preserves_default_config() -> None:
     config = merge_project_config({})
 
     assert config.worker_pipeline is None
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/worker_pipeline_config/worker-pipeline-config.feature"
-    ),
-    scenario=(
-        "@bdd-worker-pipeline-config-disabled-worker-pipeline-section-returns-"
-        "disabled-config"
-    ),
-)
+# specmason: req=REQ-0072 ac=AC-0806
+# specmason: req=REQ-0072 ac=AC-0807
 def test_disabled_worker_pipeline_section_returns_disabled_config() -> None:
     config = merge_project_config(
         {
@@ -81,8 +73,7 @@ def test_disabled_worker_pipeline_section_returns_disabled_config() -> None:
     assert config.worker_pipeline.steps[0].actor_role == "planner"
 
 
-# sw: f=specs/behavior/features/worker_pipeline_config/worker-pipeline-config.feature
-# sw: s=@bdd-worker-pipeline-config-worker-pipeline-parse-three-step-config
+# specmason: req=REQ-0072 ac=AC-0811
 def test_worker_pipeline_parse_three_step_config() -> None:
     config = merge_project_config(
         {
@@ -115,15 +106,7 @@ def test_worker_pipeline_parse_three_step_config() -> None:
     assert config.worker_pipeline.steps[2].actor_role == "validator"
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/worker_pipeline_config/worker-pipeline-config.feature"
-    ),
-    scenario=(
-        "@bdd-worker-pipeline-config-worker-pipeline-parse-four-step-config-"
-        "without-skeletor"
-    ),
-)
+# specmason: req=REQ-0072 ac=AC-0810
 def test_worker_pipeline_parse_four_step_config_without_skeletor() -> None:
     config = merge_project_config(
         {
@@ -165,8 +148,7 @@ def test_worker_pipeline_parse_four_step_config_without_skeletor() -> None:
     assert config.worker_pipeline.steps[3].actor_role == "reviewer"
 
 
-# sw: f=specs/behavior/features/worker_pipeline_config/worker-pipeline-config.feature
-# sw: s=@bdd-worker-pipeline-config-worker-pipeline-parse-custom-worker-name
+# specmason: req=REQ-0072 ac=AC-0809
 def test_worker_pipeline_parse_custom_worker_name() -> None:
     config = merge_project_config(
         {
@@ -204,8 +186,7 @@ def test_worker_pipeline_parse_custom_worker_name() -> None:
     assert domain_reviewer.actor_role == "reviewer"
 
 
-# sw: f=specs/behavior/features/worker_pipeline_config/worker-pipeline-config.feature
-# sw: s=@bdd-worker-pipeline-config-invalid-config-is-rejected
+# specmason: req=REQ-0072 ac=AC-0811
 def test_worker_pipeline_enabled_requires_steps() -> None:
     with pytest.raises(LaunchError, match="at least one step"):
         _validate_project_config_overrides(
@@ -214,6 +195,7 @@ def test_worker_pipeline_enabled_requires_steps() -> None:
         )
 
 
+# specmason: req=REQ-0072 ac=AC-0811
 def test_worker_pipeline_duplicate_step_ids_fail() -> None:
     with pytest.raises(
         LaunchError,
@@ -238,6 +220,7 @@ def test_worker_pipeline_duplicate_step_ids_fail() -> None:
         )
 
 
+# specmason: req=REQ-0072 ac=AC-0811
 def test_worker_pipeline_invalid_step_id_fails() -> None:
     with pytest.raises(LaunchError, match="must match"):
         _validate_project_config_overrides(
@@ -250,6 +233,7 @@ def test_worker_pipeline_invalid_step_id_fails() -> None:
         )
 
 
+# specmason: req=REQ-0072 ac=AC-0811
 def test_worker_pipeline_invalid_base_context_fails() -> None:
     with pytest.raises(LaunchError, match="base_context"):
         _validate_project_config_overrides(
@@ -266,6 +250,7 @@ def test_worker_pipeline_invalid_base_context_fails() -> None:
         )
 
 
+# specmason: req=REQ-0072 ac=AC-0811
 def test_worker_pipeline_invalid_lifecycle_stage_fails() -> None:
     with pytest.raises(LaunchError, match="lifecycle_stage"):
         _validate_project_config_overrides(
@@ -282,6 +267,7 @@ def test_worker_pipeline_invalid_lifecycle_stage_fails() -> None:
         )
 
 
+# specmason: req=REQ-0072 ac=AC-0809
 def test_worker_pipeline_unknown_keys_fail() -> None:
     with pytest.raises(LaunchError, match="Unknown worker_pipeline keys"):
         _validate_project_config_overrides(

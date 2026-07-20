@@ -1,12 +1,12 @@
-@area-trace @feature-trace @generated @needs-review
+@area-trace @feature-trace @generated
 Feature: Trace
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-trace
   Rule: Trace
 
-    @bdd-trace-trace-cli-format-json-is-raw-json @needs-review
+    @req-REQ-0068 @ac-AC-0771
     Example: Trace Cli Format Json Is Raw Json
       Given the pytest test setup is prepared
       When trace cli format json is raw json is executed

@@ -1,12 +1,12 @@
-@area-actor_resolution @feature-actor-resolution @generated @needs-review
+@area-actor_resolution @feature-actor-resolution @generated
 Feature: Actor Resolution
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-actor-resolution
   Rule: Actor Resolution
 
-    @bdd-actor-resolution-round-trip-command-pid-and-pid-scope @needs-review
+    @req-REQ-0003 @ac-AC-0049
     Example: Round Trip Command Pid And Pid Scope
       Given the pytest test setup is prepared
       When round trip command pid and pid scope is executed
@@ -14,7 +14,7 @@ Feature: Actor Resolution
       Then b.command_pid equals 123
       Then b.pid_scope equals 'unverifiable_harness'
 
-    @bdd-actor-resolution-round-trip-owner-pid-scope @needs-review
+    @req-REQ-0003 @ac-AC-0050
     Example: Round Trip Owner Pid Scope
       Given the pytest test setup is prepared
       When round trip owner pid scope is executed
@@ -22,7 +22,7 @@ Feature: Actor Resolution
       Then b.command_pid equals 123
       Then b.pid_scope equals 'owner'
 
-    @bdd-actor-resolution-missing-pid-scope-is-none @needs-review
+    @req-REQ-0003 @ac-AC-0044
     Example: Missing Pid Scope Is None
       Given the pytest test setup is prepared
       When missing pid scope is none is executed
@@ -30,13 +30,13 @@ Feature: Actor Resolution
       Then b.pid_scope is None
       Then b.command_pid is None
 
-    @bdd-actor-resolution-invalid-pid-scope-is-ignored @needs-review
+    @req-REQ-0003 @ac-AC-0043
     Example: Invalid Pid Scope Is Ignored
       Given the pytest test setup is prepared
       When invalid pid scope is ignored is executed
       Then b.pid_scope is None
 
-    @bdd-actor-resolution-pi-context-without-owner-pid-stores-none-pid @needs-review
+    @req-REQ-0003 @ac-AC-0048
     Example: Pi Context Without Owner Pid Stores None Pid
       Given the pytest test setup is prepared
       When pi context without owner pid stores none pid is executed
@@ -46,27 +46,27 @@ Feature: Actor Resolution
       Then actor.pid is None
       Then actor.pid_scope equals 'unverifiable_harness'
 
-    @bdd-actor-resolution-pi-context-with-owner-pid-env @needs-review
+    @req-REQ-0003 @ac-AC-0047
     Example: Pi Context With Owner Pid Env
       Given the pytest test setup is prepared
       When pi context with owner pid env is executed
       Then actor.pid equals 12345
       Then actor.pid_scope equals 'owner'
 
-    @bdd-actor-resolution-harness-pid-alias-env @needs-review
+    @req-REQ-0003 @ac-AC-0041
     Example: Harness Pid Alias Env
       Given the pytest test setup is prepared
       When harness pid alias env is executed
       Then actor.pid equals 54321
       Then actor.pid_scope equals 'owner'
 
-    @bdd-actor-resolution-owner-pid-takes-priority-over-harness-pid @needs-review
+    @req-REQ-0003 @ac-AC-0046
     Example: Owner Pid Takes Priority Over Harness Pid
       Given the pytest test setup is prepared
       When owner pid takes priority over harness pid is executed
       Then actor.pid equals 111
 
-    @bdd-actor-resolution-codex-context-without-owner-pid @needs-review
+    @req-REQ-0003 @ac-AC-0038
     Example: Codex Context Without Owner Pid
       Given the pytest test setup is prepared
       When codex context without owner pid is executed
@@ -75,7 +75,7 @@ Feature: Actor Resolution
       Then actor.pid is None
       Then actor.pid_scope equals 'unverifiable_harness'
 
-    @bdd-actor-resolution-opencode-context-without-owner-pid @needs-review
+    @req-REQ-0003 @ac-AC-0045
     Example: Opencode Context Without Owner Pid
       Given the pytest test setup is prepared
       When opencode context without owner pid is executed
@@ -83,7 +83,7 @@ Feature: Actor Resolution
       Then actor.pid is None
       Then actor.pid_scope equals 'unverifiable_harness'
 
-    @bdd-actor-resolution-env-actor-with-harness-session @needs-review
+    @req-REQ-0003 @ac-AC-0040
     Example: Env Actor With Harness Session
       Given the pytest test setup is prepared
       When env actor with harness session is executed
@@ -91,20 +91,20 @@ Feature: Actor Resolution
       Then actor.pid is None
       Then actor.pid_scope equals 'unverifiable_harness'
 
-    @bdd-actor-resolution-default-agent-gets-command-pid-as-owner @needs-review
+    @req-REQ-0003 @ac-AC-0039
     Example: Default Agent Gets Command Pid As Owner
       Given the pytest test setup is prepared
       When default agent gets command pid as owner is executed
       Then actor.pid_scope equals 'owner'
 
-    @bdd-actor-resolution-invalid-owner-pid-ignored @needs-review
+    @req-REQ-0003 @ac-AC-0042
     Example: Invalid Owner Pid Ignored
       Given the pytest test setup is prepared
       When invalid owner pid ignored is executed
       Then actor.pid is None
       Then actor.pid_scope equals 'unverifiable_harness'
 
-    @bdd-actor-resolution-zero-owner-pid-ignored @needs-review
+    @req-REQ-0003 @ac-AC-0051
     Example: Zero Owner Pid Ignored
       Given the pytest test setup is prepared
       When zero owner pid ignored is executed

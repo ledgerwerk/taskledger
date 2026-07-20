@@ -79,15 +79,7 @@ def _prepare_proposed_plan(
     assert runner.invoke(app, command).exit_code == 0
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/plan_approval_contract/plan-approval-contract.feature"
-    ),
-    scenario=(
-        "@bdd-plan-approval-contract-plan-approval-records-actor-metadata-and-"
-        "criteria-ids"
-    ),
-)
+# specmason: req=REQ-0036 ac=AC-0403
 def test_plan_approval_records_actor_metadata_and_criteria_ids(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan(tmp_path)
@@ -144,8 +136,7 @@ def test_plan_approval_records_actor_metadata_and_criteria_ids(tmp_path: Path) -
     assert plan["approved_at"]
 
 
-# sw: f=specs/behavior/features/plan_approval_contract/plan-approval-contract.feature
-# sw: s=@bdd-plan-approval-contract-plan-approval-warns-when-source-is-missing
+# specmason: req=REQ-0036 ac=AC-0406
 def test_plan_approval_warns_when_source_is_missing(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan(tmp_path)
@@ -179,8 +170,7 @@ def test_plan_approval_warns_when_source_is_missing(tmp_path: Path) -> None:
     assert any("Approval source missing" in str(item) for item in warnings)
 
 
-# sw: f=specs/behavior/features/plan_approval_contract/plan-approval-contract.feature
-# sw: s=@bdd-plan-approval-contract-task-report-warns-when-approved-plan-hash-mismatches
+# specmason: req=REQ-0036 ac=AC-0409
 def test_task_report_warns_when_approved_plan_hash_mismatches(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan(tmp_path)
@@ -231,15 +221,7 @@ def test_task_report_warns_when_approved_plan_hash_mismatches(tmp_path: Path) ->
     assert "approved plan content hash does not match" in report.stdout
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/plan_approval_contract/plan-approval-contract.feature"
-    ),
-    scenario=(
-        "@bdd-plan-approval-contract-plan-approval-blocks-running-planning-"
-        "run-without-lock"
-    ),
-)
+# specmason: req=REQ-0036 ac=AC-0402
 def test_plan_approval_blocks_running_planning_run_without_lock(
     tmp_path: Path,
 ) -> None:
@@ -280,15 +262,7 @@ def test_plan_approval_blocks_running_planning_run_without_lock(
     assert details["running_run"]["run_type"] == "planning"
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/plan_approval_contract/plan-approval-contract.feature"
-    ),
-    scenario=(
-        "@bdd-plan-approval-contract-plan-approval-rejects-agent-approval-"
-        "without-escape-hatch"
-    ),
-)
+# specmason: req=REQ-0036 ac=AC-0404
 def test_plan_approval_rejects_agent_approval_without_escape_hatch(
     tmp_path: Path,
 ) -> None:
@@ -322,8 +296,7 @@ def test_plan_approval_rejects_agent_approval_without_escape_hatch(
     assert "allow-agent-approval" in payload["error"]["message"]
 
 
-# sw: f=specs/behavior/features/plan_approval_contract/plan-approval-contract.feature
-# sw: s=@bdd-plan-approval-contract-plan-approval-requires-criteria-by-default
+# specmason: req=REQ-0036 ac=AC-0405
 def test_plan_approval_requires_criteria_by_default(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan(tmp_path, criterion=None)
@@ -355,8 +328,7 @@ def test_plan_approval_requires_criteria_by_default(tmp_path: Path) -> None:
     assert "acceptance criterion" in payload["error"]["message"]
 
 
-# sw: f=specs/behavior/features/plan_approval_contract/plan-approval-contract.feature
-# sw: s=@bdd-plan-approval-contract-plan-accept-human-error-includes-lint-issue-details
+# specmason: req=REQ-0036 ac=AC-0401
 def test_plan_accept_human_error_includes_lint_issue_details(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _prepare_proposed_plan(tmp_path)
@@ -389,8 +361,7 @@ def test_plan_accept_human_error_includes_lint_issue_details(tmp_path: Path) -> 
     assert "plan.todos" in combined
 
 
-# sw: f=specs/behavior/features/plan_approval_contract/plan-approval-contract.feature
-# sw: s=@bdd-plan-approval-contract-plan-approve-default-actor-is-agent
+# specmason: req=REQ-0036 ac=AC-0407
 def test_plan_approve_default_actor_is_agent(tmp_path: Path) -> None:
     """Verify that plan approve defaults to agent,
     requiring explicit --actor user for user approval."""
@@ -422,8 +393,7 @@ def test_plan_approve_default_actor_is_agent(tmp_path: Path) -> None:
     assert "allow-agent-approval" in payload["error"]["message"]
 
 
-# sw: f=specs/behavior/features/plan_approval_contract/plan-approval-contract.feature
-# sw: s=@bdd-plan-approval-contract-plan-yaml-single-key-shorthand-criteria
+# specmason: req=REQ-0036 ac=AC-0408
 def test_plan_yaml_single_key_shorthand_criteria(tmp_path: Path) -> None:
     """Verify plan YAML accepts single-key shorthand mappings for criteria."""
     _init_project(tmp_path)

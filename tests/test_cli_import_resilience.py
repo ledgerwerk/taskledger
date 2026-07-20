@@ -32,15 +32,7 @@ def _init_project(app, tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/cli_import_resilience/cli-import-resilience.feature"
-    ),
-    scenario=(
-        "@bdd-cli-import-resilience-optional-release-import-failure-keeps-"
-        "core-commands-available"
-    ),
-)
+# specmason: req=REQ-0008 ac=AC-0092
 def test_optional_release_import_failure_keeps_core_commands_available(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -140,8 +132,7 @@ def test_optional_release_import_failure_keeps_core_commands_available(
         importlib.reload(cli_module)
 
 
-# sw: f=specs/behavior/features/cli_import_resilience/cli-import-resilience.feature
-# sw: s=@bdd-cli-import-resilience-launcher-reports-cli-import-failure
+# specmason: req=REQ-0008 ac=AC-0091
 def test_launcher_reports_cli_import_failure(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -161,8 +152,7 @@ def test_launcher_reports_cli_import_failure(
     )
 
 
-# sw: f=specs/behavior/features/cli_import_resilience/cli-import-resilience.feature
-# sw: s=@bdd-cli-import-resilience-python-m-taskledger-help-works
+# specmason: req=REQ-0008 ac=AC-0093
 def test_python_m_taskledger_help_works() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "taskledger", "--help"],

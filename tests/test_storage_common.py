@@ -120,23 +120,27 @@ def test_write_json_creates_file(tmp_path: Path) -> None:
     assert data == {"x": 1}
 
 
+# specmason: req=REQ-0052 ac=AC-0556
 def test_write_text_creates_parent_dirs(tmp_path: Path) -> None:
     p = tmp_path / "a" / "b" / "c" / "file.txt"
     write_text(p, "hello")
     assert p.read_text() == "hello"
 
 
+# specmason: req=REQ-0052 ac=AC-0556
 def test_read_text_reads_utf8(tmp_path: Path) -> None:
     p = tmp_path / "f.txt"
     p.write_text("café", encoding="utf-8")
     assert read_text(p) == "café"
 
 
+# specmason: req=REQ-0052 ac=AC-0555
 def test_read_text_raises_on_missing(tmp_path: Path) -> None:
     with pytest.raises(LaunchError, match="Failed to read"):
         read_text(tmp_path / "nope.txt")
 
 
+# specmason: req=REQ-0052 ac=AC-0555
 def test_write_text_raises_on_oserror(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -175,21 +179,23 @@ def test_relative_to_workspace_outside_root(tmp_path: Path) -> None:
 # -- summarize_text --
 
 
+# specmason: req=REQ-0052 ac=AC-0557
 def test_summarize_text_short() -> None:
     assert summarize_text("hello") == "hello"
 
 
+# specmason: req=REQ-0052 ac=AC-0557
 def test_summarize_text_collapse_whitespace() -> None:
     assert summarize_text("  hello   world  ") == "hello world"
 
 
+# specmason: req=REQ-0052 ac=AC-0557
 def test_summarize_text_empty() -> None:
     assert summarize_text("") is None
     assert summarize_text("   ") is None
 
 
-# sw: f=specs/behavior/features/storage_common/storage-common.feature
-# sw: s=@bdd-storage-common-summarize-text-long
+# specmason: req=REQ-0052 ac=AC-0557
 def test_summarize_text_long() -> None:
     text = "x" * 90
     result = summarize_text(text)
@@ -198,6 +204,7 @@ def test_summarize_text_long() -> None:
     assert len(result) == 80
 
 
+# specmason: req=REQ-0052 ac=AC-0557
 def test_summarize_text_exactly_80() -> None:
     text = "x" * 80
     assert summarize_text(text) == text
@@ -206,14 +213,14 @@ def test_summarize_text_exactly_80() -> None:
 # -- content_hash --
 
 
-# sw: f=specs/behavior/features/storage_common/storage-common.feature
-# sw: s=@bdd-storage-common-content-hash-returns-sha256
+# specmason: req=REQ-0052 ac=AC-0554
 def test_content_hash_returns_sha256() -> None:
     h = content_hash("test")
     assert h is not None
     assert len(h) == 64
 
 
+# specmason: req=REQ-0052 ac=AC-0554
 def test_content_hash_empty_returns_none() -> None:
     assert content_hash("") is None
 
@@ -221,23 +228,23 @@ def test_content_hash_empty_returns_none() -> None:
 # -- merge_text --
 
 
-# sw: f=specs/behavior/features/storage_common/storage-common.feature
-# sw: s=@bdd-storage-common-merge-text-append
+# specmason: req=REQ-0052 ac=AC-0555
 def test_merge_text_append() -> None:
     result = merge_text("current", "incoming", prepend=False)
     assert result == "current\n\nincoming"
 
 
-# sw: f=specs/behavior/features/storage_common/storage-common.feature
-# sw: s=@bdd-storage-common-merge-text-prepend
+# specmason: req=REQ-0052 ac=AC-0556
 def test_merge_text_prepend() -> None:
     result = merge_text("current", "incoming", prepend=True)
     assert result == "incoming\n\ncurrent"
 
 
+# specmason: req=REQ-0052 ac=AC-0556
 def test_merge_text_empty_current() -> None:
     assert merge_text("", "incoming", prepend=False) == "incoming"
 
 
+# specmason: req=REQ-0052 ac=AC-0556
 def test_merge_text_empty_incoming() -> None:
     assert merge_text("current", "", prepend=False) == "current"

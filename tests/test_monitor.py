@@ -30,8 +30,7 @@ def _make_runner() -> CliRunner:
 runner = _make_runner()
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-empty-project-produces-snapshot
+# specmason: req=REQ-0033 ac=AC-0369
 def test_monitor_snapshot_works_in_empty_initialized_project(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     payload = monitor_snapshot(ws)
@@ -41,8 +40,7 @@ def test_monitor_snapshot_works_in_empty_initialized_project(tmp_path: Path) -> 
     assert payload["ready"] == []
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-monitor-snapshot-includes-active-task-and-progress
+# specmason: req=REQ-0033 ac=AC-0369
 def test_monitor_snapshot_includes_active_task_and_progress(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_id = create_approved_task(
@@ -57,8 +55,7 @@ def test_monitor_snapshot_includes_active_task_and_progress(tmp_path: Path) -> N
     assert isinstance(active["next_action"], dict)
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-monitor-snapshot-groups-in-progress-and-ready-tasks
+# specmason: req=REQ-0033 ac=AC-0368
 def test_monitor_snapshot_groups_in_progress_and_ready_tasks(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     planning = create_task(
@@ -89,8 +86,7 @@ def test_monitor_snapshot_groups_in_progress_and_ready_tasks(tmp_path: Path) -> 
     assert failed in ready_ids
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-monitor-snapshot-lists-newest-activity-first
+# specmason: req=REQ-0033 ac=AC-0370
 def test_monitor_snapshot_lists_newest_activity_first(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(ws, title="Activity task", slug="activity-task", description="x")
@@ -121,8 +117,7 @@ def test_monitor_snapshot_lists_newest_activity_first(tmp_path: Path) -> None:
     assert any(item["event"] == "plan.started" for item in activity)
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-render-monitor-text-truncates-without-throwing
+# specmason: req=REQ-0033 ac=AC-0372
 def test_render_monitor_text_truncates_without_throwing() -> None:
     payload = {
         "kind": "monitor_snapshot",
@@ -166,8 +161,7 @@ def test_render_monitor_text_truncates_without_throwing() -> None:
     assert "..." in rendered
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-monitor-cli-once-exits-zero
+# specmason: req=REQ-0033 ac=AC-0367
 def test_monitor_cli_once_exits_zero(empty_workspace: Path) -> None:
     result = runner.invoke(
         app,
@@ -177,8 +171,7 @@ def test_monitor_cli_once_exits_zero(empty_workspace: Path) -> None:
     assert "CURRENT WORK" in result.stdout
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-monitor-cli-json-once-emits-monitor-snapshot
+# specmason: req=REQ-0033 ac=AC-0366
 def test_monitor_cli_json_once_emits_monitor_snapshot(empty_workspace: Path) -> None:
     result = runner.invoke(
         app,
@@ -189,8 +182,7 @@ def test_monitor_cli_json_once_emits_monitor_snapshot(empty_workspace: Path) -> 
     assert payload["result"]["kind"] == "monitor_snapshot"
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-plan-review-is-ready-work
+# specmason: req=REQ-0033 ac=AC-0369
 def test_monitor_snapshot_includes_plan_review_in_ready(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     from taskledger.services.tasks import start_planning
@@ -205,8 +197,7 @@ def test_monitor_snapshot_includes_plan_review_in_ready(tmp_path: Path) -> None:
     assert pr.id in ready_ids
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-task-activity-scope-filters-events
+# specmason: req=REQ-0033 ac=AC-0373
 def test_monitor_activity_scope_task_filters_to_selected_task(
     tmp_path: Path,
 ) -> None:
@@ -240,8 +231,10 @@ def test_monitor_activity_scope_task_filters_to_selected_task(
     assert payload["activity_scope"] == "task"
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-ledger-activity-scope-shows-all-events
+# specmason: req=REQ-0033 ac=AC-0363
+# specmason: req=REQ-0033 ac=AC-0364
+# specmason: req=REQ-0033 ac=AC-0365
+# specmason: req=REQ-0033 ac=AC-0371
 def test_monitor_activity_scope_ledger_shows_all(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task_a = create_task(ws, title="Task A", slug="task-a", description="x")
@@ -274,6 +267,7 @@ def test_monitor_activity_scope_ledger_shows_all(tmp_path: Path) -> None:
     assert payload["activity_scope"] == "ledger"
 
 
+# specmason: req=REQ-0033 ac=AC-0372
 def test_render_monitor_text_shows_recent_ledger_activity_heading() -> None:
     payload = {
         "kind": "monitor_snapshot",
@@ -289,6 +283,7 @@ def test_render_monitor_text_shows_recent_ledger_activity_heading() -> None:
     assert "RECENT LEDGER ACTIVITY" in rendered
 
 
+# specmason: req=REQ-0033 ac=AC-0372
 def test_render_monitor_text_shows_task_activity_heading() -> None:
     payload = {
         "kind": "monitor_snapshot",
@@ -308,6 +303,7 @@ def test_render_monitor_text_shows_task_activity_heading() -> None:
     assert "TASK ACTIVITY: task-0042" in rendered
 
 
+# specmason: req=REQ-0033 ac=AC-0372
 def test_render_monitor_text_includes_status_stage_in_focused() -> None:
     payload = {
         "kind": "monitor_snapshot",
@@ -326,6 +322,7 @@ def test_render_monitor_text_includes_status_stage_in_focused() -> None:
     assert "[implementing]" in rendered
 
 
+# specmason: req=REQ-0033 ac=AC-0364
 def test_monitor_cli_activity_scope_task(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     result = runner.invoke(
@@ -346,8 +343,7 @@ def test_monitor_cli_activity_scope_task(tmp_path: Path) -> None:
     assert payload["result"]["activity_scope"] == "task"
 
 
-# sw: f=specs/behavior/features/monitor/monitor.feature
-# sw: s=@bdd-monitor-invalid-activity-scope-is-rejected
+# specmason: req=REQ-0033 ac=AC-0364
 def test_monitor_cli_activity_scope_invalid(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     result = runner.invoke(

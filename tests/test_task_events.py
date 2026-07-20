@@ -65,8 +65,7 @@ def _create_and_activate_task(tmp_path: Path, slug: str = "test-task") -> None:
     )
 
 
-# sw: f=specs/behavior/features/task_events/events.feature
-# sw: s=@bdd-task-events-task-events-human-output
+# specmason: req=REQ-0059 ac=AC-0633
 def test_task_events_human_output(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_event_logging(tmp_path)
@@ -81,8 +80,7 @@ def test_task_events_human_output(tmp_path: Path) -> None:
     assert "task.created" in result.output
 
 
-# sw: f=specs/behavior/features/task_events/events.feature
-# sw: s=@bdd-task-events-task-events-json-output
+# specmason: req=REQ-0059 ac=AC-0634
 def test_task_events_json_output(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_event_logging(tmp_path)
@@ -103,8 +101,7 @@ def test_task_events_json_output(tmp_path: Path) -> None:
     assert "actor" in event
 
 
-# sw: f=specs/behavior/features/task_events/events.feature
-# sw: s=@bdd-task-events-task-events-all
+# specmason: req=REQ-0059 ac=AC-0631
 def test_task_events_all(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_event_logging(tmp_path)
@@ -119,8 +116,7 @@ def test_task_events_all(tmp_path: Path) -> None:
     assert "task.created" in result.output
 
 
-# sw: f=specs/behavior/features/task_events/events.feature
-# sw: s=@bdd-task-events-task-events-limit
+# specmason: req=REQ-0059 ac=AC-0635
 def test_task_events_limit(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_event_logging(tmp_path)
@@ -141,8 +137,7 @@ def test_task_events_limit(tmp_path: Path) -> None:
     assert len(lines) <= 1
 
 
-# sw: f=specs/behavior/features/task_events/events.feature
-# sw: s=@bdd-task-events-task-events-empty
+# specmason: req=REQ-0059 ac=AC-0632
 def test_task_events_empty(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _create_and_activate_task(tmp_path)
@@ -156,8 +151,7 @@ def test_task_events_empty(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
-# sw: f=specs/behavior/features/task_events/events.feature
-# sw: s=@bdd-task-events-task-events-with-explicit-task-ref
+# specmason: req=REQ-0059 ac=AC-0636
 def test_task_events_with_explicit_task_ref(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_event_logging(tmp_path)

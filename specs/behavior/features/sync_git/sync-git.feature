@@ -1,12 +1,12 @@
-@area-sync_git @feature-sync-git @generated @needs-review
+@area-sync_git @feature-sync-git @generated
 Feature: Sync Git
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-sync-git
   Rule: Sync Git
 
-    @bdd-sync-git-sync-git-help-promotes-pull-and-push @needs-review
+    @req-REQ-0057 @ac-AC-0620
     Example: Sync Git Help Promotes Pull And Push
       Given the pytest test setup is prepared
       When sync git help promotes pull and push is executed
@@ -26,7 +26,7 @@ Feature: Sync Git
       Then 'status' is in hooks_help.stdout
       Then 'uninstall' is in hooks_help.stdout
 
-    @bdd-sync-git-sync-git-status-splits-project-and-outside-dirty-state @needs-review
+    @req-REQ-0057 @ac-AC-0625
     Example: Sync Git Status Splits Project And Outside Dirty State
       Given the pytest test setup is prepared
       When sync git status splits project and outside dirty state is executed
@@ -34,7 +34,7 @@ Feature: Sync Git
       Then any succeeds
       Then any succeeds
 
-    @bdd-sync-git-sync-git-commit-ignores-unrelated-dirty-paths @needs-review
+    @req-REQ-0057 @ac-AC-0618
     Example: Sync Git Commit Ignores Unrelated Dirty Paths
       Given the pytest test setup is prepared
       When sync git commit ignores unrelated dirty paths is executed
@@ -43,13 +43,13 @@ Feature: Sync Git
       Then 'project-a/local-note.txt' is in show
       Then 'project-b/other.txt' is not in show
 
-    @bdd-sync-git-sync-git-export-local-remains-compatibility-alias @needs-review
+    @req-REQ-0057 @ac-AC-0619
     Example: Sync Git Export Local Remains Compatibility Alias
       Given the pytest test setup is prepared
       When sync git export local remains compatibility alias is executed
       Then result.exit_code equals 0
 
-    @bdd-sync-git-sync-git-cd-and-path-report-expected-locations @needs-review
+    @req-REQ-0057 @ac-AC-0617
     Example: Sync Git Cd And Path Report Expected Locations
       Given the pytest test setup is prepared
       When sync git cd and path report expected locations is executed
@@ -57,7 +57,7 @@ Feature: Sync Git
       Then cd_json.exit_code equals 0
       Then path_result.exit_code equals 0
 
-    @bdd-sync-git-sync-git-pull-fails-fast-for-dirty-shared-repo @needs-review
+    @req-REQ-0057 @ac-AC-0622
     Example: Sync Git Pull Fails Fast For Dirty Shared Repo
       Given the pytest test setup is prepared
       When sync git pull fails fast for dirty shared repo is executed
@@ -65,7 +65,7 @@ Feature: Sync Git
       Then 'whole sync repository' is in output
       Then '--allow-dirty' is in output
 
-    @bdd-sync-git-sync-git-push-commits-all-sync-repo-changes-and-pushes @needs-review
+    @req-REQ-0057 @ac-AC-0624
     Example: Sync Git Push Commits All Sync Repo Changes And Pushes
       Given the pytest test setup is prepared
       When sync git push commits all sync repo changes and pushes is executed
@@ -74,13 +74,13 @@ Feature: Sync Git
       Then 'project-a/local-note.txt' is in pushed_files
       Then 'project-b/other.txt' is in pushed_files
 
-    @bdd-sync-git-sync-git-pull-runs-git-pull-without-manual-cd @needs-review
+    @req-REQ-0057 @ac-AC-0623
     Example: Sync Git Pull Runs Git Pull Without Manual Cd
       Given the pytest test setup is prepared
       When sync git pull runs git pull without manual cd is executed
       Then result.exit_code equals 0
 
-    @bdd-sync-git-sync-git-hooks-install-rejects-cross-project-managed-hook @needs-review
+    @req-REQ-0057 @ac-AC-0621
     Example: Sync Git Hooks Install Rejects Cross Project Managed Hook
       Given the pytest test setup is prepared
       When sync git hooks install rejects cross project managed hook is executed

@@ -1,24 +1,24 @@
-@area-next_action_expired_lock @feature-next-action-expired-lock @generated @needs-review
+@area-next_action_expired_lock @feature-next-action-expired-lock @generated
 Feature: Next Action Expired Lock
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-next-action-expired-lock
   Rule: Next Action Expired Lock
 
-    @bdd-next-action-expired-lock-expired-impl-lock-next-action-recommends-resume @needs-review
+    @req-REQ-0034 @ac-AC-0374
     Example: Expired Impl Lock Next Action Recommends Resume
       Given the pytest test setup is prepared
       When expired impl lock next action recommends resume is executed
       Then r.exit_code equals 0
 
-    @bdd-next-action-expired-lock-expired-impl-lock-resume-succeeds @needs-review
+    @req-REQ-0034 @ac-AC-0375
     Example: Expired Impl Lock Resume Succeeds
       Given the pytest test setup is prepared
       When expired impl lock resume succeeds is executed
       Then r.exit_code equals 0
 
-    @bdd-next-action-expired-lock-expired-planning-lock-still-routes-to-repair @needs-review
+    @req-REQ-0034 @ac-AC-0376
     Example: Expired Planning Lock Still Routes To Repair
       Given the pytest test setup is prepared
       When expired planning lock still routes to repair is executed

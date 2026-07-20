@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from taskledger.domain.models import ActorRef, TaskLock, TaskRecord, TaskRunRecord
 from taskledger.domain.policies import (
     derive_active_stage,
@@ -15,8 +13,7 @@ def _actor() -> ActorRef:
     return ActorRef(actor_type="agent", actor_name="taskledger")
 
 
-# sw: f=specs/behavior/features/lifecycle_policies/lifecycle-policies.feature
-# sw: s=@bdd-lifecycle-policies-plan-proposal-uses-durable-status-plus-active-planning
+# specmason: req=REQ-0029 ac=AC-0337
 def test_plan_proposal_uses_durable_status_plus_active_planning() -> None:
     task = TaskRecord(
         id="task-0001",
@@ -63,13 +60,7 @@ def test_active_stage_requires_matching_running_run() -> None:
     assert derive_active_stage(lock, (run,)) is None
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/lifecycle_policies/lifecycle-policies.feature"),
-    scenario=(
-        "@bdd-lifecycle-policies-implementation-mutation-allows-active-"
-        "implementation-without-status-flip"
-    ),
-)
+# specmason: req=REQ-0029 ac=AC-0336
 def test_implementation_mutation_allows_active_implementation_without_status_flip() -> (
     None
 ):
@@ -106,5 +97,6 @@ def test_implementation_mutation_allows_active_implementation_without_status_fli
     assert decision.ok is True
 
 
+# specmason: req=REQ-0029 ac=AC-0336
 def test_failed_validation_can_transition_back_to_implementing() -> None:
     assert can_transition("failed_validation", "implementing") is True

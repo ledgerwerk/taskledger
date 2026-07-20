@@ -39,8 +39,7 @@ def test_plan_body_detail_label_known() -> None:
     )
 
 
-# sw: f=specs/behavior/features/workflow_guidance/workflow-guidance.feature
-# sw: s=@bdd-workflow-guidance-render-guidance-default-profile
+# specmason: req=REQ-0077 ac=AC-0825
 def test_render_guidance_default_profile() -> None:
     p = PromptProfile()
     result = _render_guidance_from_profile(p)
@@ -54,8 +53,7 @@ def test_render_guidance_default_profile() -> None:
     )
 
 
-# sw: f=specs/behavior/features/workflow_guidance/workflow-guidance.feature
-# sw: s=@bdd-workflow-guidance-render-guidance-strict-profile
+# specmason: req=REQ-0077 ac=AC-0829
 def test_render_guidance_strict_profile() -> None:
     p = PromptProfile(
         profile="strict",
@@ -82,8 +80,7 @@ def test_render_guidance_strict_profile() -> None:
     assert "Always include a migration plan" in result
 
 
-# sw: f=specs/behavior/features/workflow_guidance/workflow-guidance.feature
-# sw: s=@bdd-workflow-guidance-render-guidance-when-required-fields-disabled
+# specmason: req=REQ-0077 ac=AC-0830
 def test_render_guidance_when_required_fields_disabled() -> None:
     p = PromptProfile(
         require_files=False,
@@ -95,24 +92,21 @@ def test_render_guidance_when_required_fields_disabled() -> None:
     assert "Required plan fields: none (all optional in this profile)." in result
 
 
-# sw: f=specs/behavior/features/workflow_guidance/workflow-guidance.feature
-# sw: s=@bdd-workflow-guidance-render-guidance-no-extra-guidance
+# specmason: req=REQ-0077 ac=AC-0827
 def test_render_guidance_no_extra_guidance() -> None:
     p = PromptProfile(extra_guidance=None)
     result = _render_guidance_from_profile(p)
     assert "Project guidance:" not in result
 
 
-# sw: f=specs/behavior/features/workflow_guidance/workflow-guidance.feature
-# sw: s=@bdd-workflow-guidance-render-guidance-no-topics
+# specmason: req=REQ-0077 ac=AC-0828
 def test_render_guidance_no_topics() -> None:
     p = PromptProfile(required_question_topics=())
     result = _render_guidance_from_profile(p)
     assert "Required question topics:" not in result
 
 
-# sw: f=specs/behavior/features/workflow_guidance/workflow-guidance.feature
-# sw: s=@bdd-workflow-guidance-render-guidance-guardrail-always-present
+# specmason: req=REQ-0077 ac=AC-0826
 def test_render_guidance_guardrail_always_present() -> None:
     for profile_value in ("compact", "balanced", "strict", "exploratory"):
         p = PromptProfile(profile=profile_value)

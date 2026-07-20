@@ -3,20 +3,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/tasks_service_static/tasks-service-static.feature"
-    ),
-    scenario=(
-        "@bdd-tasks-service-static-services-tasks-has-no-duplicate-top-level-"
-        "function-names"
-    ),
-)
+# specmason: req=REQ-0066 ac=AC-0749
 def test_services_tasks_has_no_duplicate_top_level_function_names() -> None:
     path = ROOT / "taskledger" / "services" / "tasks.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))

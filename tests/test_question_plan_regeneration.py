@@ -40,16 +40,7 @@ def _init_task(tmp_path: Path) -> None:
     start_planning(tmp_path, task.id)
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/question-plan-"
-        "regeneration.feature"
-    ),
-    scenario=(
-        "@bdd-question-plan-regeneration-required-question-blocks-approval-"
-        "until-answered-and-regenerated"
-    ),
-)
+# specmason: req=REQ-0044 ac=AC-0504
 def test_required_question_blocks_approval_until_answered_and_regenerated(
     tmp_path: Path,
 ) -> None:
@@ -167,16 +158,7 @@ Use PostgreSQL only.
     assert status["result"]["plan_regeneration_needed"] is False
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/question-plan-"
-        "regeneration.feature"
-    ),
-    scenario=(
-        "@bdd-question-plan-regeneration-plan-regeneration-finishes-orphaned-"
-        "latest-planning-run"
-    ),
-)
+# specmason: req=REQ-0044 ac=AC-0499
 def test_plan_regeneration_finishes_orphaned_latest_planning_run(
     tmp_path: Path,
 ) -> None:
@@ -265,16 +247,7 @@ Recover the orphaned planning run.
     assert status["result"]["plan_regeneration_needed"] is False
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/question-plan-"
-        "regeneration.feature"
-    ),
-    scenario=(
-        "@bdd-question-plan-regeneration-answered-question-blocks-approval-of-"
-        "stale-plan"
-    ),
-)
+# specmason: req=REQ-0044 ac=AC-0495
 def test_answered_question_blocks_approval_of_stale_plan(tmp_path: Path) -> None:
     _init_task(tmp_path)
     assert (
@@ -346,13 +319,7 @@ def test_answered_question_blocks_approval_of_stale_plan(tmp_path: Path) -> None
     assert "Regenerate the plan from answers" in payload["error"]["message"]
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/"
-        "question-plan-regeneration.feature"
-    ),
-    scenario="@bdd-question-plan-regeneration-changed-answer-restales-plan",
-)
+# specmason: req=REQ-0044 ac=AC-0496
 def test_changed_answer_requires_regeneration_again(tmp_path: Path) -> None:
     _init_task(tmp_path)
     assert (
@@ -435,13 +402,7 @@ Use SQLite.
     assert status["result"]["plan_regeneration_needed"] is True
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/"
-        "question-plan-regeneration.feature"
-    ),
-    scenario="@bdd-question-plan-regeneration-answer-many-records-user-answers",
-)
+# specmason: req=REQ-0044 ac=AC-0493
 def test_answer_many_records_user_chat_answers_and_requires_regeneration(
     tmp_path: Path,
 ) -> None:
@@ -500,15 +461,7 @@ def test_answer_many_records_user_chat_answers_and_requires_regeneration(
     ]
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/question-plan-"
-        "regeneration.feature"
-    ),
-    scenario=(
-        "@bdd-question-plan-regeneration-answer-many-rejects-duplicate-plain-text-ids"
-    ),
-)
+# specmason: req=REQ-0044 ac=AC-0494
 def test_answer_many_rejects_duplicate_plain_text_ids(tmp_path: Path) -> None:
     _init_task(tmp_path)
     assert (
@@ -545,6 +498,7 @@ def test_answer_many_rejects_duplicate_plain_text_ids(tmp_path: Path) -> None:
     assert "Duplicate key" in _json(result)["error"]["message"]
 
 
+# specmason: req=REQ-0044 ac=AC-0494
 def test_answer_many_accepts_repeated_text_options(tmp_path: Path) -> None:
     _init_task(tmp_path)
     for text in ("Q1?", "Q2?", "Q3?", "Q4?"):
@@ -596,16 +550,7 @@ def test_answer_many_accepts_repeated_text_options(tmp_path: Path) -> None:
     assert result["result"]["plan_regeneration_needed"] is True
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/question-plan-"
-        "regeneration.feature"
-    ),
-    scenario=(
-        "@bdd-question-plan-regeneration-required-question-needs-explicit-"
-        "user-source-for-agent"
-    ),
-)
+# specmason: req=REQ-0044 ac=AC-0505
 def test_required_question_needs_explicit_user_source_for_agent(tmp_path: Path) -> None:
     _init_task(tmp_path)
     assert (
@@ -645,15 +590,7 @@ def test_required_question_needs_explicit_user_source_for_agent(tmp_path: Path) 
     )
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/question-plan-"
-        "regeneration.feature"
-    ),
-    scenario=(
-        "@bdd-question-plan-regeneration-question-answer-accepts-question-option-alias"
-    ),
-)
+# specmason: req=REQ-0044 ac=AC-0501
 def test_question_answer_accepts_question_option_alias(tmp_path: Path) -> None:
     _init_task(tmp_path)
     assert (
@@ -690,16 +627,7 @@ def test_question_answer_accepts_question_option_alias(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/question-plan-"
-        "regeneration.feature"
-    ),
-    scenario=(
-        "@bdd-question-plan-regeneration-question-answer-rejects-both-"
-        "positional-and-option-id"
-    ),
-)
+# specmason: req=REQ-0044 ac=AC-0502
 def test_question_answer_rejects_both_positional_and_option_id(tmp_path: Path) -> None:
     _init_task(tmp_path)
     assert (
@@ -736,15 +664,7 @@ def test_question_answer_rejects_both_positional_and_option_id(tmp_path: Path) -
     assert "Provide exactly one question id" in combined
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/question-plan-"
-        "regeneration.feature"
-    ),
-    scenario=(
-        "@bdd-question-plan-regeneration-question-status-human-lists-required-open-ids"
-    ),
-)
+# specmason: req=REQ-0044 ac=AC-0503
 def test_question_status_human_lists_required_open_ids(tmp_path: Path) -> None:
     _init_task(tmp_path)
     for text in ("Q1?", "Q2?"):
@@ -796,16 +716,7 @@ def test_question_status_human_lists_required_open_ids(tmp_path: Path) -> None:
     assert "Do not infer answers." in result.stdout
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/question-plan-"
-        "regeneration.feature"
-    ),
-    scenario=(
-        "@bdd-question-plan-regeneration-plan-upsert-from-answers-releases-"
-        "planning-lock-and-allows-accept"
-    ),
-)
+# specmason: req=REQ-0044 ac=AC-0500
 def test_plan_upsert_from_answers_releases_planning_lock_and_allows_accept(
     tmp_path: Path,
 ) -> None:
@@ -895,13 +806,7 @@ Use PostgreSQL.
     assert _json(accepted)["result"]["status_stage"] == "approved"
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/"
-        "question-plan-regeneration.feature"
-    ),
-    scenario="@bdd-question-plan-regeneration-next-action-prefers-open-question",
-)
+# specmason: req=REQ-0044 ac=AC-0497
 def test_next_action_prefers_question_answer_while_planning_questions_are_open(
     tmp_path: Path,
 ) -> None:
@@ -963,13 +868,7 @@ def test_next_action_prefers_question_answer_while_planning_questions_are_open(
     }
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/question_plan_regeneration/"
-        "question-plan-regeneration.feature"
-    ),
-    scenario="@bdd-question-plan-regeneration-next-action-prefers-regeneration",
-)
+# specmason: req=REQ-0044 ac=AC-0498
 def test_next_action_prefers_regenerate_over_approve_for_stale_answers(
     tmp_path: Path,
 ) -> None:

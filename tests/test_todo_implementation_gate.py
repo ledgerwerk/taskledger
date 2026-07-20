@@ -100,13 +100,7 @@ Ship compact todo hints.
 class TestTodoImplementationGate:
     """Test suite for todo-based implementation finish gate."""
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=("@bdd-todo-implementation-gate-finish-blocked-by-open-todo"),
-    )
+    # specmason: req=REQ-0067 ac=AC-0752
     def test_finish_blocked_by_open_todo(self, tmp_path: Path) -> None:
         """Verify that implement finish is blocked when a todo is open."""
         _prepare_task_for_implementation(tmp_path)
@@ -143,13 +137,7 @@ class TestTodoImplementationGate:
         assert data.get("error", {}).get("code") == "IMPLEMENTATION_TODOS_INCOMPLETE"
         assert "open_todos" in data.get("error", {}).get("details", {})
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=("@bdd-todo-implementation-gate-finish-succeeds-when-todos-done"),
-    )
+    # specmason: req=REQ-0067 ac=AC-0754
     def test_finish_succeeds_when_todos_done(self, tmp_path: Path) -> None:
         """Verify that implement finish succeeds when all todos are done."""
         _prepare_task_for_implementation(tmp_path)
@@ -202,13 +190,7 @@ class TestTodoImplementationGate:
         assert data.get("ok") is True
         assert data["result"]["status"] == "implemented"
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=("@bdd-todo-implementation-gate-finish-succeeds-with-no-todos"),
-    )
+    # specmason: req=REQ-0067 ac=AC-0755
     def test_finish_succeeds_with_no_todos(self, tmp_path: Path) -> None:
         """Verify that implement finish succeeds when no todos exist."""
         _prepare_task_for_implementation(tmp_path)
@@ -230,15 +212,7 @@ class TestTodoImplementationGate:
         data = _json(result)
         assert data.get("ok") is True
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-finish-blocked-by-multiple-open-todos"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0751
     def test_finish_blocked_by_multiple_open_todos(self, tmp_path: Path) -> None:
         """Verify finish is blocked when multiple todos are open."""
         _prepare_task_for_implementation(tmp_path)
@@ -291,13 +265,7 @@ class TestTodoImplementationGate:
         open_todos = data.get("error", {}).get("details", {}).get("open_todos", [])
         assert len(open_todos) == 2
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=("@bdd-todo-implementation-gate-finish-succeeds-after-all-todos-done"),
-    )
+    # specmason: req=REQ-0067 ac=AC-0753
     def test_finish_succeeds_after_all_todos_done(self, tmp_path: Path) -> None:
         """Verify finish succeeds after marking all todos as done."""
         _prepare_task_for_implementation(tmp_path)
@@ -347,16 +315,7 @@ class TestTodoImplementationGate:
         assert data.get("ok") is True
         assert data["result"]["status"] == "implemented"
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-validation-status-open-todo-hint-uses-"
-            "existing-command"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0770
     def test_validation_status_open_todo_hint_uses_existing_command(
         self,
         tmp_path: Path,
@@ -462,15 +421,7 @@ Implement the feature.
         assert all("todo toggle" not in hint for hint in hints)
         assert all("todo done" in hint for hint in hints)
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-lock-remains-active-on-finish-failure"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0759
     def test_lock_remains_active_on_finish_failure(self, tmp_path: Path) -> None:
         """Verify that implementation lock remains active when finish is blocked."""
         _prepare_task_for_implementation(tmp_path)
@@ -516,15 +467,7 @@ Implement the feature.
             == "implementing"
         )
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-run-remains-running-on-finish-failure"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0766
     def test_run_remains_running_on_finish_failure(self, tmp_path: Path) -> None:
         """Verify that implementation run remains in 'running' state
         when finish is blocked."""
@@ -568,13 +511,7 @@ Implement the feature.
         run_data = _json(result)
         assert run_data.get("result", {}).get("run", {}).get("status") == "running"
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=("@bdd-todo-implementation-gate-error-payload-includes-blockers"),
-    )
+    # specmason: req=REQ-0067 ac=AC-0750
     def test_error_payload_includes_blockers(self, tmp_path: Path) -> None:
         """Verify error payload includes blocker details."""
         _prepare_task_for_implementation(tmp_path)
@@ -626,13 +563,7 @@ Implement the feature.
 class TestTodoObservability:
     """Regression tests for todo visibility during implementation."""
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=("@bdd-todo-implementation-gate-four-todo-adds-all-visible-in-status"),
-    )
+    # specmason: req=REQ-0067 ac=AC-0756
     def test_four_todo_adds_all_visible_in_status(self, tmp_path: Path) -> None:
         """Four sequential todo adds during implementation
         should all appear in status."""
@@ -684,15 +615,7 @@ class TestTodoObservability:
         for t in listed.get("result", {}).get("todos", []):
             assert t["mandatory"] is True
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-todo-next-json-includes-command-hints"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0768
     def test_todo_next_json_includes_command_hints(self, tmp_path: Path) -> None:
         _prepare_task_for_implementation(tmp_path)
         assert (
@@ -731,16 +654,7 @@ class TestTodoObservability:
             },
         ]
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-todo-next-human-output-shows-"
-            "validation-hint-and-done-command"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0767
     def test_todo_next_human_output_shows_validation_hint_and_done_command(
         self, tmp_path: Path
     ) -> None:
@@ -754,16 +668,7 @@ class TestTodoObservability:
         assert "Done command:" in result.stdout
         assert 'taskledger todo done todo-0001 --evidence "..."' in result.stdout
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-todo-show-human-output-shows-"
-            "validation-hint-and-done-command"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0769
     def test_todo_show_human_output_shows_validation_hint_and_done_command(
         self, tmp_path: Path
     ) -> None:
@@ -785,16 +690,7 @@ class TestTodoObservability:
 
 
 class TestNextActionTodoOutput:
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-next-action-includes-next-todo-payload-"
-            "during-implementation"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0762
     def test_next_action_includes_next_todo_payload_during_implementation(
         self, tmp_path: Path
     ) -> None:
@@ -845,16 +741,7 @@ class TestNextActionTodoOutput:
             "open_ids": ["todo-0001", "todo-0002"],
         }
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-next-action-includes-validation-hint-"
-            "when-available"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0763
     def test_next_action_includes_validation_hint_when_available(
         self, tmp_path: Path
     ) -> None:
@@ -871,15 +758,7 @@ class TestNextActionTodoOutput:
             == 'taskledger todo done todo-0001 --evidence "..."'
         )
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-next-action-human-output-names-next-todo"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0761
     def test_next_action_human_output_names_next_todo(self, tmp_path: Path) -> None:
         _prepare_task_for_implementation(tmp_path)
         assert (
@@ -907,16 +786,7 @@ class TestNextActionTodoOutput:
         assert 'taskledger todo done todo-0001 --evidence "..."' in result.stdout
         assert "Progress: 0/1 todos done" in result.stdout
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-next-action-returns-implement-finish-"
-            "when-todos-are-done"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0765
     def test_next_action_returns_implement_finish_when_todos_are_done(
         self, tmp_path: Path
     ) -> None:
@@ -961,16 +831,7 @@ class TestNextActionTodoOutput:
             "status_stage": "implementing",
         }
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-next-action-orphaned-implementation-"
-            "recommends-resume"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0764
     def test_next_action_orphaned_implementation_recommends_resume(
         self, tmp_path: Path
     ) -> None:
@@ -1016,16 +877,7 @@ class TestNextActionTodoOutput:
             for blocker in payload["blocking"]
         )
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-next-action-does-not-call-orphaned-"
-            "implementation-cancelled"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0760
     def test_next_action_does_not_call_orphaned_implementation_cancelled(
         self, tmp_path: Path
     ) -> None:
@@ -1065,15 +917,7 @@ class TestNextActionTodoOutput:
 class TestLegacyTodoSidecars:
     """Legacy sidecars are ignored during normal v2 operation."""
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-legacy-todos-yaml-is-ignored-in-normal-reads"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0758
     def test_legacy_todos_yaml_is_ignored_in_normal_reads(self, tmp_path: Path) -> None:
         _init(tmp_path)
 
@@ -1124,15 +968,7 @@ todos:
         todos = task_data.get("result", {}).get("task", {}).get("todos", [])
         assert todos == []
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/todo_implementation_gate/todo-implementation-"
-            "gate.feature"
-        ),
-        scenario=(
-            "@bdd-todo-implementation-gate-legacy-todos-yaml-does-not-block-finish"
-        ),
-    )
+    # specmason: req=REQ-0067 ac=AC-0757
     def test_legacy_todos_yaml_does_not_block_finish(self, tmp_path: Path) -> None:
         _prepare_task_for_implementation(tmp_path)
 

@@ -1,12 +1,12 @@
-@area-atomic_fast_io @feature-atomic-fast-io @generated @needs-review
+@area-atomic_fast_io @feature-atomic-fast-io @generated
 Feature: Atomic Fast Io
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-atomic-fast-io
   Rule: Atomic Fast Io
 
-    @bdd-atomic-fast-io-atomic-write-uses-fsync-by-default @needs-review
+    @req-REQ-0006 @ac-AC-0082
     Example: Atomic Write Uses Fsync By Default
       Given the pytest test setup is prepared
       When atomic write uses fsync by default is executed

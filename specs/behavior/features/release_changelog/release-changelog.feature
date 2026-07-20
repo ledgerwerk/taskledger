@@ -1,31 +1,31 @@
-@area-release_changelog @feature-release-changelog @generated @needs-review
+@area-release_changelog @feature-release-changelog @generated
 Feature: Release Changelog
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-release-changelog
   Rule: Release Changelog
 
-    @bdd-release-changelog-release-tag-persists-release-record @needs-review
+    @req-REQ-0046 @ac-AC-0520
     Example: Release Tag Persists Release Record
       Given the pytest test setup is prepared
       When release tag persists release record is executed
       Then result.exit_code equals 0
 
-    @bdd-release-changelog-release-tag-rejects-non-done-boundary @needs-review
+    @req-REQ-0046 @ac-AC-0522
     Example: Release Tag Rejects Non Done Boundary
       Given the pytest test setup is prepared
       When release tag rejects non done boundary is executed
       Then result.exit_code equals 0
       Then tag_result.exit_code does not equal 0
 
-    @bdd-release-changelog-release-tag-rejects-duplicate-version @needs-review
+    @req-REQ-0046 @ac-AC-0521
     Example: Release Tag Rejects Duplicate Version
       Given the pytest test setup is prepared
       When release tag rejects duplicate version is executed
       Then result.exit_code does not equal 0
 
-    @bdd-release-changelog-release-changelog-markdown-includes-instruction-and-evidence @needs-review
+    @req-REQ-0046 @ac-AC-0516
     Example: Release Changelog Markdown Includes Instruction And Evidence
       Given the pytest test setup is prepared
       When release changelog markdown includes instruction and evidence is executed
@@ -38,33 +38,33 @@ Feature: Release Changelog
       Then 'Evidence:' is in result.stdout
       Then "python -c print('ok')" is in result.stdout
 
-    @bdd-release-changelog-release-changelog-from-task-is-inclusive @needs-review
+    @req-REQ-0046 @ac-AC-0512
     Example: Release Changelog From Task Is Inclusive
       Given the pytest test setup is prepared
       When release changelog from task is inclusive is executed
       Then first is in task_ids
       Then second is in task_ids
 
-    @bdd-release-changelog-release-changelog-from-task-rejects-multiple-selectors @needs-review
+    @req-REQ-0046 @ac-AC-0513
     Example: Release Changelog From Task Rejects Multiple Selectors
       Given the pytest test setup is prepared
       When release changelog from task rejects multiple selectors is executed
       Then result.exit_code does not equal 0
 
-    @bdd-release-changelog-release-changelog-fail-on-omitted @needs-review
+    @req-REQ-0046 @ac-AC-0511
     Example: Release Changelog Fail On Omitted
       Given the pytest test setup is prepared
       When release changelog fail on omitted is executed
       Then result.exit_code does not equal 0
       Then 'Omitted tasks found' is in omitted_text
 
-    @bdd-release-changelog-release-changelog-include-status-implemented @needs-review
+    @req-REQ-0046 @ac-AC-0514
     Example: Release Changelog Include Status Implemented
       Given the pytest test setup is prepared
       When release changelog include status implemented is executed
       Then failed is in task_ids
 
-    @bdd-release-changelog-release-changelog-target-changelog-and-release-date @needs-review
+    @req-REQ-0046 @ac-AC-0517
     Example: Release Changelog Target Changelog And Release Date
       Given the pytest test setup is prepared
       When release changelog target changelog and release date is executed
@@ -75,32 +75,32 @@ Feature: Release Changelog
       Then md_result2.exit_code equals 0
       Then '## Changelog edit guidance' is not in md_result2.stdout
 
-    @bdd-release-changelog-release-changelog-include-status-rejects-unknown @needs-review
+    @req-REQ-0046 @ac-AC-0515
     Example: Release Changelog Include Status Rejects Unknown
       Given the pytest test setup is prepared
       When release changelog include status rejects unknown is executed
       Then result.exit_code does not equal 0
 
-    @bdd-release-changelog-release-list-sorts-by-boundary
+    @req-REQ-0046 @ac-AC-0518
     Example: Release listing is ordered by boundary task
       Given several release records exist at different task boundaries
       When releases are listed
       Then releases are ordered by their boundary tasks
 
-    @bdd-release-changelog-release-show-returns-record
+    @req-REQ-0046 @ac-AC-0519
     Example: Release show returns the persisted release record
       Given a release record has been tagged
       When that release is shown
       Then its persisted version and boundary metadata are returned
 
-    @bdd-release-changelog-default-filter-reports-omitted-tasks
+    @req-REQ-0046 @ac-AC-0510
     Example: Changelog defaults to done tasks and reports omissions
       Given a release range contains done and unfinished tasks
       When a changelog is generated with default status selection
       Then done tasks are included
       And omitted unfinished tasks are reported
 
-    @bdd-release-changelog-bootstrap-since-task-is-supported
+    @req-REQ-0046 @ac-AC-0509
     Example: Changelog supports a bootstrap starting task
       Given no prior release boundary is available
       When changelog generation starts from an explicit task

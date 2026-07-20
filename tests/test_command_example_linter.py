@@ -126,8 +126,7 @@ def _extract_command_tokens(line: str) -> str | None:
     return two_token
 
 
-# sw: f=specs/behavior/features/command_example_linter/command-example-linter.feature
-# sw: s=@bdd-command-example-linter-docs-do-not-reference-removed-commands
+# specmason: req=REQ-0010 ac=AC-0103
 def test_docs_do_not_reference_removed_commands() -> None:
     for path in ALL_PATHS:
         if not path.exists():
@@ -137,8 +136,7 @@ def test_docs_do_not_reference_removed_commands() -> None:
             assert needle not in text, f"{path}: found forbidden '{needle}'"
 
 
-# sw: f=specs/behavior/features/command_example_linter/command-example-linter.feature
-# sw: s=@bdd-command-example-linter-command-examples-in-docs-use-valid-commands
+# specmason: req=REQ-0010 ac=AC-0102
 def test_command_examples_in_docs_use_valid_commands() -> None:
     failures: list[str] = []
     for path in ALL_PATHS:
@@ -188,8 +186,7 @@ def test_command_examples_in_docs_use_valid_commands() -> None:
     assert not failures, "\n".join(failures)
 
 
-# sw: f=specs/behavior/features/command_example_linter/command-example-linter.feature
-# sw: s=@bdd-command-example-linter-readme-skill-path-matches-repository
+# specmason: req=REQ-0010 ac=AC-0104
 def test_readme_skill_path_matches_repository() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "skills/taskledger/SKILL.md" in readme

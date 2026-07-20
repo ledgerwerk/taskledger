@@ -153,6 +153,7 @@ def test_cached_command_cache_disables_cleanly_without_typer_hook(
         typer_testing._get_command = restored_get_command  # type: ignore[attr-defined]
 
 
+# specmason: req=REQ-0071 ac=AC-0798
 def test_pipeline_commands_print_no_config_message(tmp_path: Path) -> None:
     """The first reported Codecov failure must keep passing."""
     from taskledger.cli import app

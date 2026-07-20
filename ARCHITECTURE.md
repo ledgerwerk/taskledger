@@ -508,7 +508,7 @@ Cross-cutting concerns that span multiple layers:
 - **Atomic file writes**: All file writes go through `ledgercore` atomic primitives (temp file, flush, fsync, `os.replace`, directory fsync) to prevent corruption.
 - **Action and event logging (default-on)**: Mutations append immutable `TaskEvent` records to the ledger-level `events/` directory under `.taskledger/ledgers/<ledger_ref>/`. Action and event logging is enabled by default; set `[event_logging] enabled = false` to disable new records. Existing records remain readable. Source: `taskledger/storage/events.py`, `taskledger/services/task_events.py`, `taskledger/domain/event.py`.
 - **Exit code taxonomy**: Errors map to stable exit codes (0=success, 1=generic, 2=bad input, 3=workflow rejection, 4=lock conflict, 5=missing, 6=storage, 7=validation failed).
-- **Opaque cross-ledger references**: Task refs, plan versions, file links, and handoff targets remain opaque strings. Taskledger does not interpret ledgercore global refs, archledger IDs, SpecWeave feature paths, or other external system identifiers.
+- **Opaque cross-ledger references**: Task refs, plan versions, file links, and handoff targets remain opaque strings. Taskledger does not interpret external system identifiers.
 - **Read-model reuse**: `view`, `status`, `tree`, and `monitor` commands consume service-level read models. These presentations are read-only and do not bypass lifecycle services.
 - **Editable plan input**: `taskledger plan check` is a pure preflight parser in `taskledger/services/plan_input.py`. It rejects malformed YAML, normalizes the `description` alias to `text`, and surfaces indexed issues before any plan upsert. `plan lint` runs additional structural checks; `plan review` renders the approval brief.
 

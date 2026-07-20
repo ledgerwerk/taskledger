@@ -56,30 +56,37 @@ def _get_log_count(tmp_path: Path) -> int:
 class TestCommandKeyParsing:
     """Test argv command key extraction."""
 
+    # specmason: req=REQ-0035 ac=AC-0393
     def test_simple_command(self) -> None:
         assert _command_key_from_argv(("view",)) == "view"
 
+    # specmason: req=REQ-0035 ac=AC-0382
     def test_command_with_global_json_option(self) -> None:
         assert _command_key_from_argv(("--json", "view")) == "view"
 
+    # specmason: req=REQ-0035 ac=AC-0384
     def test_command_with_global_cwd_option(self) -> None:
         assert _command_key_from_argv(("--cwd", "/tmp/x", "view")) == "view"
 
+    # specmason: req=REQ-0035 ac=AC-0384
     def test_command_with_global_cwd_equals_option(self) -> None:
         assert _command_key_from_argv(("--cwd=/tmp/x", "view")) == "view"
 
+    # specmason: req=REQ-0035 ac=AC-0393
     def test_nested_command_two_word(self) -> None:
         assert (
             _command_key_from_argv(("plan", "show", "--task", "task-0001"))
             == "plan show"
         )
 
+    # specmason: req=REQ-0035 ac=AC-0393
     def test_nested_command_plan_review(self) -> None:
         assert (
             _command_key_from_argv(("plan", "review", "--task", "task-0001"))
             == "plan review"
         )
 
+    # specmason: req=REQ-0035 ac=AC-0377
     def test_nested_command_task_report(self) -> None:
         assert (
             _command_key_from_argv(
@@ -88,9 +95,11 @@ class TestCommandKeyParsing:
             == "task report"
         )
 
+    # specmason: req=REQ-0035 ac=AC-0393
     def test_nested_command_todo_done(self) -> None:
         assert _command_key_from_argv(("todo", "done", "todo-0001")) == "todo done"
 
+    # specmason: req=REQ-0035 ac=AC-0393
     def test_nested_command_implement_command(self) -> None:
         assert (
             _command_key_from_argv(("implement", "command", "pytest"))
@@ -100,6 +109,7 @@ class TestCommandKeyParsing:
     def test_empty_argv(self) -> None:
         assert _command_key_from_argv(()) is None
 
+    # specmason: req=REQ-0035 ac=AC-0393
     def test_unknown_command(self) -> None:
         # Unknown commands should return the first part
         assert _command_key_from_argv(("unknown_cmd",)) == "unknown_cmd"
@@ -108,43 +118,41 @@ class TestCommandKeyParsing:
 class TestEnvironmentVariable:
     """Test TASKLEDGER_NO_LOG environment variable."""
 
+    # specmason: req=REQ-0035 ac=AC-0385
     def test_no_env_var(self) -> None:
         assert not _env_no_log()
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-env-var-1
+    # specmason: req=REQ-0035 ac=AC-0385
     def test_env_var_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TASKLEDGER_NO_LOG", "1")
         assert _env_no_log()
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-env-var-true
+    # specmason: req=REQ-0035 ac=AC-0389
     def test_env_var_true(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TASKLEDGER_NO_LOG", "true")
         assert _env_no_log()
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-env-var-yes
+    # specmason: req=REQ-0035 ac=AC-0390
     def test_env_var_yes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TASKLEDGER_NO_LOG", "yes")
         assert _env_no_log()
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-env-var-on
+    # specmason: req=REQ-0035 ac=AC-0387
     def test_env_var_on(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TASKLEDGER_NO_LOG", "on")
         assert _env_no_log()
 
+    # specmason: req=REQ-0035 ac=AC-0385
     def test_env_var_0(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TASKLEDGER_NO_LOG", "0")
         assert not _env_no_log()
 
+    # specmason: req=REQ-0035 ac=AC-0390
     def test_env_var_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TASKLEDGER_NO_LOG", "false")
         assert not _env_no_log()
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-env-var-case-insensitive
+    # specmason: req=REQ-0035 ac=AC-0386
     def test_env_var_case_insensitive(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TASKLEDGER_NO_LOG", "TRUE")
         assert _env_no_log()
@@ -153,33 +161,28 @@ class TestEnvironmentVariable:
 class TestShouldSkipRecording:
     """Test the recording skip decision logic."""
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-skip-when-no-log-flag-set
+    # specmason: req=REQ-0035 ac=AC-0400
     def test_skip_when_no_log_flag_set(self) -> None:
         config = AgentLoggingConfig(enabled=True, capture_taskledger_cli=True)
         assert _should_skip_cli_recording(argv=("view",), config=config, no_log=True)
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-skip-when-env-var-set
+    # specmason: req=REQ-0035 ac=AC-0399
     def test_skip_when_env_var_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TASKLEDGER_NO_LOG", "1")
         config = AgentLoggingConfig(enabled=True, capture_taskledger_cli=True)
         assert _should_skip_cli_recording(argv=("view",), config=config, no_log=False)
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-skip-when-disabled
+    # specmason: req=REQ-0035 ac=AC-0398
     def test_skip_when_disabled(self) -> None:
         config = AgentLoggingConfig(enabled=False, capture_taskledger_cli=True)
         assert _should_skip_cli_recording(argv=("view",), config=config, no_log=False)
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-skip-when-cli-capture-disabled
+    # specmason: req=REQ-0035 ac=AC-0397
     def test_skip_when_cli_capture_disabled(self) -> None:
         config = AgentLoggingConfig(enabled=True, capture_taskledger_cli=False)
         assert _should_skip_cli_recording(argv=("view",), config=config, no_log=False)
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-skip-human-oriented-when-capture-disabled
+    # specmason: req=REQ-0035 ac=AC-0395
     def test_skip_human_oriented_when_capture_disabled(self) -> None:
         config = AgentLoggingConfig(
             enabled=True,
@@ -190,6 +193,7 @@ class TestShouldSkipRecording:
             argv=("task", "report"), config=config, no_log=False
         )
 
+    # specmason: req=REQ-0035 ac=AC-0395
     def test_dont_skip_human_oriented_when_capture_enabled(self) -> None:
         config = AgentLoggingConfig(
             enabled=True,
@@ -200,8 +204,7 @@ class TestShouldSkipRecording:
             argv=("task", "report"), config=config, no_log=False
         )
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-skip-safe-read-only-when-capture-disabled
+    # specmason: req=REQ-0035 ac=AC-0396
     def test_skip_safe_read_only_when_capture_disabled(self) -> None:
         config = AgentLoggingConfig(
             enabled=True,
@@ -210,6 +213,7 @@ class TestShouldSkipRecording:
         )
         assert _should_skip_cli_recording(argv=("view",), config=config, no_log=False)
 
+    # specmason: req=REQ-0035 ac=AC-0396
     def test_dont_skip_safe_read_only_when_capture_enabled(self) -> None:
         config = AgentLoggingConfig(
             enabled=True,
@@ -220,6 +224,7 @@ class TestShouldSkipRecording:
             argv=("view",), config=config, no_log=False
         )
 
+    # specmason: req=REQ-0035 ac=AC-0392
     def test_dont_skip_mutation(self) -> None:
         config = AgentLoggingConfig(
             enabled=True,
@@ -232,8 +237,7 @@ class TestShouldSkipRecording:
             argv=("task", "create"), config=config, no_log=False
         )
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-precedence-no-log-overrides-config
+    # specmason: req=REQ-0035 ac=AC-0394
     def test_precedence_no_log_overrides_config(self) -> None:
         config = AgentLoggingConfig(
             enabled=True,
@@ -246,8 +250,7 @@ class TestShouldSkipRecording:
 class TestNoLogIntegration:
     """Integration tests for --no-log flag."""
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-no-log-flag-suppresses-logging
+    # specmason: req=REQ-0035 ac=AC-0391
     def test_no_log_flag_suppresses_logging(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         _enable_agent_logging(tmp_path)
@@ -260,8 +263,7 @@ class TestNoLogIntegration:
         log_count = _get_log_count(tmp_path)
         assert log_count == 0
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-normal-command-still-logs
+    # specmason: req=REQ-0035 ac=AC-0393
     def test_normal_command_still_logs(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         _enable_agent_logging(tmp_path)
@@ -274,8 +276,7 @@ class TestNoLogIntegration:
         log_count = _get_log_count(tmp_path)
         assert log_count == 1
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-env-var-suppresses-logging
+    # specmason: req=REQ-0035 ac=AC-0388
     def test_env_var_suppresses_logging(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -291,8 +292,7 @@ class TestNoLogIntegration:
         log_count = _get_log_count(tmp_path)
         assert log_count == 0
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-no-log-mutation-still-executes
+    # specmason: req=REQ-0035 ac=AC-0392
     def test_no_log_mutation_still_executes(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         _enable_agent_logging(tmp_path)
@@ -331,8 +331,7 @@ class TestNoLogIntegration:
 class TestConfigFiltering:
     """Test config-based command filtering."""
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-capture-safe-read-only-false-skips-view
+    # specmason: req=REQ-0035 ac=AC-0378
     def test_capture_safe_read_only_false_skips_view(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
@@ -356,8 +355,7 @@ class TestConfigFiltering:
         logs_after_status = _get_log_count(tmp_path)
         assert logs_after_status == initial_logs
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-capture-safe-read-only-false-still-logs-mutations
+    # specmason: req=REQ-0035 ac=AC-0379
     def test_capture_safe_read_only_false_still_logs_mutations(
         self, tmp_path: Path
     ) -> None:
@@ -386,8 +384,7 @@ class TestConfigFiltering:
         final_logs = _get_log_count(tmp_path)
         assert final_logs > initial_logs
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-capture-human-oriented-false-skips-report
+    # specmason: req=REQ-0035 ac=AC-0377
     def test_capture_human_oriented_false_skips_report(self, tmp_path: Path) -> None:
         # Note: This test uses 'commands' (root-level) instead of 'task report' (nested)
         # because filtering is only applied at the app level, not within command groups.
@@ -418,8 +415,7 @@ class TestConfigFiltering:
 class TestCommandsCommand:
     """Test the taskledger commands CLI."""
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-commands-list-all
+    # specmason: req=REQ-0035 ac=AC-0384
     def test_commands_list_all(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         result = runner.invoke(app, ["--cwd", str(tmp_path), "commands"])
@@ -429,8 +425,7 @@ class TestCommandsCommand:
         assert "stable_for_agents" in result.stdout
         assert "safe_read_only" in result.stdout
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-commands-filter-by-audience
+    # specmason: req=REQ-0035 ac=AC-0380
     def test_commands_filter_by_audience(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         result = runner.invoke(
@@ -440,8 +435,7 @@ class TestCommandsCommand:
         assert "task report" in result.stdout
         assert "view" not in result.stdout
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-commands-filter-by-effect
+    # specmason: req=REQ-0035 ac=AC-0381
     def test_commands_filter_by_effect(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         result = runner.invoke(
@@ -451,8 +445,7 @@ class TestCommandsCommand:
         assert "view" in result.stdout
         assert "task create" not in result.stdout
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-commands-json-output
+    # specmason: req=REQ-0035 ac=AC-0382
     def test_commands_json_output(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "commands"])
@@ -468,8 +461,7 @@ class TestCommandsCommand:
         assert "audience" in result_data["commands"][0]
         assert "effect" in result_data["commands"][0]
 
-    # sw: f=specs/behavior/features/no_log_feature/no-log-feature.feature
-    # sw: s=@bdd-no-log-feature-commands-json-with-filters
+    # specmason: req=REQ-0035 ac=AC-0383
     def test_commands_json_with_filters(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         result = runner.invoke(

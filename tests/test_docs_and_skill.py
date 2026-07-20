@@ -5,8 +5,6 @@ import re
 import shlex
 from pathlib import Path
 
-import pytest
-
 from taskledger.command_inventory import COMMAND_METADATA
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,14 +42,15 @@ def test_docs_directory_uses_markdown_only() -> None:
     assert not list((ROOT / "docs").glob("*.rst"))
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-skills-are-not-packaged-resources
+# specmason: req=REQ-0016 ac=AC-0171
 def test_skills_are_not_packaged_resources() -> None:
     assert not (ROOT / "taskledger" / "skills").exists()
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "skills/taskledger" not in pyproject
 
 
+# specmason: req=REQ-0016 ac=AC-0156
+# specmason: req=REQ-0016 ac=AC-0165
 def test_api_docs_mentions_all_task_first_command_groups() -> None:
     api_text = (ROOT / "API.md").read_text(encoding="utf-8")
     for name in (
@@ -77,8 +76,7 @@ def test_api_docs_mentions_all_task_first_command_groups() -> None:
         assert f"`{name}`" in api_text
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-public-api-docs-match-module-exports
+# specmason: req=REQ-0016 ac=AC-0163
 def test_public_api_docs_match_module_exports() -> None:
     api_text = (ROOT / "API.md").read_text(encoding="utf-8")
     api_md = (ROOT / "docs" / "api.md").read_text(encoding="utf-8")
@@ -92,8 +90,7 @@ def test_public_api_docs_match_module_exports() -> None:
             assert f"`{name}`" in api_md, f"docs/api.md missing {module_name}.{name}"
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-readme-mentions-root-alias-and-json-envelope
+# specmason: req=REQ-0016 ac=AC-0165
 def test_readme_mentions_root_alias_and_json_envelope() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "--root" in readme
@@ -101,8 +98,7 @@ def test_readme_mentions_root_alias_and_json_envelope() -> None:
     assert '"command": "status"' in readme
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-skill-contains-strict-agent-protocol
+# specmason: req=REQ-0016 ac=AC-0168
 def test_skill_contains_strict_agent_protocol() -> None:
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
     for heading in (
@@ -134,8 +130,7 @@ def test_skill_contains_strict_agent_protocol() -> None:
     assert "Do not create changelog entries or edit" in skill
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-docs-define-agent-golden-path-and-advanced-surfaces
+# specmason: req=REQ-0016 ac=AC-0159
 def test_docs_define_agent_golden_path_and_advanced_surfaces() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     public_surface = (ROOT / "docs" / "public_surface.md").read_text(encoding="utf-8")
@@ -163,8 +158,7 @@ def test_skill_has_single_repair_warning() -> None:
     assert skill.count("Do not use repair commands") == 1
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-read-report-export-terminology-is-consolidated
+# specmason: req=REQ-0016 ac=AC-0164
 def test_read_report_export_terminology_is_consolidated() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
@@ -182,8 +176,7 @@ def test_read_report_export_terminology_is_consolidated() -> None:
     assert "task transcript" in public_surface
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-planning-guidance-docs-are-present
+# specmason: req=REQ-0016 ac=AC-0162
 def test_planning_guidance_docs_are_present() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
@@ -201,8 +194,7 @@ def test_planning_guidance_docs_are_present() -> None:
     assert 'plan_guidance(Path.cwd(), "task-0001")' in api_md
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-plan-revision-docs-and-skill-rules-are-present
+# specmason: req=REQ-0016 ac=AC-0161
 def test_plan_revision_docs_and_skill_rules_are_present() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
@@ -222,13 +214,7 @@ def test_plan_revision_docs_and_skill_rules_are_present() -> None:
     assert "taskledger plan review" in command_contract
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/docs_and_skill/docs-and-skill.feature"),
-    scenario=(
-        "@bdd-docs-and-skill-worker-pipeline-docs-cover-guided-next-action-"
-        "and-worker-refs"
-    ),
-)
+# specmason: req=REQ-0016 ac=AC-0174
 def test_worker_pipeline_docs_cover_guided_next_action_and_worker_refs() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
@@ -247,8 +233,7 @@ def test_worker_pipeline_docs_cover_guided_next_action_and_worker_refs() -> None
     assert "context_command" in skill
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-transfer-docs-cover-project-identity-and-dry-run
+# specmason: req=REQ-0016 ac=AC-0173
 def test_transfer_docs_cover_project_identity_and_dry_run() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
@@ -268,8 +253,7 @@ def test_transfer_docs_cover_project_identity_and_dry_run() -> None:
     assert "taskledger import ./taskledger-transfer.tar.gz --dry-run" in skill
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-sync-docs-promote-git-pull-push-convenience-commands
+# specmason: req=REQ-0016 ac=AC-0172
 def test_sync_docs_promote_git_pull_push_convenience_commands() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
@@ -283,8 +267,7 @@ def test_sync_docs_promote_git_pull_push_convenience_commands() -> None:
     assert 'cd "$(taskledger sync git cd)"' in sync_doc
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-docs-do-not-reference-removed-commands
+# specmason: req=REQ-0016 ac=AC-0160
 def test_docs_do_not_reference_removed_commands() -> None:
     forbidden = [
         "taskledger repo ",
@@ -309,8 +292,7 @@ def test_docs_do_not_reference_removed_commands() -> None:
             assert needle not in text, f"{path}: {needle}"
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-bdd-docs-and-skill-prefer-specweave-and-plain-pytest
+# specmason: req=REQ-0016 ac=AC-0161
 def test_docs_and_skill_describe_isolated_ledger() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
@@ -331,6 +313,7 @@ def test_docs_and_skill_describe_isolated_ledger() -> None:
         assert "archledger-candidate" not in text
 
 
+# specmason: req=REQ-0016 ac=AC-0157
 def test_behavior_spec_docs_do_not_promote_bdd_runners() -> None:
     """Verify docs do not reference an external BDD runner or pytest-bdd/behave.
 
@@ -350,6 +333,7 @@ def test_behavior_spec_docs_do_not_promote_bdd_runners() -> None:
     assert "behave" not in architecture.lower()
 
 
+# specmason: req=REQ-0016 ac=AC-0166
 def test_readme_links_exist() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", readme):
@@ -361,23 +345,20 @@ def test_readme_links_exist() -> None:
         assert (ROOT / local_target).exists(), target
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-readme-skill-path-matches-repository
+# specmason: req=REQ-0016 ac=AC-0166
 def test_readme_skill_path_matches_repository() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "skills/taskledger/SKILL.md" in readme
     assert "taskledger/skills/taskledger/SKILL.md" not in readme
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-skill-uses-only-canonical-handoff-group
+# specmason: req=REQ-0016 ac=AC-0170
 def test_skill_uses_only_canonical_handoff_group() -> None:
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
     assert "handoff-protocol" not in skill
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-command-examples-reference-registered-commands
+# specmason: req=REQ-0016 ac=AC-0158
 def test_command_examples_reference_registered_commands() -> None:
     for path in DOC_PATHS:
         for line_number, command_line in _taskledger_example_lines(path):
@@ -432,8 +413,7 @@ def _command_key(tokens: list[str]) -> str | None:
     return two_token
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-service-boundary-whitelist-doc-matches-test-constants
+# specmason: req=REQ-0016 ac=AC-0167
 def test_service_boundary_whitelist_doc_matches_test_constants() -> None:
     """Verify docs/service_boundary_whitelist.md tracks current whitelist entries."""
     from tests.test_service_boundaries import (
@@ -464,6 +444,7 @@ def test_service_boundary_whitelist_doc_matches_test_constants() -> None:
         assert module_ref in doc, f"CLI services import missing from doc: {module_ref}"
 
 
+# specmason: req=REQ-0016 ac=AC-0167
 def test_service_boundary_whitelist_doc_matches_cli_import_whitelist_exactly() -> None:
     """Verify CLI services import refs in doc match test whitelist as exact sets."""
     from tests.test_service_boundaries import CLI_SERVICES_IMPORT_WHITELIST
@@ -483,8 +464,7 @@ def test_service_boundary_whitelist_doc_matches_cli_import_whitelist_exactly() -
     )
 
 
-# sw: f=specs/behavior/features/docs_and_skill/docs-and-skill.feature
-# sw: s=@bdd-docs-and-skill-skill-requires-user-requested-reviews-to-be-recorded
+# specmason: req=REQ-0016 ac=AC-0169
 def test_skill_requires_user_requested_reviews_to_be_recorded() -> None:
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
     assert "## User-requested review protocol" in skill
@@ -496,6 +476,7 @@ def test_skill_requires_user_requested_reviews_to_be_recorded() -> None:
     ) in skill
 
 
+# specmason: req=REQ-0016 ac=AC-0168
 def test_skill_documents_release_boundary_protocol() -> None:
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
     assert "## Release boundary protocol" in skill
@@ -528,6 +509,7 @@ def test_taskledger_runtime_has_no_bdd_or_archledger_coupling() -> None:
         assert pattern not in haystack, f"Forbidden pattern found in runtime: {pattern}"
 
 
+# specmason: req=REQ-0016 ac=AC-0168
 def test_skill_documents_structured_approval_presentation_protocol() -> None:
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
     assert "### Approval presentation protocol" in skill

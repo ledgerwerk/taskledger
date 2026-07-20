@@ -11,8 +11,7 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-# sw: f=specs/behavior/features/find_code_clones_script/find-code-clones-script.feature
-# sw: s=@bdd-find-code-clones-script-find-code-clones-script-json-and-include-tests
+# specmason: req=REQ-0022 ac=AC-0294
 def test_find_code_clones_script_json_and_include_tests(tmp_path: Path) -> None:
     _write(
         tmp_path / "taskledger" / "a.py",

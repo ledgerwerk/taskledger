@@ -68,8 +68,7 @@ def _create_and_activate_task(tmp_path: Path, slug: str = "test-task") -> None:
 # -- default-on tests --
 
 
-# sw: f=specs/behavior/features/event_logging_config/event-logging-config.feature
-# sw: s=@bdd-event-logging-config-runtime-events-enabled-by-default
+# specmason: req=REQ-0019 ac=AC-0279
 def test_runtime_events_enabled_by_default_writes_events(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _create_and_activate_task(tmp_path)
@@ -88,8 +87,7 @@ def test_runtime_events_enabled_by_default_writes_events(tmp_path: Path) -> None
     assert any(e["event"] == "task.created" for e in events)
 
 
-# sw: f=specs/behavior/features/event_logging_config/event-logging-config.feature
-# sw: s=@bdd-event-logging-config-task-events-reads-default-action-events
+# specmason: req=REQ-0019 ac=AC-0281
 def test_task_events_reads_default_action_events(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _create_and_activate_task(tmp_path)
@@ -104,8 +102,7 @@ def test_task_events_reads_default_action_events(tmp_path: Path) -> None:
     assert len(payload["result"]["items"]) > 0
 
 
-# sw: f=specs/behavior/features/event_logging_config/event-logging-config.feature
-# sw: s=@bdd-event-logging-config-lock-break-writes-events-by-default
+# specmason: req=REQ-0019 ac=AC-0277
 def test_lock_break_writes_events_by_default(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert (
@@ -161,8 +158,8 @@ def test_lock_break_writes_events_by_default(tmp_path: Path) -> None:
 # -- opt-out tests --
 
 
-# sw: f=specs/behavior/features/event_logging_config/event-logging-config.feature
-# sw: s=@bdd-event-logging-config-false-disables-new-action-events
+# specmason: req=REQ-0019 ac=AC-0278
+# specmason: req=REQ-0019 ac=AC-0280
 def test_event_logging_false_disables_new_action_events(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _disable_event_logging(tmp_path)
@@ -183,8 +180,7 @@ def test_event_logging_false_disables_new_action_events(tmp_path: Path) -> None:
     assert payload["result"]["items"] == []
 
 
-# sw: f=specs/behavior/features/event_logging_config/event-logging-config.feature
-# sw: s=@bdd-event-logging-config-existing-events-readable-after-disable
+# specmason: req=REQ-0019 ac=AC-0276
 def test_existing_events_readable_after_disable(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _create_and_activate_task(tmp_path)

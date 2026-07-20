@@ -155,8 +155,7 @@ Use worker-tagged todos when the pipeline is enabled.
     assert "worker_step_id" not in todos[1]
 
 
-# sw: f=specs/behavior/features/worker_pipeline_todos/worker-pipeline-todos.feature
-# sw: s=@bdd-worker-pipeline-todos-pipeline-next-returns-first-open-worker-todo
+# specmason: req=REQ-0076 ac=AC-0823
 def test_pipeline_next_returns_first_open_worker_todo(tmp_path: Path) -> None:
     _setup_planning_task(tmp_path, with_pipeline=True)
     _approve_plan(
@@ -186,8 +185,7 @@ Drive pipeline-next from worker-tagged todos.
     assert payload["result"]["step"]["id"] == "tester"
 
 
-# sw: f=specs/behavior/features/worker_pipeline_todos/worker-pipeline-todos.feature
-# sw: s=@bdd-worker-pipeline-todos-plan-todo-worker-step-requires-enabled-pipeline
+# specmason: req=REQ-0076 ac=AC-0824
 def test_plan_todo_worker_step_requires_enabled_pipeline(tmp_path: Path) -> None:
     _setup_planning_task(tmp_path, with_pipeline=False)
 
@@ -219,6 +217,7 @@ This should fail because no worker pipeline is configured.
     assert "requires an enabled worker pipeline" in output
 
 
+# specmason: req=REQ-0076 ac=AC-0824
 def test_task_records_do_not_gain_worker_null_fields_without_worker_pipeline(
     tmp_path: Path,
 ) -> None:

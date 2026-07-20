@@ -1,57 +1,37 @@
-@area-taskledger_branch_scoped_ledgers @feature-taskledger-branch-scoped-ledgers @generated @needs-review
+@area-taskledger_branch_scoped_ledgers @feature-taskledger-branch-scoped-ledgers @generated
 Feature: Taskledger Branch Scoped Ledgers
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-taskledger-branch-scoped-ledgers
   Rule: Taskledger Branch Scoped Ledgers
 
-    @bdd-taskledger-branch-scoped-ledgers-two-ledgers-can-each-have-task-0030-and-hide-active-task @needs-review
-    Example: Two Ledgers Can Each Have Task 0030 And Hide Active Task
-      Given the pytest test setup is prepared
-      When two ledgers can each have task 0030 and hide active task is executed
-      Then result.exit_code equals 0
-      Then result.exit_code equals 0
-      Then result.exit_code equals 0
-      Then 'task-0030' is in result.stdout
-      Then result.exit_code equals 0
-      Then result.exit_code equals 0
-      Then 'task-0030' is in result.stdout
-      Then result.exit_code does not equal 0
-      Then 'Feature task' is not in result.stdout
+    @req-REQ-0062 @ac-AC-0677
+    Example: Branch Ledgers Derive Task IDs Per Ledger
+      Given a project uses main and feature ledger references
+      When tasks are created on each ledger
+      Then each ledger derives its task IDs independently
 
-    @bdd-taskledger-branch-scoped-ledgers-ledger-fork-switch-status-and-doctor @needs-review
-    Example: Ledger Fork Switch Status And Doctor
-      Given the pytest test setup is prepared
-      When ledger fork switch status and doctor is executed
-      Then result.exit_code equals 0
-      Then 'Ledger ref: main' is in result.stdout
-      Then result.exit_code equals 0
-      Then 'forked ledger main -> feature-a' is in result.stdout
-      Then result.exit_code equals 0
-      Then 'feature-a (current)' is in result.stdout
-      Then result.exit_code equals 0
-      Then 'switched feature-a -> main' is in result.stdout
-      Then result.exit_code equals 0
-      Then 'Healthy: yes' is in result.stdout
+    @req-REQ-0062 @ac-AC-0675
+    Example: Ledger Status Reports Derived Next Task ID
+      Given the current ledger contains one task
+      When ledger status is inspected
+      Then the next task ID is derived from the ledger state
 
-    @bdd-taskledger-branch-scoped-ledgers-ledger-adopt-renumbers-on-collision @needs-review
-    Example: Ledger Adopt Renumbers On Collision
-      Given the pytest test setup is prepared
-      When ledger adopt renumbers on collision is executed
-      Then result.exit_code equals 0
-      Then 'renumbered' is in result.stdout
+    @req-REQ-0062 @ac-AC-0674
+    Example: Ledger Fork Switch And Doctor Use Sibling State
+      Given a project has a sibling ledger store
+      When a ledger is forked, switched, and inspected
+      Then the selected ledger state remains healthy
 
-    @bdd-taskledger-branch-scoped-ledgers-doctor-reports-legacy-unscoped-state @needs-review
-    Example: Doctor Reports Legacy Unscoped State
-      Given the pytest test setup is prepared
-      When doctor reports legacy unscoped state is executed
-      Then result.exit_code equals 0
-      Then 'Legacy unscoped path exists' is in result.stdout
+    @req-REQ-0062 @ac-AC-0673
+    Example: Release JSON Includes Ledger Reference
+      Given a release is listed for the current ledger
+      When release output is requested as JSON
+      Then the response includes the active ledger reference
 
-    @bdd-taskledger-branch-scoped-ledgers-release-json-includes-ledger-ref @needs-review
-    Example: Release Json Includes Ledger Ref
-      Given the pytest test setup is prepared
-      When release json includes ledger ref is executed
-      Then result.exit_code equals 0
-      Then '"ledger_ref": "main"' is in result.stdout
+    @req-REQ-0062 @ac-AC-0676
+    Example: Global References Remain Branch Agnostic
+      Given a task is created on a branch-scoped ledger
+      When its global reference is inspected
+      Then the reference does not encode the branch ledger

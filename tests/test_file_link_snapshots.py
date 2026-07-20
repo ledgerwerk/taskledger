@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from taskledger.cli import app
@@ -23,8 +22,7 @@ def _make_runner() -> CliRunner:
 runner = _make_runner()
 
 
-# sw: f=specs/behavior/features/file_link_snapshots/file-link-snapshots.feature
-# sw: s=@bdd-file-link-snapshots-existing-links-load-without-baseline-fields
+# specmason: req=REQ-0021 ac=AC-0289
 def test_existing_links_load_without_baseline_fields() -> None:
     link = FileLink.from_dict(
         {
@@ -42,8 +40,7 @@ def test_existing_links_load_without_baseline_fields() -> None:
     assert link.baseline_exists is None
 
 
-# sw: f=specs/behavior/features/file_link_snapshots/file-link-snapshots.feature
-# sw: s=@bdd-file-link-snapshots-new-links-record-baseline-fields
+# specmason: req=REQ-0021 ac=AC-0292
 def test_new_links_record_baseline_fields(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(ws, title="Link task", slug="link-task", description="x")
@@ -66,8 +63,7 @@ def test_new_links_record_baseline_fields(tmp_path: Path) -> None:
     assert link.target_type == "file"
 
 
-# sw: f=specs/behavior/features/file_link_snapshots/file-link-snapshots.feature
-# sw: s=@bdd-file-link-snapshots-binary-files-hash-without-decoding-errors
+# specmason: req=REQ-0021 ac=AC-0285
 def test_binary_files_hash_without_decoding_errors(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(ws, title="Binary task", slug="binary-task", description="x")
@@ -95,8 +91,7 @@ def test_binary_files_hash_without_decoding_errors(tmp_path: Path) -> None:
     )
 
 
-# sw: f=specs/behavior/features/file_link_snapshots/file-link-snapshots.feature
-# sw: s=@bdd-file-link-snapshots-modified-file-status
+# specmason: req=REQ-0021 ac=AC-0290
 def test_modified_file_status(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(ws, title="Modified task", slug="modified-task", description="x")
@@ -117,8 +112,7 @@ def test_modified_file_status(tmp_path: Path) -> None:
     assert payload["result"]["links"][0]["status"] == "modified"
 
 
-# sw: f=specs/behavior/features/file_link_snapshots/file-link-snapshots.feature
-# sw: s=@bdd-file-link-snapshots-deleted-file-status
+# specmason: req=REQ-0021 ac=AC-0286
 def test_deleted_file_status(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(ws, title="Deleted task", slug="deleted-task", description="x")
@@ -136,8 +130,7 @@ def test_deleted_file_status(tmp_path: Path) -> None:
     assert payload["result"]["links"][0]["status"] == "deleted"
 
 
-# sw: f=specs/behavior/features/file_link_snapshots/file-link-snapshots.feature
-# sw: s=@bdd-file-link-snapshots-new-file-status-from-missing-baseline
+# specmason: req=REQ-0021 ac=AC-0291
 def test_new_file_status_from_missing_baseline(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(ws, title="New file task", slug="new-file-task", description="x")
@@ -154,8 +147,7 @@ def test_new_file_status_from_missing_baseline(tmp_path: Path) -> None:
     assert payload["result"]["links"][0]["status"] == "new"
 
 
-# sw: f=specs/behavior/features/file_link_snapshots/file-link-snapshots.feature
-# sw: s=@bdd-file-link-snapshots-directory-status-is-unchanged-without-recursive-hashing
+# specmason: req=REQ-0021 ac=AC-0287
 def test_directory_status_is_unchanged_without_recursive_hashing(
     tmp_path: Path,
 ) -> None:
@@ -179,8 +171,7 @@ def test_directory_status_is_unchanged_without_recursive_hashing(
     assert link["status"] == "unchanged"
 
 
-# sw: f=specs/behavior/features/file_link_snapshots/file-link-snapshots.feature
-# sw: s=@bdd-file-link-snapshots-refresh-rebaselines-modified-file
+# specmason: req=REQ-0021 ac=AC-0293
 def test_refresh_rebaselines_modified_file(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(ws, title="Refresh task", slug="refresh-task", description="x")
@@ -214,13 +205,7 @@ def test_refresh_rebaselines_modified_file(tmp_path: Path) -> None:
     assert json.loads(after.stdout)["result"]["links"][0]["status"] == "unchanged"
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/file_link_snapshots/file-link-snapshots.feature"),
-    scenario=(
-        "@bdd-file-link-snapshots-existing-link-baseline-is-preserved-without-"
-        "explicit-snapshot"
-    ),
-)
+# specmason: req=REQ-0021 ac=AC-0288
 def test_existing_link_baseline_is_preserved_without_explicit_snapshot(
     tmp_path: Path,
 ) -> None:

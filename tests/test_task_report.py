@@ -45,8 +45,7 @@ def _invoke(args: list[str], cwd: Path) -> tuple[int, str, str]:
 
 
 class TestServiceReport:
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-full-markdown-includes-major-sections
+    # specmason: req=REQ-0061 ac=AC-0659
     def test_task_report_full_markdown_includes_major_sections(
         self, tmp_path: Path
     ) -> None:
@@ -73,8 +72,7 @@ class TestServiceReport:
         assert "## Worker Contract" not in content
         assert "## Required Output" not in content
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-planning-preset-excludes-impl-and-val
+    # specmason: req=REQ-0061 ac=AC-0666
     def test_task_report_planning_preset_excludes_impl_and_val(
         self, tmp_path: Path
     ) -> None:
@@ -94,8 +92,7 @@ class TestServiceReport:
         assert "## Validation" not in content
         assert "## Code Changes" not in content
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-implementation-preset-includes-code-reviews
+    # specmason: req=REQ-0061 ac=AC-0660
     def test_task_report_implementation_preset_includes_code_reviews(
         self, tmp_path: Path
     ) -> None:
@@ -119,8 +116,7 @@ class TestServiceReport:
         assert "## Code Reviews" in content
         assert "review-0001" in content
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-planning-report-includes-proposed-plan-details
+    # specmason: req=REQ-0061 ac=AC-0667
     def test_task_report_planning_report_includes_proposed_plan_details(
         self, tmp_path: Path
     ) -> None:
@@ -167,8 +163,7 @@ Render this proposed plan body in the task report.
         assert "Proposed todo is visible." in content
         assert "No accepted plan." in content
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-without-removes-sections
+    # specmason: req=REQ-0061 ac=AC-0671
     def test_task_report_without_removes_sections(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -188,8 +183,7 @@ Render this proposed plan body in the task report.
         assert "## Acceptance Criteria" not in content
         assert "## Summary" in content
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-explicit-sections-override-preset
+    # specmason: req=REQ-0061 ac=AC-0658
     def test_task_report_explicit_sections_override_preset(
         self, tmp_path: Path
     ) -> None:
@@ -211,8 +205,7 @@ Render this proposed plan body in the task report.
         assert "## Implementation" not in content
         assert "## Validation" not in content
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-archive-includes-events
+    # specmason: req=REQ-0061 ac=AC-0656
     def test_task_report_archive_includes_events(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -225,8 +218,7 @@ Render this proposed plan body in the task report.
 
         assert "## Events" in content
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-events-limit
+    # specmason: req=REQ-0061 ac=AC-0657
     def test_task_report_events_limit(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -243,8 +235,7 @@ Render this proposed plan body in the task report.
         assert isinstance(content, str)
         assert "## Events" in content
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-include-command-log-section
+    # specmason: req=REQ-0061 ac=AC-0661
     def test_task_report_include_command_log_section(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -258,6 +249,7 @@ Render this proposed plan body in the task report.
         assert isinstance(content, str)
         assert "## Command Transcript" in content
 
+    # specmason: req=REQ-0061 ac=AC-0671
     def test_task_report_unknown_section_fails(self, tmp_path: Path) -> None:
         from taskledger.errors import LaunchError
 
@@ -269,6 +261,7 @@ Render this proposed plan body in the task report.
                 exclude_sections=(),
             )
 
+    # specmason: req=REQ-0061 ac=AC-0668
     def test_task_report_unknown_preset_fails(self) -> None:
         from taskledger.errors import LaunchError
 
@@ -280,6 +273,7 @@ Render this proposed plan body in the task report.
                 exclude_sections=(),
             )
 
+    # specmason: req=REQ-0061 ac=AC-0657
     def test_task_report_negative_events_limit_fails(self, tmp_path: Path) -> None:
         from taskledger.errors import LaunchError
 
@@ -293,8 +287,7 @@ Render this proposed plan body in the task report.
                 options=TaskReportOptions(events_limit=-1),
             )
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-json-payload-is-structured
+    # specmason: req=REQ-0061 ac=AC-0663
     def test_task_report_json_payload_is_structured(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -317,8 +310,7 @@ Render this proposed plan body in the task report.
 
 
 class TestCLIReport:
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-stdout-markdown
+    # specmason: req=REQ-0061 ac=AC-0669
     def test_task_report_stdout_markdown(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -328,8 +320,7 @@ class TestCLIReport:
         assert f"# Task {task_id}" in stdout
         assert "## Summary" in stdout
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-output-writes-file
+    # specmason: req=REQ-0061 ac=AC-0665
     def test_task_report_output_writes_file(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -352,8 +343,7 @@ class TestCLIReport:
         content = output_path.read_text()
         assert f"# Task {task_id}" in content
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-output-json
+    # specmason: req=REQ-0061 ac=AC-0664
     def test_task_report_output_json(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -378,8 +368,7 @@ class TestCLIReport:
         assert data["result"]["kind"] == "task_report"
         assert data["result"]["output_path"] == str(output_path)
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-uses-active-task-default
+    # specmason: req=REQ-0061 ac=AC-0670
     def test_task_report_uses_active_task_default(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -392,8 +381,7 @@ class TestCLIReport:
         assert exit_code == 0
         assert f"# Task {task_id}" in stdout
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-preset-planning
+    # specmason: req=REQ-0061 ac=AC-0668
     def test_task_report_preset_planning(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_approved_task(ws, allow_lint_errors=True)
@@ -413,8 +401,7 @@ class TestCLIReport:
         assert "## Plans" in stdout
         assert "## Implementation" not in stdout
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-without-todos-and-criteria
+    # specmason: req=REQ-0061 ac=AC-0672
     def test_task_report_without_todos_and_criteria(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -437,8 +424,7 @@ class TestCLIReport:
         assert "## Acceptance Criteria" not in stdout
         assert "## Summary" in stdout
 
-    # sw: f=specs/behavior/features/task_report/report.feature
-    # sw: s=@bdd-task-report-task-report-invalid-format
+    # specmason: req=REQ-0061 ac=AC-0662
     def test_task_report_invalid_format(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)

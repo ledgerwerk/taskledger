@@ -42,8 +42,7 @@ def _json(result) -> dict[str, object]:
     return json.loads(result.stdout)
 
 
-# sw: f=specs/behavior/features/locks_audit/locks-audit.feature
-# sw: s=@bdd-locks-audit-break-lock-writes-audit-file-and-repair-event
+# specmason: req=REQ-0031 ac=AC-0358
 def test_break_lock_writes_audit_file_and_repair_event(tmp_path: Path) -> None:
     _init_project(tmp_path)
     _enable_event_logging(tmp_path)
@@ -105,8 +104,7 @@ def test_break_lock_writes_audit_file_and_repair_event(tmp_path: Path) -> None:
     assert any(event["event"] == "repair.lock_broken" for event in events)
 
 
-# sw: f=specs/behavior/features/locks_audit/locks-audit.feature
-# sw: s=@bdd-locks-audit-stale-lock-blocks-new-run-until-explicit-break
+# specmason: req=REQ-0031 ac=AC-0359
 def test_stale_lock_blocks_new_run_until_explicit_break(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert (

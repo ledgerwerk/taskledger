@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 
 LEGACY_MODULE_PATHS = {
@@ -62,45 +60,20 @@ def test_legacy_modules_are_removed() -> None:
         assert not (ROOT / relative_path).exists(), relative_path
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/legacy_cleanup_contracts/legacy-cleanup-"
-        "contracts.feature"
-    ),
-    scenario=(
-        "@bdd-legacy-cleanup-contracts-package-initializers-do-not-use-star-imports"
-    ),
-)
+# specmason: req=REQ-0028 ac=AC-0334
 def test_package_initializers_do_not_use_star_imports() -> None:
     for relative_path in ("taskledger/__init__.py", "taskledger/api/__init__.py"):
         text = (ROOT / relative_path).read_text(encoding="utf-8")
         assert "import *" not in text
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/legacy_cleanup_contracts/legacy-cleanup-"
-        "contracts.feature"
-    ),
-    scenario=(
-        "@bdd-legacy-cleanup-contracts-v2-storage-does-not-import-storage-facade"
-    ),
-)
+# specmason: req=REQ-0028 ac=AC-0335
 def test_v2_storage_does_not_import_storage_facade() -> None:
     text = (ROOT / "taskledger/storage/task_store.py").read_text(encoding="utf-8")
     assert "from taskledger.storage import" not in text
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/legacy_cleanup_contracts/legacy-cleanup-"
-        "contracts.feature"
-    ),
-    scenario=(
-        "@bdd-legacy-cleanup-contracts-domain-models-does-not-import-legacy-"
-        "models-package"
-    ),
-)
+# specmason: req=REQ-0028 ac=AC-0333
 def test_domain_models_does_not_import_legacy_models_package() -> None:
     text = (ROOT / "taskledger/domain/models.py").read_text(encoding="utf-8")
     assert "from taskledger.models import" not in text

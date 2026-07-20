@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
 from typer.testing import CliRunner
 
 from taskledger.cli import app
@@ -54,14 +53,12 @@ def _registered_command_paths() -> set[str]:
     return paths
 
 
-# sw: f=specs/behavior/features/cli_command_contract/cli-command-contract.feature
-# sw: s=@bdd-cli-command-contract-removed-aliases-are-not-registered
+# specmason: req=REQ-0007 ac=AC-0085
 def test_removed_aliases_are_not_registered() -> None:
     assert REMOVED_COMMANDS.isdisjoint(_registered_command_paths())
 
 
-# sw: f=specs/behavior/features/cli_command_contract/cli-command-contract.feature
-# sw: s=@bdd-cli-command-contract-commands-do-not-register-local-json-options
+# specmason: req=REQ-0007 ac=AC-0083
 def test_commands_do_not_register_local_json_options() -> None:
     import inspect
 
@@ -84,15 +81,7 @@ def test_commands_do_not_register_local_json_options() -> None:
     assert not offenders
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/cli_command_contract/cli-command-contract.feature"
-    ),
-    scenario=(
-        "@bdd-cli-command-contract-workflow-commands-reject-positional-task-"
-        "refs-with-json-remediation"
-    ),
-)
+# specmason: req=REQ-0007 ac=AC-0090
 def test_workflow_commands_reject_positional_task_refs_with_json_remediation(
     tmp_path: Path,
 ) -> None:
@@ -122,8 +111,7 @@ def test_workflow_commands_reject_positional_task_refs_with_json_remediation(
         )
 
 
-# sw: f=specs/behavior/features/cli_command_contract/cli-command-contract.feature
-# sw: s=@bdd-cli-command-contract-task-show-accepts-positional-task-ref-and-task-option
+# specmason: req=REQ-0007 ac=AC-0088
 def test_task_show_accepts_positional_task_ref_and_task_option(tmp_path: Path) -> None:
     assert (
         runner.invoke(
@@ -169,15 +157,7 @@ def test_task_show_accepts_positional_task_ref_and_task_option(tmp_path: Path) -
     assert explicit_payload["result"]["task"]["id"] == "task-0001"
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/cli_command_contract/cli-command-contract.feature"
-    ),
-    scenario=(
-        "@bdd-cli-command-contract-task-cancel-requires-explicit-target-even-"
-        "when-active-exists"
-    ),
-)
+# specmason: req=REQ-0007 ac=AC-0087
 def test_task_cancel_requires_explicit_target_even_when_active_exists(
     tmp_path: Path,
 ) -> None:
@@ -230,15 +210,7 @@ def test_task_cancel_requires_explicit_target_even_when_active_exists(
     assert "requires an explicit target" in payload["error"]["message"]
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/cli_command_contract/cli-command-contract.feature"
-    ),
-    scenario=(
-        "@bdd-cli-command-contract-task-cancel-accepts-positional-task-ref-"
-        "and-active-flag"
-    ),
-)
+# specmason: req=REQ-0007 ac=AC-0086
 def test_task_cancel_accepts_positional_task_ref_and_active_flag(
     tmp_path: Path,
 ) -> None:
@@ -332,8 +304,7 @@ def test_task_cancel_accepts_positional_task_ref_and_active_flag(
     assert active_payload["result"]["target"]["selection"] == "active_explicit"
 
 
-# sw: f=specs/behavior/features/cli_command_contract/cli-command-contract.feature
-# sw: s=@bdd-cli-command-contract-global-json-only-for-task-show
+# specmason: req=REQ-0007 ac=AC-0084
 def test_global_json_only_for_task_show(tmp_path: Path) -> None:
     assert (
         runner.invoke(
@@ -376,8 +347,7 @@ def test_global_json_only_for_task_show(tmp_path: Path) -> None:
     assert payload["ok"] is True
 
 
-# sw: f=specs/behavior/features/cli_command_contract/cli-command-contract.feature
-# sw: s=@bdd-cli-command-contract-version-flag-displays-version
+# specmason: req=REQ-0007 ac=AC-0089
 def test_version_flag_displays_version() -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
@@ -387,6 +357,7 @@ def test_version_flag_displays_version() -> None:
 # ── Ledger isolation tests ──────────────────────────────────────
 
 
+# specmason: req=REQ-0007 ac=AC-0085
 def test_bdd_group_is_not_registered() -> None:
     result = runner.invoke(app, ["bdd", "--help"])
     assert result.exit_code != 0
@@ -396,11 +367,13 @@ def test_bdd_group_is_not_registered() -> None:
     )
 
 
+# specmason: req=REQ-0007 ac=AC-0085
 def test_validate_import_bdd_report_is_not_registered() -> None:
     result = runner.invoke(app, ["validate", "import-bdd-report", "report.xml"])
     assert result.exit_code != 0
 
 
+# specmason: req=REQ-0007 ac=AC-0083
 def test_task_bundle_does_not_create_bdd_directory(tmp_path: Path) -> None:
     from tests.support.builders import init_workspace
 
@@ -410,6 +383,7 @@ def test_task_bundle_does_not_create_bdd_directory(tmp_path: Path) -> None:
     assert not list(tmp_path.glob(".taskledger/**/tasks/task-*/bdd"))
 
 
+# specmason: req=REQ-0007 ac=AC-0085
 def test_changelog_group_is_not_registered() -> None:
     result = runner.invoke(app, ["changelog", "--help"])
     assert result.exit_code != 0
@@ -419,6 +393,7 @@ def test_changelog_group_is_not_registered() -> None:
     )
 
 
+# specmason: req=REQ-0007 ac=AC-0085
 def test_build_command_is_not_registered() -> None:
     result = runner.invoke(app, ["build", "--help"])
     assert result.exit_code != 0
@@ -428,6 +403,7 @@ def test_build_command_is_not_registered() -> None:
     )
 
 
+# specmason: req=REQ-0007 ac=AC-0085
 def test_release_changelog_subcommand_is_not_registered(tmp_path: Path) -> None:
     workspace = init_workspace(tmp_path)
     result = runner.invoke(

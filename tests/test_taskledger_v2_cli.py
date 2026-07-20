@@ -142,6 +142,7 @@ Repair before implementation.
     return task.id, run.run_id
 
 
+# specmason: req=REQ-0064 ac=AC-0703
 def test_task_show_accepts_global_and_file_ref_aliases(tmp_path: Path) -> None:
     _init_project(tmp_path)
     create = runner.invoke(
@@ -176,6 +177,7 @@ def test_task_show_accepts_global_and_file_ref_aliases(tmp_path: Path) -> None:
         assert payload["result"]["task"]["file_ref"] == "tl-task-0001"
 
 
+# specmason: req=REQ-0064 ac=AC-0692
 def test_ref_show_and_parse_emit_resource_ref_payload(tmp_path: Path) -> None:
     _init_project(tmp_path)
     for command in ("show", "parse"):
@@ -192,6 +194,7 @@ def test_ref_show_and_parse_emit_resource_ref_payload(tmp_path: Path) -> None:
         assert result["file_ref"] == "tl-task-0001"
 
 
+# specmason: req=REQ-0064 ac=AC-0717
 def test_task_record_keeps_local_id_without_global_ref_fields(tmp_path: Path) -> None:
     _init_project(tmp_path)
     create = runner.invoke(
@@ -222,6 +225,7 @@ def test_task_record_keeps_local_id_without_global_ref_fields(tmp_path: Path) ->
     assert "global_ref" not in metadata
 
 
+# specmason: req=REQ-0064 ac=AC-0692
 def test_implement_command_records_stdout_stderr_and_exit_code(
     tmp_path: Path,
 ) -> None:
@@ -253,8 +257,7 @@ def test_implement_command_records_stdout_stderr_and_exit_code(
     assert command_payload["check"]["exit_code"] == 0
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-command-mirrors-inner-exit-code-by-default
+# specmason: req=REQ-0064 ac=AC-0692
 def test_implement_command_mirrors_inner_exit_code_by_default(tmp_path: Path) -> None:
     _prepare_focused_context_task(tmp_path)
     result = runner.invoke(
@@ -275,8 +278,7 @@ def test_implement_command_mirrors_inner_exit_code_by_default(tmp_path: Path) ->
     assert result.exit_code == 7
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-command-allow-failure-keeps-wrapper-exit-zero
+# specmason: req=REQ-0064 ac=AC-0691
 def test_implement_command_allow_failure_keeps_wrapper_exit_zero(
     tmp_path: Path,
 ) -> None:
@@ -303,8 +305,7 @@ def test_implement_command_allow_failure_keeps_wrapper_exit_zero(
     assert result["result"]["exit_code"] == 7
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-planning-guidance-is-recommended-then-not-repeated
+# specmason: req=REQ-0064 ac=AC-0710
 def test_planning_guidance_is_recommended_then_not_repeated(tmp_path: Path) -> None:
     _init_project(tmp_path)
     config = tmp_path / "taskledger.toml"
@@ -381,8 +382,7 @@ def _break_task_lock(tmp_path: Path, task_ref: str = "resume-task") -> None:
     assert result.exit_code == 0, result.stdout
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-v2-task-lifecycle-and-handoff
+# specmason: req=REQ-0064 ac=AC-0723
 def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -686,6 +686,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
     }
 
 
+# specmason: req=REQ-0064 ac=AC-0698
 def test_failed_validation_restarts_implementation(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -935,8 +936,7 @@ Ship the initial implementation, fail validation, and restart implementation.
     assert task_show["result"]["task"]["latest_validation_run"] == validation_run_id
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-v2-lock-break-and-expired-lock-report
+# specmason: req=REQ-0064 ac=AC-0722
 def test_v2_lock_break_and_expired_lock_report(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -995,13 +995,7 @@ def test_v2_lock_break_and_expired_lock_report(tmp_path: Path) -> None:
     assert not lock_path.exists()
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature"),
-    scenario=(
-        "@bdd-taskledger-v2-cli-doctor-human-reports-non-looping-"
-        "implementation-mismatch-hint"
-    ),
-)
+# specmason: req=REQ-0064 ac=AC-0687
 def test_doctor_human_reports_non_looping_implementation_mismatch_hint(
     tmp_path: Path,
 ) -> None:
@@ -1020,8 +1014,7 @@ def test_doctor_human_reports_non_looping_implementation_mismatch_hint(
     assert "taskledger doctor" not in result.stdout
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-doctor-verbose-option-is-supported
+# specmason: req=REQ-0064 ac=AC-0688
 def test_doctor_verbose_option_is_supported(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
@@ -1034,6 +1027,7 @@ def test_doctor_verbose_option_is_supported(tmp_path: Path) -> None:
     assert "healthy:" in result.stdout
 
 
+# specmason: req=REQ-0064 ac=AC-0700
 def test_implement_resume_reacquires_lock_after_break(tmp_path: Path) -> None:
     task_id, run_id = _prepare_resumable_implementation_task(tmp_path)
     _break_task_lock(tmp_path)
@@ -1069,8 +1063,7 @@ def test_implement_resume_reacquires_lock_after_break(tmp_path: Path) -> None:
     assert task_show["result"]["task"]["active_stage"] == "implementation"
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-resume-does-not-create-new-run
+# specmason: req=REQ-0064 ac=AC-0693
 def test_implement_resume_does_not_create_new_run(tmp_path: Path) -> None:
     task_id, run_id = _prepare_resumable_implementation_task(tmp_path)
     _break_task_lock(tmp_path)
@@ -1098,8 +1091,7 @@ def test_implement_resume_does_not_create_new_run(tmp_path: Path) -> None:
     assert implementation_runs[0].run_id == run_id
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-resume-requires-reason
+# specmason: req=REQ-0064 ac=AC-0700
 def test_implement_resume_requires_reason(tmp_path: Path) -> None:
     _prepare_resumable_implementation_task(tmp_path)
     _break_task_lock(tmp_path)
@@ -1122,8 +1114,7 @@ def test_implement_resume_requires_reason(tmp_path: Path) -> None:
     assert "Implementation resume requires --reason." in result.stdout
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-next-action-recommends-repair-for-orphaned-planning-run
+# specmason: req=REQ-0064 ac=AC-0708
 def test_next_action_recommends_repair_for_orphaned_planning_run(
     tmp_path: Path,
 ) -> None:
@@ -1143,8 +1134,7 @@ def test_next_action_recommends_repair_for_orphaned_planning_run(
     assert blocker["running_run"]["run_type"] == "planning"
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-can-implement-blocker-names-orphaned-planning-run
+# specmason: req=REQ-0064 ac=AC-0682
 def test_can_implement_blocker_names_orphaned_planning_run(tmp_path: Path) -> None:
     _, run_id = _prepare_approved_task_with_orphaned_planning_run(tmp_path)
 
@@ -1162,8 +1152,7 @@ def test_can_implement_blocker_names_orphaned_planning_run(tmp_path: Path) -> No
     assert blocker["running_run"]["has_matching_lock"] is False
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-start-reports-running-run-details
+# specmason: req=REQ-0064 ac=AC-0702
 def test_implement_start_reports_running_run_details(tmp_path: Path) -> None:
     _, run_id = _prepare_approved_task_with_orphaned_planning_run(tmp_path)
 
@@ -1182,8 +1171,7 @@ def test_implement_start_reports_running_run_details(tmp_path: Path) -> None:
     assert details["suggested_command"] == "taskledger doctor"
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-repair-run-finishes-orphaned-planning-run
+# specmason: req=REQ-0064 ac=AC-0713
 def test_repair_run_finishes_orphaned_planning_run(tmp_path: Path) -> None:
     task_id, run_id = _prepare_approved_task_with_orphaned_planning_run(tmp_path)
 
@@ -1210,8 +1198,7 @@ def test_repair_run_finishes_orphaned_planning_run(tmp_path: Path) -> None:
     assert resolve_run(tmp_path, task_id, run_id).status == "finished"
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-resume-rejects-missing-accepted-plan
+# specmason: req=REQ-0064 ac=AC-0697
 def test_implement_resume_rejects_missing_accepted_plan(tmp_path: Path) -> None:
     task_id, _ = _prepare_resumable_implementation_task(tmp_path)
     _break_task_lock(tmp_path)
@@ -1236,8 +1223,7 @@ def test_implement_resume_rejects_missing_accepted_plan(tmp_path: Path) -> None:
     assert "Implementation resume requires an accepted plan version." in result.stdout
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-resume-rejects-non-running-implementation-run
+# specmason: req=REQ-0064 ac=AC-0699
 def test_implement_resume_rejects_non_running_implementation_run(
     tmp_path: Path,
 ) -> None:
@@ -1266,8 +1252,7 @@ def test_implement_resume_rejects_non_running_implementation_run(
     )
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-resume-rejects-non-implementation-run
+# specmason: req=REQ-0064 ac=AC-0698
 def test_implement_resume_rejects_non_implementation_run(tmp_path: Path) -> None:
     task_id, run_id = _prepare_resumable_implementation_task(tmp_path)
     _break_task_lock(tmp_path)
@@ -1294,8 +1279,7 @@ def test_implement_resume_rejects_non_implementation_run(tmp_path: Path) -> None
     )
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-resume-rejects-existing-lock
+# specmason: req=REQ-0064 ac=AC-0696
 def test_implement_resume_rejects_existing_lock(tmp_path: Path) -> None:
     _prepare_resumable_implementation_task(tmp_path)
 
@@ -1317,8 +1301,7 @@ def test_implement_resume_rejects_existing_lock(tmp_path: Path) -> None:
     assert "Implementation resume requires no active lock." in result.stdout
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-resume-rejects-completed-task
+# specmason: req=REQ-0064 ac=AC-0695
 def test_implement_resume_rejects_completed_task(tmp_path: Path) -> None:
     task_id, _ = _prepare_resumable_implementation_task(tmp_path)
     _break_task_lock(tmp_path)
@@ -1346,8 +1329,7 @@ def test_implement_resume_rejects_completed_task(tmp_path: Path) -> None:
     )
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-implement-resume-rejects-cancelled-task
+# specmason: req=REQ-0064 ac=AC-0694
 def test_implement_resume_rejects_cancelled_task(tmp_path: Path) -> None:
     _prepare_resumable_implementation_task(tmp_path)
     cancel = runner.invoke(
@@ -1386,8 +1368,7 @@ def test_implement_resume_rejects_cancelled_task(tmp_path: Path) -> None:
     )
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-task-uncancel-restores-cancelled-task-to-approved
+# specmason: req=REQ-0064 ac=AC-0720
 def test_task_uncancel_restores_cancelled_task_to_approved(tmp_path: Path) -> None:
     task_id, _ = _prepare_resumable_implementation_task(tmp_path)
     cancel = runner.invoke(
@@ -1438,13 +1419,7 @@ def test_task_uncancel_restores_cancelled_task_to_approved(tmp_path: Path) -> No
     assert task_show["result"]["task"]["status_stage"] == "approved"
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature"),
-    scenario=(
-        "@bdd-taskledger-v2-cli-next-action-after-uncancel-running-"
-        "implementation-recommends-resume"
-    ),
-)
+# specmason: req=REQ-0064 ac=AC-0705
 def test_next_action_after_uncancel_running_implementation_recommends_resume(
     tmp_path: Path,
 ) -> None:
@@ -1496,8 +1471,7 @@ def test_next_action_after_uncancel_running_implementation_recommends_resume(
     )
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-can-implement-blocks-existing-running-run-after-uncancel
+# specmason: req=REQ-0064 ac=AC-0683
 def test_can_implement_blocks_existing_running_run_after_uncancel(
     tmp_path: Path,
 ) -> None:
@@ -1549,6 +1523,7 @@ def test_can_implement_blocks_existing_running_run_after_uncancel(
     )
 
 
+# specmason: req=REQ-0064 ac=AC-0699
 def test_can_implement_resume_after_uncancel_running_implementation(
     tmp_path: Path,
 ) -> None:
@@ -1599,8 +1574,7 @@ def test_can_implement_resume_after_uncancel_running_implementation(
     assert payload["reason"] == "Implementation resume is ready."
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-uncancel-non-cancelled-orphan-hints-resume
+# specmason: req=REQ-0064 ac=AC-0721
 def test_uncancel_non_cancelled_orphan_hints_resume(tmp_path: Path) -> None:
     _prepare_resumable_implementation_task(tmp_path)
     _break_task_lock(tmp_path)
@@ -1632,8 +1606,7 @@ def test_uncancel_non_cancelled_orphan_hints_resume(tmp_path: Path) -> None:
     )
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-task-uncancel-rejects-active-stage-target
+# specmason: req=REQ-0064 ac=AC-0719
 def test_task_uncancel_rejects_active_stage_target(tmp_path: Path) -> None:
     _prepare_resumable_implementation_task(tmp_path)
     cancel = runner.invoke(
@@ -1674,13 +1647,7 @@ def test_task_uncancel_rejects_active_stage_target(tmp_path: Path) -> None:
     assert "Invalid uncancel target: implementing" in result.stdout
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature"),
-    scenario=(
-        "@bdd-taskledger-v2-cli-repair-task-human-output-records-inspection-"
-        "and-recovery-hint"
-    ),
-)
+# specmason: req=REQ-0064 ac=AC-0714
 def test_repair_task_human_output_records_inspection_and_recovery_hint(
     tmp_path: Path,
 ) -> None:
@@ -1725,8 +1692,7 @@ def test_repair_task_human_output_records_inspection_and_recovery_hint(
     )
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-task-first-support-commands-are-available
+# specmason: req=REQ-0064 ac=AC-0718
 def test_task_first_support_commands_are_available(tmp_path: Path) -> None:
     _init_project(tmp_path)
     assert (
@@ -1796,8 +1762,7 @@ def test_task_first_support_commands_are_available(tmp_path: Path) -> None:
     assert "@README.md [doc]" in file_list.stdout
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-root-alias-uses-stable-json-envelope
+# specmason: req=REQ-0064 ac=AC-0715
 def test_root_alias_uses_stable_json_envelope(tmp_path: Path) -> None:
     init_result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert init_result.exit_code == 0
@@ -1820,8 +1785,7 @@ def test_root_alias_uses_stable_json_envelope(tmp_path: Path) -> None:
     assert payload["result"]["slug"] == "root-alias-task"
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-plan-approval-blocks-open-questions-with-json-error
+# specmason: req=REQ-0064 ac=AC-0709
 def test_plan_approval_blocks_open_questions_with_json_error(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -1887,8 +1851,7 @@ def test_plan_approval_blocks_open_questions_with_json_error(tmp_path: Path) -> 
     assert payload["error"]["code"] == "WORKFLOW_REJECTION"
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-expired-lock-requires-explicit-break-json-error
+# specmason: req=REQ-0064 ac=AC-0689
 def test_expired_lock_requires_explicit_break_json_error(tmp_path: Path) -> None:
     _init_project(tmp_path)
     runner.invoke(
@@ -1943,8 +1906,7 @@ def test_expired_lock_requires_explicit_break_json_error(tmp_path: Path) -> None
     assert payload["error"]["code"] == "STALE_LOCK_REQUIRES_BREAK"
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-context-for-implementer-todo-renders-focused-context
+# specmason: req=REQ-0064 ac=AC-0685
 def test_context_for_implementer_todo_renders_focused_context(tmp_path: Path) -> None:
     _prepare_focused_context_task(tmp_path)
 
@@ -1974,8 +1936,7 @@ def test_context_for_implementer_todo_renders_focused_context(tmp_path: Path) ->
     assert "[ ] todo-0001" not in result.stdout
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-context-for-spec-reviewer-run-renders-review-context
+# specmason: req=REQ-0064 ac=AC-0686
 def test_context_for_spec_reviewer_run_renders_review_context(tmp_path: Path) -> None:
     run_id = _prepare_focused_context_task(tmp_path)
 
@@ -2004,8 +1965,7 @@ def test_context_for_spec_reviewer_run_renders_review_context(tmp_path: Path) ->
     assert "deviations_from_plan" in result.stdout
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-context-for-code-reviewer-run-renders-review-context
+# specmason: req=REQ-0064 ac=AC-0684
 def test_context_for_code_reviewer_run_renders_review_context(tmp_path: Path) -> None:
     run_id = _prepare_focused_context_task(tmp_path)
 
@@ -2034,8 +1994,7 @@ def test_context_for_code_reviewer_run_renders_review_context(tmp_path: Path) ->
     assert "test_coverage_gaps" in result.stdout
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-handoff-create-and-show-focused-todo-snapshot
+# specmason: req=REQ-0064 ac=AC-0690
 def test_handoff_create_and_show_focused_todo_snapshot(tmp_path: Path) -> None:
     _prepare_focused_context_task(tmp_path)
 
@@ -2079,8 +2038,7 @@ def test_handoff_create_and_show_focused_todo_snapshot(tmp_path: Path) -> None:
     assert "todo-0001" in show_result.stdout
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-repair-planning-command-changes-dry-run
+# specmason: req=REQ-0064 ac=AC-0711
 def test_repair_planning_command_changes_dry_run(tmp_path: Path) -> None:
     """Test repair planning-command-changes with dry-run flag."""
     _init_project(tmp_path)
@@ -2126,8 +2084,7 @@ def test_repair_planning_command_changes_dry_run(tmp_path: Path) -> None:
     assert payload["result"]["task_id"] == task_id
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-repair-planning-command-changes-requires-reason
+# specmason: req=REQ-0064 ac=AC-0712
 def test_repair_planning_command_changes_requires_reason(tmp_path: Path) -> None:
     """Test repair planning-command-changes requires --reason."""
     _init_project(tmp_path)
@@ -2166,8 +2123,7 @@ def test_repair_planning_command_changes_requires_reason(tmp_path: Path) -> None
     assert "Missing option '--reason'" in result.stdout or result.exit_code == 2
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-status-command-with-check-flag
+# specmason: req=REQ-0064 ac=AC-0716
 def test_status_command_with_check_flag(tmp_path: Path) -> None:
     """Test status --check runs doctor health check."""
     _init_project(tmp_path)
@@ -2189,8 +2145,7 @@ def test_status_command_with_check_flag(tmp_path: Path) -> None:
     assert isinstance(payload["result"]["health"]["healthy"], bool)
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-status-command-without-check-flag-fast
+# specmason: req=REQ-0064 ac=AC-0717
 def test_status_command_without_check_flag_fast(tmp_path: Path) -> None:
     """Test status without --check flag uses fast counts."""
     _init_project(tmp_path)
@@ -2240,8 +2195,7 @@ def _overwrite_holder_pid(
     lock_path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-lock-show-human-reports-dead-holder-pid-and-next-commands
+# specmason: req=REQ-0064 ac=AC-0703
 def test_lock_show_human_reports_dead_holder_pid_and_next_commands(
     tmp_path: Path,
 ) -> None:
@@ -2270,13 +2224,7 @@ def test_lock_show_human_reports_dead_holder_pid_and_next_commands(
     assert "lock file:" in result.stdout
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature"),
-    scenario=(
-        "@bdd-taskledger-v2-cli-lock-show-json-payload-includes-diagnostics-"
-        "and-storage-fields"
-    ),
-)
+# specmason: req=REQ-0064 ac=AC-0704
 def test_lock_show_json_payload_includes_diagnostics_and_storage_fields(
     tmp_path: Path,
 ) -> None:
@@ -2299,13 +2247,7 @@ def test_lock_show_json_payload_includes_diagnostics_and_storage_fields(
     assert isinstance(result_data["lock_file"], str)
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature"),
-    scenario=(
-        "@bdd-taskledger-v2-cli-implement-resume-with-active-dead-pid-lock-"
-        "explains-repair-not-expired-resume"
-    ),
-)
+# specmason: req=REQ-0064 ac=AC-0701
 def test_implement_resume_with_active_dead_pid_lock_explains_repair_not_expired_resume(
     tmp_path: Path,
 ) -> None:
@@ -2346,8 +2288,7 @@ def test_implement_resume_with_active_dead_pid_lock_explains_repair_not_expired_
     )
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-next-action-dead-pid-lock-routes-to-repair-lock
+# specmason: req=REQ-0064 ac=AC-0706
 def test_next_action_dead_pid_lock_routes_to_repair_lock(
     tmp_path: Path,
 ) -> None:
@@ -2375,8 +2316,7 @@ def test_next_action_dead_pid_lock_routes_to_repair_lock(
     assert "is no longer running" in lock_blockers[0].get("message", "")
 
 
-# sw: f=specs/behavior/features/taskledger_v2_cli/taskledger-v2-cli.feature
-# sw: s=@bdd-taskledger-v2-cli-next-action-live-lock-keeps-todo-work-with-warning
+# specmason: req=REQ-0064 ac=AC-0707
 def test_next_action_live_lock_keeps_todo_work_with_warning(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -212,6 +212,22 @@ python -m pip install -e .
 python -m pip install -e ".[dev]"
 ```
 
+## Behavior specifications
+
+The retained behavior corpus uses SpecMason for Gherkin identities, pytest mappings,
+bidirectional coverage, and reports. Install SpecMason from its project
+distribution, then run:
+
+```bash
+specmason check --config specmason.toml --requirements requirements/manifest.json --json
+specmason discover-pytest --config specmason.toml --json
+specmason coverage --config specmason.toml --requirements requirements/manifest.json --view both --show gaps --json
+specmason review --config specmason.toml --requirements requirements/manifest.json --json
+```
+
+Taskledger does not package or import SpecMason. See `specs/behavior/README.md`
+for the mapping and intentional-waiver policy.
+
 ### Shell completion
 
 After installing `taskledger`, install completion for your current shell:

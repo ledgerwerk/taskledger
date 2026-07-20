@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from taskledger.services.task_export import (
@@ -36,15 +35,7 @@ def _invoke(args: list[str], cwd: Path) -> tuple[int, str, str]:
 
 
 class TestServiceExport:
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/task_markdown_export/markdown-export.feature"
-        ),
-        scenario=(
-            "@bdd-task-markdown-export-task-export-includes-curated-report-and-"
-            "raw-task-files"
-        ),
-    )
+    # specmason: req=REQ-0060 ac=AC-0643
     def test_task_export_includes_curated_report_and_raw_task_files(
         self, tmp_path: Path
     ) -> None:
@@ -66,15 +57,7 @@ class TestServiceExport:
         assert isinstance(payload["bytes"], int)
         assert payload["bytes"] > 0
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/task_markdown_export/markdown-export.feature"
-        ),
-        scenario=(
-            "@bdd-task-markdown-export-task-export-includes-source-file-snapshots-"
-            "from-changes"
-        ),
-    )
+    # specmason: req=REQ-0060 ac=AC-0644
     def test_task_export_includes_source_file_snapshots_from_changes(
         self, tmp_path: Path
     ) -> None:
@@ -97,15 +80,7 @@ class TestServiceExport:
         assert "# Test Project" in content
         assert "README.md" in payload["included_source_files"]
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/task_markdown_export/markdown-export.feature"
-        ),
-        scenario=(
-            "@bdd-task-markdown-export-task-export-no-source-files-skips-source-"
-            "snapshot-section"
-        ),
-    )
+    # specmason: req=REQ-0060 ac=AC-0647
     def test_task_export_no_source_files_skips_source_snapshot_section(
         self, tmp_path: Path
     ) -> None:
@@ -127,8 +102,7 @@ class TestServiceExport:
         assert "# Test Project" not in content
         assert payload["included_source_files"] == []
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-skips-outside-workspace-file
+    # specmason: req=REQ-0060 ac=AC-0650
     def test_task_export_skips_outside_workspace_file(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -147,8 +121,7 @@ class TestServiceExport:
         paths = [s["path"] for s in skipped]
         assert "/etc/passwd" in paths
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-skips-oversized-source-file
+    # specmason: req=REQ-0060 ac=AC-0651
     def test_task_export_skips_oversized_source_file(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         # Create a large file that's referenced as a change
@@ -173,8 +146,7 @@ class TestServiceExport:
         assert "bigfile.txt" in reasons_by_path
         assert "bytes" in reasons_by_path["bigfile.txt"]
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-does-not-mutate-taskledger-state
+    # specmason: req=REQ-0060 ac=AC-0639
     def test_task_export_does_not_mutate_taskledger_state(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -199,8 +171,7 @@ class TestServiceExport:
         after = _snapshot()
         assert before == after
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-front-matter-contains-metadata
+    # specmason: req=REQ-0060 ac=AC-0642
     def test_task_export_front_matter_contains_metadata(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -215,8 +186,7 @@ class TestServiceExport:
         assert "taskledger_version:" in content
         assert "include_source_files: True" in content
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-deterministic-body
+    # specmason: req=REQ-0060 ac=AC-0638
     def test_task_export_deterministic_body(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -234,8 +204,7 @@ class TestServiceExport:
         body2 = content2.split("## How to use this file", 1)[1]
         assert body1 == body2
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-summary-table
+    # specmason: req=REQ-0060 ac=AC-0653
     def test_task_export_summary_table(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -249,8 +218,7 @@ class TestServiceExport:
         assert "| Record files included |" in content
         assert "| Source files included |" in content
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-dedupes-change-and-plan-source-paths
+    # specmason: req=REQ-0060 ac=AC-0637
     def test_task_export_dedupes_change_and_plan_source_paths(
         self, tmp_path: Path
     ) -> None:
@@ -287,8 +255,7 @@ Test plan.
         assert content.count("### `README.md`") == 1
         assert payload["included_source_files"] == ["README.md"]
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-skips-nested-git-directory
+    # specmason: req=REQ-0060 ac=AC-0649
     def test_task_export_skips_nested_git_directory(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -310,15 +277,7 @@ Test plan.
         assert isinstance(skipped, list)
         assert any(s["path"] == "src/.git/config" for s in skipped)
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/task_markdown_export/markdown-export.feature"
-        ),
-        scenario=(
-            "@bdd-task-markdown-export-task-export-does-not-report-missing-plan-"
-            "only-source-file"
-        ),
-    )
+    # specmason: req=REQ-0060 ac=AC-0641
     def test_task_export_does_not_report_missing_plan_only_source_file(
         self, tmp_path: Path
     ) -> None:
@@ -357,15 +316,7 @@ Use the temporary review input to plan the change.
         assert all(s["path"] != "@temporary_review_input.md" for s in skipped)
         assert "README.md" in payload["included_source_files"]
 
-    @pytest.mark.specweave(
-        feature=(
-            "specs/behavior/features/task_markdown_export/markdown-export.feature"
-        ),
-        scenario=(
-            "@bdd-task-markdown-export-task-export-does-not-report-git-scan-dot-"
-            "as-source-file"
-        ),
-    )
+    # specmason: req=REQ-0060 ac=AC-0640
     def test_task_export_does_not_report_git_scan_dot_as_source_file(
         self, tmp_path: Path
     ) -> None:
@@ -401,6 +352,7 @@ Use the temporary review input to plan the change.
         assert isinstance(skipped, list)
         assert all(s["path"] != "." for s in skipped)
 
+    # specmason: req=REQ-0060 ac=AC-0644
     def test_task_export_total_source_budget_does_not_charge_skipped_file(
         self, tmp_path: Path
     ) -> None:
@@ -431,8 +383,7 @@ Use the temporary review input to plan the change.
 
 
 class TestCliExport:
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-writes-markdown-file
+    # specmason: req=REQ-0060 ac=AC-0655
     def test_task_export_writes_markdown_file(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -449,8 +400,7 @@ class TestCliExport:
         assert "# Compiled Task Export:" in content
         assert "## Raw Taskledger Record Files" in content
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-stdout-markdown
+    # specmason: req=REQ-0060 ac=AC-0652
     def test_task_export_stdout_markdown(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -464,8 +414,7 @@ class TestCliExport:
         assert "# Compiled Task Export:" in stdout
         assert "## Raw Taskledger Record Files" in stdout
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-json-output-writes-file
+    # specmason: req=REQ-0060 ac=AC-0645
     def test_task_export_json_output_writes_file(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -496,8 +445,7 @@ class TestCliExport:
         file_content = output_path.read_text()
         assert "# Compiled Task Export:" in file_content
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-uses-active-task-default
+    # specmason: req=REQ-0060 ac=AC-0654
     def test_task_export_uses_active_task_default(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
@@ -514,8 +462,7 @@ class TestCliExport:
         assert exit_code == 0
         assert f"# Compiled Task Export: {task_id}" in stdout
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-no-source-files-flag
+    # specmason: req=REQ-0060 ac=AC-0646
     def test_task_export_no_source_files_flag(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(
@@ -535,8 +482,7 @@ class TestCliExport:
         assert exit_code == 0
         assert "## Source File Snapshots" not in stdout
 
-    # sw: f=specs/behavior/features/task_markdown_export/markdown-export.feature
-    # sw: s=@bdd-task-markdown-export-task-export-positional-task-ref
+    # specmason: req=REQ-0060 ac=AC-0648
     def test_task_export_positional_task_ref(self, tmp_path: Path) -> None:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)

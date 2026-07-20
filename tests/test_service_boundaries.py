@@ -3,8 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = ROOT / "taskledger"
 MAX_MODULE_LINES = 2000
@@ -274,8 +272,7 @@ def _relative(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
 
-# sw: f=specs/behavior/features/service_boundaries/service-boundaries.feature
-# sw: s=@bdd-service-boundaries-boundary-whitelists-include-reasons
+# specmason: req=REQ-0048 ac=AC-0526
 def test_boundary_whitelists_include_reasons() -> None:
     for whitelist in (
         MODULE_LINE_WHITELIST,
@@ -287,8 +284,7 @@ def test_boundary_whitelists_include_reasons() -> None:
             assert reason.strip()
 
 
-# sw: f=specs/behavior/features/service_boundaries/service-boundaries.feature
-# sw: s=@bdd-service-boundaries-service-module-line-budget
+# specmason: req=REQ-0048 ac=AC-0530
 def test_service_module_line_budget() -> None:
     module_lines: dict[str, int] = {}
     for path in _python_files():
@@ -316,8 +312,7 @@ def test_service_module_line_budget() -> None:
     )
 
 
-# sw: f=specs/behavior/features/service_boundaries/service-boundaries.feature
-# sw: s=@bdd-service-boundaries-service-function-line-budget
+# specmason: req=REQ-0048 ac=AC-0529
 def test_service_function_line_budget() -> None:
     long_functions: dict[str, int] = {}
     for path in _python_files():
@@ -353,8 +348,7 @@ def test_service_function_line_budget() -> None:
     )
 
 
-# sw: f=specs/behavior/features/service_boundaries/service-boundaries.feature
-# sw: s=@bdd-service-boundaries-except-exception-sites-are-whitelisted
+# specmason: req=REQ-0048 ac=AC-0528
 def test_except_exception_sites_are_whitelisted() -> None:
     found_sites: set[str] = set()
     for path in _python_files():
@@ -374,8 +368,7 @@ def test_except_exception_sites_are_whitelisted() -> None:
     assert not stale, f"Whitelist sites no longer present: {stale}"
 
 
-# sw: f=specs/behavior/features/service_boundaries/service-boundaries.feature
-# sw: s=@bdd-service-boundaries-cli-services-imports-are-whitelisted
+# specmason: req=REQ-0048 ac=AC-0527
 def test_cli_services_imports_are_whitelisted() -> None:
     found_imports: set[str] = set()
     for path in ROOT.glob("taskledger/cli*.py"):
@@ -396,8 +389,7 @@ def test_cli_services_imports_are_whitelisted() -> None:
     assert not stale, f"Stale CLI->services import whitelist entries: {stale}"
 
 
-# sw: f=specs/behavior/features/service_boundaries/service-boundaries.feature
-# sw: s=@bdd-service-boundaries-validation-module-has-no-private-tasks-imports
+# specmason: req=REQ-0048 ac=AC-0532
 def test_validation_module_has_no_private_tasks_imports() -> None:
     path = ROOT / "taskledger" / "services" / "validation.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -418,13 +410,7 @@ def test_validation_module_has_no_private_tasks_imports() -> None:
     )
 
 
-@pytest.mark.specweave(
-    feature=("specs/behavior/features/service_boundaries/service-boundaries.feature"),
-    scenario=(
-        "@bdd-service-boundaries-tasks-validation-gate-wrapper-has-no-local-"
-        "import-workaround"
-    ),
-)
+# specmason: req=REQ-0048 ac=AC-0531
 def test_tasks_validation_gate_wrapper_has_no_local_import_workaround() -> None:
     path = ROOT / "taskledger" / "services" / "tasks.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -511,6 +497,7 @@ def test_tasks_implementation_entrypoints_delegate_to_implementation_flow() -> N
         )
 
 
+# specmason: req=REQ-0048 ac=AC-0531
 def test_tasks_validation_entrypoints_delegate_to_validation_flow() -> None:
     path = ROOT / "taskledger" / "services" / "tasks.py"
     for function_name in (

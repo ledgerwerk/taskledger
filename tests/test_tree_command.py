@@ -64,8 +64,7 @@ def _json_tree(tmp_path: Path, *extra: str) -> dict:
 
 
 class TestEmptyLedger:
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-human-output-shows-no-tasks
+    # specmason: req=REQ-0069 ac=AC-0780
     def test_human_output_shows_no_tasks(self, tmp_path: Path) -> None:
         _init(tmp_path)
         result = _tree(tmp_path)
@@ -104,8 +103,7 @@ class TestEmptyLedger:
 
 
 class TestCurrentLedgerTasks:
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-shows-both-tasks
+    # specmason: req=REQ-0069 ac=AC-0785
     def test_shows_both_tasks(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "Parser fix", slug="parser-fix")
@@ -121,6 +119,7 @@ class TestCurrentLedgerTasks:
         # Active marker
         assert "*" in result.output
 
+    # specmason: req=REQ-0069 ac=AC-0781
     def test_json_active_task_marker(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "First", slug="first")
@@ -133,8 +132,7 @@ class TestCurrentLedgerTasks:
         assert tasks[0]["is_active"] is False
         assert tasks[1]["is_active"] is True
 
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-no-active-task-still-succeeds
+    # specmason: req=REQ-0069 ac=AC-0781
     def test_no_active_task_still_succeeds(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "Lonely task", slug="lonely")
@@ -149,8 +147,7 @@ class TestCurrentLedgerTasks:
 
 
 class TestFollowUpNesting:
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-child-nested-under-parent-human
+    # specmason: req=REQ-0069 ac=AC-0775
     def test_child_nested_under_parent_human(self, tmp_path: Path) -> None:
         _init(tmp_path)
         # Create a done parent via task record
@@ -195,8 +192,7 @@ class TestFollowUpNesting:
         assert "task-0002" in result.output
         assert "(follow-up)" in result.output
 
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-child-nested-under-parent-json
+    # specmason: req=REQ-0069 ac=AC-0776
     def test_child_nested_under_parent_json(self, tmp_path: Path) -> None:
         _init(tmp_path)
         result = runner.invoke(
@@ -250,8 +246,7 @@ class TestFollowUpNesting:
 
 
 class TestTaskSubtree:
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-subtree-shows-only-selected
+    # specmason: req=REQ-0069 ac=AC-0786
     def test_subtree_shows_only_selected(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "Alpha", slug="alpha")
@@ -267,6 +262,7 @@ class TestTaskSubtree:
         ]
         assert len(task_lines) == 0
 
+    # specmason: req=REQ-0069 ac=AC-0786
     def test_subtree_json_scope(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "Alpha", slug="alpha")
@@ -279,8 +275,7 @@ class TestTaskSubtree:
         assert len(tasks) == 1
         assert tasks[0]["slug"] == "alpha"
 
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-subtree-with-children
+    # specmason: req=REQ-0069 ac=AC-0787
     def test_subtree_with_children(self, tmp_path: Path) -> None:
         _init(tmp_path)
         result = runner.invoke(
@@ -332,8 +327,7 @@ class TestTaskSubtree:
 
 
 class TestDetails:
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-details-shows-counts
+    # specmason: req=REQ-0069 ac=AC-0779
     def test_details_shows_counts(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "Detailed task", slug="detailed")
@@ -354,8 +348,7 @@ class TestDetails:
         assert "changes" in counts
         assert "has_lock" in counts
 
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-details-human-output-compact
+    # specmason: req=REQ-0069 ac=AC-0778
     def test_details_human_output_compact(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "Detailed task", slug="detailed")
@@ -365,6 +358,7 @@ class TestDetails:
         # Should contain count-like patterns
         assert "todos=" in result.output or "plans=" in result.output
 
+    # specmason: req=REQ-0069 ac=AC-0779
     def test_no_details_means_null_counts(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "Simple task", slug="simple")
@@ -380,8 +374,7 @@ class TestDetails:
 
 
 class TestAllLedgers:
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-all-ledgers-shows-multiple
+    # specmason: req=REQ-0069 ac=AC-0773
     def test_all_ledgers_shows_multiple(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "Main task", slug="main-task")
@@ -407,8 +400,7 @@ class TestAllLedgers:
         current = [ledger for ledger in ledgers if ledger["is_current"]]
         assert len(current) == 1
 
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-all-ledgers-does-not-mutate-config
+    # specmason: req=REQ-0069 ac=AC-0772
     def test_all_ledgers_does_not_mutate_config(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "Main task", slug="main-task")
@@ -429,8 +421,7 @@ class TestAllLedgers:
 
 
 class TestReleaseRendering:
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-current-ledger-release-is-rendered
+    # specmason: req=REQ-0069 ac=AC-0777
     def test_current_ledger_release_is_rendered(self, tmp_path: Path) -> None:
         _init(tmp_path)
         result = runner.invoke(
@@ -476,8 +467,7 @@ class TestReleaseRendering:
         assert ledger["releases"][0]["version"] == "0.1.0"
         assert ledger["releases"][0]["boundary_task_id"] == "task-0001"
 
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-all-ledgers-uses-each-ledger-release-records
+    # specmason: req=REQ-0069 ac=AC-0774
     def test_all_ledgers_uses_each_ledger_release_records(self, tmp_path: Path) -> None:
         _init(tmp_path)
         result = runner.invoke(
@@ -532,8 +522,7 @@ class TestReleaseRendering:
 
 
 class TestPlainOutput:
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-plain-uses-ascii-glyphs
+    # specmason: req=REQ-0069 ac=AC-0782
     def test_plain_uses_ascii_glyphs(self, tmp_path: Path) -> None:
         _init(tmp_path)
         _create_task(tmp_path, "Test task", slug="test-task")
@@ -552,8 +541,7 @@ class TestPlainOutput:
 
 
 class TestRecordedTaskType:
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-recorded-marker-in-output
+    # specmason: req=REQ-0069 ac=AC-0784
     def test_recorded_marker_in_output(self, tmp_path: Path) -> None:
         _init(tmp_path)
         result = runner.invoke(
@@ -579,8 +567,7 @@ class TestRecordedTaskType:
         assert result.exit_code == 0, result.output
         assert "{recorded}" in result.output
 
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-recorded-in-json
+    # specmason: req=REQ-0069 ac=AC-0783
     def test_recorded_in_json(self, tmp_path: Path) -> None:
         _init(tmp_path)
         result = runner.invoke(
@@ -609,8 +596,7 @@ class TestRecordedTaskType:
 
 
 class TestArchivedTasks:
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-tree-hides-archived-by-default
+    # specmason: req=REQ-0069 ac=AC-0788
     def test_tree_hides_archived_by_default(self, tmp_path: Path) -> None:
         _init(tmp_path)
         result = runner.invoke(
@@ -652,8 +638,7 @@ class TestArchivedTasks:
         assert "legacy" not in result.output
         assert "next=task-0002" in result.output
 
-    # sw: f=specs/behavior/features/tree_command/tree-command.feature
-    # sw: s=@bdd-tree-command-tree-include-archived-marks-nodes
+    # specmason: req=REQ-0069 ac=AC-0789
     def test_tree_include_archived_marks_nodes(self, tmp_path: Path) -> None:
         _init(tmp_path)
         result = runner.invoke(

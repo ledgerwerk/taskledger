@@ -318,7 +318,14 @@ def _apply_ledger_patch(
 
 
 def _canonical_context_for_config(config_path: Path) -> Any:
-    if config_path.parent.name != "task" or config_path.parent.parent.name != ".ledger":
+    # Canonical tool configs live at .ledger/<tool_name>/config.toml.
+    # Reject paths that are not config.toml or not under .ledger/.
+    if config_path.name != "config.toml":
+        return None
+    if config_path.parent.parent.name != ".ledger":
+        return None
+    # Legacy .ledger/task/config.toml is not a canonical tool config.
+    if config_path.parent.name == "task":
         return None
     from taskledger.storage.project_context import load_project_context
 

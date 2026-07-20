@@ -110,16 +110,7 @@ def _prepare_implementation(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/implementation_change_scan/implementation-"
-        "change-scan.feature"
-    ),
-    scenario=(
-        "@bdd-implementation-change-scan-scan-changes-from-git-records-branch-"
-        "status-and-diff-stat"
-    ),
-)
+# specmason: req=REQ-0025 ac=AC-0313
 def test_scan_changes_from_git_records_branch_status_and_diff_stat(
     tmp_path: Path,
 ) -> None:
@@ -182,16 +173,7 @@ def test_scan_changes_from_git_records_branch_status_and_diff_stat(
     assert "README.md" in payload["result"]["git_diff_stat"]
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/implementation_change_scan/implementation-"
-        "change-scan.feature"
-    ),
-    scenario=(
-        "@bdd-implementation-change-scan-scan-changes-from-git-rejects-non-"
-        "git-workspace"
-    ),
-)
+# specmason: req=REQ-0025 ac=AC-0314
 def test_scan_changes_from_git_rejects_non_git_workspace(tmp_path: Path) -> None:
     _prepare_implementation(tmp_path)
 
@@ -214,16 +196,7 @@ def test_scan_changes_from_git_rejects_non_git_workspace(tmp_path: Path) -> None
     assert "Git work tree" in payload["error"]["message"]
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/implementation_change_scan/implementation-"
-        "change-scan.feature"
-    ),
-    scenario=(
-        "@bdd-implementation-change-scan-manual-implement-change-still-works-"
-        "via-canonical-command"
-    ),
-)
+# specmason: req=REQ-0025 ac=AC-0312
 def test_manual_implement_change_still_works_via_canonical_command(
     tmp_path: Path,
 ) -> None:
@@ -252,15 +225,7 @@ def test_manual_implement_change_still_works_via_canonical_command(
     assert payload["result"]["path"] == "taskledger/services/tasks.py"
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/implementation_change_scan/implementation-"
-        "change-scan.feature"
-    ),
-    scenario=(
-        "@bdd-implementation-change-scan-implement-finish-warns-when-git-scan-missing"
-    ),
-)
+# specmason: req=REQ-0025 ac=AC-0311
 def test_implement_finish_warns_when_git_scan_missing(tmp_path: Path) -> None:
     _prepare_implementation(tmp_path)
     subprocess.run(
@@ -306,15 +271,7 @@ def test_implement_finish_warns_when_git_scan_missing(tmp_path: Path) -> None:
     assert any("no git-backed scan" in str(item) for item in warnings)
 
 
-@pytest.mark.specweave(
-    feature=(
-        "specs/behavior/features/implementation_change_scan/implementation-"
-        "change-scan.feature"
-    ),
-    scenario=(
-        "@bdd-implementation-change-scan-implement-finish-warning-clears-after-git-scan"
-    ),
-)
+# specmason: req=REQ-0025 ac=AC-0310
 def test_implement_finish_warning_clears_after_git_scan(tmp_path: Path) -> None:
     _prepare_implementation(tmp_path)
     subprocess.run(

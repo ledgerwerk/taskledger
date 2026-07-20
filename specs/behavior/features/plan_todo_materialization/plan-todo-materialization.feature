@@ -1,12 +1,12 @@
-@area-plan_todo_materialization @feature-plan-todo-materialization @generated @needs-review
+@area-plan_todo_materialization @feature-plan-todo-materialization @generated
 Feature: Plan Todo Materialization
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-plan-todo-materialization
   Rule: Plan Todo Materialization
 
-    @bdd-plan-todo-materialization-plan-approval-materializes-structured-todos-once @needs-review
+    @req-REQ-0040 @ac-AC-0454
     Example: Plan Approval Materializes Structured Todos Once
       Given a proposed plan contains structured todo front matter
       When the plan is approved

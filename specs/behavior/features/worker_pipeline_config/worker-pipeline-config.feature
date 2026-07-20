@@ -1,24 +1,24 @@
-@area-worker_pipeline_config @feature-worker-pipeline-config @generated @needs-review
+@area-worker_pipeline_config @feature-worker-pipeline-config @generated
 Feature: Worker Pipeline Config
 
-  Generated from pytest tests. Review and refine domain language before using as acceptance evidence.
+  Derived from current pytest behavior and maintained by SpecMason.
 
   @rule-worker-pipeline-config
   Rule: Worker Pipeline Config
 
-    @bdd-worker-pipeline-config-no-worker-pipeline-section-preserves-default-config @needs-review
+    @req-REQ-0072 @ac-AC-0808
     Example: No Worker Pipeline Section Preserves Default Config
       Given the pytest test setup is prepared
       When no worker pipeline section preserves default config is executed
       Then config.worker_pipeline is None
 
-    @bdd-worker-pipeline-config-disabled-worker-pipeline-section-returns-disabled-config @needs-review
+    @req-REQ-0072 @ac-AC-0806
     Example: Disabled Worker Pipeline Section Returns Disabled Config
       Given the pytest test setup is prepared
       When disabled worker pipeline section returns disabled config is executed
       Then config.worker_pipeline is not None
 
-    @bdd-worker-pipeline-config-worker-pipeline-parse-three-step-config @needs-review
+    @req-REQ-0072 @ac-AC-0811
     Example: Worker Pipeline Parse Three Step Config
       Given the pytest test setup is prepared
       When worker pipeline parse three step config is executed
@@ -27,13 +27,13 @@ Feature: Worker Pipeline Config
       Then config.worker_pipeline.name equals 'simple-three-context'
       Then config.worker_pipeline.mode equals 'guided'
 
-    @bdd-worker-pipeline-config-worker-pipeline-parse-four-step-config-without-skeletor @needs-review
+    @req-REQ-0072 @ac-AC-0810
     Example: Worker Pipeline Parse Four Step Config Without Skeletor
       Given the pytest test setup is prepared
       When worker pipeline parse four step config without skeletor is executed
       Then config.worker_pipeline is not None
 
-    @bdd-worker-pipeline-config-worker-pipeline-parse-custom-worker-name @needs-review
+    @req-REQ-0072 @ac-AC-0809
     Example: Worker Pipeline Parse Custom Worker Name
       Given the pytest test setup is prepared
       When worker pipeline parse custom worker name is executed
@@ -42,7 +42,7 @@ Feature: Worker Pipeline Config
       Then api_designer.todo_tag equals 'api-design'
       Then domain_reviewer.actor_role equals 'reviewer'
 
-    @bdd-worker-pipeline-config-invalid-config-is-rejected
+    @req-REQ-0072 @ac-AC-0807
     Example: Invalid worker pipeline configuration is rejected
       Given an enabled pipeline has missing steps, duplicate IDs, or invalid fields
       When Taskledger validates project configuration

@@ -14,8 +14,7 @@ from taskledger.services.check_tracking import classify_check_command
 
 
 class TestImplementationCheckRecordRoundTrip:
-    # sw: f=specs/behavior/features/implementation_checks/implementation-checks.feature
-    # sw: s=@bdd-implementation-checks-to-dict-from-dict-round-trip
+    # specmason: req=REQ-0026 ac=AC-0322
     def test_to_dict_from_dict_round_trip(self) -> None:
         record = ImplementationCheckRecord(
             check_id="check-0001",
@@ -33,6 +32,7 @@ class TestImplementationCheckRecordRoundTrip:
         restored = ImplementationCheckRecord.from_dict(data)
         assert restored == record
 
+    # specmason: req=REQ-0026 ac=AC-0322
     def test_from_dict_rejects_wrong_object_type(self) -> None:
         data = {
             "object_type": "change",
@@ -46,6 +46,7 @@ class TestImplementationCheckRecordRoundTrip:
         with pytest.raises(Exception, match="object_type"):
             ImplementationCheckRecord.from_dict(data)
 
+    # specmason: req=REQ-0026 ac=AC-0322
     def test_from_dict_rejects_unknown_status(self) -> None:
         data = {
             "object_type": "implementation_check",
@@ -61,6 +62,7 @@ class TestImplementationCheckRecordRoundTrip:
         with pytest.raises(Exception, match="Unsupported check status"):
             ImplementationCheckRecord.from_dict(data)
 
+    # specmason: req=REQ-0026 ac=AC-0322
     def test_from_dict_rejects_unknown_category(self) -> None:
         data = {
             "object_type": "implementation_check",
@@ -76,6 +78,7 @@ class TestImplementationCheckRecordRoundTrip:
         with pytest.raises(Exception, match="Unsupported check category"):
             ImplementationCheckRecord.from_dict(data)
 
+    # specmason: req=REQ-0026 ac=AC-0320
     def test_missing_command_fails(self) -> None:
         data = {
             "object_type": "implementation_check",
@@ -89,8 +92,7 @@ class TestImplementationCheckRecordRoundTrip:
         with pytest.raises(Exception, match="command"):
             ImplementationCheckRecord.from_dict(data)
 
-    # sw: f=specs/behavior/features/implementation_checks/implementation-checks.feature
-    # sw: s=@bdd-implementation-checks-defaults
+    # specmason: req=REQ-0026 ac=AC-0319
     def test_defaults(self) -> None:
         data = {
             "object_type": "implementation_check",
@@ -219,8 +221,7 @@ def _prepare_task_with_impl_run(tmp_path: Path) -> str:
 
 
 class TestImplementCommandCreatesCheck:
-    # sw: f=specs/behavior/features/implementation_checks/implementation-checks.feature
-    # sw: s=@bdd-implementation-checks-creates-check-not-change
+    # specmason: req=REQ-0026 ac=AC-0318
     def test_creates_check_not_change(self, tmp_path: Path) -> None:
         root = _prepare_task_with_impl_run(tmp_path)
         runner = CliRunner()
@@ -244,8 +245,7 @@ class TestImplementCommandCreatesCheck:
         assert payload["result"]["check"]["check_id"].startswith("check-")
         assert payload["result"]["change"] is None
 
-    # sw: f=specs/behavior/features/implementation_checks/implementation-checks.feature
-    # sw: s=@bdd-implementation-checks-check-has-category
+    # specmason: req=REQ-0026 ac=AC-0316
     def test_check_has_category(self, tmp_path: Path) -> None:
         root = _prepare_task_with_impl_run(tmp_path)
         runner = CliRunner()
@@ -270,8 +270,7 @@ class TestImplementCommandCreatesCheck:
         payload = json.loads(r.output)
         assert payload["result"]["check"]["category"] == "test"
 
-    # sw: f=specs/behavior/features/implementation_checks/implementation-checks.feature
-    # sw: s=@bdd-implementation-checks-check-refs-on-run
+    # specmason: req=REQ-0026 ac=AC-0317
     def test_check_refs_on_run(self, tmp_path: Path) -> None:
         root = _prepare_task_with_impl_run(tmp_path)
         runner = CliRunner()
@@ -304,8 +303,7 @@ class TestImplementCommandCreatesCheck:
         run = resolve_run(P(root), task.id, task.latest_implementation_run)
         assert check_id in run.check_refs
 
-    # sw: f=specs/behavior/features/implementation_checks/implementation-checks.feature
-    # sw: s=@bdd-implementation-checks-human-output-shows-check
+    # specmason: req=REQ-0026 ac=AC-0321
     def test_human_output_shows_check(self, tmp_path: Path) -> None:
         root = _prepare_task_with_impl_run(tmp_path)
         runner = CliRunner()
@@ -316,8 +314,7 @@ class TestImplementCommandCreatesCheck:
         assert r.exit_code == 0, r.output
         assert "recorded check check-" in r.output
 
-    # sw: f=specs/behavior/features/implementation_checks/implementation-checks.feature
-    # sw: s=@bdd-implementation-checks-failed-command-creates-failed-check
+    # specmason: req=REQ-0026 ac=AC-0320
     def test_failed_command_creates_failed_check(self, tmp_path: Path) -> None:
         root = _prepare_task_with_impl_run(tmp_path)
         runner = CliRunner()
@@ -340,8 +337,7 @@ class TestImplementCommandCreatesCheck:
         assert payload["result"]["check"]["status"] == "failed"
         assert payload["result"]["check"]["exit_code"] == 1
 
-    # sw: f=specs/behavior/features/implementation_checks/implementation-checks.feature
-    # sw: s=@bdd-implementation-checks-allow-failure-records-check
+    # specmason: req=REQ-0026 ac=AC-0315
     def test_allow_failure_records_check(self, tmp_path: Path) -> None:
         root = _prepare_task_with_impl_run(tmp_path)
         runner = CliRunner()

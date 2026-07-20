@@ -93,8 +93,7 @@ def _init_task_with_questions(tmp_path: Path) -> None:
 # --- --status filter tests ---
 
 
-# sw: f=specs/behavior/features/question_filter_answers/question-filter-answers.feature
-# sw: s=@bdd-question-filter-answers-list-filters-by-status
+# specmason: req=REQ-0043 ac=AC-0488
 def test_list_with_status_answered(tmp_path: Path) -> None:
     _init_task_with_questions(tmp_path)
     result = _json(
@@ -117,6 +116,7 @@ def test_list_with_status_answered(tmp_path: Path) -> None:
     assert items[0]["id"] == "q-0001"
 
 
+# specmason: req=REQ-0043 ac=AC-0492
 def test_list_with_status_dismissed(tmp_path: Path) -> None:
     _init_task_with_questions(tmp_path)
     result = _json(
@@ -161,8 +161,7 @@ def test_list_with_comma_separated_status(tmp_path: Path) -> None:
     assert statuses == {"answered", "dismissed"}
 
 
-# sw: f=specs/behavior/features/question_filter_answers/question-filter-answers.feature
-# sw: s=@bdd-question-filter-answers-list-without-status-returns-all
+# specmason: req=REQ-0043 ac=AC-0492
 def test_list_without_status_returns_all(tmp_path: Path) -> None:
     _init_task_with_questions(tmp_path)
     result = _json(
@@ -175,6 +174,7 @@ def test_list_without_status_returns_all(tmp_path: Path) -> None:
     assert len(items) == 2
 
 
+# specmason: req=REQ-0043 ac=AC-0492
 def test_list_with_status_open_returns_empty(tmp_path: Path) -> None:
     _init_task_with_questions(tmp_path)
     result = _json(
@@ -190,8 +190,7 @@ def test_list_with_status_open_returns_empty(tmp_path: Path) -> None:
 # --- answers command tests ---
 
 
-# sw: f=specs/behavior/features/question_filter_answers/question-filter-answers.feature
-# sw: s=@bdd-question-filter-answers-answers-markdown-format
+# specmason: req=REQ-0043 ac=AC-0489
 def test_answers_markdown_format(tmp_path: Path) -> None:
     _init_task_with_questions(tmp_path)
     result = runner.invoke(
@@ -204,8 +203,7 @@ def test_answers_markdown_format(tmp_path: Path) -> None:
     assert "A: A1" in result.output
 
 
-# sw: f=specs/behavior/features/question_filter_answers/question-filter-answers.feature
-# sw: s=@bdd-question-filter-answers-json-output-is-structured
+# specmason: req=REQ-0043 ac=AC-0489
 def test_answers_json_format(tmp_path: Path) -> None:
     _init_task_with_questions(tmp_path)
     result = _json(
@@ -230,8 +228,7 @@ def test_answers_json_format(tmp_path: Path) -> None:
     assert questions[0]["answer"] == "A1"
 
 
-# sw: f=specs/behavior/features/question_filter_answers/question-filter-answers.feature
-# sw: s=@bdd-question-filter-answers-answers-empty-when-none-answered
+# specmason: req=REQ-0043 ac=AC-0488
 def test_answers_empty_when_none_answered(tmp_path: Path) -> None:
     init_workspace(tmp_path)
     assert (
@@ -264,8 +261,9 @@ def test_answers_empty_when_none_answered(tmp_path: Path) -> None:
 # --- empty answer validation test ---
 
 
-# sw: f=specs/behavior/features/question_filter_answers/question-filter-answers.feature
-# sw: s=@bdd-question-filter-answers-answer-empty-text-rejected
+# specmason: req=REQ-0043 ac=AC-0486
+# specmason: req=REQ-0043 ac=AC-0490
+# specmason: req=REQ-0043 ac=AC-0491
 def test_answer_empty_text_rejected(tmp_path: Path) -> None:
     init_workspace(tmp_path)
     assert (
@@ -305,8 +303,7 @@ def test_answer_empty_text_rejected(tmp_path: Path) -> None:
     assert "empty" in payload["error"]["message"].lower()
 
 
-# sw: f=specs/behavior/features/question_filter_answers/question-filter-answers.feature
-# sw: s=@bdd-question-filter-answers-answer-whitespace-only-rejected
+# specmason: req=REQ-0043 ac=AC-0487
 def test_answer_whitespace_only_rejected(tmp_path: Path) -> None:
     init_workspace(tmp_path)
     assert (

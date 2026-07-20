@@ -52,12 +52,12 @@ def _registered_command_paths() -> set[str]:
     return paths
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-registered-commands-have-complete-metadata
+# specmason: req=REQ-0011 ac=AC-0114
 def test_registered_commands_have_inventory_metadata() -> None:
     assert _registered_command_paths() == set(COMMAND_METADATA)
 
 
+# specmason: req=REQ-0011 ac=AC-0108
 def test_inventory_marks_core_and_repair_commands() -> None:
     assert COMMAND_METADATA["task create"].audience == STABLE_FOR_AGENTS
     assert COMMAND_METADATA["plan approve"].audience == STABLE_FOR_AGENTS
@@ -71,8 +71,7 @@ def test_inventory_marks_core_and_repair_commands() -> None:
     assert COMMAND_METADATA["doctor"].audience == REPAIR
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-plan-review-is-classified-read-only
+# specmason: req=REQ-0011 ac=AC-0112
 def test_plan_review_is_classified_read_only() -> None:
     spec = COMMAND_METADATA["plan review"]
     assert spec.effect == "safe_read_only"
@@ -80,8 +79,7 @@ def test_plan_review_is_classified_read_only() -> None:
     assert spec.targeting == TARGETING_ACTIVE_DEFAULT
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-mutations-are-not-safe-read-only
+# specmason: req=REQ-0011 ac=AC-0111
 def test_mutating_commands_are_not_marked_safe_read_only() -> None:
     mutating_suffixes = {
         "activate",
@@ -134,6 +132,7 @@ def test_mutating_commands_are_not_marked_safe_read_only() -> None:
 # ── new metadata tests ────────────────────────────────────────────────
 
 
+# specmason: req=REQ-0011 ac=AC-0111
 def test_all_commands_have_ledger_effect() -> None:
     """Every command must have a non-empty ledger_effect after migration."""
     empty = [k for k, v in COMMAND_METADATA.items() if not v.ledger_effect]
@@ -177,8 +176,7 @@ def test_critical_tier_is_primary_surface() -> None:
     assert non_primary == [], f"Non-primary critical commands: {non_primary}"
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-lock-break-is-deprecated
+# specmason: req=REQ-0011 ac=AC-0110
 def test_lock_break_is_deprecated() -> None:
     spec = COMMAND_METADATA["lock break"]
     assert spec.deprecated is True
@@ -186,6 +184,7 @@ def test_lock_break_is_deprecated() -> None:
     assert spec.tier == TIER_RARE
 
 
+# specmason: req=REQ-0011 ac=AC-0108
 def test_no_other_deprecated_commands() -> None:
     """Deprecated commands should stay limited and intentional."""
     deprecated = sorted(k for k, v in COMMAND_METADATA.items() if v.deprecated)
@@ -197,8 +196,7 @@ def test_no_other_deprecated_commands() -> None:
     ]
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-process-exec-commands
+# specmason: req=REQ-0011 ac=AC-0113
 def test_process_exec_commands() -> None:
     """Commands that execute subprocesses must have process_exec."""
     process_cmds = [
@@ -210,6 +208,7 @@ def test_process_exec_commands() -> None:
     assert "plan command" in process_cmds
 
 
+# specmason: req=REQ-0011 ac=AC-0114
 def test_monitor_and_file_commands_have_expected_metadata() -> None:
     assert COMMAND_METADATA["monitor"].agent_safe is False
     assert COMMAND_METADATA["usage"].targeting == TARGETING_POSITIONAL_OR_ACTIVE
@@ -218,8 +217,7 @@ def test_monitor_and_file_commands_have_expected_metadata() -> None:
     assert COMMAND_METADATA["file refresh"].targeting == TARGETING_EXPLICIT_REQUIRED
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-file-write-commands
+# specmason: req=REQ-0011 ac=AC-0108
 def test_file_write_commands() -> None:
     """Export and snapshot write external files."""
     file_write_cmds = [
@@ -232,6 +230,7 @@ def test_file_write_commands() -> None:
     assert "plan template" in file_write_cmds
 
 
+# specmason: req=REQ-0011 ac=AC-0113
 def test_workspace_read_commands() -> None:
     """Search/grep/symbols/deps read the workspace filesystem."""
     for cmd in ("search", "grep", "symbols", "deps"):
@@ -239,8 +238,7 @@ def test_workspace_read_commands() -> None:
         assert COMMAND_METADATA[cmd].ledger_effect == EFFECT_NONE, cmd
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-repair-commands-remain-rare
+# specmason: req=REQ-0011 ac=AC-0115
 def test_repair_commands_are_rare() -> None:
     """All repair/doctor/migration commands should be rare tier."""
     repair_cmds = [
@@ -250,8 +248,7 @@ def test_repair_commands_are_rare() -> None:
     assert non_rare == [], f"Repair commands not rare: {non_rare}"
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-advanced-operations-are-not-in-agent-golden-path
+# specmason: req=REQ-0011 ac=AC-0105
 def test_advanced_operations_are_not_in_agent_golden_path() -> None:
     advanced_normal_work_exclusions = {
         "release tag",
@@ -302,6 +299,7 @@ def test_ledger_effect_values_are_valid() -> None:
     assert invalid == [], f"Commands with invalid ledger_effect: {invalid}"
 
 
+# specmason: req=REQ-0011 ac=AC-0111
 def test_legacy_mutation_commands_classified_correctly() -> None:
     """Commands with effect=ledger_mutation that are not ledger writes
     should have explicit non-write ledger_effect (export reads to file)."""
@@ -314,6 +312,7 @@ def test_legacy_mutation_commands_classified_correctly() -> None:
     assert sorted(legacy_mut_not_write) == ["export", "sync export"]
 
 
+# specmason: req=REQ-0011 ac=AC-0109
 def test_read_only_commands_have_read_or_none_ledger_effect() -> None:
     """safe_read_only effect should have read or none ledger_effect."""
     mismatches = [
@@ -325,8 +324,7 @@ def test_read_only_commands_have_read_or_none_ledger_effect() -> None:
     assert mismatches == [], f"Bad read-only ledger_effect: {mismatches}"
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-deprecated-hidden-by-default-in-commands-cli
+# specmason: req=REQ-0011 ac=AC-0107
 def test_deprecated_hidden_by_default_in_commands_cli() -> None:
     """taskledger commands should not show lock break."""
     from typer.testing import CliRunner
@@ -358,8 +356,7 @@ def test_sync_git_command_metadata_matches_revised_surface() -> None:
     assert COMMAND_METADATA["sync git sync"].deprecated is True
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-tier-filter-in-commands-cli
+# specmason: req=REQ-0011 ac=AC-0116
 def test_tier_filter_in_commands_cli() -> None:
     """taskledger commands --tier critical returns only critical commands."""
     from typer.testing import CliRunner
@@ -378,8 +375,7 @@ def test_tier_filter_in_commands_cli() -> None:
     assert len(data_lines) == len(critical_names)
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-commands-json-includes-new-fields
+# specmason: req=REQ-0011 ac=AC-0106
 def test_commands_json_includes_new_fields() -> None:
     """taskledger --json commands should include all new metadata fields."""
     import json
@@ -419,8 +415,7 @@ def test_targeting_values_are_valid() -> None:
     assert invalid == [], f"Commands with invalid targeting: {invalid}"
 
 
-# sw: f=specs/behavior/features/command_inventory/command-inventory.feature
-# sw: s=@bdd-command-inventory-key-commands-have-stable-targeting
+# specmason: req=REQ-0011 ac=AC-0116
 def test_targeting_metadata_for_key_commands() -> None:
     assert COMMAND_METADATA["plan start"].targeting == TARGETING_ACTIVE_DEFAULT
     assert COMMAND_METADATA["implement start"].targeting == TARGETING_ACTIVE_DEFAULT
