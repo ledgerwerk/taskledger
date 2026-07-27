@@ -41,6 +41,15 @@ external at `../ledger`; indexes are cache storage. Use `taskledger storage wher
 and `taskledger storage set` for storage selection. Branch state remains in
 the resolved data mount's `state.toml`.
 
+The manifest registration is authoritative. A `.ledger/taskledger/` directory
+or `config.toml` does not register Taskledger until `[ledgers.taskledger]` is
+present in `.ledger/ledger.toml`. Once a canonical manifest is found, discovery
+never falls back to `taskledger.toml`, `.taskledger.toml`, or `.taskledger/`.
+Reads are side-effect free, and canonical-unregistered mutations fail before
+writing; use `taskledger init` to add the registration. Doctor reports orphan
+configs, legacy shadows, and split-brain histories. Back up and recover those
+histories explicitly—Taskledger does not merge or delete them automatically.
+
 ## Storage migration recovery
 
 Legacy Taskledger data is discovered independently from the canonical Ledger manifest.

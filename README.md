@@ -5,11 +5,12 @@
 
 # taskledger
 
-`taskledger` is a task-first durable state layer for staged coding work. It keeps
-project-local configuration in `taskledger.toml` at the workspace root and stores
-plans, approval state, implementation logs, validation results, locks, and
-fresh-context handoffs under a configurable `taskledger_dir` (default:
-`.taskledger/` beside that config file).
+`taskledger` is a task-first durable state layer for staged coding work. New
+projects use Ledgercore's canonical `.ledger/ledger.toml` manifest and keep
+Taskledger configuration at `.ledger/taskledger/config.toml`. The manifest's
+`[ledgers.taskledger]` registration is authoritative; a config directory alone
+does not register the tool. Legacy `taskledger.toml`/`.taskledger` projects are
+supported only when no canonical manifest exists.
 
 ## Canonical workflow
 
@@ -258,6 +259,16 @@ taskledger --root /path/to/repo init
 `.ledger/taskledger/config.toml`. Default data is external at `../ledger`; indexes
 are cache storage. Use `storage set data user-data --local` for a local override.
 
+Canonical discovery is fail-closed. Once `.ledger/ledger.toml` is found,
+Taskledger never falls back to a root `taskledger.toml`, `.taskledger.toml`, or
+`.taskledger/`, including when the Taskledger registration, config, binding, or
+storage is missing or invalid. Read commands never initialize storage. In a
+canonical-unregistered project, `status`, `usage`, and `doctor` identify the
+manifest boundary and `taskledger init` is the next step; mutations stop before
+writing. If both canonical and legacy roots contain tasks, doctor reports a
+split-brain condition. Back up and inspect both histories before any explicit
+recovery; Taskledger never auto-deletes or merges them.
+
 Create and activate a task, ask required planning questions, regenerate the
 plan from answers, approve it, implement todos with evidence, and validate it:
 
@@ -470,7 +481,7 @@ Agents should keep using `taskledger next-action`, `taskledger todo next`, and
 work. Reach for `context` or handoffs when the task actually needs a broader
 fresh-context transfer.
 
-## Storage layout
+## Legacy storage layout
 
 `taskledger` keeps project-local configuration in the workspace root and durable
 records under the configured storage root. The checked-in `taskledger.toml`
@@ -490,6 +501,11 @@ taskledger.toml
       events/
       indexes/   # optional derived caches and registries
 ```
+
+For canonical projects, use `taskledger storage where` to inspect the resolved
+Ledgercore data and index mounts. The canonical config path is always
+`.ledger/taskledger/config.toml`; it is inactive until the manifest registers
+Taskledger.
 
 Markdown files are canonical. Task, plan, and run listings scan only the current
 ledger by default. JSON files under the current ledger's `indexes/` directory are

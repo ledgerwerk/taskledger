@@ -125,16 +125,14 @@ class V2Paths:
 
 
 def resolve_v2_paths(workspace_root: Path) -> V2Paths:
-    from taskledger.storage.ledger_config import load_ledger_config
-    from taskledger.storage.paths import load_project_locator
+    from taskledger.storage.paths import probe_taskledger_project
+    from taskledger.storage.project_context import load_project_context
 
-    try:
-        from taskledger.storage.project_context import load_project_context
-
-        context = load_project_context(workspace_root)
-    except LaunchError:
-        context = None
-    if context is not None and context.mode == "canonical":
+    probe = probe_taskledger_project(workspace_root)
+    if probe.source == "none":
+        return _resolve_legacy_v2_paths(workspace_root)
+    context = load_project_context(workspace_root, require_initialized=False)
+    if context.mode == "canonical":
         taskledger_root = context.paths.data_root
         ledger_dir = context.paths.ledger_data_dir
         indexes_dir = context.paths.ledger_indexes_dir
@@ -160,6 +158,13 @@ def resolve_v2_paths(workspace_root: Path) -> V2Paths:
             dependencies_index_path=context.paths.dependencies_index_path,
             introductions_index_path=context.paths.introductions_index_path,
         )
+    return _resolve_legacy_v2_paths(workspace_root)
+
+
+def _resolve_legacy_v2_paths(workspace_root: Path) -> V2Paths:
+    from taskledger.storage.ledger_config import load_ledger_config
+    from taskledger.storage.paths import load_project_locator
+
     locator = load_project_locator(workspace_root)
     taskledger_root = locator.taskledger_dir
     config = load_ledger_config(locator.config_path)
@@ -189,8 +194,17 @@ def resolve_v2_paths(workspace_root: Path) -> V2Paths:
     )
 
 
-def ensure_v2_layout(workspace_root: Path) -> V2Paths:
-    paths = resolve_v2_paths(workspace_root)
+def initialize_v2_layout(workspace_root: Path) -> V2Paths:
+    try:
+        paths = resolve_v2_paths(workspace_root)
+    except LaunchError:
+        from taskledger.storage.paths import probe_taskledger_project
+
+        if probe_taskledger_project(workspace_root).source == "canonical":
+            raise
+        # Explicit callers historically used this initializer to bootstrap a
+        # legacy layout before a config file existed. Read paths never use it.
+        paths = _resolve_legacy_v2_paths(workspace_root)
     for directory in (
         paths.project_dir,
         paths.introductions_dir,
@@ -213,8 +227,33 @@ def ensure_v2_layout(workspace_root: Path) -> V2Paths:
     return paths
 
 
+def require_v2_layout(workspace_root: Path) -> V2Paths:
+    """Resolve an initialized layout without creating directories or indexes."""
+    paths = resolve_v2_paths(workspace_root)
+    required = (paths.project_dir, paths.tasks_dir, paths.events_dir, paths.indexes_dir)
+    missing = [path for path in required if not path.exists()]
+    if missing:
+        raise LaunchError(
+            "Project state is not initialized. Missing: "
+            + ", ".join(str(path) for path in missing)
+            + ". Run `taskledger init`."
+        )
+    return paths
+
+
+def ensure_v2_layout(workspace_root: Path) -> V2Paths:
+    """Compatibility alias for explicit callers that intentionally initialize."""
+    from taskledger.storage.paths import probe_taskledger_project
+
+    if probe_taskledger_project(workspace_root).source == "canonical":
+        from taskledger.storage.project_context import require_mutable_project_context
+
+        require_mutable_project_context(workspace_root, allow_legacy=False)
+    return initialize_v2_layout(workspace_root)
+
+
 def list_tasks(workspace_root: Path) -> list[TaskRecord]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     return sorted(
         [_load_task(path) for path in paths.tasks_dir.glob("task-*/task.md")],
         key=lambda item: item.id,
@@ -284,7 +323,7 @@ def resolve_task(
 
 
 def load_active_task_state(workspace_root: Path) -> ActiveTaskState | None:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     if not paths.active_task_path.exists():
         return None
     payload = load_yaml_object(
@@ -311,7 +350,7 @@ def clear_active_task_state(workspace_root: Path) -> ActiveTaskState | None:
 
 
 def load_actor_state(workspace_root: Path) -> ActiveActorState | None:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     if not paths.actor_path.exists():
         return None
     payload = load_yaml_object(paths.actor_path, "actor state", missing="empty")
@@ -336,7 +375,7 @@ def clear_actor_state(workspace_root: Path) -> ActiveActorState | None:
 
 
 def load_harness_state(workspace_root: Path) -> ActiveHarnessState | None:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     if not paths.harness_path.exists():
         return None
     payload = load_yaml_object(paths.harness_path, "harness state", missing="empty")
@@ -413,7 +452,7 @@ def save_task(workspace_root: Path, task: TaskRecord) -> TaskRecord:
 
 
 def list_introductions(workspace_root: Path) -> list[IntroductionRecord]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     return sorted(
         [_load_intro(path) for path in paths.introductions_dir.glob("intro-*.md")],
         key=lambda item: item.id,
@@ -421,7 +460,7 @@ def list_introductions(workspace_root: Path) -> list[IntroductionRecord]:
 
 
 def list_releases(workspace_root: Path) -> list[ReleaseRecord]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     return sorted(
         [_load_release(path) for path in paths.releases_dir.glob("*.md")],
         key=lambda item: (task_numeric_sort_key(item.boundary_task_id), item.version),
@@ -429,7 +468,7 @@ def list_releases(workspace_root: Path) -> list[ReleaseRecord]:
 
 
 def resolve_release(workspace_root: Path, version: str) -> ReleaseRecord:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     path = release_markdown_path(paths, version)
     if not path.exists():
         raise LaunchError(f"Release not found: {version}")
@@ -489,7 +528,7 @@ def rewrite_task_refs(task_dir: Path, old_task_id: str, new_task_id: str) -> Non
 
 
 def list_plans(workspace_root: Path, task_id: str) -> list[PlanRecord]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     return list_plans_from_paths(paths, task_id)
 
 
@@ -539,7 +578,7 @@ def resolve_plan(
 
 
 def list_questions(workspace_root: Path, task_id: str) -> list[QuestionRecord]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     return list_questions_from_paths(paths, task_id)
 
 
@@ -583,7 +622,7 @@ def save_question(workspace_root: Path, question: QuestionRecord) -> QuestionRec
 
 
 def list_runs(workspace_root: Path, task_id: str) -> list[TaskRunRecord]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     return list_runs_from_paths(paths, task_id)
 
 
@@ -622,7 +661,7 @@ def save_run(workspace_root: Path, run: TaskRunRecord) -> TaskRunRecord:
 
 
 def list_changes(workspace_root: Path, task_id: str) -> list[CodeChangeRecord]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     return list_changes_from_paths(paths, task_id)
 
 
@@ -683,7 +722,7 @@ def resolve_check(
 
 
 def list_code_reviews(workspace_root: Path, task_id: str) -> list[CodeReviewRecord]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     directory = task_reviews_dir(paths, task_id)
     return sorted(
         [_load_code_review(path) for path in directory.glob("review-*.md")],
@@ -732,7 +771,7 @@ def resolve_code_review(
 
 
 def load_active_locks(workspace_root: Path) -> list[TaskLock]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     return load_active_locks_from_paths(paths)
 
 
@@ -746,7 +785,7 @@ def load_active_locks_from_paths(paths: V2Paths) -> list[TaskLock]:
 
 
 def load_todos(workspace_root: Path, task_id: str) -> TodoCollection:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     return load_todos_from_paths(paths, task_id)
 
 
@@ -797,7 +836,7 @@ def save_todos(workspace_root: Path, collection: TodoCollection) -> TodoCollecti
 
 
 def load_links(workspace_root: Path, task_id: str) -> LinkCollection:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     directory = task_links_dir(paths, task_id)
     records = sorted(
         [_load_record(p, FileLink.from_dict) for p in directory.glob("link-*.md")],
@@ -837,7 +876,7 @@ def save_links(workspace_root: Path, collection: LinkCollection) -> LinkCollecti
 
 
 def load_requirements(workspace_root: Path, task_id: str) -> RequirementCollection:
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
     directory = task_requirements_dir(paths, task_id)
     records = sorted(
         [

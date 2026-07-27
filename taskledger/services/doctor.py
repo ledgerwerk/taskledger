@@ -269,7 +269,7 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:  # no
 
 def inspect_v2_project(workspace_root: Path) -> dict[str, object]:
     """Run doctor checks through the phase-based scan implementation."""
-    return _inspect_v2_project_phases(workspace_root)
+    return _inspect_v2_project_with_boundary(workspace_root)
 
 
 def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
@@ -419,3 +419,47 @@ def cleanup_orphan_slug_dirs(workspace_root: Path) -> dict[str, object]:
         "removed": removed,
         "count": len(removed),
     }
+
+
+def _inspect_v2_project_with_boundary(workspace_root: Path) -> dict[str, object]:
+    from taskledger.errors import TaskledgerRegistrationMissing
+    from taskledger.services.doctor_checks.project_scan import (
+        scan_canonical_boundary,
+    )
+
+    try:
+        return _inspect_v2_project_phases(workspace_root)
+    except TaskledgerRegistrationMissing as exc:
+        boundary = scan_canonical_boundary(workspace_root)
+        errors = list(cast(list[object], boundary["errors"]))
+        warnings = list(cast(list[object], boundary["warnings"]))
+        diagnostics = list(cast(list[object], boundary["diagnostics"]))
+        errors.append(str(exc))
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": exc.code,
+                "message": str(exc),
+                "details": dict(exc.details),
+            }
+        )
+        return {
+            "kind": "taskledger_doctor",
+            "counts": {
+                "tasks": 0,
+                "plans": 0,
+                "questions": 0,
+                "runs": 0,
+                "changes": 0,
+                "locks": 0,
+                "active_task": 0,
+            },
+            "healthy": False,
+            "errors": errors,
+            "warnings": warnings,
+            "repair_hints": list(cast(list[object], boundary["repair_hints"])),
+            "broken_links": [],
+            "expired_locks": [],
+            "run_lock_mismatches": [],
+            "diagnostics": diagnostics,
+        }

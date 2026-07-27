@@ -10,6 +10,7 @@ from taskledger.errors import LaunchError
 from taskledger.storage.ledgercore_backend import (
     execute_taskledger_layout_migration,
 )
+from taskledger.storage.paths import probe_taskledger_project
 from taskledger.storage.task_store import load_active_locks
 
 
@@ -30,6 +31,9 @@ class TaskledgerMigrationPlan:
 
 
 def require_no_active_taskledger_locks(project_root: Path) -> None:
+    probe = probe_taskledger_project(project_root)
+    if probe.source == "canonical" and not probe.registration_present:
+        return
     locks = load_active_locks(project_root)
     if locks:
         raise LaunchError(

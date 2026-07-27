@@ -770,6 +770,23 @@ Domain terms used throughout taskledger. The full glossary lives in the per-term
 | Front Matter         | The YAML metadata block at the top of a canonical record file, delimited by ---.                              |
 | Worker Pipeline      | An optional advisory overlay that guides fresh-context handoffs through sequential worker steps.              |
 
-## Ledgercore 0.3 storage boundary
+## Canonical project boundary and Ledgercore storage boundary
 
-Canonical project discovery, project identity, checkout identity, storage-class resolution, scope resolution, and physical mount resolution belong to Ledgercore. Taskledger owns manifest registration mutation, config validation, data state, record layout, migration planning, backup, and verification.
+Canonical project discovery, project identity, checkout identity, storage-class
+resolution, scope resolution, and physical mount resolution belong to Ledgercore.
+Taskledger owns manifest registration mutation, config validation, data state,
+record layout, migration planning, backup, and verification.
+
+`.ledger/ledger.toml` is the authoritative project boundary. Taskledger returns
+that boundary even when `[ledgers.taskledger]` is absent and reports
+`TASKLEDGER_REGISTRATION_MISSING` rather than selecting a legacy project inside
+the same checkout. `.ledger/taskledger/config.toml` and its binding marker do
+not register a tool by themselves. Read paths resolve without `mkdir`, index
+writes, or project-local agent logs; initialization is explicit.
+
+Doctor reports `TASKLEDGER_ORPHAN_CANONICAL_CONFIG` for an inactive canonical
+config, `TASKLEDGER_SHADOW_LEGACY_PROJECT` for a `.taskledger/ledgers` shadow,
+and `TASKLEDGER_SPLIT_BRAIN` when both roots contain task records. Recovery is
+operator-led: back up both roots, register and verify the canonical project,
+then migrate or archive one history explicitly. No automatic deletion or merge
+is safe because IDs, events, active state, locks, plans, and runs may conflict.

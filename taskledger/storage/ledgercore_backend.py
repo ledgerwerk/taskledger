@@ -40,6 +40,7 @@ from ledgercore.manifest import (
     LedgerRegistration,
     MountDefinition,
 )
+from ledgercore.storage_binding import StorageBindingError, read_storage_binding
 
 TOOL_NAME = "taskledger"
 DATA_MOUNT = "data"
@@ -131,6 +132,20 @@ def load_taskledger_ledger_layout(
                     bundle.loaded_project, bundle.resolved_layout, None
                 )
             return bundle
+        if (
+            getattr(manifest, "schema_version", None) == 3
+            and TOOL_NAME not in manifest.ledgers
+        ):
+            from taskledger.errors import TaskledgerRegistrationMissing
+
+            orphan_config = locator.project_root / ".ledger" / TOOL_NAME / "config.toml"
+            raise TaskledgerRegistrationMissing(
+                project_root=str(locator.project_root),
+                manifest_path=str(locator.manifest_path),
+                tool_config_path=str(orphan_config),
+                orphan_config_present=orphan_config.exists(),
+                ledgercore_code="UNKNOWN_LEDGER_REGISTRATION",
+            )
     loaded = _call(
         lambda: load_ledger_project(
             start,
@@ -267,15 +282,21 @@ def initialize_taskledger_bindings(
     if initialize_config:
         results["config"] = _call(lambda: initialize_config_binding(layout))
     if initialize_data:
+        data_mount = layout.mounts[DATA_MOUNT]
         results[DATA_MOUNT] = _call(
             lambda: initialize_storage_binding(
-                layout.mounts[DATA_MOUNT], require_empty=True
+                data_mount,
+                require_empty=not (data_mount.path / ".ledger-project.toml").exists(),
             )
         )
     if initialize_indexes:
+        indexes_mount = layout.mounts[INDEX_MOUNT]
         results[INDEX_MOUNT] = _call(
             lambda: initialize_storage_binding(
-                layout.mounts[INDEX_MOUNT], require_empty=True
+                indexes_mount,
+                require_empty=not (
+                    indexes_mount.path / ".ledger-project.toml"
+                ).exists(),
             )
         )
     return results
@@ -446,4 +467,6 @@ __all__ = [
     "recover_taskledger_migration",
     "set_taskledger_mount_target",
     "build_taskledger_manifest_with_registration",
+    "StorageBindingError",
+    "read_storage_binding",
 ]

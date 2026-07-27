@@ -9,11 +9,14 @@ from taskledger.errors import LaunchError
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.common import write_text
 from taskledger.storage.ledgercore_backend import (
+    StorageBindingError,
     ensure_taskledger_ledger_registration,
     initialize_taskledger_bindings,
     initialize_taskledger_external_store,
     load_taskledger_ledger_layout,
     locate_taskledger_project,
+    read_ledger_manifest,
+    read_storage_binding,
 )
 from taskledger.storage.meta import StorageMeta, write_storage_meta
 from taskledger.storage.paths import (
@@ -23,6 +26,7 @@ from taskledger.storage.paths import (
     project_paths_for_root,
 )
 from taskledger.storage.project_config import (
+    load_canonical_project_config,
     render_canonical_taskledger_config,
     render_default_taskledger_toml,
 )
@@ -181,41 +185,61 @@ def init_canonical_project_state(
         )
     selected_uuid = project_uuid or str(uuid.uuid4())
     effective_name = project_name or root.name
+    manifest_path = root / ".ledger" / "ledger.toml"
+    previous_manifest = (
+        manifest_path.read_text(encoding="utf-8") if manifest_path.exists() else None
+    )
+    existing_registration = None
     if discovered is not None and not discovered.is_legacy:
-        try:
-            current = load_taskledger_ledger_layout(root, validate_storage=False)
-        except LaunchError:
-            current = None
-        if current is not None:
-            selected_uuid = current.loaded_project.manifest.project_uuid
-            effective_name = (
-                project_name
-                or current.loaded_project.manifest.project_name
-                or effective_name
+        manifest = read_ledger_manifest(discovered.manifest_path)
+        selected_uuid = manifest.project_uuid
+        if project_uuid is not None and str(uuid.UUID(project_uuid)) != selected_uuid:
+            raise LaunchError(
+                "EXPLICIT_PROJECT_UUID_CONFLICT: project UUID conflicts with the "
+                "existing Ledger manifest.",
+                code="EXPLICIT_PROJECT_UUID_CONFLICT",
+                details={"expected": selected_uuid, "actual": project_uuid},
             )
-    ensure_taskledger_ledger_registration(
-        root,
-        project_uuid=selected_uuid,
-        project_name=effective_name,
-        data_storage=data_storage,
-        external_root=external_root,
-    )
-    bundle = load_taskledger_ledger_layout(root, validate_storage=False)
-    layout = bundle.resolved_layout
-    created: list[str] = []
-    if initialize_taskledger_external_store(layout):
-        data_root = layout.mounts["data"].root
-        if data_root is not None:
-            created.append(str(data_root))
-    initialize_taskledger_bindings(
-        layout,
-        initialize_config=True,
-        initialize_data=True,
-        initialize_indexes=True,
-    )
-    if layout.tool_config_path is not None and not layout.tool_config_path.exists():
-        atomic_write_text(layout.tool_config_path, render_canonical_taskledger_config())
-        created.append(str(layout.tool_config_path))
+        effective_name = project_name or manifest.project_name or effective_name
+        existing_registration = manifest.ledgers.get("taskledger")
+        _validate_existing_canonical_taskledger_config(root, selected_uuid)
+        if existing_registration is not None:
+            existing_data = existing_registration.mounts.get("data")
+            if existing_data is not None:
+                data_storage = str(existing_data.storage)
+                external_root = existing_data.external_root
+    try:
+        ensure_taskledger_ledger_registration(
+            root,
+            project_uuid=selected_uuid,
+            project_name=effective_name,
+            data_storage=data_storage,
+            external_root=external_root,
+        )
+        bundle = load_taskledger_ledger_layout(root, validate_storage=False)
+        layout = bundle.resolved_layout
+        created: list[str] = []
+        if initialize_taskledger_external_store(layout):
+            data_root = layout.mounts["data"].root
+            if data_root is not None:
+                created.append(str(data_root))
+        initialize_taskledger_bindings(
+            layout,
+            initialize_config=True,
+            initialize_data=True,
+            initialize_indexes=True,
+        )
+        if layout.tool_config_path is not None and not layout.tool_config_path.exists():
+            atomic_write_text(
+                layout.tool_config_path, render_canonical_taskledger_config()
+            )
+            created.append(str(layout.tool_config_path))
+    except Exception:
+        if previous_manifest is not None:
+            atomic_write_text(manifest_path, previous_manifest)
+        elif manifest_path.exists():
+            manifest_path.unlink()
+        raise
     paths = load_project_context(
         root, require_initialized=False, allow_legacy=False
     ).paths
@@ -252,6 +276,58 @@ def init_canonical_project_state(
         )
         created.append(str(paths.state_path))
     return load_project_context(root), created
+
+
+def _validate_existing_canonical_taskledger_config(
+    root: Path,
+    project_uuid: str,
+) -> None:
+    """Validate orphan config and its optional existing Ledgercore marker."""
+    config_dir = root / ".ledger" / "taskledger"
+    config_path = config_dir / "config.toml"
+    marker_path = config_dir / ".ledger-project.toml"
+    if config_path.exists():
+        try:
+            load_canonical_project_config(config_path)
+        except LaunchError as exc:
+            raise LaunchError(
+                f"TASKLEDGER_ORPHAN_CONFIG_INVALID: {exc}",
+                code="TASKLEDGER_ORPHAN_CONFIG_INVALID",
+                details={"config_path": str(config_path)},
+            ) from exc
+    if not marker_path.exists():
+        return
+    try:
+        binding = read_storage_binding(marker_path)
+    except StorageBindingError as exc:
+        raise LaunchError(
+            f"TASKLEDGER_CONFIG_BINDING_INVALID: {exc}",
+            code="TASKLEDGER_CONFIG_BINDING_INVALID",
+            details={"binding_path": str(marker_path)},
+        ) from exc
+    expected = {
+        "project_uuid": project_uuid,
+        "tool": "taskledger",
+        "mount": "config",
+        "storage": "project",
+    }
+    actual = {
+        "project_uuid": binding.project_uuid,
+        "tool": binding.tool,
+        "mount": binding.mount,
+        "storage": binding.storage,
+    }
+    if actual != expected:
+        raise LaunchError(
+            "TASKLEDGER_CONFIG_BINDING_INVALID: existing Taskledger config "
+            "binding does not match the canonical project.",
+            code="TASKLEDGER_CONFIG_BINDING_INVALID",
+            details={
+                "binding_path": str(marker_path),
+                "expected": expected,
+                "actual": actual,
+            },
+        )
 
 
 __all__ = [

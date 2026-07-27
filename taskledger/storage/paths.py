@@ -25,6 +25,18 @@ class ProjectLocator:
 
 
 @dataclass(slots=True, frozen=True)
+class TaskledgerProjectProbe:
+    """Project-boundary discovery independent of Taskledger mount resolution."""
+
+    project_root: Path
+    source: Literal["canonical", "legacy", "none"]
+    manifest_path: Path | None
+    registration_present: bool
+    tool_config_path: Path | None
+    orphan_config_present: bool
+
+
+@dataclass(slots=True, frozen=True)
 class ProjectPaths:
     workspace_root: Path
     project_dir: Path
@@ -40,12 +52,16 @@ def resolve_taskledger_root(workspace_root: Path) -> Path:
 
 
 def resolve_project_paths(workspace_root: Path) -> ProjectPaths:
-    try:
-        from taskledger.storage.project_context import load_project_context
+    if probe_taskledger_project(workspace_root).source == "none":
+        locator = load_project_locator(workspace_root)
+        return project_paths_for_root(
+            locator.workspace_root,
+            locator.taskledger_dir,
+            config_path=locator.config_path,
+        )
+    from taskledger.storage.project_context import load_project_context
 
-        context = load_project_context(workspace_root, require_initialized=False)
-    except Exception:
-        context = None
+    context = load_project_context(workspace_root, require_initialized=False)
     if context is not None and context.mode == "canonical":
         return ProjectPaths(
             workspace_root=context.project_root,
@@ -73,6 +89,55 @@ def find_project_config(start: Path) -> Path | None:
     return find_config_upwards(start_path, PROJECT_CONFIG_FILENAMES)
 
 
+def probe_taskledger_project(start: Path) -> TaskledgerProjectProbe:
+    """Find the project boundary without resolving Taskledger storage mounts."""
+    start_path = start if start.is_dir() else start.parent
+    for current in _search_roots(start_path):
+        manifest_path = current / ".ledger" / "ledger.toml"
+        if manifest_path.is_file():
+            from ledgercore import LedgerCoreError, read_ledger_manifest
+
+            try:
+                manifest = read_ledger_manifest(manifest_path)
+            except LedgerCoreError as exc:
+                raise LaunchError(
+                    "CANONICAL_MANIFEST_INVALID: Unable to read "
+                    f"{manifest_path}: {exc}",
+                    code="CANONICAL_MANIFEST_INVALID",
+                    details={"manifest_path": str(manifest_path)},
+                ) from exc
+            config_path = current / ".ledger" / "taskledger" / "config.toml"
+            registration_present = "taskledger" in getattr(manifest, "ledgers", {})
+            return TaskledgerProjectProbe(
+                project_root=current.resolve(),
+                source="canonical",
+                manifest_path=manifest_path.resolve(),
+                registration_present=registration_present,
+                tool_config_path=config_path.resolve(),
+                orphan_config_present=(
+                    config_path.is_file() and not registration_present
+                ),
+            )
+    legacy_config_path = find_project_config(start_path)
+    if legacy_config_path is not None:
+        return TaskledgerProjectProbe(
+            project_root=legacy_config_path.parent.resolve(),
+            source="legacy",
+            manifest_path=None,
+            registration_present=False,
+            tool_config_path=legacy_config_path.resolve(),
+            orphan_config_present=False,
+        )
+    return TaskledgerProjectProbe(
+        project_root=start_path.resolve(),
+        source="none",
+        manifest_path=None,
+        registration_present=False,
+        tool_config_path=None,
+        orphan_config_present=False,
+    )
+
+
 def load_project_locator(
     start: Path,
     *,
@@ -85,19 +150,33 @@ def load_project_locator(
 
         canonical = locate_ledger_project(start_path)
         if canonical is not None and canonical.source == "canonical":
-            from taskledger.storage.project_context import load_project_context
+            from ledgercore import read_ledger_manifest
 
-            try:
-                context = load_project_context(start_path, require_initialized=False)
-            except LaunchError:
-                pass
-            else:
+            manifest = read_ledger_manifest(canonical.manifest_path)
+            if (
+                getattr(manifest, "schema_version", None) == 3
+                and "taskledger" not in manifest.ledgers
+            ):
                 return ProjectLocator(
-                    workspace_root=context.project_root,
-                    config_path=context.config_path,
-                    taskledger_dir=context.paths.data_root,
+                    workspace_root=canonical.project_root,
+                    config_path=(
+                        canonical.project_root
+                        / ".ledger"
+                        / "taskledger"
+                        / "config.toml"
+                    ),
+                    taskledger_dir=canonical.project_root / ".ledger" / "taskledger",
                     source="canonical",
                 )
+            from taskledger.storage.project_context import load_project_context
+
+            context = load_project_context(start_path, require_initialized=False)
+            return ProjectLocator(
+                workspace_root=context.project_root,
+                config_path=context.config_path,
+                taskledger_dir=context.paths.data_root,
+                source="canonical",
+            )
     config_path = find_project_config(start_path)
     if config_path is not None:
         workspace_root = config_path.parent
@@ -190,7 +269,10 @@ def _search_roots(start: Path) -> tuple[Path, ...]:
 
 def _find_legacy_workspace_root(start: Path) -> Path | None:
     for current in _search_roots(start):
-        if (current / DEFAULT_TASKLEDGER_DIR_NAME / "storage.yaml").exists():
+        taskledger_dir = current / DEFAULT_TASKLEDGER_DIR_NAME
+        if (taskledger_dir / "storage.yaml").exists() or (
+            taskledger_dir / "ledgers"
+        ).is_dir():
             return current
     return None
 

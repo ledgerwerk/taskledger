@@ -457,6 +457,19 @@ def _usage_error_command(argv: tuple[str, ...], exc: click.ClickException) -> st
 
 
 def _status_human(payload: dict[str, Any]) -> str:
+    if payload.get("mode") == "canonical-unregistered":
+        lines = [
+            "Taskledger status",
+            f"PROJECT root: {payload.get('workspace_root')}",
+            "Mode: canonical-unregistered",
+            f"Manifest: {payload.get('manifest_path')}",
+            "Registration: missing",
+            f"Config: {payload.get('config_path')}",
+        ]
+        if payload.get("orphan_config"):
+            lines.append(f"Orphan config: {payload.get('orphan_config')}")
+        lines.append("Next: taskledger init")
+        return "\n".join(lines)
     workspace = payload.get("workspace_root", "?")
     config_path = payload.get("config_path", "?")
     ledger_ref = payload.get("ledger_ref", "?")

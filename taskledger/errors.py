@@ -6,6 +6,11 @@ STORAGE_ERROR_CODES = frozenset(
     {
         "TASKLEDGER_MIGRATION_REQUIRED",
         "TASKLEDGER_REGISTRATION_MISSING",
+        "TASKLEDGER_ORPHAN_CONFIG_INVALID",
+        "TASKLEDGER_CONFIG_BINDING_INVALID",
+        "TASKLEDGER_ORPHAN_CANONICAL_CONFIG",
+        "TASKLEDGER_SHADOW_LEGACY_PROJECT",
+        "TASKLEDGER_SPLIT_BRAIN",
         "TASKLEDGER_REGISTRATION_CONFLICT",
         "TASKLEDGER_WORKSPACE_ENV_UNSUPPORTED",
         "TASKLEDGER_WORKSPACE_ROOT_CONFLICT",
@@ -137,6 +142,50 @@ class LaunchError(TaskledgerError):
 
     code = "LAUNCH_ERROR"
     error_type = "LaunchError"
+
+
+class TaskledgerRegistrationMissing(LaunchError):
+    """Raised when a canonical Ledger project has no Taskledger registration."""
+
+    code = "TASKLEDGER_REGISTRATION_MISSING"
+    exit_code = 6
+    error_type = "TaskledgerRegistrationMissing"
+
+    def __init__(
+        self,
+        *,
+        project_root: str,
+        manifest_path: str,
+        tool_config_path: str,
+        orphan_config_present: bool,
+        ledgercore_code: str | None = None,
+    ) -> None:
+        orphan_text = (
+            f"An existing Taskledger config was found at {tool_config_path}, but it "
+            "is inactive until the manifest contains a Taskledger registration.\n"
+            if orphan_config_present
+            else ""
+        )
+        details: dict[str, object] = {
+            "project_root": project_root,
+            "manifest_path": manifest_path,
+            "tool": "taskledger",
+            "registration_present": False,
+            "tool_config_path": tool_config_path,
+            "orphan_config_present": orphan_config_present,
+        }
+        if ledgercore_code is not None:
+            details["ledgercore_code"] = ledgercore_code
+        super().__init__(
+            f"TASKLEDGER_REGISTRATION_MISSING: Canonical Ledger project found at "
+            f"{project_root}, but {manifest_path} does not register `taskledger`.\n"
+            f"{orphan_text}Run `taskledger init` to add the canonical registration.\n"
+            "Taskledger will not create a legacy `.taskledger` fallback inside a "
+            "canonical Ledger project.",
+            code=self.code,
+            details=details,
+            remediation=["Run `taskledger init` to add the canonical registration."],
+        )
 
 
 class OptionalCommandGroupUnavailable(LaunchError):

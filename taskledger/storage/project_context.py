@@ -253,7 +253,10 @@ def _legacy_context(project_paths: ProjectPaths) -> TaskledgerProjectContext:
 def _legacy_marker_root(start: Path) -> Path | None:
     current = start if start.is_dir() else start.parent
     for candidate in (current, *current.parents):
-        if (candidate / DEFAULT_TASKLEDGER_DIR_NAME / "storage.yaml").exists():
+        taskledger_dir = candidate / DEFAULT_TASKLEDGER_DIR_NAME
+        if (taskledger_dir / "storage.yaml").exists() or (
+            taskledger_dir / "ledgers"
+        ).is_dir():
             return candidate
     return None
 
@@ -377,6 +380,34 @@ def load_project_context(
     )
 
 
+def require_mutable_project_context(
+    start: Path,
+    *,
+    allow_legacy: bool = True,
+) -> TaskledgerProjectContext:
+    """Require a real initialized project before any command may write state."""
+    context = load_project_context(
+        start,
+        require_initialized=True,
+        allow_legacy=allow_legacy,
+    )
+    if context.mode == "legacy":
+        required = (
+            context.paths.project_dir,
+            context.paths.tasks_dir,
+            context.paths.events_dir,
+            context.paths.ledger_indexes_dir,
+        )
+        missing = [path for path in required if not path.exists()]
+        if missing:
+            raise LaunchError(
+                "Legacy Taskledger project is not initialized. Missing: "
+                + ", ".join(str(path) for path in missing)
+                + ". Run `taskledger init`."
+            )
+    return context
+
+
 def _load_state(path: Path) -> LedgerConfig:
     if not path.exists():
         return LedgerConfig()
@@ -426,4 +457,5 @@ __all__ = [
     "TaskledgerProjectContext",
     "_paths_for_mounts",
     "load_project_context",
+    "require_mutable_project_context",
 ]

@@ -383,7 +383,12 @@ def start_cli_recorder(
     json_output: bool,
     no_log: bool = False,
 ) -> None:
-    config = _load_agent_logging_config(workspace_root)
+    try:
+        config = _load_agent_logging_config(workspace_root)
+    except LaunchError:
+        # Discovery and diagnostics must remain usable before a canonical
+        # Taskledger registration or initialized data mount exists.
+        return
     if _should_skip_cli_recording(argv=argv, config=config, no_log=no_log):
         return
     recorder = AgentCommandRecorder(

@@ -554,4 +554,22 @@ evidence refs, implementation/review refs, and handoffs.
 
 ## Canonical storage layout
 
-New projects use `.ledger/ledger.toml` with schema version 3 and the Taskledger config at `.ledger/taskledger/config.toml`. The default `data` mount is persistent external storage rooted at `../ledger`; `indexes` is always cache storage. A machine-local `.ledger/ledger.local.toml` may override the data mount with `user-data`. Resolve both mounts through `taskledger storage where` or `taskledger storage path`, and change them with `taskledger storage set` or `taskledger storage clear-override`.
+New projects use `.ledger/ledger.toml` with schema version 3 and the Taskledger
+config at `.ledger/taskledger/config.toml`. The manifest's
+`[ledgers.taskledger]` registration is authoritative; a config directory or
+binding marker alone does not register a tool. The default `data` mount is
+persistent external storage rooted at `../ledger`; `indexes` is always cache
+storage. A machine-local `.ledger/ledger.local.toml` may override the data mount
+with `user-data`. Resolve both mounts through `taskledger storage where` or
+`taskledger storage path`, and change them with `taskledger storage set` or
+`taskledger storage clear-override`.
+
+Once `.ledger/ledger.toml` is found, never fall back to root `taskledger.toml`,
+`.taskledger.toml`, or `.taskledger/`, even when Taskledger is unregistered,
+uninitialized, or invalid. Read commands must not initialize directories,
+indexes, or project-local logs. Canonical-unregistered mutations must stop
+before writing with `TASKLEDGER_REGISTRATION_MISSING`; use `taskledger init` to
+add the registration. Doctor reports orphan canonical configs, legacy shadow
+projects, and `TASKLEDGER_SPLIT_BRAIN` when both roots contain records. Back up
+and inspect both roots before explicit recovery; never auto-delete or auto-merge
+shadow histories.

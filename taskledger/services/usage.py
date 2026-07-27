@@ -137,6 +137,40 @@ def usage_payload(
     include_closed: bool = False,
 ) -> dict[str, object]:
     del quiet
+    from taskledger.storage.paths import probe_taskledger_project
+
+    probe = probe_taskledger_project(workspace_root)
+    if probe.source == "canonical" and not probe.registration_present:
+        return {
+            "kind": "usage",
+            "project": {
+                "root": str(probe.project_root),
+                "mode": "canonical-unregistered",
+                "manifest": str(probe.manifest_path),
+                "registration": "missing",
+                "config": str(probe.tool_config_path),
+                "orphan_config": (
+                    str(probe.tool_config_path) if probe.orphan_config_present else None
+                ),
+                "data": None,
+            },
+            "next": "taskledger init",
+            "actor": None,
+            "harness": None,
+            "active": None,
+            "inbox": {
+                "claimable_handoffs": [],
+                "review_ready": [],
+                "stale_locks": [],
+                "open_questions": [],
+            },
+            "ready": {
+                "approved": [],
+                "failed_validation": [],
+                "plan_review": [],
+            },
+            "warnings": [],
+        }
     actor = resolve_actor(workspace_root=workspace_root)
     harness = resolve_harness(cwd=workspace_root, workspace_root=workspace_root)
     warnings: list[str] = []
@@ -289,7 +323,23 @@ def usage_payload(
     return payload
 
 
-def render_usage_text(payload: dict[str, object], *, quiet: bool = False) -> str:
+def render_usage_text(  # noqa: C901
+    payload: dict[str, object], *, quiet: bool = False
+) -> str:
+    project = payload.get("project")
+    if isinstance(project, dict):
+        lines = [
+            "PROJECT",
+            f"  root: {project.get('root')}",
+            f"  mode: {project.get('mode')}",
+            f"  manifest: {project.get('manifest')}",
+            f"  registration: {project.get('registration')}",
+            f"  config: {project.get('config')}",
+        ]
+        if project.get("orphan_config"):
+            lines.append(f"  orphan config: {project.get('orphan_config')}")
+        lines.extend(["", "NEXT", f"  {payload.get('next', 'taskledger init')}"])
+        return "\n".join(lines)
     active = payload.get("active")
     inbox = payload.get("inbox")
     ready = payload.get("ready")

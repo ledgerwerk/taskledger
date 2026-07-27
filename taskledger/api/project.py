@@ -19,7 +19,11 @@ from taskledger.services.tree import TreeOptions, build_tree
 from taskledger.storage.init import init_canonical_project_state, init_project_state
 from taskledger.storage.ledgercore_backend import locate_taskledger_project
 from taskledger.storage.locks import lock_is_expired
-from taskledger.storage.paths import load_project_locator, resolve_project_paths
+from taskledger.storage.paths import (
+    load_project_locator,
+    probe_taskledger_project,
+    resolve_project_paths,
+)
 from taskledger.storage.project_identity import (
     load_project_uuid,
     project_name_or_default,
@@ -173,6 +177,34 @@ def _storage_status_fields(workspace_root: Path) -> dict[str, object]:
 def project_status_summary(
     workspace_root: Path, *, check_health: bool = False
 ) -> dict[str, object]:
+    probe = probe_taskledger_project(workspace_root)
+    if probe.source == "canonical" and not probe.registration_present:
+        boundary_health: dict[str, object] = {
+            "checked": check_health,
+            "healthy": False,
+        }
+        if check_health:
+            boundary_health["doctor"] = inspect_v2_project(workspace_root)
+        return {
+            "kind": "taskledger_status",
+            "workspace_root": str(probe.project_root),
+            "mode": "canonical-unregistered",
+            "manifest_path": str(probe.manifest_path),
+            "registration": "missing",
+            "config_path": str(probe.tool_config_path),
+            "orphan_config": str(probe.tool_config_path)
+            if probe.orphan_config_present
+            else None,
+            "taskledger_dir": str(probe.project_root / ".ledger" / "taskledger"),
+            "project_dir": None,
+            "ledger_ref": None,
+            "project_uuid": None,
+            "project_name": None,
+            "counts": {},
+            "health": boundary_health,
+            "active_task": None,
+            "next": "taskledger init",
+        }
     paths = resolve_project_paths(workspace_root)
     identity = _project_identity(workspace_root)
     health: dict[str, object] = {"checked": check_health}
