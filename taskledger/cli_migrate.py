@@ -170,15 +170,17 @@ def _apply_human(payload: dict[str, object]) -> str:
     if inspection_dict:
         source = inspection_dict.get("source", {})
         target = inspection_dict.get("target", {})
-        lines.extend([
-            "",
-            "Source",
-            f"  {source.get('data', 'unknown')}",
-            "",
-            "Target",
-            f"  {target.get('data', 'unknown')}",
-            f"  classification: {target.get('classification', 'unknown')}",
-        ])
+        lines.extend(
+            [
+                "",
+                "Source",
+                f"  {source.get('data', 'unknown')}",
+                "",
+                "Target",
+                f"  {target.get('data', 'unknown')}",
+                f"  classification: {target.get('classification', 'unknown')}",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -348,7 +350,7 @@ def migrate_apply_command(
         bool,
         typer.Option(
             "--adopt-sibling-store",
-            help="Adopt an existing non-empty legacy sibling root."
+            help="Adopt an existing non-empty legacy sibling root.",
         ),
     ] = False,
     sibling_ledger_root: Annotated[

@@ -164,7 +164,6 @@ def ensure_project_exists(workspace_root: Path) -> ProjectPaths:
     return paths
 
 
-
 def _count_legacy_tasks(taskledger_dir: Path) -> int:
     """Count tasks in a legacy Taskledger data directory."""
     count = 0
@@ -173,6 +172,7 @@ def _count_legacy_tasks(taskledger_dir: Path) -> int:
         if tasks_dir.is_dir():
             count += len(list(tasks_dir.glob("task-*")))
     return count
+
 
 def init_canonical_project_state(
     workspace_root: Path,

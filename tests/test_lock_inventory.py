@@ -173,9 +173,7 @@ def test_lock_inventory_no_errors_silenced(tmp_path: Path) -> None:
         expires_at=FAR_FUTURE,
     )
     write_lock(paths.tasks_dir / "task-0001" / "lock.yaml", valid_lock)
-    (paths.tasks_dir / "task-0002" / "lock.yaml").write_text(
-        "broken", encoding="utf-8"
-    )
+    (paths.tasks_dir / "task-0002" / "lock.yaml").write_text("broken", encoding="utf-8")
 
     inventory = build_lock_inventory(paths)
     assert inventory.lock_file_count == 2

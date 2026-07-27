@@ -31,6 +31,7 @@ class MigrationOptions:
     create_sibling_store: bool = False
     adopt_sibling_store: bool = False
 
+
 def inspect_migration(
     start: Path,
     *,

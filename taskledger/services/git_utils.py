@@ -159,23 +159,26 @@ def check_git_path_state(path: Path) -> GitPathState:
 
     # Check if tracked.
     tracked_result = run_git(
-        root, "ls-files", "--error-unmatch", "--",
-        relative, check=False,
+        root,
+        "ls-files",
+        "--error-unmatch",
+        "--",
+        relative,
+        check=False,
     )
-    tracked = (
-        tracked_result.returncode == 0
-        and bool(tracked_result.stdout.strip())
-    )
+    tracked = tracked_result.returncode == 0 and bool(tracked_result.stdout.strip())
 
     # Check if ignored.
     ignored_result = run_git(
-        root, "check-ignore", "-v", "--no-index", "--",
-        relative, check=False,
+        root,
+        "check-ignore",
+        "-v",
+        "--no-index",
+        "--",
+        relative,
+        check=False,
     )
-    ignored = (
-        ignored_result.returncode == 0
-        and bool(ignored_result.stdout.strip())
-    )
+    ignored = ignored_result.returncode == 0 and bool(ignored_result.stdout.strip())
     ignore_source: str | None = None
     if ignored and ignored_result.stdout.strip():
         # Format is: <source>:<linenum>:<pattern>\t<filename>

@@ -125,11 +125,7 @@ class LockInventory:
             CLASSIFICATION_EXPIRED,
             CLASSIFICATION_ACTIVE_DEAD_LOCAL_PROCESS,
         }
-        return sum(
-            1
-            for e in self.entries
-            if e.classification in stale_classifications
-        )
+        return sum(1 for e in self.entries if e.classification in stale_classifications)
 
     @property
     def malformed_count(self) -> int:
@@ -179,9 +175,7 @@ class LockInventory:
     def safe_repairable(self) -> tuple[LockInventoryEntry, ...]:
         """Entries that can be safely repaired automatically."""
         return tuple(
-            e
-            for e in self.entries
-            if e.classification in SAFE_REPAIR_CLASSIFICATIONS
+            e for e in self.entries if e.classification in SAFE_REPAIR_CLASSIFICATIONS
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -269,9 +263,7 @@ def require_migration_safe_locks(
         "expired_count": inventory.expired_count,
         "malformed_count": inventory.malformed_count,
         "stale_count": inventory.stale_count,
-        "blocker_task_ids": [
-            e.task_id for e in blockers if e.task_id is not None
-        ],
+        "blocker_task_ids": [e.task_id for e in blockers if e.task_id is not None],
         "blocker_classifications": [e.classification for e in blockers],
     }
 

@@ -795,8 +795,7 @@ def load_active_locks(workspace_root: Path) -> list[TaskLock]:
     from taskledger.storage.locks import lock_is_expired
 
     return [
-        lock for lock in load_lock_records(workspace_root)
-        if not lock_is_expired(lock)
+        lock for lock in load_lock_records(workspace_root) if not lock_is_expired(lock)
     ]
 
 

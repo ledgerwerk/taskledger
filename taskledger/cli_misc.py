@@ -854,15 +854,16 @@ def register_lock_v2_commands(app: typer.Typer) -> None:
         filtered = locks
         if problematic:
             filtered = [
-                item for item in filtered
+                item
+                for item in filtered
                 if isinstance(item, dict)
-                and item.get("classification", "none") not in {
-                    "none", "active_live_local_process", "active_same_actor"
-                }
+                and item.get("classification", "none")
+                not in {"none", "active_live_local_process", "active_same_actor"}
             ]
         if expired:
             filtered = [
-                item for item in filtered
+                item
+                for item in filtered
                 if isinstance(item, dict) and item.get("status", {}).get("expired")
             ]
         lines = ["LOCKS"]
@@ -875,9 +876,7 @@ def register_lock_v2_commands(app: typer.Typer) -> None:
                 status = item.get("status")
                 if isinstance(status, dict) and status.get("expired"):
                     expired_flag = " expired=yes"
-                lines.append(
-                    f"{task_id}  {stage}  {classification}{expired_flag}"
-                )
+                lines.append(f"{task_id}  {stage}  {classification}{expired_flag}")
                 diag = item.get("diagnostics")
                 if isinstance(diag, dict):
                     summary = diag.get("summary")
@@ -899,8 +898,7 @@ def register_lock_v2_commands(app: typer.Typer) -> None:
             exp = summary.get("expired_count", 0)
             mal = summary.get("malformed_count", 0)
             lines.append(
-                f"\nTotal: {total}, Active: {active}, "
-                f"Expired: {exp}, Malformed: {mal}"
+                f"\nTotal: {total}, Active: {active}, Expired: {exp}, Malformed: {mal}"
             )
         emit_payload(
             ctx, payload, human="\n".join(lines) if filtered else "LOCKS\n(empty)"
@@ -1472,8 +1470,12 @@ def _lock_inspection_human(payload: dict[str, object]) -> str:
     if isinstance(summary, dict):
         lines.append("SUMMARY")
         for key in (
-            "total", "live", "expired",
-            "stale", "malformed", "unverifiable",
+            "total",
+            "live",
+            "expired",
+            "stale",
+            "malformed",
+            "unverifiable",
         ):
             val = summary.get(key)
             if val is not None:
@@ -1489,7 +1491,8 @@ def _lock_inspection_human(payload: dict[str, object]) -> str:
         lines.append("")
 
     _render_lock_entries(
-        lines, "EXPIRED LOCKS",
+        lines,
+        "EXPIRED LOCKS",
         payload.get("expired_locks"),
         show_remediation=True,
     )
@@ -1498,7 +1501,9 @@ def _lock_inspection_human(payload: dict[str, object]) -> str:
     if isinstance(stale, list) and stale:
         lines.append("")
         _render_lock_entries(
-            lines, "STALE LOCKS", stale,
+            lines,
+            "STALE LOCKS",
+            stale,
             show_assessment=True,
             show_remediation=True,
         )
@@ -1507,7 +1512,9 @@ def _lock_inspection_human(payload: dict[str, object]) -> str:
     if isinstance(malformed, list) and malformed:
         lines.append("")
         _render_lock_entries(
-            lines, "MALFORMED LOCK FILES", malformed,
+            lines,
+            "MALFORMED LOCK FILES",
+            malformed,
             show_path=True,
         )
 
@@ -1515,7 +1522,9 @@ def _lock_inspection_human(payload: dict[str, object]) -> str:
     if isinstance(unverifiable, list) and unverifiable:
         lines.append("")
         _render_lock_entries(
-            lines, "UNVERIFIABLE LOCKS", unverifiable,
+            lines,
+            "UNVERIFIABLE LOCKS",
+            unverifiable,
             show_assessment=True,
         )
 

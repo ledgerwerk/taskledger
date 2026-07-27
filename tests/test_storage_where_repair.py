@@ -9,6 +9,7 @@ Covers acceptance criteria from the storage-where-repair brief:
 - Config immutability
 - Bulk lock repair safety
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -91,9 +92,7 @@ def _write_lock_yaml(
         actor_type=actor_type,
         actor_name=actor_name,
     )
-    lock_path.write_text(
-        yaml.safe_dump(payload, sort_keys=False), encoding="utf-8"
-    )
+    lock_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
     return lock_path
 
 
@@ -192,9 +191,7 @@ class TestLockStatusSemantics:
 class TestLockInventory:
     """Defect 2 & 3: Lock inventory tracks all locks and preserves errors."""
 
-    def test_lock_inventory_counts_expired_separately(
-        self, tmp_path: Path
-    ) -> None:
+    def test_lock_inventory_counts_expired_separately(self, tmp_path: Path) -> None:
         """Expired locks are not counted as active."""
         init_workspace(tmp_path)
         paths = resolve_v2_paths(tmp_path)
@@ -208,9 +205,7 @@ class TestLockInventory:
         assert inventory.active_count == 1
         assert inventory.expired_count == 1
 
-    def test_lock_inventory_keeps_parse_error_path(
-        self, tmp_path: Path
-    ) -> None:
+    def test_lock_inventory_keeps_parse_error_path(self, tmp_path: Path) -> None:
         """Malformed lock files are tracked with their path and error."""
         init_workspace(tmp_path)
         paths = resolve_v2_paths(tmp_path)
@@ -226,9 +221,7 @@ class TestLockInventory:
         assert entry.parse_error is not None
         assert "task-0001" in str(entry.path)
 
-    def test_lock_inventory_classifies_dead_local_owner(
-        self, tmp_path: Path
-    ) -> None:
+    def test_lock_inventory_classifies_dead_local_owner(self, tmp_path: Path) -> None:
         """Lock with non-running PID is classified as dead local process."""
         init_workspace(tmp_path)
         paths = resolve_v2_paths(tmp_path)
@@ -284,9 +277,7 @@ class TestLockInventory:
 class TestStorageWhereRendering:
     """Defect 5: Storage where is mode-aware."""
 
-    def test_legacy_storage_where_has_legacy_fields(
-        self, tmp_path: Path
-    ) -> None:
+    def test_legacy_storage_where_has_legacy_fields(self, tmp_path: Path) -> None:
         """Legacy storage report includes workspace, config, storage paths."""
         init_workspace(tmp_path)
         report = build_storage_location_report(tmp_path)
@@ -297,9 +288,7 @@ class TestStorageWhereRendering:
         assert "config_path" in payload
         assert "taskledger_dir" in payload
 
-    def test_legacy_storage_where_no_manifest_section(
-        self, tmp_path: Path
-    ) -> None:
+    def test_legacy_storage_where_no_manifest_section(self, tmp_path: Path) -> None:
         """Legacy report does not include canonical manifest section."""
         init_workspace(tmp_path)
         report = build_storage_location_report(tmp_path)
@@ -350,9 +339,7 @@ class TestGitPathState:
 class TestMigrationIdentity:
     """Defect 4: Migration inspection is deterministic for missing UUID."""
 
-    def test_migration_inspect_missing_uuid_is_blocked(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migration_inspect_missing_uuid_is_blocked(self, tmp_path: Path) -> None:
         """Missing project UUID produces a blocker, not a random UUID."""
         from taskledger.storage.layout_migration import inspect_migration
 
@@ -406,9 +393,7 @@ class TestProjectIdentityRepair:
         assert result["changed"] is False
         assert result["project_uuid"] is None
 
-    def test_repair_project_identity_apply_generates_uuid(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repair_project_identity_apply_generates_uuid(self, tmp_path: Path) -> None:
         """Apply mode generates and persists a UUID."""
         init_workspace(tmp_path)
         config_path = tmp_path / "taskledger.toml"
@@ -471,9 +456,7 @@ class TestBulkLockRepair:
         assert result["status"] == "dry_run"
         assert result["safe_repairable"] >= 1
 
-    def test_bulk_lock_repair_requires_reason_for_apply(
-        self, tmp_path: Path
-    ) -> None:
+    def test_bulk_lock_repair_requires_reason_for_apply(self, tmp_path: Path) -> None:
         """Apply mode requires a non-empty reason."""
         init_workspace(tmp_path)
         paths = resolve_v2_paths(tmp_path)

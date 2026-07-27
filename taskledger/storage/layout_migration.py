@@ -163,15 +163,18 @@ class TaskledgerMigrationInspection:
     def _build_commands(self) -> dict[str, object]:
         """Build the apply command with all non-default options."""
         import shlex
+
         argv: list[str] = ["taskledger"]
         if self.project_root:
             argv.extend(["--root", str(self.project_root)])
         argv.extend(["migrate", "apply"])
         if self.request_sibling_ledger_root is not None:
-            argv.extend([
-                "--sibling-ledger-root",
-                str(self.request_sibling_ledger_root),
-            ])
+            argv.extend(
+                [
+                    "--sibling-ledger-root",
+                    str(self.request_sibling_ledger_root),
+                ]
+            )
         elif self.sibling_root:
             argv.extend(["--sibling-ledger-root", str(self.sibling_root)])
         if self.request_source_data_root is not None:
@@ -258,9 +261,7 @@ class TaskledgerMigrationInspection:
             "issues": [issue.to_dict() for issue in self.issues],
             "blockers": blockers,
             "warnings": warnings,
-            "commands": self._build_commands()
-            if self.ready
-            else {},
+            "commands": self._build_commands() if self.ready else {},
         }
 
 
@@ -689,6 +690,7 @@ def _is_legacy_sibling_root(path: Path) -> bool:
         if child.is_dir() and (child / "storage.yaml").is_file():
             return True
     return False
+
 
 def _inspect_migration_phases(  # noqa: C901
     start: Path,
@@ -1520,8 +1522,7 @@ def _apply_migration_phases(
 ) -> dict[str, object]:
     if not inspection.ready:
         raise LaunchError(
-            "Migration inspection is not ready to apply. "
-            "Resolve all blockers first.",
+            "Migration inspection is not ready to apply. Resolve all blockers first.",
             code="TASKLEDGER_STORAGE_MIGRATION_NOT_READY",
             details={"blockers": list(inspection.blockers)},
         )

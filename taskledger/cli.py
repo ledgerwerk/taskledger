@@ -1167,9 +1167,7 @@ def repair_locks_command(
         lines = [f"BULK LOCK REPAIR (dry-run): {len(entries)} lock(s)"]
         for entry in entries:
             if isinstance(entry, dict):
-                lines.append(
-                    f"  {entry.get('task_id')}  {entry.get('classification')}"
-                )
+                lines.append(f"  {entry.get('task_id')}  {entry.get('classification')}")
         next_cmd = payload.get("next_command")
         if next_cmd:
             lines.append(f"\nNext: {next_cmd}")
@@ -1182,9 +1180,7 @@ def repair_locks_command(
             if isinstance(item, dict):
                 task_or_path = item.get("task_id", item.get("path"))
                 err = item.get("error")
-                lines.append(
-                    f"  failed: {task_or_path}: {err}"
-                )
+                lines.append(f"  failed: {task_or_path}: {err}")
         emit_payload(ctx, payload, human="\n".join(lines))
 
 

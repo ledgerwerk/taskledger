@@ -124,9 +124,11 @@ class StorageLocationReport:
             locks_section["unverifiable_count"] = self.unverifiable_lock_count
         if self.lock_file_count is not None:
             locks_section["status"] = (
-                "invalid" if self.malformed_lock_count else
-                "attention" if self.active_lock_count or self.expired_lock_count else
-                "clean"
+                "invalid"
+                if self.malformed_lock_count
+                else "attention"
+                if self.active_lock_count or self.expired_lock_count
+                else "clean"
             )
             payload["locks"] = locks_section
         if self.issues:
@@ -437,8 +439,7 @@ def build_storage_location_report(
             )
         elif not git_state.ignored:
             legacy_warnings.append(
-                "Add `.taskledger/` to `.gitignore` to prevent "
-                "accidental tracking."
+                "Add `.taskledger/` to `.gitignore` to prevent accidental tracking."
             )
         # If ignored and untracked: no warning needed (safe).
     if active_lock_count:

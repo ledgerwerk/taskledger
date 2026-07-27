@@ -144,33 +144,35 @@ def repair_locks(
                 for e in safe
             ],
             "next_command": (
-                'taskledger repair locks --apply '
+                "taskledger repair locks --apply "
                 '--reason "Clear stale locks before storage migration."'
             ),
         }
 
     if not reason.strip():
-        raise LaunchError(
-            "Bulk lock repair requires --reason when using --apply."
-        )
+        raise LaunchError("Bulk lock repair requires --reason when using --apply.")
 
     repaired: list[str] = []
     failed: list[dict[str, str]] = []
     for entry in safe:
         if entry.task_id is None:
-            failed.append({
-                "path": str(entry.path),
-                "error": "Cannot determine task_id from lock path.",
-            })
+            failed.append(
+                {
+                    "path": str(entry.path),
+                    "error": "Cannot determine task_id from lock path.",
+                }
+            )
             continue
         try:
             break_lock(workspace_root, entry.task_id, reason=reason)
             repaired.append(entry.task_id)
         except Exception as exc:
-            failed.append({
-                "task_id": entry.task_id,
-                "error": str(exc),
-            })
+            failed.append(
+                {
+                    "task_id": entry.task_id,
+                    "error": str(exc),
+                }
+            )
 
     return {
         "kind": "bulk_lock_repair",
