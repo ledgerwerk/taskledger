@@ -29,7 +29,7 @@ class MigrationOptions:
     source_checkout_id: str | None = None
     project_uuid: str | None = None
     create_sibling_store: bool = False
-
+    adopt_sibling_store: bool = False
 
 def inspect_migration(
     start: Path,
@@ -57,6 +57,7 @@ def inspect_migration(
         project_uuid=selected.project_uuid,
         sibling_ledger_root=selected.sibling_ledger_root,
         create_sibling_store=selected.create_sibling_store,
+        adopt_sibling_store=selected.adopt_sibling_store,
     )
 
 
@@ -96,6 +97,7 @@ def apply_migration(
         backup=backup,
         backup_dir=backup_dir,
         create_sibling_store=selected.create_sibling_store,
+        adopt_sibling_store=selected.adopt_sibling_store,
         retire_source=retire_source,
     )
 

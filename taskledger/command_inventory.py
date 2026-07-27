@@ -1689,6 +1689,14 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         tier=TIER_RARE,
         ledger_effect=EFFECT_WRITE,
     ),
+    "runtime": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "safe_read_only",
+        MIGRATION,
+        PHASE_SETUP,
+        tier=TIER_RARE,
+        ledger_effect=EFFECT_READ,
+    ),
     "reindex": CommandSpec(
         REPAIR,
         "ledger_mutation",

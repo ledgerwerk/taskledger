@@ -138,6 +138,10 @@ class TaskledgerMigrationInspection:
     source_candidates: tuple[Mapping[str, object], ...] = ()
     target_classification: str = "ABSENT"
     would_create_sibling_store: bool = False
+    request_source_data_root: Path | None = None
+    request_sibling_ledger_root: Path | None = None
+    request_create_sibling_store: bool = False
+    request_adopt_sibling_store: bool = False
 
     @property
     def blockers(self) -> tuple[str, ...]:
@@ -155,6 +159,38 @@ class TaskledgerMigrationInspection:
     def items(self) -> tuple[MigrationCopyItem, ...]:
         """Compatibility alias for the former migration plan item list."""
         return self.copy_items
+
+    def _build_commands(self) -> dict[str, object]:
+        """Build the apply command with all non-default options."""
+        import shlex
+        argv: list[str] = ["taskledger"]
+        if self.project_root:
+            argv.extend(["--root", str(self.project_root)])
+        argv.extend(["migrate", "apply"])
+        if self.request_sibling_ledger_root is not None:
+            argv.extend([
+                "--sibling-ledger-root",
+                str(self.request_sibling_ledger_root),
+            ])
+        elif self.sibling_root:
+            argv.extend(["--sibling-ledger-root", str(self.sibling_root)])
+        if self.request_source_data_root is not None:
+            argv.extend(["--source-data-root", str(self.request_source_data_root)])
+        if self.project_uuid:
+            argv.extend(["--project-uuid", self.project_uuid])
+        if self.source_checkout_id:
+            argv.extend(["--source-checkout-id", self.source_checkout_id])
+        if self.request_create_sibling_store:
+            argv.append("--create-sibling-store")
+        if self.request_adopt_sibling_store:
+            argv.append("--adopt-sibling-store")
+        shell_cmd = shlex.join(argv)
+        return {
+            "apply": {
+                "argv": argv,
+                "shell": shell_cmd,
+            }
+        }
 
     def to_dict(self) -> dict[str, object]:
         blockers = [
@@ -222,12 +258,7 @@ class TaskledgerMigrationInspection:
             "issues": [issue.to_dict() for issue in self.issues],
             "blockers": blockers,
             "warnings": warnings,
-            "commands": {
-                "apply": (
-                    "taskledger migrate apply "
-                    f"--sibling-ledger-root {self.sibling_root}"
-                )
-            }
+            "commands": self._build_commands()
             if self.ready
             else {},
         }
@@ -377,6 +408,7 @@ def _ensure_migration_sibling_store(
     sibling_root: Path,
     *,
     create: bool,
+    adopt: bool = False,
 ) -> None:
     if sibling_root.is_symlink():
         raise LaunchError(
@@ -395,12 +427,20 @@ def _ensure_migration_sibling_store(
     if marker.is_symlink() or (marker.exists() and not marker.is_file()):
         raise LaunchError(f"TASKLEDGER_SIBLING_MARKER_INVALID: {marker}")
     if not marker.exists():
-        if not create:
+        if not create and not adopt:
             raise LaunchError(
                 f"TASKLEDGER_SIBLING_ROOT_UNMARKED: {sibling_root}. "
-                "Use --create-sibling-store to initialize it."
+                "Use --create-sibling-store or --adopt-sibling-store to initialize it."
             )
-        if any(sibling_root.iterdir()):
+        if adopt:
+            # Adoption allows non-empty legacy roots
+            if not _is_legacy_sibling_root(sibling_root):
+                raise LaunchError(
+                    "Refusing to adopt non-legacy unmarked sibling root "
+                    f"{sibling_root}. Only roots with recognized legacy "
+                    "Taskledger data can be adopted."
+                )
+        elif any(sibling_root.iterdir()):
             raise LaunchError(
                 "Refusing to initialize non-empty unmarked sibling root "
                 f"{sibling_root}."
@@ -628,6 +668,28 @@ def _is_direct_sibling_registration(
     )
 
 
+def _is_legacy_sibling_root(path: Path) -> bool:
+    """Check if a directory contains recognizable legacy Taskledger data."""
+    if not path.is_dir():
+        return False
+    # Check for common legacy patterns:
+    # - task/ subdirectory with content
+    # - storage.yaml files
+    # - ledgers/ directory
+    task_dir = path / "task"
+    if task_dir.is_dir() and any(task_dir.iterdir()):
+        return True
+    if (path / "storage.yaml").is_file():
+        return True
+    ledgers_dir = path / "ledgers"
+    if ledgers_dir.is_dir() and any(ledgers_dir.iterdir()):
+        return True
+    # Check for any directory containing storage.yaml
+    for child in path.iterdir():
+        if child.is_dir() and (child / "storage.yaml").is_file():
+            return True
+    return False
+
 def _inspect_migration_phases(  # noqa: C901
     start: Path,
     *,
@@ -638,6 +700,7 @@ def _inspect_migration_phases(  # noqa: C901
     project_uuid: str | None = None,
     sibling_ledger_root: Path | None = None,
     create_sibling_store: bool = False,
+    adopt_sibling_store: bool = False,
 ) -> TaskledgerMigrationInspection:
     root = start.expanduser().resolve()
     sibling_root, marker = _target_roots(root, sibling_ledger_root)
@@ -786,15 +849,38 @@ def _inspect_migration_phases(  # noqa: C901
             )
         )
     elif not marker.is_file():
-        issues.append(
-            _issue(
-                "blocker",
-                "SIBLING_ROOT_UNMARKED",
-                f"Sibling root exists without required marker {marker}.",
-                "Use --create-sibling-store when applying.",
-                details={"path": str(marker)},
+        # Check if this is a recognizable legacy sibling root
+        is_legacy_adoptable = _is_legacy_sibling_root(sibling_root)
+        if is_legacy_adoptable and adopt_sibling_store:
+            issues.append(
+                _issue(
+                    "info",
+                    "SIBLING_ROOT_LEGACY_ADOPTABLE",
+                    f"Sibling root has legacy data: {sibling_root}",
+                    "Marker will be created during apply.",
+                    details={"path": str(sibling_root)},
+                )
             )
-        )
+        elif is_legacy_adoptable:
+            issues.append(
+                _issue(
+                    "blocker",
+                    "SIBLING_ROOT_LEGACY_ADOPTABLE",
+                    f"Sibling root contains legacy data without marker: {sibling_root}",
+                    "Use --adopt-sibling-store when applying.",
+                    details={"path": str(sibling_root)},
+                )
+            )
+        else:
+            issues.append(
+                _issue(
+                    "blocker",
+                    "SIBLING_ROOT_UNMARKED",
+                    f"Sibling root exists without required marker {marker}.",
+                    "Use --create-sibling-store when applying.",
+                    details={"path": str(marker)},
+                )
+            )
     candidates: list[dict[str, object]] = []
     candidate_paths: set[Path] = set()
     candidate_priority: dict[Path, int] = {}
@@ -922,16 +1008,31 @@ def _inspect_migration_phases(  # noqa: C901
     if len(viable) > 1:
         fingerprints = {candidate["fingerprint"] for candidate in viable}
         if len(fingerprints) > 1:
-            issues.append(
-                _issue(
-                    "blocker",
-                    "MIGRATION_SOURCE_AMBIGUOUS",
-                    "Multiple non-identical Taskledger source candidates were found.",
-                    "Use --source-data-root to select one source after "
-                    "inspecting all candidates.",
-                    details={"candidates": viable},
+            if source_data_root is not None:
+                # Explicit source overrides ambiguity
+                issues.append(
+                    _issue(
+                        "info",
+                        "EXPLICIT_SOURCE_OVERRIDES_OTHER_CANDIDATES",
+                        "Explicit source-data-root overrides other candidates.",
+                        "Other candidates remain visible but are not selected.",
+                        details={
+                            "selected": str(source_data_root),
+                            "candidate_count": len(viable),
+                        },
+                    )
                 )
-            )
+            else:
+                issues.append(
+                    _issue(
+                        "blocker",
+                        "MIGRATION_SOURCE_AMBIGUOUS",
+                        "Multiple non-identical source candidates found.",
+                        "Use --source-data-root to select one source after ",
+                        "inspecting all candidates.",
+                        details={"candidates": viable},
+                    )
+                )
     if selected is not None:
         selected["selected_reason"] = selected["reason"]
     source_data = Path(str(selected["path"])) if selected is not None else None
@@ -1185,9 +1286,17 @@ def _inspect_migration_phases(  # noqa: C901
         "IDENTICAL_SOURCE",
     }:
         items = _copy_items(source_data, source_logs, target_data)
+    # Check for valid completion receipt
+    has_valid_receipt = False
+    if target_data is not None and target_data.is_dir():
+        migrations_dir = target_data / "migrations"
+        if migrations_dir.is_dir():
+            receipts = list(migrations_dir.glob("*.json"))
+            has_valid_receipt = len(receipts) > 0
     migration_required = not (
         target_classification in {"IDENTICAL_SOURCE", "COMPLETE_CANONICAL"}
         and current_registration is not None
+        and has_valid_receipt
     )
     ready = not any(issue.severity == "blocker" for issue in issues) and (
         source_data is not None or target_classification == "COMPLETE_CANONICAL"
@@ -1220,6 +1329,10 @@ def _inspect_migration_phases(  # noqa: C901
         source_candidates=tuple(candidates),
         target_classification=target_classification,
         would_create_sibling_store=create_sibling_store and not sibling_root.exists(),
+        request_source_data_root=source_data_root,
+        request_sibling_ledger_root=sibling_ledger_root,
+        request_create_sibling_store=create_sibling_store,
+        request_adopt_sibling_store=adopt_sibling_store,
     )
 
 
@@ -1233,6 +1346,7 @@ def inspect_migration(
     project_uuid: str | None = None,
     sibling_ledger_root: Path | None = None,
     create_sibling_store: bool = False,
+    adopt_sibling_store: bool = False,
 ) -> TaskledgerMigrationInspection:
     """Inspect migration state through the phase-based implementation."""
     return _inspect_migration_phases(
@@ -1244,6 +1358,7 @@ def inspect_migration(
         project_uuid=project_uuid,
         sibling_ledger_root=sibling_ledger_root,
         create_sibling_store=create_sibling_store,
+        adopt_sibling_store=adopt_sibling_store,
     )
 
 
@@ -1400,6 +1515,7 @@ def _apply_migration_phases(
     backup: bool = True,
     backup_dir: Path | None = None,
     create_sibling_store: bool = False,
+    adopt_sibling_store: bool = False,
     retire_source: bool = False,
 ) -> dict[str, object]:
     if not inspection.ready:
@@ -1417,10 +1533,11 @@ def _apply_migration_phases(
         )
     initial_source_fingerprint = _tree_fingerprint(inspection.source_data_root)
     initial_target_fingerprint = _tree_fingerprint(inspection.target_data_root)
-    if create_sibling_store:
+    if create_sibling_store or adopt_sibling_store:
         _ensure_migration_sibling_store(
             inspection.sibling_root,
-            create=True,
+            create=create_sibling_store,
+            adopt=adopt_sibling_store,
         )
     fresh = inspect_migration(
         inspection.project_root,
@@ -1439,6 +1556,13 @@ def _apply_migration_phases(
             "status": "applied",
             "inspection": fresh.to_dict(),
             "receipt": str(receipts[-1]) if receipts else None,
+            "canonical_activation": True,
+            "source_retired": False,
+            "next_commands": [
+                "taskledger migrate status",
+                "taskledger storage validate",
+                "taskledger doctor",
+            ],
         }
     issues = list(fresh.issues)
     if create_sibling_store and fresh.issues:
@@ -1596,8 +1720,14 @@ def _apply_migration_phases(
             "inspection": fresh.to_dict(),
             "backup": str(backup_path),
             "receipt": str(receipt),
-            "retired": False,
+            "verification": verification_report,
             "canonical_activation": False,
+            "source_retired": False,
+            "next_commands": [
+                "taskledger migrate status",
+                "taskledger storage validate",
+                "taskledger doctor",
+            ],
             "warnings": [
                 "Migration-only destination override was used; canonical "
                 "project activation was not changed."
@@ -1673,7 +1803,14 @@ def _apply_migration_phases(
         "inspection": fresh.to_dict(),
         "backup": str(backup_path),
         "receipt": str(receipt),
-        "retired": retire_source,
+        "verification": verification_report,
+        "canonical_activation": True,
+        "source_retired": retire_source,
+        "next_commands": [
+            "taskledger migrate status",
+            "taskledger storage validate",
+            "taskledger doctor",
+        ],
     }
 
 
@@ -1683,6 +1820,7 @@ def apply_migration(
     backup: bool = True,
     backup_dir: Path | None = None,
     create_sibling_store: bool = False,
+    adopt_sibling_store: bool = False,
     retire_source: bool = False,
 ) -> dict[str, object]:
     """Apply migration through the phase-based implementation."""
@@ -1691,6 +1829,7 @@ def apply_migration(
         backup=backup,
         backup_dir=backup_dir,
         create_sibling_store=create_sibling_store,
+        adopt_sibling_store=adopt_sibling_store,
         retire_source=retire_source,
     )
 
@@ -1715,6 +1854,7 @@ def apply_layout_migration(
     project_uuid: str | None = None,
     sibling_ledger_root: Path | None = None,
     create_sibling_store: bool = False,
+    adopt_sibling_store: bool = False,
     dry_run: bool = False,
     retire_legacy: bool = False,
 ) -> dict[str, object]:
@@ -1722,6 +1862,8 @@ def apply_layout_migration(
         start,
         project_uuid=project_uuid,
         sibling_ledger_root=sibling_ledger_root,
+        create_sibling_store=create_sibling_store,
+        adopt_sibling_store=adopt_sibling_store,
     )
     if dry_run:
         return {
@@ -1733,6 +1875,7 @@ def apply_layout_migration(
         inspection,
         backup=backup,
         create_sibling_store=create_sibling_store,
+        adopt_sibling_store=adopt_sibling_store,
         retire_source=retire_legacy,
     )
 

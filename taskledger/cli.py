@@ -82,6 +82,7 @@ from taskledger.cli_plan import register_plan_v2_commands
 from taskledger.cli_question import register_question_v2_commands
 from taskledger.cli_ref import ref_app
 from taskledger.cli_review import register_review_commands
+from taskledger.cli_runtime import runtime_app
 from taskledger.cli_storage import register_storage_commands
 from taskledger.cli_sync import register_sync_commands
 from taskledger.cli_task import register_task_v2_commands
@@ -163,6 +164,7 @@ app.add_typer(sync_app, name="sync")
 app.add_typer(doctor_app, name="doctor")
 app.add_typer(repair_app, name="repair")
 app.add_typer(migrate_app, name="migrate")
+app.add_typer(runtime_app, name="runtime")
 app.add_typer(actors_app, name="actor")
 app.add_typer(harness_app, name="harness")
 app.add_typer(ledger_app, name="ledger")
@@ -1659,7 +1661,9 @@ def cli_main() -> None:
     argv = tuple(sys.argv[1:])
     json_requested = "--json" in argv
     try:
-        app(prog_name="taskledger", args=list(argv), standalone_mode=False)
+        result = app(prog_name="taskledger", args=list(argv), standalone_mode=False)
+        if isinstance(result, int) and result != 0:
+            raise SystemExit(result)
     except _CLICK_EXCEPTION_TYPES as exc:
         click_exc = cast(click.ClickException, exc)
         if json_requested:

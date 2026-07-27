@@ -164,6 +164,16 @@ def ensure_project_exists(workspace_root: Path) -> ProjectPaths:
     return paths
 
 
+
+def _count_legacy_tasks(taskledger_dir: Path) -> int:
+    """Count tasks in a legacy Taskledger data directory."""
+    count = 0
+    for ledger_dir in (taskledger_dir / "ledgers").glob("*"):
+        tasks_dir = ledger_dir / "tasks"
+        if tasks_dir.is_dir():
+            count += len(list(tasks_dir.glob("task-*")))
+    return count
+
 def init_canonical_project_state(
     workspace_root: Path,
     *,
@@ -179,9 +189,20 @@ def init_canonical_project_state(
     discovered = locate_taskledger_project(root)
     if discovered is not None and discovered.is_legacy:
         legacy = load_project_locator(root)
+        task_count = _count_legacy_tasks(legacy.taskledger_dir)
         raise LaunchError(
             f"Legacy Taskledger project detected at {legacy.taskledger_dir}. "
-            "Run `taskledger migrate plan`, then `taskledger migrate apply`."
+            "Run `taskledger migrate plan`, then `taskledger migrate apply`.",
+            code="TASKLEDGER_LEGACY_PROJECT_REQUIRES_MIGRATION",
+            details={
+                "legacy_config": str(legacy.config_path),
+                "legacy_data_root": str(legacy.taskledger_dir),
+                "task_count": task_count,
+                "next_commands": [
+                    "taskledger migrate plan",
+                    "taskledger migrate apply",
+                ],
+            },
         )
     selected_uuid = project_uuid or str(uuid.uuid4())
     effective_name = project_name or root.name

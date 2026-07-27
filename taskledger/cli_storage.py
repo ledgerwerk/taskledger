@@ -82,6 +82,7 @@ def _render_issues_and_next(payload: dict[str, object]) -> list[str]:
 def _render_legacy_storage_where(payload: dict[str, object]) -> str:
     """Render storage where for legacy layout."""
     lines = [
+        "Mode: legacy",
         f"Workspace: {payload.get('workspace_root')}",
         f"Config: {payload.get('config_path')}",
         f"Storage: {payload.get('taskledger_dir')}",
@@ -111,6 +112,13 @@ def _render_legacy_storage_where(payload: dict[str, object]) -> str:
         lines.append("Warnings:")
         lines.extend(f"- {item}" for item in warnings if isinstance(item, str))
     lines.extend(_render_issues_and_next(payload))
+    # Migration guidance for legacy mode
+    lines.append("")
+    lines.append("Migration required: yes")
+    lines.append("")
+    lines.append("Next:")
+    lines.append("1. taskledger migrate plan")
+    lines.append("2. taskledger migrate apply")
     return "\n".join(lines)
 
 
