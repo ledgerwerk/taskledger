@@ -24,29 +24,122 @@ from taskledger.cli_common import (
 from taskledger.errors import LaunchError
 
 
-def _render_storage_where(payload: dict[str, object]) -> str:
+def _render_lock_breakdown(payload: dict[str, object]) -> list[str]:
+    """Render the lock breakdown section."""
+    lines: list[str] = []
+    locks = payload.get("locks")
+    if isinstance(locks, dict):
+        lock_file_count = locks.get("lock_file_count")
+        active = locks.get("active_count", 0)
+        expired = locks.get("expired_count")
+        stale = locks.get("stale_count")
+        malformed = locks.get("malformed_count")
+        unverifiable = locks.get("unverifiable_count")
+        parts = [f"{active} active"]
+        if expired:
+            parts.append(f"{expired} expired")
+        if stale:
+            parts.append(f"{stale} stale")
+        if malformed:
+            parts.append(f"{malformed} malformed")
+        if unverifiable:
+            parts.append(f"{unverifiable} unverifiable")
+        if lock_file_count is not None:
+            lines.append(f"Locks: {lock_file_count} file(s): {', '.join(parts)}")
+        else:
+            lines.append(f"Active locks: {active}")
+    else:
+        lines.append(f"Active locks: {payload.get('active_lock_count', 0)}")
+    return lines
+
+
+def _render_issues_and_next(payload: dict[str, object]) -> list[str]:
+    """Render issues and next commands sections."""
+    lines: list[str] = []
+    issues = payload.get("issues")
+    if isinstance(issues, list) and issues:
+        lines.append("")
+        lines.append("Issues:")
+        for issue in issues:
+            if isinstance(issue, dict):
+                severity = issue.get("severity", "info")
+                code = issue.get("code", "")
+                message = issue.get("message", "")
+                lines.append(f"- [{severity}:{code}] {message}")
+                for rem in issue.get("remediation", []):
+                    if isinstance(rem, str):
+                        lines.append(f"  remedy: {rem}")
+    next_commands = payload.get("next_commands")
+    if isinstance(next_commands, list) and next_commands:
+        lines.append("")
+        lines.append("Next:")
+        for idx, cmd in enumerate(next_commands, 1):
+            if isinstance(cmd, str):
+                lines.append(f"{idx}. {cmd}")
+    return lines
+
+
+def _render_legacy_storage_where(payload: dict[str, object]) -> str:
+    """Render storage where for legacy layout."""
+    lines = [
+        f"Workspace: {payload.get('workspace_root')}",
+        f"Config: {payload.get('config_path')}",
+        f"Storage: {payload.get('taskledger_dir')}",
+        f"Project: {payload.get('project_name')} "
+        f"[{payload.get('project_uuid') or 'no UUID'}]",
+        f"Ledger: {payload.get('ledger_ref')}",
+        f"Inside workspace: {payload.get('inside_workspace')}",
+    ]
+    git = payload.get("git")
+    if isinstance(git, dict):
+        tracked = git.get("tracked")
+        ignored = git.get("ignored")
+        git_root = git.get("root")
+        if git_root:
+            lines.append(f"Git repo: {git_root}")
+        if tracked is not None:
+            lines.append(f"Git tracked: {tracked}")
+        if ignored is not None:
+            lines.append(f"Git ignored: {ignored}")
+    else:
+        lines.append(f"Git repo: {payload.get('git_root')}")
+    lines.extend(_render_lock_breakdown(payload))
+    # Backward-compat warnings.
+    warnings = payload.get("warnings", [])
+    if isinstance(warnings, list) and warnings:
+        lines.append("")
+        lines.append("Warnings:")
+        lines.extend(f"- {item}" for item in warnings if isinstance(item, str))
+    lines.extend(_render_issues_and_next(payload))
+    return "\n".join(lines)
+
+
+def _render_canonical_storage_where(payload: dict[str, object]) -> str:
+    """Render storage where for canonical layout."""
     project = payload.get("project", {})
     project = project if isinstance(project, dict) else {}
     config = payload.get("config", {})
     config = config if isinstance(config, dict) else {}
+    lines = [
+        f"Project root: {project.get('root', payload.get('project_root'))}",
+        f"Project UUID: {project.get('uuid', payload.get('project_uuid'))}",
+    ]
     manifest = payload.get("manifest", {})
     manifest_path = (
         manifest.get("path")
         if isinstance(manifest, dict)
         else payload.get("manifest_path")
     )
-    lines = [
-        f"Project root: {project.get('root', payload.get('project_root'))}",
-        f"Project UUID: {project.get('uuid', payload.get('project_uuid'))}",
-        f"Manifest: {manifest_path}",
-        f"Config: {config.get('path', payload.get('config_path'))}",
-        f"Active locks: {payload.get('active_lock_count', 0)}",
-        "Mounts:",
-    ]
+    if manifest_path:
+        lines.append(f"Manifest: {manifest_path}")
+    lines.append(f"Config: {config.get('path', payload.get('config_path'))}")
+    lines.extend(_render_lock_breakdown(payload))
     mounts = payload.get("mounts", {})
-    if isinstance(mounts, dict):
+    if isinstance(mounts, dict) and mounts:
+        lines.append("Mounts:")
         for name, mount in mounts.items():
             if isinstance(mount, dict):
+                initialized = "yes" if mount.get("initialized") else "no"
                 lines.extend(
                     [
                         f"  {name}",
@@ -54,15 +147,24 @@ def _render_storage_where(payload: dict[str, object]) -> str:
                         f"    source: {mount.get('source')}",
                         f"    root: {mount.get('root')}",
                         f"    path: {mount.get('path')}",
-                        "    initialized: "
-                        f"{'yes' if mount.get('initialized') else 'no'}",
+                        f"    initialized: {initialized}",
                     ]
                 )
+    # Backward-compat warnings.
     warnings = payload.get("warnings", [])
     if isinstance(warnings, list) and warnings:
+        lines.append("")
         lines.append("Warnings:")
         lines.extend(f"- {item}" for item in warnings if isinstance(item, str))
+    lines.extend(_render_issues_and_next(payload))
     return "\n".join(lines)
+
+
+def _render_storage_where(payload: dict[str, object]) -> str:
+    mode = payload.get("mode", "legacy")
+    if mode == "canonical":
+        return _render_canonical_storage_where(payload)
+    return _render_legacy_storage_where(payload)
 
 
 def _render_storage_move(payload: dict[str, object]) -> str:

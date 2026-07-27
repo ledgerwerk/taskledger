@@ -833,7 +833,15 @@ def register_lock_v2_commands(app: typer.Typer) -> None:
         emit_payload(ctx, payload, human=f"broke lock for {payload['task_id']}")
 
     @app.command("list")
-    def list_command(ctx: typer.Context) -> None:
+    def list_command(
+        ctx: typer.Context,
+        problematic: Annotated[
+            bool, typer.Option("--problematic", help="Show only locks with issues.")
+        ] = False,
+        expired: Annotated[
+            bool, typer.Option("--expired", help="Show only expired locks.")
+        ] = False,
+    ) -> None:
         state = cli_state_from_context(ctx)
         try:
             payload = list_locks(state.cwd)
@@ -842,14 +850,60 @@ def register_lock_v2_commands(app: typer.Typer) -> None:
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         locks = payload["locks"]
         assert isinstance(locks, list)
+        # Apply filters.
+        filtered = locks
+        if problematic:
+            filtered = [
+                item for item in filtered
+                if isinstance(item, dict)
+                and item.get("classification", "none") not in {
+                    "none", "active_live_local_process", "active_same_actor"
+                }
+            ]
+        if expired:
+            filtered = [
+                item for item in filtered
+                if isinstance(item, dict) and item.get("status", {}).get("expired")
+            ]
         lines = ["LOCKS"]
-        for item in locks:
+        for item in filtered:
             if isinstance(item, dict):
+                task_id = item.get("task_id", "?")
+                classification = item.get("classification", "?")
+                stage = item.get("stage", "?")
+                expired_flag = ""
+                status = item.get("status")
+                if isinstance(status, dict) and status.get("expired"):
+                    expired_flag = " expired=yes"
                 lines.append(
-                    f"{item.get('task_id')}  {item.get('stage')}  {item.get('run_id')}"
+                    f"{task_id}  {stage}  {classification}{expired_flag}"
                 )
+                diag = item.get("diagnostics")
+                if isinstance(diag, dict):
+                    summary = diag.get("summary")
+                    if summary:
+                        lines.append(f"  assessment: {summary}")
+                    remediation = diag.get("remediation", [])
+                    if isinstance(remediation, list) and remediation:
+                        first_cmd = remediation[0]
+                        if isinstance(first_cmd, str):
+                            lines.append(f"  next: {first_cmd}")
+                parse_error = item.get("parse_error")
+                if isinstance(parse_error, str):
+                    lines.append(f"  error: {parse_error}")
+        # Summary line.
+        summary = payload.get("summary")
+        if isinstance(summary, dict):
+            total = summary.get("lock_file_count", len(locks))
+            active = summary.get("active_count", 0)
+            exp = summary.get("expired_count", 0)
+            mal = summary.get("malformed_count", 0)
+            lines.append(
+                f"\nTotal: {total}, Active: {active}, "
+                f"Expired: {exp}, Malformed: {mal}"
+            )
         emit_payload(
-            ctx, payload, human="\n".join(lines) if locks else "LOCKS\n(empty)"
+            ctx, payload, human="\n".join(lines) if filtered else "LOCKS\n(empty)"
         )
 
 
@@ -1372,29 +1426,125 @@ def _emit_handoff(
     emit_payload(ctx, payload, human=human)
 
 
+def _render_lock_entries(
+    lines: list[str],
+    section_name: str,
+    entries: object,
+    *,
+    show_remediation: bool = False,
+    show_assessment: bool = False,
+    show_path: bool = False,
+) -> None:
+    """Render a section of lock entries."""
+    lines.append(section_name)
+    if not isinstance(entries, list) or not entries:
+        lines.append("  (empty)")
+        return
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        task_id = item.get("task_id", "?")
+        classification = item.get("classification", "?")
+        if show_path:
+            lines.append(f"  {item.get('path', '?')}")
+        else:
+            lines.append(f"  {task_id}  {classification}")
+        diag = item.get("diagnostics")
+        if isinstance(diag, dict):
+            if show_assessment:
+                summary_text = diag.get("summary")
+                if summary_text:
+                    lines.append(f"    assessment: {summary_text}")
+            if show_remediation:
+                for cmd in diag.get("remediation", []):
+                    if isinstance(cmd, str) and not cmd.startswith("#"):
+                        lines.append(f"    next: {cmd}")
+        parse_error = item.get("parse_error")
+        if parse_error and show_path:
+            lines.append(f"    error: {parse_error}")
+
+
 def _lock_inspection_human(payload: dict[str, object]) -> str:
-    expired = payload.get("expired_locks")
+    lines: list[str] = []
+
+    # Summary section.
+    summary = payload.get("summary", {})
+    if isinstance(summary, dict):
+        lines.append("SUMMARY")
+        for key in (
+            "total", "live", "expired",
+            "stale", "malformed", "unverifiable",
+        ):
+            val = summary.get(key)
+            if val is not None:
+                lines.append(f"  {key}: {val}")
+        lines.append("")
+
+    errors = payload.get("errors", [])
+    if isinstance(errors, list) and errors:
+        lines.append("ERRORS")
+        for err in errors:
+            if isinstance(err, str):
+                lines.append(f"  - {err}")
+        lines.append("")
+
+    _render_lock_entries(
+        lines, "EXPIRED LOCKS",
+        payload.get("expired_locks"),
+        show_remediation=True,
+    )
+
+    stale = payload.get("stale_locks")
+    if isinstance(stale, list) and stale:
+        lines.append("")
+        _render_lock_entries(
+            lines, "STALE LOCKS", stale,
+            show_assessment=True,
+            show_remediation=True,
+        )
+
+    malformed = payload.get("malformed_locks")
+    if isinstance(malformed, list) and malformed:
+        lines.append("")
+        _render_lock_entries(
+            lines, "MALFORMED LOCK FILES", malformed,
+            show_path=True,
+        )
+
+    unverifiable = payload.get("unverifiable_locks")
+    if isinstance(unverifiable, list) and unverifiable:
+        lines.append("")
+        _render_lock_entries(
+            lines, "UNVERIFIABLE LOCKS", unverifiable,
+            show_assessment=True,
+        )
+
     mismatches = payload.get("run_lock_mismatches")
-    lines = ["EXPIRED LOCKS"]
-    if isinstance(expired, list) and expired:
-        for item in expired:
-            if isinstance(item, dict):
-                lines.append(str(item.get("task_id")))
-    else:
-        lines.append("(empty)")
+    lines.append("")
     lines.append("RUN/LOCK MISMATCHES")
     if isinstance(mismatches, list) and mismatches:
         for item in mismatches:
             if isinstance(item, dict):
                 lines.append(
-                    f"{item.get('task_id')} {item.get('run_type')} "
-                    f"{item.get('run_id')} next: {item.get('next_command')}"
+                    f"  {item.get('task_id')} "
+                    f"{item.get('run_type')} "
+                    f"{item.get('run_id')} "
+                    f"next: {item.get('next_command')}"
                 )
                 note = item.get("note")
                 if isinstance(note, str) and note.strip():
-                    lines.append(f"  note: {note}")
+                    lines.append(f"    note: {note}")
     else:
-        lines.append("(empty)")
+        lines.append("  (empty)")
+
+    next_commands = payload.get("next_commands")
+    if isinstance(next_commands, list) and next_commands:
+        lines.append("")
+        lines.append("NEXT COMMANDS")
+        for idx, cmd in enumerate(next_commands, 1):
+            if isinstance(cmd, str):
+                lines.append(f"  {idx}. {cmd}")
+
     return "\n".join(lines)
 
 

@@ -738,11 +738,24 @@ def _inspect_migration_phases(  # noqa: C901
         selected_uuid = requested_uuid
         identity_transition = "explicit"
     if selected_uuid is None:
-        selected_uuid = str(uuid.uuid4())
-        identity_transition = "explicit"
-    target_data = sibling_root / "taskledger" / selected_uuid / "data"
-    target_indexes = sibling_root / "taskledger" / selected_uuid / "indexes"
-    target_registration = _target_registration(selected_uuid)
+        issues.append(
+            _issue(
+                "blocker",
+                "PROJECT_UUID_MISSING",
+                "Legacy Taskledger config has no stable project UUID.",
+                "Run `taskledger repair project-identity --apply`.",
+                details={
+                    "config_paths": [str(path) for path, _ in legacy_configs],
+                },
+            )
+        )
+        target_data = sibling_root / "taskledger" / "unresolved" / "data"
+        target_indexes = sibling_root / "taskledger" / "unresolved" / "indexes"
+        target_registration = _target_registration(None)
+    else:
+        target_data = sibling_root / "taskledger" / selected_uuid / "data"
+        target_indexes = sibling_root / "taskledger" / selected_uuid / "indexes"
+        target_registration = _target_registration(selected_uuid)
     if not sibling_root.exists() and create_sibling_store:
         issues.append(
             _issue(
@@ -1389,6 +1402,19 @@ def _apply_migration_phases(
     create_sibling_store: bool = False,
     retire_source: bool = False,
 ) -> dict[str, object]:
+    if not inspection.ready:
+        raise LaunchError(
+            "Migration inspection is not ready to apply. "
+            "Resolve all blockers first.",
+            code="TASKLEDGER_STORAGE_MIGRATION_NOT_READY",
+            details={"blockers": list(inspection.blockers)},
+        )
+    if inspection.project_uuid is None:
+        raise LaunchError(
+            "Migration requires a stable project UUID. "
+            "Run `taskledger repair project-identity --apply` first.",
+            code="TASKLEDGER_STORAGE_MIGRATION_NO_PROJECT_UUID",
+        )
     initial_source_fingerprint = _tree_fingerprint(inspection.source_data_root)
     initial_target_fingerprint = _tree_fingerprint(inspection.target_data_root)
     if create_sibling_store:

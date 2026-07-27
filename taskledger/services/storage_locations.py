@@ -8,6 +8,9 @@ from pathlib import Path
 from taskledger.errors import LaunchError
 from taskledger.services.doctor import inspect_v2_project
 from taskledger.services.git_utils import (
+    check_git_path_state as _check_git_path_state,
+)
+from taskledger.services.git_utils import (
     git_root as _git_root,
 )
 from taskledger.services.git_utils import (
@@ -19,6 +22,7 @@ from taskledger.services.git_utils import (
 from taskledger.services.git_utils import (
     run_git as _run_git,
 )
+from taskledger.services.lock_inventory import LockInventory, build_lock_inventory
 from taskledger.storage.ledger_config import load_ledger_config
 from taskledger.storage.ledgercore_backend import locate_taskledger_project
 from taskledger.storage.paths import DEFAULT_TASKLEDGER_DIR_NAME, load_project_locator
@@ -28,7 +32,26 @@ from taskledger.storage.project_identity import (
     load_project_uuid,
     project_name_or_default,
 )
-from taskledger.storage.task_store import load_active_locks
+
+
+@dataclass(slots=True, frozen=True)
+class StorageIssue:
+    """A structured issue surfaced by a storage location report."""
+
+    severity: str  # "info", "warning", "error", "blocker"
+    code: str
+    message: str
+    remediation: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        result: dict[str, object] = {
+            "severity": self.severity,
+            "code": self.code,
+            "message": self.message,
+        }
+        if self.remediation:
+            result["remediation"] = list(self.remediation)
+        return result
 
 
 @dataclass(slots=True, frozen=True)
@@ -57,6 +80,16 @@ class StorageLocationReport:
     store_marker: str | None = None
     binding: str | None = None
     relative_path: str | None = None
+    lock_file_count: int | None = None
+    expired_lock_count: int | None = None
+    stale_lock_count: int | None = None
+    malformed_lock_count: int | None = None
+    unverifiable_lock_count: int | None = None
+    git_tracked: bool | None = None
+    git_ignored: bool | None = None
+    git_ignore_source: str | None = None
+    issues: tuple[StorageIssue, ...] | None = None
+    next_commands: tuple[str, ...] | None = None
 
     def to_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -72,6 +105,34 @@ class StorageLocationReport:
             "has_active_locks": self.has_active_locks,
             "warnings": list(self.warnings),
         }
+        # Lock breakdown (backward-compatible additions).
+        locks_section: dict[str, object] = {
+            "active_count": self.active_lock_count,
+        }
+        if self.lock_file_count is not None:
+            locks_section["lock_file_count"] = self.lock_file_count
+            payload["lock_file_count"] = self.lock_file_count
+        if self.expired_lock_count is not None:
+            locks_section["expired_count"] = self.expired_lock_count
+            payload["expired_lock_count"] = self.expired_lock_count
+        if self.stale_lock_count is not None:
+            locks_section["stale_count"] = self.stale_lock_count
+        if self.malformed_lock_count is not None:
+            locks_section["malformed_count"] = self.malformed_lock_count
+            payload["malformed_lock_count"] = self.malformed_lock_count
+        if self.unverifiable_lock_count is not None:
+            locks_section["unverifiable_count"] = self.unverifiable_lock_count
+        if self.lock_file_count is not None:
+            locks_section["status"] = (
+                "invalid" if self.malformed_lock_count else
+                "attention" if self.active_lock_count or self.expired_lock_count else
+                "clean"
+            )
+            payload["locks"] = locks_section
+        if self.issues:
+            payload["issues"] = [issue.to_dict() for issue in self.issues]
+        if self.next_commands:
+            payload["next_commands"] = list(self.next_commands)
         if self.mode == "legacy":
             payload.update(
                 {
@@ -81,6 +142,13 @@ class StorageLocationReport:
                     "git_root": self.git_root,
                 }
             )
+            if self.git_tracked is not None:
+                payload["git"] = {
+                    "root": self.git_root,
+                    "tracked": self.git_tracked,
+                    "ignored": self.git_ignored,
+                    "ignore_source": self.git_ignore_source,
+                }
         else:
             mounts = {
                 name: {
@@ -119,6 +187,17 @@ class StorageLocationReport:
                 "active_lock_count": self.active_lock_count,
                 "warnings": list(self.warnings),
             }
+            if self.lock_file_count is not None:
+                payload["lock_file_count"] = self.lock_file_count
+                payload["locks"] = locks_section
+            if self.expired_lock_count is not None:
+                payload["expired_lock_count"] = self.expired_lock_count
+            if self.malformed_lock_count is not None:
+                payload["malformed_lock_count"] = self.malformed_lock_count
+            if self.issues:
+                payload["issues"] = [issue.to_dict() for issue in self.issues]
+            if self.next_commands:
+                payload["next_commands"] = list(self.next_commands)
         return payload
 
 
@@ -258,6 +337,19 @@ def build_storage_location_report(
             for name, mount in context.layout.mounts.items()
         }
         active_lock_count = _active_lock_count(workspace_root)
+        try:
+            inventory = _build_lock_inventory(workspace_root)
+            lock_file_count = inventory.lock_file_count
+            expired_lock_count = inventory.expired_count
+            stale_lock_count = inventory.stale_count
+            malformed_lock_count = inventory.malformed_count
+            unverifiable_lock_count = inventory.unverifiable_count
+        except LaunchError:
+            lock_file_count = None
+            expired_lock_count = None
+            stale_lock_count = None
+            malformed_lock_count = None
+            unverifiable_lock_count = None
         warnings = (
             [f"{active_lock_count} active lock(s) are present."]
             if active_lock_count
@@ -297,6 +389,11 @@ def build_storage_location_report(
             else None,
             binding=context.binding_path.as_posix() if context.binding_path else None,
             relative_path=relative_path,
+            lock_file_count=lock_file_count,
+            expired_lock_count=expired_lock_count,
+            stale_lock_count=stale_lock_count,
+            malformed_lock_count=malformed_lock_count,
+            unverifiable_lock_count=unverifiable_lock_count,
         )
     legacy_locator = load_project_locator(workspace_root)
     taskledger_dir = legacy_locator.taskledger_dir
@@ -310,12 +407,40 @@ def build_storage_location_report(
     inside_workspace = _is_within(taskledger_dir, legacy_locator.workspace_root)
     git_root = _git_root(taskledger_dir)
     active_lock_count = _active_lock_count(legacy_locator.workspace_root)
+    try:
+        inventory = _build_lock_inventory(legacy_locator.workspace_root)
+        lock_file_count = inventory.lock_file_count
+        expired_lock_count = inventory.expired_count
+        stale_lock_count = inventory.stale_count
+        malformed_lock_count = inventory.malformed_count
+        unverifiable_lock_count = inventory.unverifiable_count
+    except LaunchError:
+        lock_file_count = None
+        expired_lock_count = None
+        stale_lock_count = None
+        malformed_lock_count = None
+        unverifiable_lock_count = None
     legacy_warnings: list[str] = []
+    # Git-aware in-workspace diagnostics.
+    git_tracked: bool | None = None
+    git_ignored: bool | None = None
+    git_ignore_source: str | None = None
     if inside_workspace:
-        legacy_warnings.append(
-            "Resolved taskledger_dir is inside the workspace. "
-            "Keep it ignored in source control."
-        )
+        git_state = _check_git_path_state(taskledger_dir)
+        git_tracked = git_state.tracked
+        git_ignored = git_state.ignored
+        git_ignore_source = git_state.ignore_source
+        if git_state.tracked:
+            legacy_warnings.append(
+                "Durable runtime state is tracked by Git. "
+                "Run `git rm -r --cached -- .taskledger`."
+            )
+        elif not git_state.ignored:
+            legacy_warnings.append(
+                "Add `.taskledger/` to `.gitignore` to prevent "
+                "accidental tracking."
+            )
+        # If ignored and untracked: no warning needed (safe).
     if active_lock_count:
         legacy_warnings.append(f"{active_lock_count} active lock(s) are present.")
     return StorageLocationReport(
@@ -331,6 +456,14 @@ def build_storage_location_report(
         active_lock_count=active_lock_count,
         has_active_locks=active_lock_count > 0,
         warnings=tuple(legacy_warnings),
+        lock_file_count=lock_file_count,
+        expired_lock_count=expired_lock_count,
+        stale_lock_count=stale_lock_count,
+        malformed_lock_count=malformed_lock_count,
+        unverifiable_lock_count=unverifiable_lock_count,
+        git_tracked=git_tracked,
+        git_ignored=git_ignored,
+        git_ignore_source=git_ignore_source,
     )
 
 
@@ -554,9 +687,21 @@ def sync_commit_storage(workspace_root: Path, *, message: str) -> SyncCommitRepo
     )
 
 
+def _build_lock_inventory(workspace_root: Path) -> LockInventory:
+    """Build lock inventory for the given workspace root.
+
+    Raises LaunchError if paths cannot be resolved (no fail-open).
+    """
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    paths = resolve_v2_paths(workspace_root)
+    return build_lock_inventory(paths)
+
+
 def _active_lock_count(workspace_root: Path) -> int:
     try:
-        return len(load_active_locks(workspace_root))
+        inventory = _build_lock_inventory(workspace_root)
+        return inventory.active_count
     except LaunchError:
         return 0
 

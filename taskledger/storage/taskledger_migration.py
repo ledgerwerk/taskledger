@@ -6,12 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from taskledger.errors import LaunchError
 from taskledger.storage.ledgercore_backend import (
     execute_taskledger_layout_migration,
 )
 from taskledger.storage.paths import probe_taskledger_project
-from taskledger.storage.task_store import load_active_locks
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,13 +32,15 @@ def require_no_active_taskledger_locks(project_root: Path) -> None:
     probe = probe_taskledger_project(project_root)
     if probe.source == "canonical" and not probe.registration_present:
         return
-    locks = load_active_locks(project_root)
-    if locks:
-        raise LaunchError(
-            f"Taskledger storage migration is blocked by {len(locks)} active lock(s).",
-            code="TASKLEDGER_STORAGE_MIGRATION_ACTIVE_LOCKS",
-            details={"active_lock_count": len(locks)},
-        )
+    from taskledger.services.lock_inventory import (
+        build_lock_inventory,
+        require_migration_safe_locks,
+    )
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    paths = resolve_v2_paths(project_root)
+    inventory = build_lock_inventory(paths)
+    require_migration_safe_locks(inventory, project_root=project_root)
 
 
 def execute_taskledger_migration(

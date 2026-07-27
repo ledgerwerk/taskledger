@@ -64,6 +64,7 @@ def lock_is_expired(lock: TaskLock, *, now: datetime | None = None) -> bool:
 def lock_status(lock: TaskLock | None) -> dict[str, object]:
     if lock is None:
         return {
+            "present": False,
             "active": False,
             "expired": False,
             "holder": None,
@@ -72,9 +73,11 @@ def lock_status(lock: TaskLock | None) -> dict[str, object]:
             "created_at": None,
             "expires_at": None,
         }
+    expired = lock_is_expired(lock)
     return {
-        "active": True,
-        "expired": lock_is_expired(lock),
+        "present": True,
+        "active": not expired,
+        "expired": expired,
         "holder": lock.holder.to_dict(),
         "stage": lock.stage,
         "run_id": lock.run_id,

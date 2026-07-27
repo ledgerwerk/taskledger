@@ -562,6 +562,13 @@ def config_set(workspace_root: Path, *, key: str, value_text: str) -> dict[str, 
     except LaunchError as exc:
         if "Config key not found" not in str(exc):
             raise
+    # Enforce immutability before branching between modes.
+    help_entry = _match_config_help_entry(key)
+    if help_entry is not None and not help_entry.mutable:
+        raise LaunchError(
+            f"Config key {key} is immutable. "
+            "Use the dedicated repair or topology command."
+        )
     if context.mode == "canonical":
         if key in {
             "config_version",

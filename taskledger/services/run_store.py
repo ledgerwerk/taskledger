@@ -14,7 +14,6 @@ from taskledger.services.task_events import (
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.locks import lock_status, read_lock, remove_lock
 from taskledger.storage.task_store import (
-    load_active_locks,
     resolve_task,
     resolve_v2_paths,
     task_lock_path,
@@ -106,19 +105,30 @@ def break_lock(
 
 
 def list_locks(workspace_root: Path) -> dict[str, object]:
-    from taskledger.services.lock_diagnostics import diagnose_lock
+    from taskledger.services.lock_inventory import build_lock_inventory
+    from taskledger.storage.task_store import resolve_v2_paths
 
-    locks = load_active_locks(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
+    inventory = build_lock_inventory(paths)
     entries: list[dict[str, object]] = []
-    for lock in locks:
-        entries.append(
-            {
-                **lock.to_dict(),
-                "status": lock_status(lock),
-                "diagnostics": diagnose_lock(lock, task_id=lock.task_id).to_dict(),
-            }
-        )
+    for entry in inventory.entries:
+        entry_dict: dict[str, object] = {
+            "task_id": entry.task_id,
+            "path": str(entry.path),
+            "classification": entry.classification,
+        }
+        if entry.lock is not None:
+            entry_dict.update(entry.lock.to_dict())
+            from taskledger.storage.locks import lock_status
+
+            entry_dict["status"] = lock_status(entry.lock)
+        if entry.diagnostics is not None:
+            entry_dict["diagnostics"] = entry.diagnostics.to_dict()
+        if entry.parse_error is not None:
+            entry_dict["parse_error"] = entry.parse_error
+        entries.append(entry_dict)
     return {
         "kind": "task_lock_list",
         "locks": entries,
+        "summary": inventory.to_dict(),
     }

@@ -770,18 +770,34 @@ def resolve_code_review(
     raise LaunchError(f"Code review not found: {review_ref}")
 
 
-def load_active_locks(workspace_root: Path) -> list[TaskLock]:
+def load_lock_records(workspace_root: Path) -> list[TaskLock]:
+    """Load all readable lock files (no expiry filter)."""
     paths = resolve_v2_paths(workspace_root)
-    return load_active_locks_from_paths(paths)
+    return load_lock_records_from_paths(paths)
 
 
-def load_active_locks_from_paths(paths: V2Paths) -> list[TaskLock]:
+def load_lock_records_from_paths(paths: V2Paths) -> list[TaskLock]:
+    """Load all readable lock files from resolved paths (no expiry filter)."""
     locks: list[TaskLock] = []
     for path in sorted(paths.tasks_dir.glob("task-*/lock.yaml")):
         lock = read_lock(path)
         if lock is not None:
             locks.append(lock)
     return locks
+
+
+# Compatibility alias retained during transition.
+load_active_locks_from_paths = load_lock_records_from_paths
+
+
+def load_active_locks(workspace_root: Path) -> list[TaskLock]:
+    """Load non-expired locks only (compatibility wrapper)."""
+    from taskledger.storage.locks import lock_is_expired
+
+    return [
+        lock for lock in load_lock_records(workspace_root)
+        if not lock_is_expired(lock)
+    ]
 
 
 def load_todos(workspace_root: Path, task_id: str) -> TodoCollection:

@@ -1141,6 +1141,94 @@ def repair_lock_command(
     emit_payload(ctx, payload, human=f"repaired lock for {payload['task_id']}")
 
 
+@repair_app.command("locks")
+def repair_locks_command(
+    ctx: typer.Context,
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Apply repairs (default is dry-run).")
+    ] = False,
+    reason: Annotated[
+        str, typer.Option("--reason", help="Reason for breaking locks.")
+    ] = "",
+) -> None:
+    from taskledger.api.repair import repair_locks
+
+    state = ctx.obj
+    assert isinstance(state, CLIState)
+    try:
+        payload = repair_locks(state.cwd, apply=apply, reason=reason)
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    if payload.get("dry_run"):
+        entries = payload.get("entries", [])
+        lines = [f"BULK LOCK REPAIR (dry-run): {len(entries)} lock(s)"]
+        for entry in entries:
+            if isinstance(entry, dict):
+                lines.append(
+                    f"  {entry.get('task_id')}  {entry.get('classification')}"
+                )
+        next_cmd = payload.get("next_command")
+        if next_cmd:
+            lines.append(f"\nNext: {next_cmd}")
+        emit_payload(ctx, payload, human="\n".join(lines))
+    else:
+        repaired = payload.get("repaired", [])
+        failed = payload.get("failed", [])
+        lines = [f"repaired {len(repaired)} lock(s)"]
+        for item in failed:
+            if isinstance(item, dict):
+                task_or_path = item.get("task_id", item.get("path"))
+                err = item.get("error")
+                lines.append(
+                    f"  failed: {task_or_path}: {err}"
+                )
+        emit_payload(ctx, payload, human="\n".join(lines))
+
+
+@repair_app.command("project-identity")
+def repair_project_identity_command(
+    ctx: typer.Context,
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Generate and persist a project UUID.")
+    ] = False,
+    project_uuid: Annotated[
+        str | None,
+        typer.Option("--project-uuid", help="Explicit UUID to set."),
+    ] = None,
+) -> None:
+    from taskledger.api.repair import repair_project_identity
+
+    state = ctx.obj
+    assert isinstance(state, CLIState)
+    try:
+        payload = repair_project_identity(
+            state.cwd, apply=apply, project_uuid=project_uuid
+        )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    status = payload.get("status", "unknown")
+    config_path = payload.get("config_path", "")
+    uuid_val = payload.get("project_uuid")
+    lines = [
+        "PROJECT IDENTITY",
+        f"status: {status}",
+        f"config: {config_path}",
+        f"uuid: {uuid_val}",
+    ]
+    if payload.get("changed"):
+        lines.append("changed: yes")
+        for cmd in payload.get("next_commands", []):
+            lines.append(f"next: {cmd}")
+    elif status == "missing":
+        lines.append("action: generate and persist a UUID")
+        next_cmd = payload.get("next_command")
+        if next_cmd:
+            lines.append(f"next: {next_cmd}")
+    emit_payload(ctx, payload, human="\n".join(lines))
+
+
 @repair_app.command("task")
 def repair_task_command(
     ctx: typer.Context,

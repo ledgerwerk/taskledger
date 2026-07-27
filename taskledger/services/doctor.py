@@ -273,14 +273,100 @@ def inspect_v2_project(workspace_root: Path) -> dict[str, object]:
 
 
 def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
+    from taskledger.services.lock_inventory import build_lock_inventory
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    try:
+        paths = resolve_v2_paths(workspace_root)
+        inventory = build_lock_inventory(paths)
+    except Exception as exc:
+        return {
+            "kind": "taskledger_lock_inspection",
+            "healthy": False,
+            "errors": [str(exc)],
+            "expired_locks": [],
+            "run_lock_mismatches": [],
+            "summary": {},
+            "entries": [],
+        }
+
+    expired_locks: list[dict[str, object]] = []
+    stale_locks: list[dict[str, object]] = []
+    malformed_locks: list[dict[str, object]] = []
+    unverifiable_locks: list[dict[str, object]] = []
+    live_locks: list[dict[str, object]] = []
+    errors: list[str] = []
+    next_commands: list[str] = []
+
+    for entry in inventory.entries:
+        entry_dict = entry.to_dict()
+        if entry.is_malformed:
+            malformed_locks.append(entry_dict)
+            errors.append(f"Malformed lock {entry.path}: {entry.parse_error}")
+            continue
+        classification = entry.classification
+        if classification == "expired":
+            expired_locks.append(entry_dict)
+        elif classification in {
+            "active_dead_local_process",
+        }:
+            stale_locks.append(entry_dict)
+        elif classification in {
+            "active_unverifiable_remote_or_unknown_process",
+            "active_no_pid",
+            "active_harness_session",
+            "active_other_actor",
+        }:
+            unverifiable_locks.append(entry_dict)
+        elif classification in {
+            "active_live_local_process",
+            "active_same_actor",
+        }:
+            live_locks.append(entry_dict)
+        else:
+            live_locks.append(entry_dict)
+
+    # Collect remediation from stale/expired entries.
+    for entry in (*expired_locks, *stale_locks):
+        diag = entry.get("diagnostics", {})
+        if isinstance(diag, dict):
+            for cmd in diag.get("remediation", []):
+                if isinstance(cmd, str) and not cmd.startswith("#"):
+                    next_commands.append(cmd)
+
+    healthy = (
+        not expired_locks
+        and not stale_locks
+        and not malformed_locks
+        and not unverifiable_locks
+    )
+    # Also include run_lock_mismatches from the full doctor check.
     payload = inspect_v2_project(workspace_root)
-    expired_locks = list(cast(list[object], payload["expired_locks"]))
     run_lock_mismatches = list(cast(list[object], payload["run_lock_mismatches"]))
+
+    if run_lock_mismatches:
+        healthy = False
+
     return {
         "kind": "taskledger_lock_inspection",
-        "healthy": not expired_locks and not run_lock_mismatches,
+        "healthy": healthy,
+        "errors": errors,
+        "summary": {
+            "total": inventory.lock_file_count,
+            "live": len(live_locks),
+            "expired": len(expired_locks),
+            "stale": len(stale_locks),
+            "malformed": len(malformed_locks),
+            "unverifiable": len(unverifiable_locks),
+        },
+        "live_locks": live_locks,
         "expired_locks": expired_locks,
+        "stale_locks": stale_locks,
+        "malformed_locks": malformed_locks,
+        "unverifiable_locks": unverifiable_locks,
         "run_lock_mismatches": run_lock_mismatches,
+        "next_commands": list(dict.fromkeys(next_commands)),
+        "entries": [e.to_dict() for e in inventory.entries],
     }
 
 
