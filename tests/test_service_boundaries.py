@@ -183,10 +183,10 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/tree.py:258": (
         "Tree command handles task ref resolution errors by returning empty."
     ),
-    "taskledger/services/lock_inventory.py:213": (
+    "taskledger/services/lock_inventory.py:214": (
         "Lock inventory preserves malformed lock read failures for diagnostics."
     ),
-    "taskledger/services/lock_inventory.py:225": (
+    "taskledger/services/lock_inventory.py:226": (
         "Lock inventory preserves lock diagnosis failures for diagnostics."
     ),
     "taskledger/storage/ledger_config.py:96": (
