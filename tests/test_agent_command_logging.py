@@ -306,7 +306,7 @@ def test_task_transcript_json_contract(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
-    assert payload["command"] == "task transcript"  # space-separated canonical path
+    assert payload["command"] == "task.transcript"  # dotted JSON command path
     assert payload["result"]["kind"] == "task_transcript"
 
 

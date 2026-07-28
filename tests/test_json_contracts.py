@@ -155,7 +155,7 @@ def test_json_success_envelope_uses_ok_command_result_and_events(
     payload = json.loads(result.stdout)
     assert payload == {
         "ok": True,
-        "command": "task create",  # space-separated canonical path
+        "command": "task.create",  # dotted JSON command path
         "task_id": "task-0001",
         "result": payload["result"],
         "events": [],

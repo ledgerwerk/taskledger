@@ -212,7 +212,7 @@ def emit_payload(
 ) -> None:
     from taskledger.services.agent_logging import note_payload
 
-    note_payload(payload, operation_name=_operation_name(ctx))
+    note_payload(payload, operation_name=_operation_log_name(ctx))
     state = cli_state_from_context(ctx)
     if state.json_output:
         typer.echo(
@@ -324,6 +324,17 @@ def _success_envelope(
 
 def _operation_name(ctx: typer.Context) -> str:
     """Get the canonical dotted command path for the JSON contract."""
+    parts = _command_parts(ctx)
+    return ".".join(parts) if parts else "taskledger"
+
+
+def _operation_log_name(ctx: typer.Context) -> str:
+    """Get the readable space-separated command path for agent logs."""
+    parts = _command_parts(ctx)
+    return " ".join(parts) if parts else "taskledger"
+
+
+def _command_parts(ctx: typer.Context) -> list[str]:
     root_name = ctx.find_root().info_name
     parts = ctx.command_path.split()
     if root_name:
@@ -332,7 +343,7 @@ def _operation_name(ctx: typer.Context) -> str:
             parts = parts[len(root_parts) :]
         elif parts and parts[0] == Path(root_name).name:
             parts = parts[1:]
-    return ".".join(parts) if parts else "taskledger"
+    return parts
 
 
 def _infer_result_type(payload: Any) -> str:

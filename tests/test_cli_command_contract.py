@@ -343,7 +343,7 @@ def test_global_json_only_for_task_show(tmp_path: Path) -> None:
     )
     assert global_result.exit_code == 0, global_result.stdout
     payload = json.loads(global_result.stdout)
-    assert payload["command"] == "task show"  # space-separated canonical path
+    assert payload["command"] == "task.show"  # dotted JSON command path
     assert payload["ok"] is True
 
 

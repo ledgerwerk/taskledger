@@ -13,8 +13,8 @@ def test_stable_storage_error_has_storage_exit_code() -> None:
     error = LaunchError("TASKLEDGER_SIBLING_ROOT_MISSING: /tmp/ledger")
 
     assert error.code == "TASKLEDGER_SIBLING_ROOT_MISSING"
-    assert error.exit_code == 4  # CONFLICT (storage error)
-    assert error.taskledger_exit_code == 4  # CONFLICT (storage error)
+    assert error.exit_code == 6  # STORAGE_ERROR
+    assert error.taskledger_exit_code == 6  # STORAGE_ERROR
 
 
 def test_canonical_sync_error_has_usage_exit_code() -> None:

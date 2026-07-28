@@ -369,7 +369,7 @@ class TestMigrateCLI:
 
         runner = CliRunner()
         result = runner.invoke(app, ["--root", str(tmp_path), "migrate", "apply"])
-        assert result.exit_code == 4  # CONFLICT (storage migration issue)
+        assert result.exit_code == 6  # STORAGE_ERROR (storage migration issue)
 
     # specmason: req=REQ-0054 ac=AC-0572
     def test_migrate_apply_up_to_date(self, tmp_path: Path) -> None:
