@@ -58,6 +58,7 @@ from taskledger.cli_common import (
     resolve_workspace_root,
 )
 from taskledger.cli_config import register_config_commands
+from taskledger.cli_help import register_help_command
 from taskledger.cli_implement import register_implement_v2_commands
 from taskledger.cli_ledger import ledger_app
 from taskledger.cli_migrate import migrate_app
@@ -97,7 +98,7 @@ from taskledger.services.usage import render_usage_text, usage_payload
 
 def _version_callback(value: bool) -> None:
     if value:
-        typer.echo(f"taskledger, version {__version__}")
+        typer.echo(f"taskledger {__version__}")
         raise typer.Exit()
 
 
@@ -191,6 +192,7 @@ register_pipeline_commands(pipeline_app)
 register_review_commands(review_app)
 register_config_commands(config_app)
 register_trace_command(app)
+register_help_command(app)
 # register_changelog_commands removed.
 # register_build_command removed.
 
@@ -526,18 +528,19 @@ def main(
             help="Show the version and exit.",
         ),
     ] = False,
-    cwd: Annotated[
-        Path | None,
-        typer.Option(
-            "--cwd",
-            help="Workspace root. Defaults to the current directory.",
-        ),
-    ] = None,
     root: Annotated[
         Path | None,
         typer.Option(
             "--root",
-            help="Workspace root. Preferred alias for --cwd.",
+            help="Workspace root. Defaults to the current directory.",
+        ),
+    ] = None,
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Deprecated: use --root instead.",
+            hidden=True,
         ),
     ] = None,
     json_output: Annotated[
@@ -564,9 +567,29 @@ def main(
             "Use either --cwd or --root, not both with different values."
         )
     raw_cwd = (root or cwd or Path.cwd()).expanduser().resolve()
+
+    # Commands that tolerate uninitialized workspaces
+    _tolerant_commands = {
+        "init",
+        "status",
+        "info",
+        "doctor",
+        "commands",
+        "help",
+        "storage",
+        "migrate",
+    }
+    command = _command_from_tokens(argv)
+    command_base = command.split(".")[0] if command else ""
+    is_tolerant = command_base in _tolerant_commands
+
     try:
         resolved_cwd = resolve_workspace_root(raw_cwd)
     except LaunchError as exc:
+        if is_tolerant:
+            # For tolerant commands, use the raw cwd without failing
+            ctx.obj = CLIState(cwd=raw_cwd, json_output=json_output)
+            return
         ctx.obj = CLIState(cwd=raw_cwd, json_output=json_output)
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
@@ -732,6 +755,28 @@ def status_command(
             payload = project_status(state.cwd)
         else:
             payload = project_status_summary(state.cwd, check_health=check)
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    emit_payload(
+        ctx,
+        payload,
+        human=_status_human(payload) if isinstance(payload, dict) else None,
+    )
+
+
+@app.command("info")
+def info_command(
+    ctx: typer.Context,
+) -> None:
+    """Show detailed project information and inventory.
+
+    This replaces the deprecated `status --full` usage.
+    """
+    state = ctx.obj
+    assert isinstance(state, CLIState)
+    try:
+        payload = project_status(state.cwd)
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc

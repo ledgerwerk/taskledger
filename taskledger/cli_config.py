@@ -143,6 +143,62 @@ def register_config_commands(app: typer.Typer) -> None:
             ctx, payload, result_type="config_path", human=str(payload["path"])
         )
 
+    @app.command("validate")
+    def validate_command(ctx: typer.Context) -> None:
+        """Validate the project configuration.
+
+        Checks that the config file is valid TOML and all keys are recognized.
+        """
+        state = cli_state_from_context(ctx)
+        try:
+            from taskledger.storage.project_context import load_project_context
+
+            context = load_project_context(state.cwd)
+            payload = {
+                "kind": "config_validation",
+                "path": str(context.config_path),
+                "valid": True,
+                "errors": [],
+                "warnings": [],
+            }
+        except LaunchError as exc:
+            payload = {
+                "kind": "config_validation",
+                "valid": False,
+                "errors": [str(exc)],
+                "warnings": [],
+            }
+        emit_payload(
+            ctx,
+            payload,
+            result_type="config_validation",
+            human=_render_config_validate(payload),
+        )
+
+    @app.command("unset")
+    def unset_command(
+        ctx: typer.Context,
+        key: Annotated[str, typer.Argument(help="Configuration key to unset.")],
+    ) -> None:
+        """Remove a configuration key.
+
+        Removes the key from local overrides if present.
+        """
+        state = cli_state_from_context(ctx)
+        try:
+            from taskledger.api.config import config_unset
+
+            payload = config_unset(state.cwd, key)
+        except LaunchError as exc:
+            emit_error(ctx, exc)
+            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+        emit_payload(
+            ctx,
+            payload,
+            result_type="project_config_updated",
+            human=f"Unset: {key}",
+        )
+
 
 def _render_config_list(payload: dict[str, object]) -> str:
     config_path = str(payload.get("config_path", "?"))
@@ -210,4 +266,26 @@ def _render_config_describe(payload: dict[str, object]) -> str:
         lines.append(f"Current: {render_json(value).rstrip()}")
     else:
         lines.append("Current: not set explicitly")
+    return "\n".join(lines)
+
+
+def _render_config_validate(payload: dict[str, object]) -> str:
+    """Render config validation result for human output."""
+    valid = payload.get("valid", False)
+    errors = payload.get("errors", [])
+    warnings = payload.get("warnings", [])
+    path = payload.get("path", "?")
+    lines = [f"Config validation: {path}"]
+    if valid:
+        lines.append("Status: valid")
+    else:
+        lines.append("Status: invalid")
+    if isinstance(errors, list) and errors:
+        lines.append("Errors:")
+        for err in errors:
+            lines.append(f"  - {err}")
+    if isinstance(warnings, list) and warnings:
+        lines.append("Warnings:")
+        for warn in warnings:
+            lines.append(f"  - {warn}")
     return "\n".join(lines)

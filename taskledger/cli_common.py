@@ -7,6 +7,10 @@ from typing import Annotated, Any
 
 import typer
 
+from taskledger.compat.ledgercore import (
+    make_cli_error_envelope,
+    make_cli_success_envelope,
+)
 from taskledger.domain.models import ActorRef, HarnessRef
 from taskledger.errors import (
     LaunchError,
@@ -286,28 +290,32 @@ def _success_envelope(
     result_type: str | None,
     warnings: list[str] | None,
 ) -> dict[str, object]:
+    """Create a success envelope using the Ledgerwerk CLI v1 schema."""
     extracted_warnings = warnings
     if extracted_warnings is None and isinstance(payload, dict):
         raw_warnings = payload.get("warnings")
         if isinstance(raw_warnings, list):
             extracted_warnings = [str(item) for item in raw_warnings]
-    envelope: dict[str, object] = {
-        "ok": True,
-        "command": _operation_name(ctx),
-        "result": payload,
-        "events": _event_refs(payload),
-    }
+    # Convert to tuple for CLIWarning compatibility
+    warning_tuples = tuple(extracted_warnings or ())
+    command = _operation_name(ctx)
+    envelope = make_cli_success_envelope(
+        command=command,
+        result=payload if isinstance(payload, dict) else {"value": payload},
+        events=_event_refs_as_tuples(payload),
+        warnings=warning_tuples,
+    )
+    d = envelope.as_mapping()
     task_id = _task_id_from_value(payload)
     if task_id is not None:
-        envelope["task_id"] = task_id
-    if extracted_warnings:
-        envelope["warnings"] = extracted_warnings
+        d["task_id"] = task_id
     if result_type is not None:
-        envelope["result_type"] = result_type
-    return envelope
+        d["result_type"] = result_type
+    return d
 
 
 def _operation_name(ctx: typer.Context) -> str:
+    """Get the canonical command path using space separators."""
     root_name = ctx.find_root().info_name
     parts = ctx.command_path.split()
     if root_name:
@@ -316,7 +324,7 @@ def _operation_name(ctx: typer.Context) -> str:
             parts = parts[len(root_parts) :]
         elif parts and parts[0] == Path(root_name).name:
             parts = parts[1:]
-    return ".".join(parts) if parts else "taskledger"
+    return " ".join(parts) if parts else "taskledger"
 
 
 def _infer_result_type(payload: Any) -> str:
@@ -359,6 +367,7 @@ def _error_envelope(
     exit_code: int | None,
     error_type: str | None,
 ) -> dict[str, object]:
+    """Create an error envelope using the Ledgerwerk CLI v1 schema."""
     resolved_error = _error_payload(
         error,
         data=data,
@@ -366,15 +375,18 @@ def _error_envelope(
         exit_code=exit_code,
         error_type=error_type,
     )
-    envelope: dict[str, object] = {
-        "ok": False,
-        "command": _operation_name(ctx),
-        "error": resolved_error,
-    }
+    command = _operation_name(ctx)
+    envelope = make_cli_error_envelope(
+        command=command,
+        error=resolved_error,
+        events=(),
+        warnings=(),
+    )
+    d = envelope.as_mapping()
     task_id = resolved_error.get("task_id")
     if isinstance(task_id, str):
-        envelope["task_id"] = task_id
-    return envelope
+        d["task_id"] = task_id
+    return d
 
 
 def _error_exit_code(error: Exception | str) -> int:
@@ -530,13 +542,14 @@ def _error_blocking_refs(error: Exception | str) -> list[str]:
 
 
 def _exit_code_from_message(message: str, default: int) -> int:
+    """Map exit codes to family contract (0-5 only)."""
     lowered = message.lower()
     if "not found" in lowered or lowered.startswith("no plans found"):
-        return 5
+        return 3  # UNAVAILABLE
     if "lock already exists" in lowered:
-        return 4
+        return 4  # CONFLICT
     if "invalid yaml" in lowered or "invalid lock file" in lowered:
-        return 6
+        return 2  # USAGE
     return default
 
 
@@ -554,24 +567,22 @@ def _error_code_from_error_type(error_type: str) -> str | None:
 
 
 def _error_code_from_exit_code(exit_code: int) -> str | None:
+    """Map exit codes to error codes. Family contract: 0-5 only."""
     return {
-        2: "INVALID_INPUT",
-        3: "WORKFLOW_REJECTION",
-        4: "LOCK_CONFLICT",
-        5: "NOT_FOUND",
-        6: "STORAGE_ERROR",
-        7: "VALIDATION_FAILED",
+        2: "USAGE_ERROR",
+        3: "UNAVAILABLE",
+        4: "CONFLICT",
+        5: "EXTERNAL_FAILURE",
     }.get(exit_code)
 
 
 def _default_remediation(exit_code: int) -> list[str]:
+    """Default remediation messages by exit code."""
     return {
         2: ["Review the invalid input or command usage and retry."],
-        3: ["Move the task through the required workflow gate before retrying."],
+        3: ["Check the resource reference or initialize the workspace first."],
         4: ["Inspect the active lock or break it explicitly if it is stale."],
-        5: ["Check the task or record reference and retry."],
-        6: ["Run `taskledger doctor` and repair the ledger state before retrying."],
-        7: ["Review the recorded validation results and resolve the failing checks."],
+        5: ["Check external dependencies and retry."],
     }.get(exit_code, [])
 
 
@@ -714,6 +725,22 @@ def _event_refs(payload: Any) -> list[str]:
     if isinstance(events, list):
         return [str(item) for item in events]
     return []
+
+
+def _event_refs_as_tuples(payload: Any) -> tuple[dict[str, object], ...]:
+    """Extract events as a tuple of dicts for envelope compatibility."""
+    if not isinstance(payload, dict):
+        return ()
+    events = payload.get("events")
+    if isinstance(events, list):
+        result = []
+        for item in events:
+            if isinstance(item, dict):
+                result.append(item)
+            else:
+                result.append({"ref": str(item)})
+        return tuple(result)
+    return ()
 
 
 def read_text_input(

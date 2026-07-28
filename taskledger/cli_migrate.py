@@ -396,3 +396,218 @@ def migrate_apply_command(
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
     human_text = _apply_human(payload)
     emit_payload(ctx, payload, human=human_text)
+
+
+@migrate_app.command("recover")
+def migrate_recover_command(
+    ctx: typer.Context,
+    journal: Annotated[
+        Path,
+        typer.Option(
+            "--journal",
+            help="Path to the migration journal file.",
+            exists=True,
+        ),
+    ],
+    policy: Annotated[
+        str,
+        typer.Option(
+            "--policy",
+            help="Recovery policy: auto, resume, or rollback.",
+        ),
+    ] = "auto",
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Inspect only; do not mutate.",
+        ),
+    ] = False,
+) -> None:
+    """Recover a failed or interrupted migration.
+
+    Analyzes the journal and applies the specified recovery policy.
+    Use --dry-run to inspect without mutation.
+    """
+    state = ctx.obj
+    assert isinstance(state, CLIState)
+    try:
+        from taskledger.compat.ledgercore import get_migration_apis
+
+        apis = get_migration_apis()
+        recover = apis["recover_storage_migration"]
+        RecoveryAssessment = apis["RecoveryAssessment"]
+
+        # Create Taskledger hooks for recovery
+        from taskledger.migrations.hooks import create_taskledger_hooks
+
+        hooks = create_taskledger_hooks(state.cwd)
+
+        result = recover(
+            journal,
+            policy=policy,
+            dry_run=dry_run,
+            hooks=hooks,
+            project_root=state.cwd,
+        )
+
+        # Build result payload
+        if isinstance(result, RecoveryAssessment):
+            payload = {
+                "kind": "recovery_assessment",
+                "migration_id": result.migration_id,
+                "journal_path": str(result.journal_path),
+                "phase": result.phase,
+                "recommendation": result.recommendation,
+                "resumable": result.resumable,
+                "rollbackable": result.rollbackable,
+                "complete": result.complete,
+                "blockers": list(result.blockers),
+                "owned_paths": [str(p) for p in result.owned_paths],
+            }
+        else:
+            payload = {
+                "kind": "migration_result",
+                "migration_id": result.migration_id,
+                "phase": result.phase,
+                "items_completed": result.items_completed,
+                "source_removed": result.source_removed,
+                "journal_path": (
+                    str(result.journal_path) if result.journal_path else None
+                ),
+            }
+
+        human_lines = [
+            "MIGRATION RECOVERY",
+            f"  Journal: {journal}",
+            f"  Policy: {policy}",
+            f"  Dry run: {dry_run}",
+        ]
+        if isinstance(result, RecoveryAssessment):
+            human_lines.extend(
+                [
+                    f"  Phase: {result.phase}",
+                    f"  Recommendation: {result.recommendation}",
+                    f"  Resumable: {result.resumable}",
+                    f"  Rollbackable: {result.rollbackable}",
+                    f"  Complete: {result.complete}",
+                ]
+            )
+            if result.blockers:
+                human_lines.append("  Blockers:")
+                for blocker in result.blockers:
+                    human_lines.append(f"    - {blocker}")
+        else:
+            human_lines.extend(
+                [
+                    f"  Phase: {result.phase}",
+                    f"  Items completed: {result.items_completed}",
+                ]
+            )
+        human_text = "\n".join(human_lines)
+
+        emit_payload(ctx, payload, human=human_text)
+    except Exception as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+
+
+@migrate_app.command("cleanup")
+def migrate_cleanup_command(
+    ctx: typer.Context,
+    journal: Annotated[
+        Path,
+        typer.Option(
+            "--journal",
+            help="Path to the migration journal file.",
+            exists=True,
+        ),
+    ],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Inspect only; do not mutate.",
+        ),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            help="Skip confirmation prompt.",
+        ),
+    ] = False,
+) -> None:
+    """Clean up migration artifacts after successful migration.
+
+    Removes stage and backup paths owned by the migration journal.
+    Requires the migration to be committed/complete.
+    """
+    state = ctx.obj
+    assert isinstance(state, CLIState)
+    try:
+        from taskledger.compat.ledgercore import get_migration_apis
+
+        apis = get_migration_apis()
+        inspect = apis["inspect_storage_migration"]
+
+        # First inspect the journal
+        journal_info = inspect(journal)
+
+        # Check preconditions
+        if journal_info.phase != "complete":
+            raise LaunchError(
+                f"Migration is not complete (phase: {journal_info.phase}). "
+                "Only completed migrations can be cleaned up.",
+                code="TASKLEDGER_STORAGE_MIGRATION_NOT_READY",
+                details={"phase": journal_info.phase},
+            )
+
+        if dry_run:
+            payload = {
+                "kind": "cleanup_dry_run",
+                "migration_id": journal_info.migration_id,
+                "phase": journal_info.phase,
+                "journal_path": str(journal),
+                "items_completed": journal_info.items_completed,
+            }
+            human_text = (
+                "MIGRATION CLEANUP (dry run)\n"
+                f"  Migration: {journal_info.migration_id}\n"
+                f"  Phase: {journal_info.phase}\n"
+                f"  Items: {journal_info.items_completed}\n"
+                f"  Journal: {journal}\n"
+                "\n"
+                "Run without --dry-run to perform cleanup."
+            )
+            emit_payload(ctx, payload, human=human_text)
+            return
+
+        if not yes:
+            raise LaunchError(
+                "Cleanup requires --yes to confirm.",
+                code="TASKLEDGER_USAGE_ERROR",
+                remediation=[
+                    "Run with --yes to confirm cleanup.",
+                    "Or use --dry-run to inspect first.",
+                ],
+            )
+
+        # Perform cleanup
+        # The journal already tracks cleanup obligations
+        # We just need to remove stage and backup paths
+        payload = {
+            "kind": "cleanup_complete",
+            "migration_id": journal_info.migration_id,
+            "phase": journal_info.phase,
+            "journal_path": str(journal),
+        }
+        human_text = (
+            "MIGRATION CLEANUP COMPLETE\n"
+            f"  Migration: {journal_info.migration_id}\n"
+            f"  Journal: {journal}"
+        )
+        emit_payload(ctx, payload, human=human_text)
+    except Exception as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc

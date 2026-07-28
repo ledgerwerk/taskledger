@@ -1,5 +1,36 @@
 ## Unreleased
 
+### Added
+
+- Added Ledgercore 0.6.0 compatibility boundary with strict public-API imports and version validation
+- Added unified CLI envelope format with `ledgerwerk.cli.v1` schema, space-separated command paths
+- Added family exit code mapping (0-5 only): SUCCESS, DOMAIN_FAILURE, USAGE, UNAVAILABLE, CONFLICT, EXTERNAL_FAILURE
+- Added `--root` as canonical global option; `--cwd` is now a hidden deprecated alias
+- Added `taskledger X` canonical version output format
+- Added nested `help` command with CommandInventory integration
+- Added `info` command (replaces deprecated `status --full` usage)
+- Added tolerant root callback for init/status/info/doctor/commands/help/storage/migrate
+- Added command metadata family schema mapping with Taskledger extensions
+- Added `config validate` and `config unset` commands
+- Added `storage validate --strict` with additional binding/fingerprint checks
+- Added canonical storage options: `--storage-root`, `--scope`; deprecated `--root`, `--project`, `--local`
+- Added `migrate recover` command with `--journal`, `--policy`, `--dry-run` options
+- Added `migrate cleanup` command with `--journal`, `--dry-run`, `--yes` options
+- Added Taskledger migration hooks: quiescence_check, validate_staged, validate_activated, finalize
+
+### Changed
+
+- Updated Ledgercore dependency to `>=0.5.0,<0.7.0` (supports 0.6.0)
+- Updated exit codes to family contract: NOT_FOUND 5->3, STORAGE 6->4, VALIDATION 7->1
+- Updated `storage set` to be topology-only (no data movement)
+- Updated command paths to use space separators instead of dots
+
+### Deprecated
+
+- Deprecated `--cwd` global option (use `--root` instead)
+- Deprecated `status --full` (use `info` instead)
+- Deprecated storage options `--root`, `--project`, `--local` in `storage set`
+
 - Add Ledgercore 0.3 canonical `.ledger/` layout support with split data, logs, and indexes mounts, explicit legacy migration, and compatibility routing.
 
 # Changelog

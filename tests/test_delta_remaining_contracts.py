@@ -107,7 +107,7 @@ def test_validation_pass_requires_mandatory_criteria_checks(tmp_path: Path) -> N
     )
 
     payload = _json(result)
-    assert result.exit_code == 7
+    assert result.exit_code == 1  # DOMAIN_FAILURE (validation incomplete)
     assert payload["error"]["code"] == "VALIDATION_INCOMPLETE"
     assert payload["error"]["details"]["missing_criteria"] == ["ac-0001"]
 
@@ -753,7 +753,7 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
             "Ready.",
         ],
     )
-    assert result.exit_code == 7
+    assert result.exit_code == 1  # DOMAIN_FAILURE (validation incomplete)
     payload = _json(result)
     assert payload["error"]["code"] == "VALIDATION_INCOMPLETE"
     assert len(payload["error"]["details"].get("open_mandatory_todos", [])) > 0

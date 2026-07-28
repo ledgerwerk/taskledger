@@ -59,12 +59,13 @@ STORAGE_ERROR_CODES = frozenset(
 
 
 def error_exit_code_for_code(code: str) -> int | None:
+    """Map error codes to family exit codes (0-5 only)."""
     if code == "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED":
-        return 2
+        return 2  # USAGE
     if code in STORAGE_ERROR_CODES:
-        return 6
+        return 4  # CONFLICT (storage issues are conflicts)
     if code == "TASKLEDGER_PROJECT_NOT_FOUND":
-        return 5
+        return 3  # UNAVAILABLE
     return None
 
 
@@ -155,7 +156,7 @@ class TaskledgerRegistrationMissing(LaunchError):
     """Raised when a canonical Ledger project has no Taskledger registration."""
 
     code = "TASKLEDGER_REGISTRATION_MISSING"
-    exit_code = 6
+    exit_code = 3  # UNAVAILABLE (registration missing)
     error_type = "TaskledgerRegistrationMissing"
 
     def __init__(
@@ -202,7 +203,7 @@ class OptionalCommandGroupUnavailable(LaunchError):
 
 class NoActiveTask(LaunchError):
     code = "NO_ACTIVE_TASK"
-    exit_code = 5
+    exit_code = 3  # UNAVAILABLE (no active task)
     error_type = "NoActiveTask"
 
     def __init__(self) -> None:
@@ -227,13 +228,13 @@ class InvalidPromptError(TaskledgerError):
 
 class NotFound(TaskledgerError):
     code = "NOT_FOUND"
-    exit_code = 5
+    exit_code = 3  # UNAVAILABLE (not found)
     error_type = "NotFound"
 
 
 class ValidationError(TaskledgerError):
     code = "VALIDATION_FAILED"
-    exit_code = 7
+    exit_code = 1  # DOMAIN_FAILURE (validation failed)
     error_type = "ValidationError"
 
 
@@ -269,7 +270,7 @@ class StaleLockRequiresBreak(TaskledgerError):
 
 class StorageCorruption(LaunchError):
     code = "STORAGE_CORRUPTION"
-    exit_code = 6
+    exit_code = 4  # CONFLICT (storage corruption)
     error_type = "StorageCorruption"
 
 
@@ -280,5 +281,5 @@ class ActiveTaskNotFound(StorageCorruption):
 
 class IndexRebuildFailed(TaskledgerError):
     code = "INDEX_REBUILD_FAILED"
-    exit_code = 6
+    exit_code = 4  # CONFLICT (index rebuild failed)
     error_type = "IndexRebuildFailed"

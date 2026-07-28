@@ -24,8 +24,8 @@ from taskledger.storage.task_store import (
     list_questions,
     list_runs,
     list_tasks_by_visibility,
-    load_active_locks,
     load_active_task_state,
+    load_lock_records,
     resolve_task,
     resolve_v2_paths,
     task_lock_path,
@@ -256,7 +256,7 @@ def usage_payload(
             )
 
     stale_locks: list[dict[str, object]] = []
-    for lock in load_active_locks(workspace_root):
+    for lock in load_lock_records(workspace_root):
         diagnostics = diagnose_lock(lock, task_id=lock.task_id, current_actor=actor)
         if diagnostics.classification not in {
             CLASSIFICATION_EXPIRED,

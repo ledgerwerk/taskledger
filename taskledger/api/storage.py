@@ -21,6 +21,7 @@ from taskledger.storage.ledgercore_backend import (
     load_taskledger_ledger_layout,
     migrate_taskledger_mount,
     recover_taskledger_migration,
+    set_taskledger_mount_target,
 )
 from taskledger.storage.project_context import load_project_context
 from taskledger.storage.taskledger_migration import require_no_active_taskledger_locks
@@ -70,21 +71,69 @@ def storage_move(
     ).to_dict()
 
 
-def storage_validate(workspace_root: Path) -> dict[str, object]:
+def storage_validate(
+    workspace_root: Path,
+    *,
+    strict: bool = False,
+) -> dict[str, object]:
+    """Validate storage configuration.
+
+    Args:
+        workspace_root: The workspace root path.
+        strict: If True, run additional binding and fingerprint checks.
+
+    Returns:
+        A dict with the validation result.
+    """
     bundle = load_taskledger_ledger_layout(workspace_root)
     report = bundle.validation_report
+    results = []
+    if report is not None:
+        for result in report.results:
+            results.append(
+                {
+                    "path": str(result.path),
+                    "valid": result.valid,
+                    "reason": result.reason,
+                }
+            )
+    # Add strict checks if requested
+    if strict:
+        # Check that all mount paths are accessible
+        try:
+            from taskledger.storage.paths import resolve_project_paths
+
+            paths = resolve_project_paths(workspace_root)
+            for mount_name in ("data", "indexes"):
+                mount_path = getattr(paths, f"{mount_name}_path", None)
+                if mount_path and mount_path.exists():
+                    results.append(
+                        {
+                            "path": str(mount_path),
+                            "valid": True,
+                            "reason": f"Mount {mount_name} accessible",
+                        }
+                    )
+                elif mount_path:
+                    results.append(
+                        {
+                            "path": str(mount_path),
+                            "valid": False,
+                            "reason": f"Mount {mount_name} not found",
+                        }
+                    )
+        except Exception:
+            pass  # Best effort for strict checks
+    valid = bool(report is not None and report.valid)
+    if strict:
+        # In strict mode, all results must be valid
+        valid = valid and all(r["valid"] for r in results)
     return {
         "kind": "storage_validation",
         "schema_version": 2,
-        "valid": bool(report is not None and report.valid),
-        "results": [
-            {
-                "path": str(result.path),
-                "valid": result.valid,
-                "reason": result.reason,
-            }
-            for result in (report.results if report is not None else ())
-        ],
+        "valid": valid,
+        "strict": strict,
+        "results": results,
     }
 
 
@@ -95,7 +144,7 @@ def storage_set(
     storage: str,
     target: str,
     external_root: str | None = None,
-    mode: str = "move",
+    mode: str = "copy",
 ) -> dict[str, object]:
     if mode not in {"copy", "move"}:
         raise LaunchError("mode must be copy or move")
@@ -116,10 +165,27 @@ def storage_set(
 
 
 def storage_clear_override(
-    workspace_root: Path, *, mount: str, mode: str = "move"
+    workspace_root: Path, *, mount: str, mode: str = "copy"
 ) -> dict[str, object]:
     bundle = load_taskledger_ledger_layout(workspace_root, validate_storage=False)
     base_mount = bundle.loaded_project.manifest.ledgers["taskledger"].mounts[mount]
+    if mode not in {"copy", "move"}:
+        raise LaunchError("mode must be copy or move")
+    if mode == "copy" and bundle.loaded_project.locator.local_config_path.exists():
+        # Clearing an overlay selects the already-owned project mount. Ledgercore's
+        # create-only migration policy correctly refuses to copy over that mount;
+        # switch the overlay after checking that the workspace is quiescent.
+        require_no_active_taskledger_locks(workspace_root)
+        set_taskledger_mount_target(
+            workspace_root,
+            mount=mount,
+            storage=str(base_mount.storage),
+            external_root=getattr(base_mount, "external_root", None),
+            target="project",
+        )
+        return build_storage_location_report(
+            workspace_root, require_initialized=False
+        ).to_dict()
     return storage_set(
         workspace_root,
         mount=mount,

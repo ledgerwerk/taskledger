@@ -79,7 +79,7 @@ def test_task_scoped_command_without_active_task_fails_json(tmp_path: Path) -> N
         app,
         ["--cwd", str(tmp_path), "--json", "plan", "start"],
     )
-    assert result.exit_code == 5
+    assert result.exit_code == 3  # UNAVAILABLE (no active task)
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
     assert payload["error"]["code"] == "NO_ACTIVE_TASK"
@@ -104,7 +104,7 @@ def test_single_task_without_active_task_fails_for_task_scoped_defaults(
 
     for command in commands:
         result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", *command])
-        assert result.exit_code == 5, command
+        assert result.exit_code == 3, command  # UNAVAILABLE (no active task)
         payload = json.loads(result.stdout)
         assert payload["ok"] is False
         assert payload["error"]["code"] == "NO_ACTIVE_TASK"

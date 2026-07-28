@@ -616,6 +616,86 @@ def config_set(workspace_root: Path, *, key: str, value_text: str) -> dict[str, 
     }
 
 
+def config_unset(workspace_root: Path, *, key: str) -> dict[str, object]:
+    context = load_project_context(workspace_root)
+    paths = resolve_project_paths(workspace_root)
+    before: object = None
+    try:
+        before = config_get(workspace_root, key=key)["value"]
+    except LaunchError:
+        # Key doesn't exist, nothing to unset
+        return {
+            "kind": "project_config_updated",
+            "workspace_root": str(paths.workspace_root),
+            "config_path": str(paths.config_path),
+            "key": key,
+            "previous_value": None,
+            "value": None,
+        }
+    # Check immutability
+    help_entry = _match_config_help_entry(key)
+    if help_entry is not None and not help_entry.mutable:
+        raise LaunchError(
+            f"Config key {key} is immutable. "
+            "Use the dedicated repair or topology command."
+        )
+    if context.mode == "canonical":
+        if key in {
+            "config_version",
+            "taskledger_dir",
+            "project_uuid",
+            "project_name",
+            "ledger_ref",
+            "ledger_parent_ref",
+            "ledger_next_task_number",
+            "ledger_branch_guard",
+        }:
+            raise LaunchError(
+                f"Config key {key} cannot be edited in canonical mode; "
+                "topology and ledger state are managed separately."
+            )
+        from tomlkit import dumps, parse
+
+        from taskledger.storage.atomic import atomic_write_text
+
+        try:
+            document = parse(context.config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise LaunchError(
+                f"Invalid canonical project config {context.config_path}: {exc}"
+            ) from exc
+        # Remove the key if it exists
+        segments = key.split(".")
+        target = document
+        for segment in segments[:-1]:
+            if segment not in target:
+                # Key path doesn't exist, nothing to unset
+                return {
+                    "kind": "project_config_updated",
+                    "workspace_root": str(paths.workspace_root),
+                    "config_path": str(paths.config_path),
+                    "key": key,
+                    "previous_value": before,
+                    "value": None,
+                }
+            target = target[segment]
+        if segments[-1] in target:
+            del target[segments[-1]]
+            atomic_write_text(context.config_path, dumps(document))
+    else:
+        from taskledger.storage.project_config import remove_project_config_value
+
+        remove_project_config_value(paths.config_path, key)
+    return {
+        "kind": "project_config_updated",
+        "workspace_root": str(paths.workspace_root),
+        "config_path": str(paths.config_path),
+        "key": key,
+        "previous_value": before,
+        "value": None,
+    }
+
+
 def parse_config_value_text(value_text: str) -> object:
     stripped = value_text.strip()
     if not stripped:

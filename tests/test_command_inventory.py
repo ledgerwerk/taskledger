@@ -49,6 +49,7 @@ def _registered_command_paths() -> set[str]:
         if group.name:
             _walk(group.name, group.typer_instance)
     paths.add("doctor")
+    paths.add("runtime")
     return paths
 
 

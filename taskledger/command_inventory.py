@@ -237,6 +237,23 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         workspace_effect=EFFECT_WRITE,
         external_effect=EXTERNAL_FILE_WRITE,
     ),
+    "config validate": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "safe_read_only",
+        SUPPORT,
+        PHASE_SETUP,
+        ledger_effect=EFFECT_NONE,
+        workspace_effect=EFFECT_READ,
+    ),
+    "config unset": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "workspace_mutation",
+        SUPPORT,
+        PHASE_SETUP,
+        ledger_effect=EFFECT_NONE,
+        workspace_effect=EFFECT_WRITE,
+        external_effect=EXTERNAL_FILE_WRITE,
+    ),
     "pipeline show": CommandSpec(
         STABLE_FOR_AGENTS,
         "safe_read_only",
@@ -1689,6 +1706,36 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         tier=TIER_RARE,
         ledger_effect=EFFECT_WRITE,
     ),
+    "migrate recover": CommandSpec(
+        REPAIR,
+        "ledger_mutation",
+        MIGRATION,
+        PHASE_REPAIR,
+        tier=TIER_RARE,
+        ledger_effect=EFFECT_WRITE,
+    ),
+    "migrate cleanup": CommandSpec(
+        REPAIR,
+        "ledger_mutation",
+        MIGRATION,
+        PHASE_REPAIR,
+        tier=TIER_RARE,
+        ledger_effect=EFFECT_WRITE,
+    ),
+    "help": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "safe_read_only",
+        SUPPORT,
+        PHASE_SETUP,
+        ledger_effect=EFFECT_NONE,
+    ),
+    "info": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "safe_read_only",
+        SUPPORT,
+        PHASE_REPORTING,
+        ledger_effect=EFFECT_READ,
+    ),
     "runtime": CommandSpec(
         STABLE_FOR_AGENTS,
         "safe_read_only",
@@ -1724,3 +1771,115 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         workspace_effect=EFFECT_READ,
     ),
 }
+
+
+# ── Family schema mapping helpers ─────────────────────────────────────
+
+
+def _map_audience(audience: str) -> str:
+    """Map Taskledger audience to family audience."""
+    return {
+        STABLE_FOR_AGENTS: "agent",
+        BETA_FOR_AGENTS: "agent",
+        HUMAN_ORIENTED: "human",
+        REPAIR: "both",
+    }.get(audience, "both")
+
+
+def _map_stability(audience: str, deprecated: bool) -> str:
+    """Map Taskledger audience/deprecated to family stability."""
+    if deprecated:
+        return "deprecated"
+    return {
+        STABLE_FOR_AGENTS: "stable",
+        BETA_FOR_AGENTS: "beta",
+        HUMAN_ORIENTED: "stable",
+        REPAIR: "stable",
+    }.get(audience, "stable")
+
+
+def _map_effect(effect: str, external_effect: str) -> str:
+    """Map Taskledger effect to family effect."""
+    if external_effect == EXTERNAL_PROCESS_EXEC:
+        return "external-process"
+    if external_effect == EXTERNAL_FILE_WRITE:
+        return "external-write"
+    if effect == EFFECT_WRITE:
+        return "workspace-write"
+    if effect == "ledger_mutation":
+        return "ledger-write"
+    return "read"
+
+
+def _map_requires_workspace(effect: str) -> bool:
+    """Determine if command requires workspace."""
+    return effect not in {EFFECT_NONE}
+
+
+def _map_targeting(targeting: str) -> str:
+    """Map Taskledger targeting to family targeting."""
+    return {
+        TARGETING_NONE: "none",
+        TARGETING_ACTIVE_DEFAULT: "positional_resource_or_active",
+        TARGETING_EXPLICIT_TASK_OPTION: "positional_resource_or_active",
+        TARGETING_POSITIONAL_RESOURCE: "positional_resource",
+        TARGETING_POSITIONAL_OR_ACTIVE: "positional_resource_or_active",
+        TARGETING_EXPLICIT_REQUIRED: "positional_resource",
+    }.get(targeting, "none")
+
+
+def get_command_family_metadata(path: str) -> dict[str, object]:
+    """Get family-schema metadata for a command path."""
+    spec = COMMAND_METADATA.get(path)
+    if spec is None:
+        return {}
+    return {
+        "path": path,
+        "summary": "",  # summaries come from command help text
+        "audience": _map_audience(spec.audience),
+        "stability": _map_stability(spec.audience, spec.deprecated),
+        "effect": _map_effect(spec.effect, spec.external_effect),
+        "requires_workspace": _map_requires_workspace(spec.effect),
+        "requires_active_record": spec.targeting
+        in {
+            TARGETING_ACTIVE_DEFAULT,
+            TARGETING_EXPLICIT_TASK_OPTION,
+            TARGETING_POSITIONAL_OR_ACTIVE,
+        },
+        "targeting": _map_targeting(spec.targeting),
+        "supports_json": True,
+        "aliases": (),
+        "deprecated": spec.deprecated,
+        "replacement": spec.replaced_by or None,
+        "extensions": {
+            "taskledger": {
+                "surface": spec.surface,
+                "phase": spec.phase,
+                "tier": spec.tier,
+                "ledger_effect": spec.ledger_effect,
+                "workspace_effect": spec.workspace_effect,
+                "external_effect": spec.external_effect,
+                "agent_safe": spec.agent_safe,
+            }
+        },
+    }
+
+
+def get_all_command_family_metadata() -> dict[str, dict[str, object]]:
+    """Get family-schema metadata for all registered commands."""
+    return {path: get_command_family_metadata(path) for path in COMMAND_METADATA}
+
+
+# ── Command summaries (from CLI help text) ──────────────────────────────
+
+COMMAND_SUMMARIES: dict[str, str] = {}
+
+
+def register_command_summary(path: str, summary: str) -> None:
+    """Register a command summary from CLI help text."""
+    COMMAND_SUMMARIES[path] = summary
+
+
+def get_command_summary(path: str) -> str:
+    """Get a command summary, falling back to empty string."""
+    return COMMAND_SUMMARIES.get(path, "")

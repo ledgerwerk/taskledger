@@ -115,13 +115,16 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     "taskledger/cli_migrate.py:taskledger.services.storage_migration": (
         "Migration CLI delegates to the storage migration service."
     ),
+    "taskledger/cli_runtime.py:taskledger.services.runtime_info": (
+        "Runtime CLI delegates provenance collection to the runtime service."
+    ),
 }
 EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
-    "taskledger/cli.py:268": (
-        "Optional command group import fallback reports missing modules gracefully."
+    "taskledger/api/repair.py:169": (
+        "Bulk lock repair reports individual failures while continuing other repairs."
     ),
-    "taskledger/storage/project_config.py:725": (
-        "Project config TOML parsing wraps all parse failures as LaunchError."
+    "taskledger/cli.py:270": (
+        "Optional command group import fallback reports missing modules gracefully."
     ),
     "taskledger/cli_ledger.py:122": (
         "Ledger root fallback degrades gracefully when legacy storage probes fail."
@@ -138,14 +141,17 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/doctor.py:154": (
         "Doctor must continue scanning even when one task metadata read fails."
     ),
-    "taskledger/services/doctor.py:295": (
+    "taskledger/services/doctor.py:282": (
+        "Doctor lock inspection degrades gracefully when lock inventory fails."
+    ),
+    "taskledger/services/doctor.py:381": (
         "Doctor schema inspection degrades gracefully when storage.yaml is unreadable."
     ),
-    "taskledger/services/doctor.py:328": (
-        "Doctor index inspection degrades gracefully when event loading fails."
+    "taskledger/services/doctor.py:414": (
+        "Doctor schema inspection records unreadable storage metadata as an error."
     ),
-    "taskledger/services/doctor.py:389": (
-        "Doctor lock inspection ignores malformed optional lock metadata."
+    "taskledger/services/doctor.py:475": (
+        "Doctor index inspection degrades gracefully when event loading fails."
     ),
     "taskledger/services/doctor_checks/project_scan.py:27": (
         "Project scan continues past config load errors."
@@ -168,6 +174,12 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/tree.py:258": (
         "Tree command handles task ref resolution errors by returning empty."
     ),
+    "taskledger/services/lock_inventory.py:213": (
+        "Lock inventory preserves malformed lock read failures for diagnostics."
+    ),
+    "taskledger/services/lock_inventory.py:225": (
+        "Lock inventory preserves lock diagnosis failures for diagnostics."
+    ),
     "taskledger/storage/ledger_config.py:96": (
         "Ledger config loader reports parse/runtime differences consistently "
         "across Python versions."
@@ -185,53 +197,55 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/storage/migrations.py:485": (
         "Migration executor records unexpected write failures in audit output."
     ),
-    "taskledger/storage/paths.py:47": (
-        "Path probe falls back when environment inspection raises platform-"
-        "specific errors."
+    "taskledger/storage/init.py:258": (
+        "Canonical initialization restores the previous manifest after a failed write."
     ),
-    "taskledger/storage/paths.py:171": (
+    "taskledger/storage/paths.py:250": (
         "Path resolution falls back when environment inspection raises errors."
     ),
-    "taskledger/storage/task_store.py:408": (
-        "save_task write-through index update degrades gracefully on failure."
-    ),
-    "taskledger/storage/task_store.py:483": (
-        "rewrite_task_refs falls back to plain string replacement when "
-        "front matter parsing fails."
-    ),
-    "taskledger/storage/task_store.py:576": (
-        "save_question write-through sidecar index update degrades gracefully."
-    ),
-    "taskledger/storage/task_store.py:615": (
-        "save_run write-through sidecar index update degrades gracefully."
-    ),
-    "taskledger/storage/task_store.py:713": (
-        "save_code_review write-through sidecar index update degrades gracefully."
-    ),
-    "taskledger/storage/task_store.py:790": (
-        "save_todos write-through sidecar index update degrades gracefully."
-    ),
-    "taskledger/storage/task_store.py:1086": (
-        "_task_latest_impl_run returns None when task resolution fails."
-    ),
-    "taskledger/storage/task_store.py:1186": (
-        "list_handoffs_with_errors tolerates malformed handoff records "
-        "and continues scanning."
-    ),
-    "taskledger/storage/task_store.py:1228": (
-        "save_handoff write-through sidecar index update degrades gracefully."
-    ),
-    "taskledger/storage/task_store.py:1257": (
-        "save_lock write-through sidecar index update degrades gracefully."
+    "taskledger/storage/project_config.py:725": (
+        "Project config TOML parsing wraps all parse failures as LaunchError."
     ),
     "taskledger/storage/project_config.py:899": (
         "Project config TOML parsing wraps all parse failures as LaunchError."
     ),
+    "taskledger/storage/sidecar_index.py:277": (
+        "Sidecar index rebuild skips tasks with read failures and continues."
+    ),
     "taskledger/storage/task_index.py:171": (
         "Task index rebuild skips unparseable task files and continues."
     ),
-    "taskledger/storage/sidecar_index.py:277": (
-        "Sidecar index rebuild skips tasks with read failures and continues."
+    "taskledger/storage/task_store.py:447": (
+        "save_task write-through index update degrades gracefully on failure."
+    ),
+    "taskledger/storage/task_store.py:522": (
+        "rewrite_task_refs falls back to plain string replacement when "
+        "front matter parsing fails."
+    ),
+    "taskledger/storage/task_store.py:615": (
+        "save_question write-through sidecar index update degrades gracefully."
+    ),
+    "taskledger/storage/task_store.py:654": (
+        "save_run write-through sidecar index update degrades gracefully."
+    ),
+    "taskledger/storage/task_store.py:752": (
+        "save_code_review write-through sidecar index update degrades gracefully."
+    ),
+    "taskledger/storage/task_store.py:844": (
+        "save_todos write-through sidecar index update degrades gracefully."
+    ),
+    "taskledger/storage/task_store.py:1140": (
+        "_task_latest_impl_run returns None when task resolution fails."
+    ),
+    "taskledger/storage/task_store.py:1240": (
+        "list_handoffs_with_errors tolerates malformed handoff records "
+        "and continues scanning."
+    ),
+    "taskledger/storage/task_store.py:1282": (
+        "save_handoff write-through sidecar index update degrades gracefully."
+    ),
+    "taskledger/storage/task_store.py:1311": (
+        "save_lock write-through sidecar index update degrades gracefully."
     ),
 }
 

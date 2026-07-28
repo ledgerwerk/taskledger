@@ -120,7 +120,7 @@ def test_read_commands_do_not_initialize_canonical_unregistered_project(
 
     result = runner.invoke(app, ["--root", str(tmp_path), *argv])
 
-    assert result.exit_code in {0, 1, 5, 6}
+    assert result.exit_code in {0, 1, 3, 4, 5}  # family exit codes (0-5 only)
     assert _tree_snapshot(tmp_path) == before
     assert not (tmp_path / ".taskledger").exists()
     assert not (tmp_path / "taskledger.toml").exists()
@@ -149,7 +149,7 @@ def test_mutations_stop_before_writing_unregistered_canonical_project(
         assert result.exception.code == "TASKLEDGER_REGISTRATION_MISSING"
     else:
         assert isinstance(result.exception, SystemExit)
-        assert result.exit_code == 6
+        assert result.exit_code == 3  # UNAVAILABLE (registration missing)
     assert _tree_snapshot(tmp_path) == before
     assert not (tmp_path / ".taskledger").exists()
     assert not (tmp_path / "taskledger.toml").exists()

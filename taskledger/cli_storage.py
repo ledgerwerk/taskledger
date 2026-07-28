@@ -264,10 +264,24 @@ def register_storage_commands(app: typer.Typer) -> None:
         )
 
     @app.command("validate")
-    def validate_command(ctx: typer.Context) -> None:
+    def validate_command(
+        ctx: typer.Context,
+        strict: Annotated[
+            bool,
+            typer.Option(
+                "--strict",
+                help="Run strict validation with additional checks.",
+            ),
+        ] = False,
+    ) -> None:
+        """Validate storage configuration.
+
+        Checks that storage paths are valid and accessible.
+        Use --strict for additional binding and fingerprint checks.
+        """
         state = cli_state_from_context(ctx)
         try:
-            payload = storage_validate(state.cwd)
+            payload = storage_validate(state.cwd, strict=strict)
         except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
@@ -276,25 +290,80 @@ def register_storage_commands(app: typer.Typer) -> None:
     @app.command("set")
     def set_command(
         ctx: typer.Context,
-        mount: Annotated[str, typer.Argument()],
-        storage: Annotated[str, typer.Argument()],
-        root: Annotated[str | None, typer.Option("--root")] = None,
-        project: Annotated[bool, typer.Option("--project")] = False,
-        local: Annotated[bool, typer.Option("--local")] = False,
-        mode: Annotated[str, typer.Option("--mode")] = "move",
-        move: Annotated[bool | None, typer.Option("--move/--copy")] = None,
+        mount: Annotated[str, typer.Argument(help="Mount name (e.g., data, indexes).")],
+        storage: Annotated[
+            str,
+            typer.Argument(
+                help="Storage kind: project, external, user-data, or cache."
+            ),
+        ],
+        storage_root: Annotated[
+            str | None,
+            typer.Option(
+                "--storage-root",
+                help="External storage root path (for external storage).",
+            ),
+        ] = None,
+        scope: Annotated[
+            str | None,
+            typer.Option(
+                "--scope",
+                help="Configuration scope: project or local.",
+            ),
+        ] = None,
+        # Deprecated aliases
+        root: Annotated[
+            str | None,
+            typer.Option(
+                "--root",
+                help="Deprecated: use --storage-root instead.",
+                hidden=True,
+            ),
+        ] = None,
+        project: Annotated[
+            bool,
+            typer.Option(
+                "--project",
+                help="Deprecated: use --scope project instead.",
+                hidden=True,
+            ),
+        ] = False,
+        local: Annotated[
+            bool,
+            typer.Option(
+                "--local",
+                help="Deprecated: use --scope local instead.",
+                hidden=True,
+            ),
+        ] = False,
     ) -> None:
-        if project == local:
-            raise typer.BadParameter("Specify exactly one of --project or --local")
+        """Set storage topology for a mount.
+
+        This command changes configuration only. It does NOT copy, move, or
+        delete data. If data relocation is needed, use `taskledger migrate`.
+        """
         state = cli_state_from_context(ctx)
+
+        # Resolve scope from deprecated options if not provided
+        if scope is None:
+            if project and not local:
+                scope = "project"
+            elif local and not project:
+                scope = "local"
+            else:
+                scope = "project"  # default
+
+        # Resolve storage_root from deprecated --root if not provided
+        resolved_root = storage_root or root
+
         try:
             payload = storage_set(
                 state.cwd,
                 mount=mount,
                 storage=storage,
-                target="project" if project else "local",
-                external_root=root,
-                mode="move" if move is True else "copy" if move is False else mode,
+                target=scope,
+                external_root=resolved_root,
+                mode="copy",  # Topology-only, no data movement
             )
         except LaunchError as exc:
             emit_error(ctx, exc)
@@ -310,7 +379,7 @@ def register_storage_commands(app: typer.Typer) -> None:
     def clear_override_command(
         ctx: typer.Context,
         mount: Annotated[str, typer.Argument()],
-        mode: Annotated[str, typer.Option("--mode")] = "move",
+        mode: Annotated[str, typer.Option("--mode")] = "copy",
     ) -> None:
         state = cli_state_from_context(ctx)
         try:

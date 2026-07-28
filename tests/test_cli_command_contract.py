@@ -343,7 +343,7 @@ def test_global_json_only_for_task_show(tmp_path: Path) -> None:
     )
     assert global_result.exit_code == 0, global_result.stdout
     payload = json.loads(global_result.stdout)
-    assert payload["command"] == "task.show"
+    assert payload["command"] == "task show"  # space-separated canonical path
     assert payload["ok"] is True
 
 
@@ -351,7 +351,7 @@ def test_global_json_only_for_task_show(tmp_path: Path) -> None:
 def test_version_flag_displays_version() -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "taskledger, version" in result.stdout
+    assert "taskledger " in result.stdout  # canonical format: taskledger X
 
 
 # ── Ledger isolation tests ──────────────────────────────────────

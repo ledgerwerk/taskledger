@@ -419,6 +419,67 @@ def set_project_config_value(config_path: Path, dotted_key: str, value: object) 
     load_project_config_document(config_path)
 
 
+def remove_project_config_value(config_path: Path, dotted_key: str) -> None:
+    """Remove a configuration key from the project config.
+
+    Args:
+        config_path: Path to the config file.
+        dotted_key: The dotted key path to remove.
+    """
+    if not config_path.exists():
+        # Nothing to remove
+        return
+    try:
+        current_text = config_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise LaunchError(f"Failed to read {config_path}: {exc}") from exc
+
+    if not current_text:
+        # Empty config, nothing to remove
+        return
+
+    existing_document = load_project_config_document(config_path)
+    segments = _parse_project_config_key_path(dotted_key)
+    _ensure_mutable_project_config_key_path(segments)
+
+    # Navigate to the parent and remove the key
+    target = existing_document
+    for segment in segments[:-1]:
+        if not isinstance(target, dict) or segment not in target:
+            # Key path doesn't exist, nothing to remove
+            return
+        target = target[segment]
+
+    if isinstance(target, dict) and segments[-1] in target:
+        del target[segments[-1]]
+    else:
+        # Key doesn't exist, nothing to remove
+        return
+
+    # Write the updated config
+    # Reconstruct the TOML text
+    import tomllib
+
+    from taskledger.storage.atomic import atomic_write_text
+
+    try:
+        # Re-read and remove the key
+        document = tomllib.loads(current_text)
+    except (OSError, ValueError) as exc:
+        raise LaunchError(f"Invalid project config {config_path}: {exc}") from exc
+
+    target = document
+    for segment in segments[:-1]:
+        if segment not in target:
+            return
+        target = target[segment]
+    if segments[-1] in target:
+        del target[segments[-1]]
+        from tomlkit import dumps
+
+        atomic_write_text(config_path, dumps(document))
+
+
 def load_project_config_overrides(paths: ProjectPaths) -> dict[str, object]:
     data = load_project_config_document(paths.config_path)
     if data.get("config_version") == 3:

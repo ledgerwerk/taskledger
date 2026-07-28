@@ -177,7 +177,7 @@ def test_cli_success_command_is_captured_when_enabled(tmp_path: Path) -> None:
     record = cli_logs[-1]
     assert record.status == "succeeded"
     assert record.exit_code == 0
-    assert record.operation_name == "task.create"
+    assert record.operation_name == "task create"  # space-separated canonical path
     assert record.task_id == "task-0001"
     assert record.visible_stdout_excerpt is not None
     assert "created task" in record.visible_stdout_excerpt
@@ -306,7 +306,7 @@ def test_task_transcript_json_contract(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
-    assert payload["command"] == "task.transcript"
+    assert payload["command"] == "task transcript"  # space-separated canonical path
     assert payload["result"]["kind"] == "task_transcript"
 
 
