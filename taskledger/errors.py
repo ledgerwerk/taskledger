@@ -59,13 +59,12 @@ STORAGE_ERROR_CODES = frozenset(
 
 
 def error_exit_code_for_code(code: str) -> int | None:
-    """Map error codes to family exit codes (0-5 only)."""
     if code == "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED":
-        return 2  # USAGE
+        return 2
     if code in STORAGE_ERROR_CODES:
-        return 4  # CONFLICT (storage issues are conflicts)
+        return 6
     if code == "TASKLEDGER_PROJECT_NOT_FOUND":
-        return 3  # UNAVAILABLE
+        return 5
     return None
 
 

@@ -109,10 +109,16 @@ Current sanctioned imports:
   to the trace service.
 - `taskledger/cli_migrate.py:taskledger.services.storage_migration` — Migration CLI delegates to the storage migration service.
 
+- `taskledger/cli_runtime.py:taskledger.services.runtime_info` — Runtime CLI delegates provenance collection to the runtime service.
+
 ## Catch-all exception whitelist (`except Exception`)
 
 Current allowed sites are listed with reasons in
 `tests/test_service_boundaries.py` under `EXCEPT_EXCEPTION_WHITELIST`.
+
+The reviewed resilience sites include storage validation, migration command
+and hook handling, and project-config parsing boundaries listed in the test
+constants.
 
 Policy intent:
 

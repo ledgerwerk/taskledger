@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from taskledger.compat.ledgercore import (
     TaskledgerCLIState,
@@ -91,6 +92,7 @@ class TestCLIState:
         resolved = tmp_path / "resolved"
         # TaskledgerCLIState is frozen, so we need to create a new one
         from taskledger.compat.ledgercore import TaskledgerCLIState
+
         new_state = TaskledgerCLIState(
             common=state.common,
             requested_root=tmp_path,
@@ -132,6 +134,21 @@ class TestEnvelopes:
         assert d["tool"] == "taskledger"
         assert d["command"] == "task show"
         assert d["error"]["code"] == "not_found"
+
+    def test_envelope_coerces_string_warnings(self) -> None:
+        envelope = make_cli_success_envelope(
+            command="sync.git.status",
+            result={},
+            warnings=("A compatibility warning.",),
+        )
+
+        assert envelope.as_mapping()["warnings"] == [
+            {
+                "code": "taskledger_warning",
+                "message": "A compatibility warning.",
+                "replacement": None,
+            }
+        ]
 
 
 class TestErrorTranslation:

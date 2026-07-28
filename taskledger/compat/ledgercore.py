@@ -73,6 +73,7 @@ def require_ledgercore_060() -> None:
 
 # --- Public API imports ---
 
+
 def _import_cli_apis() -> dict[str, Any]:
     """Import and return the public CLI APIs from Ledgercore."""
     try:
@@ -88,6 +89,7 @@ def _import_cli_apis() -> dict[str, Any]:
             deprecated_command_warning,
             deprecated_option_warning,
         )
+
         return {
             "CLIError": CLIError,
             "CLIWarning": CLIWarning,
@@ -129,6 +131,7 @@ def _import_migration_apis() -> dict[str, Any]:
             recover_storage_migration,
             validate_storage_migration_plan,
         )
+
         return {
             "DestinationKind": DestinationKind,
             "DestinationPolicy": DestinationPolicy,
@@ -200,7 +203,7 @@ def make_cli_success_envelope(
         command=command,
         result=result or {},
         events=events,
-        warnings=warnings,
+        warnings=_coerce_cli_warnings(warnings, apis["CLIWarning"]),
     )
 
 
@@ -220,8 +223,24 @@ def make_cli_error_envelope(
         command=command,
         error=error or {},
         events=events,
-        warnings=warnings,
+        warnings=_coerce_cli_warnings(warnings, apis["CLIWarning"]),
     )
+
+
+def _coerce_cli_warnings(
+    warnings: tuple[Any, ...],
+    warning_type: type[Any],
+) -> tuple[Any, ...]:
+    """Normalize Taskledger warning strings for Ledgercore's typed envelope."""
+    normalized: list[Any] = []
+    for warning in warnings:
+        if isinstance(warning, warning_type):
+            normalized.append(warning)
+        else:
+            normalized.append(
+                warning_type(code="taskledger_warning", message=str(warning))
+            )
+    return tuple(normalized)
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,9 +334,7 @@ def recover_plan(
 ) -> Any:
     """Recover a failed migration."""
     apis = get_migration_apis()
-    return apis["recover_storage_migration"](
-        journal_path, policy=policy, hooks=hooks
-    )
+    return apis["recover_storage_migration"](journal_path, policy=policy, hooks=hooks)
 
 
 # --- Error translation ---

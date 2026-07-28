@@ -17,8 +17,8 @@ from taskledger.domain.models import (
 from taskledger.domain.policies import validation_check_decision
 from taskledger.domain.states import (
     EXIT_CODE_BAD_INPUT,
+    EXIT_CODE_GENERIC_FAILURE,
     EXIT_CODE_INVALID_TRANSITION,
-    EXIT_CODE_VALIDATION_FAILED,
     TaskStatusStage,
     normalize_validation_check_status,
     normalize_validation_result,
@@ -468,7 +468,7 @@ def _ensure_validation_can_pass(
 
 def _validation_incomplete(message: str, details: dict[str, object]) -> LaunchError:
     error = LaunchError(message)
-    error.taskledger_exit_code = EXIT_CODE_VALIDATION_FAILED
+    error.taskledger_exit_code = EXIT_CODE_GENERIC_FAILURE
     error.taskledger_error_code = "VALIDATION_INCOMPLETE"
     error.taskledger_data = details
     return error

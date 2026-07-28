@@ -2543,7 +2543,7 @@ def _criterion_has_user_waiver(check: ValidationCheck) -> bool:
 
 def _validation_incomplete(message: str, details: dict[str, object]) -> LaunchError:
     error = LaunchError(message)
-    error.taskledger_exit_code = EXIT_CODE_VALIDATION_FAILED
+    error.taskledger_exit_code = EXIT_CODE_GENERIC_FAILURE
     error.taskledger_error_code = "VALIDATION_INCOMPLETE"
     error.taskledger_data = details
     return error

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 import typer
 
@@ -305,7 +305,15 @@ def _success_envelope(
         events=_event_refs_as_tuples(payload),
         warnings=warning_tuples,
     )
-    d = envelope.as_mapping()
+    d = cast(dict[str, object], envelope.as_mapping())
+    # Keep Taskledger's public envelope stable while Ledgercore supplies the
+    # typed boundary implementation.
+    d.pop("schema", None)
+    d.pop("tool", None)
+    d.pop("warnings", None)
+    d["result"] = payload
+    if extracted_warnings:
+        d["warnings"] = extracted_warnings
     task_id = _task_id_from_value(payload)
     if task_id is not None:
         d["task_id"] = task_id
@@ -315,7 +323,7 @@ def _success_envelope(
 
 
 def _operation_name(ctx: typer.Context) -> str:
-    """Get the canonical command path using space separators."""
+    """Get the canonical dotted command path for the JSON contract."""
     root_name = ctx.find_root().info_name
     parts = ctx.command_path.split()
     if root_name:
@@ -324,7 +332,7 @@ def _operation_name(ctx: typer.Context) -> str:
             parts = parts[len(root_parts) :]
         elif parts and parts[0] == Path(root_name).name:
             parts = parts[1:]
-    return " ".join(parts) if parts else "taskledger"
+    return ".".join(parts) if parts else "taskledger"
 
 
 def _infer_result_type(payload: Any) -> str:
@@ -382,7 +390,11 @@ def _error_envelope(
         events=(),
         warnings=(),
     )
-    d = envelope.as_mapping()
+    d = cast(dict[str, object], envelope.as_mapping())
+    d.pop("schema", None)
+    d.pop("tool", None)
+    d.pop("events", None)
+    d.pop("warnings", None)
     task_id = resolved_error.get("task_id")
     if isinstance(task_id, str):
         d["task_id"] = task_id
@@ -545,11 +557,11 @@ def _exit_code_from_message(message: str, default: int) -> int:
     """Map exit codes to family contract (0-5 only)."""
     lowered = message.lower()
     if "not found" in lowered or lowered.startswith("no plans found"):
-        return 3  # UNAVAILABLE
+        return 5
     if "lock already exists" in lowered:
         return 4  # CONFLICT
     if "invalid yaml" in lowered or "invalid lock file" in lowered:
-        return 2  # USAGE
+        return 6
     return default
 
 
@@ -569,10 +581,12 @@ def _error_code_from_error_type(error_type: str) -> str | None:
 def _error_code_from_exit_code(exit_code: int) -> str | None:
     """Map exit codes to error codes. Family contract: 0-5 only."""
     return {
-        2: "USAGE_ERROR",
-        3: "UNAVAILABLE",
-        4: "CONFLICT",
-        5: "EXTERNAL_FAILURE",
+        2: "INVALID_INPUT",
+        3: "WORKFLOW_REJECTION",
+        4: "LOCK_CONFLICT",
+        5: "NOT_FOUND",
+        6: "STORAGE_ERROR",
+        7: "VALIDATION_FAILED",
     }.get(exit_code)
 
 
@@ -580,9 +594,11 @@ def _default_remediation(exit_code: int) -> list[str]:
     """Default remediation messages by exit code."""
     return {
         2: ["Review the invalid input or command usage and retry."],
-        3: ["Check the resource reference or initialize the workspace first."],
+        3: ["Move the task through the required workflow gate before retrying."],
         4: ["Inspect the active lock or break it explicitly if it is stale."],
-        5: ["Check external dependencies and retry."],
+        5: ["Check the task or record reference and retry."],
+        6: ["Run `taskledger doctor` and repair the ledger state before retrying."],
+        7: ["Review the recorded validation results and resolve the failing checks."],
     }.get(exit_code, [])
 
 

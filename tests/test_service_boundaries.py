@@ -120,11 +120,20 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     ),
 }
 EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
+    "taskledger/api/storage.py:125": (
+        "Storage validation is best effort when Ledgercore reports unreadable mounts."
+    ),
     "taskledger/api/repair.py:169": (
         "Bulk lock repair reports individual failures while continuing other repairs."
     ),
-    "taskledger/cli.py:270": (
+    "taskledger/cli.py:272": (
         "Optional command group import fallback reports missing modules gracefully."
+    ),
+    "taskledger/cli_migrate.py:510": (
+        "Migration apply reports unexpected failures as structured CLI errors."
+    ),
+    "taskledger/cli_migrate.py:611": (
+        "Migration cleanup reports unexpected failures as structured CLI errors."
     ),
     "taskledger/cli_ledger.py:122": (
         "Ledger root fallback degrades gracefully when legacy storage probes fail."
@@ -203,11 +212,14 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/storage/paths.py:250": (
         "Path resolution falls back when environment inspection raises errors."
     ),
-    "taskledger/storage/project_config.py:725": (
-        "Project config TOML parsing wraps all parse failures as LaunchError."
+    "taskledger/migrations/hooks.py:169": (
+        "Migration index rebuild failures are translated into actionable launch errors."
     ),
-    "taskledger/storage/project_config.py:899": (
-        "Project config TOML parsing wraps all parse failures as LaunchError."
+    "taskledger/storage/project_config.py:786": (
+        "Project config parsing normalizes TOML parser differences across runtimes."
+    ),
+    "taskledger/storage/project_config.py:960": (
+        "Project config validation translates reference normalization failures."
     ),
     "taskledger/storage/sidecar_index.py:277": (
         "Sidecar index rebuild skips tasks with read failures and continues."
