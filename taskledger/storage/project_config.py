@@ -4,7 +4,7 @@ import importlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from ledgercore.refs import normalize_ref_token
 
@@ -443,7 +443,7 @@ def remove_project_config_value(config_path: Path, dotted_key: str) -> None:
     _ensure_mutable_project_config_key_path(segments)
 
     # Navigate to the parent and remove the key
-    target = existing_document
+    target: Any = existing_document
     for segment in segments[:-1]:
         if not isinstance(target, dict) or segment not in target:
             # Key path doesn't exist, nothing to remove
@@ -458,7 +458,7 @@ def remove_project_config_value(config_path: Path, dotted_key: str) -> None:
 
     # Write the updated config
     # Reconstruct the TOML text
-    import tomllib
+    import tomllib  # type: ignore[import-not-found]
 
     from taskledger.storage.atomic import atomic_write_text
 

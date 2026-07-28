@@ -89,7 +89,7 @@ class TaskLock:
         return cls(
             lock_id=_string_value(data, "lock_id"),
             task_id=_string_value(data, "task_id"),
-            stage=cast(ActiveTaskStatusStage, stage),
+            stage=stage,
             run_id=_string_value(data, "run_id"),
             created_at=_string_value(data, "created_at"),
             expires_at=_optional_string(data.get("expires_at")),

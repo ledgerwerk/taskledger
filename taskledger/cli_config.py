@@ -188,7 +188,7 @@ def register_config_commands(app: typer.Typer) -> None:
         try:
             from taskledger.api.config import config_unset
 
-            payload = config_unset(state.cwd, key)
+            payload = config_unset(state.cwd, key=key)
         except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc

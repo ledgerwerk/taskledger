@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from taskledger.domain.actor import ActorRef
 from taskledger.domain.models import TaskLock
 from taskledger.errors import LaunchError
 from taskledger.services.lock_diagnostics import (
@@ -196,7 +197,7 @@ class LockInventory:
 def build_lock_inventory(
     paths: V2Paths,
     *,
-    current_actor: object | None = None,
+    current_actor: ActorRef | None = None,
 ) -> LockInventory:
     """Build a lock inventory by reading every ``task-*/lock.yaml``.
 

@@ -260,7 +260,7 @@ class TaskledgerCLIState:
     @property
     def json_output(self) -> bool:
         """Return whether JSON output is requested."""
-        return self.common.json_output
+        return bool(self.common.json_output)
 
 
 def make_cli_state(

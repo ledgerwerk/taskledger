@@ -1208,7 +1208,8 @@ def repair_locks_command(
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
     if payload.get("dry_run"):
-        entries = payload.get("entries", [])
+        entries_raw = payload.get("entries", [])
+        entries = entries_raw if isinstance(entries_raw, list) else []
         lines = [f"BULK LOCK REPAIR (dry-run): {len(entries)} lock(s)"]
         for entry in entries:
             if isinstance(entry, dict):
@@ -1218,8 +1219,10 @@ def repair_locks_command(
             lines.append(f"\nNext: {next_cmd}")
         emit_payload(ctx, payload, human="\n".join(lines))
     else:
-        repaired = payload.get("repaired", [])
-        failed = payload.get("failed", [])
+        repaired_raw = payload.get("repaired", [])
+        repaired = repaired_raw if isinstance(repaired_raw, list) else []
+        failed_raw = payload.get("failed", [])
+        failed = failed_raw if isinstance(failed_raw, list) else []
         lines = [f"repaired {len(repaired)} lock(s)"]
         for item in failed:
             if isinstance(item, dict):
@@ -1262,7 +1265,9 @@ def repair_project_identity_command(
     ]
     if payload.get("changed"):
         lines.append("changed: yes")
-        for cmd in payload.get("next_commands", []):
+        next_commands_raw = payload.get("next_commands", [])
+        next_commands = next_commands_raw if isinstance(next_commands_raw, list) else []
+        for cmd in next_commands:
             lines.append(f"next: {cmd}")
     elif status == "missing":
         lines.append("action: generate and persist a UUID")

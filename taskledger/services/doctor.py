@@ -327,8 +327,8 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
             live_locks.append(entry_dict)
 
     # Collect remediation from stale/expired entries.
-    for entry in (*expired_locks, *stale_locks):
-        diag = entry.get("diagnostics", {})
+    for expired_or_stale in (*expired_locks, *stale_locks):
+        diag = expired_or_stale.get("diagnostics", {})
         if isinstance(diag, dict):
             for cmd in diag.get("remediation", []):
                 if isinstance(cmd, str) and not cmd.startswith("#"):

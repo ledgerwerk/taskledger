@@ -164,8 +164,10 @@ def _render_command_help_text(
         else:
             typer.echo("Deprecated")
 
-    extensions = meta.get("extensions", {})
-    taskledger_ext = extensions.get("taskledger", {})
+    extensions_raw = meta.get("extensions", {})
+    extensions = extensions_raw if isinstance(extensions_raw, dict) else {}
+    taskledger_ext_raw = extensions.get("taskledger", {})
+    taskledger_ext = taskledger_ext_raw if isinstance(taskledger_ext_raw, dict) else {}
     if taskledger_ext:
         typer.echo("")
         typer.echo("Taskledger extensions:")

@@ -43,7 +43,7 @@ def require_no_active_taskledger_locks(workspace_root: Path) -> None:
     Raises:
         LaunchError: If active locks are found.
     """
-    from taskledger.storage.locks import list_locks
+    from taskledger.services.tasks import list_locks
 
     locks = list_locks(workspace_root)
     if locks:
@@ -163,9 +163,9 @@ def finalize_migration(
         LaunchError: If index rebuild fails.
     """
     try:
-        from taskledger.services.indexes import rebuild_indexes
+        from taskledger.services.tasks import reindex
 
-        rebuild_indexes(workspace_root)
+        reindex(workspace_root)
     except Exception as exc:
         raise LaunchError(
             f"Index rebuild failed after migration: {exc}",
