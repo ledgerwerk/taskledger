@@ -126,7 +126,7 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/api/repair.py:169": (
         "Bulk lock repair reports individual failures while continuing other repairs."
     ),
-    "taskledger/cli.py:272": (
+    "taskledger/cli.py:273": (
         "Optional command group import fallback reports missing modules gracefully."
     ),
     "taskledger/cli_migrate.py:510": (
