@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import re
 import shutil
 import sys
@@ -350,6 +351,8 @@ def context_command(
 
 
 _HELP_FLAGS = {"--help", "-h", "--show-completion", "--install-completion"}
+_COMPLETION_SHELLS = frozenset({"bash", "zsh", "fish", "powershell", "pwsh"})
+_COMPLETION_OPTIONS = frozenset({"--show-completion", "--install-completion"})
 _ROOT_OPTIONS_WITH_VALUE = {"--cwd", "--root"}
 _WORKFLOW_TASK_OPTION_COMMANDS = {
     ("plan", "start"),
@@ -362,6 +365,20 @@ def _is_help_or_introspection(argv: tuple[str, ...]) -> bool:
     """Return True if this is a help/completion invocation that should skip
     workspace discovery and agent-log recording."""
     return bool(_HELP_FLAGS.intersection(argv))
+
+
+def _has_explicit_completion_shell(argv: tuple[str, ...]) -> bool:
+    """Return True when a supported shell follows a completion option."""
+    for index, token in enumerate(argv):
+        option, separator, value = token.partition("=")
+        if option not in _COMPLETION_OPTIONS:
+            continue
+        if separator:
+            if value in _COMPLETION_SHELLS:
+                return True
+        elif index + 1 < len(argv) and argv[index + 1] in _COMPLETION_SHELLS:
+            return True
+    return False
 
 
 def _command_from_tokens(argv: tuple[str, ...]) -> str:
@@ -1706,6 +1723,13 @@ _CLICK_EXCEPTION_TYPES: tuple[type[Exception], ...] = (
 def cli_main() -> None:
     argv = tuple(sys.argv[1:])
     json_requested = "--json" in argv
+    completion_detection_env = "_TYPER_COMPLETE_TEST_DISABLE_SHELL_DETECTION"
+    previous_completion_detection = os.environ.get(completion_detection_env)
+    if _has_explicit_completion_shell(argv):
+        # Typer uses a boolean completion option when it can auto-detect the
+        # shell, which makes an explicit trailing shell look like an extra
+        # argument. Force its explicit-shell parameter mode for this call.
+        os.environ[completion_detection_env] = "1"
     try:
         result = app(prog_name="taskledger", args=list(argv), standalone_mode=False)
         if isinstance(result, int) and result != 0:
@@ -1734,3 +1758,8 @@ def cli_main() -> None:
         raise SystemExit(click_exc.exit_code) from click_exc
     except typer.Exit as exc:
         raise SystemExit(exc.exit_code) from exc
+    finally:
+        if previous_completion_detection is None:
+            os.environ.pop(completion_detection_env, None)
+        else:
+            os.environ[completion_detection_env] = previous_completion_detection
