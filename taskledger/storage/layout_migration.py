@@ -6,6 +6,7 @@ import hashlib
 import importlib
 import json
 import os
+import re
 import shutil
 import uuid
 from collections.abc import Mapping
@@ -377,9 +378,33 @@ def _legacy_task_id_fields(
 
 def _manifest_document(path: Path) -> dict[str, object]:
     try:
-        value = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
         raise LaunchError(f"Invalid Ledger manifest {path}: {exc}") from exc
+    value: object | None = None
+    try:
+        value = tomllib.loads(text)
+    except ValueError as exc:
+        # Older Windows config writers and hand-authored legacy configs often
+        # put a native path in a TOML basic string without escaping ``\\``.
+        # Recover that narrow case without making arbitrary malformed TOML
+        # acceptable.
+        if path.name in {".taskledger.toml", "taskledger.toml"}:
+            repaired = re.sub(
+                r'(?m)^(\s*taskledger_dir\s*=\s*")([^"\r\n]*)(".*)$',
+                lambda match: (
+                    f"{match.group(1)}{match.group(2).replace(chr(92), '/')}"
+                    f"{match.group(3)}"
+                ),
+                text,
+            )
+            if repaired != text:
+                try:
+                    value = tomllib.loads(repaired)
+                except (OSError, ValueError):
+                    value = None
+        if value is None:
+            raise LaunchError(f"Invalid Ledger manifest {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise LaunchError(f"Invalid Ledger manifest {path}.")
     return value
@@ -1274,6 +1299,9 @@ def _inspect_migration_phases(  # noqa: C901
                         )
                     )
     source_logs = source_data
+    legacy_next_task_number: int | None = None
+    derived_next_task_id: str | None = None
+    tombstones_required: tuple[str, ...] = ()
     try:
         legacy_next_task_number, derived_next_task_id, tombstones_required = (
             _legacy_task_id_fields(source_data, root)

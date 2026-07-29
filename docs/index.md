@@ -19,6 +19,7 @@ transfer
 sync
 service_boundary_whitelist
 documentation_freshness
+changelog
 ```
 
 ## Indices and tables

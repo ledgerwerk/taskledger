@@ -157,7 +157,7 @@ def git_sync_paths(
     storage_path = _storage_path(config)
     return {
         "kind": "taskledger_sync_git_paths",
-        "repo_path": config.repo_path.as_posix(),
+        "repo_path": str(config.repo_path),
         "project_path": config.project_path,
         "storage_path": storage_path.as_posix(),
         "branch": config.branch,

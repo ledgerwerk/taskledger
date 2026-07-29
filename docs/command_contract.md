@@ -254,7 +254,7 @@ taskledger release show 0.4.1
 `release tag` writes a durable release record under the current ledger's
 `releases/` directory. Release boundaries must point to done tasks.
 Taskledger does not provide changelog entry, changelog context, or
-`CHANGELOG.md` build commands; those belong to the separate `releaseledger`
+[docs/changelog.md](changelog.md) build commands; those belong to the separate `releaseledger`
 tool. Load both skills when cross-ledger release notes need task context.
 
 ## Ledger commands

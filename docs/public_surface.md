@@ -69,8 +69,8 @@ new child task instead of reopening a `done` task.
 
 Release boundaries are tracked separately from task lifecycle state with
 `release tag`, `release list`, and `release show`. Taskledger does not
-manage changelog entries or `CHANGELOG.md`; use the separate `releaseledger`
-tool for changelog entries, changelog context, and `CHANGELOG.md` builds.
+manage changelog entries or [docs/changelog.md](changelog.md); use the separate `releaseledger`
+tool for changelog entries, changelog context, and [docs/changelog.md](changelog.md) builds.
 
 `release *`, `storage move`, `sync git pull/push/sync`, sync hooks,
 `ledger fork/switch/adopt`, `migrate *`, `repair *`, and

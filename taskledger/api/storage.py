@@ -45,7 +45,7 @@ def storage_path(workspace_root: Path, mount: str) -> dict[str, object]:
         "kind": "storage_path",
         "schema_version": 2,
         "mount": mount,
-        "path": str(resolved.path),
+        "path": resolved.path.as_posix(),
         "storage": str(resolved.storage),
         "source": str(resolved.source),
         "initialized": resolved.path.exists(),

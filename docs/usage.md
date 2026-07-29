@@ -294,7 +294,7 @@ todos:
 ## Release boundary tags
 
 Use taskledger only to record the task boundary for a release. Taskledger does not
-manage changelog entries or edit `CHANGELOG.md`; that belongs to the separate
+manage changelog entries or edit [docs/changelog.md](changelog.md); that belongs to the separate
 `releaseledger` tool.
 
 ```bash
@@ -304,7 +304,7 @@ taskledger release list
 ```
 
 Release boundaries must point to done tasks. When the user asks for release notes,
-changelog entries, or `CHANGELOG.md` updates, use `releaseledger`. Load both
+changelog entries, or [docs/changelog.md](changelog.md) updates, use `releaseledger`. Load both
 skills when cross-ledger release notes need task context.
 
 ## Recording manually completed work

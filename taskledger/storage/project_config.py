@@ -292,7 +292,7 @@ def render_default_taskledger_toml(
         f"# Project-local taskledger configuration.\n"
         f"# This file lives in the source project root.\n"
         f"config_version = {config_version}\n"
-        f"taskledger_dir = {taskledger_dir!r}"
+        f"taskledger_dir = {Path(taskledger_dir).as_posix()!r}"
         f"{identity_block}"
         f"{ledger_block}"
         f"{ledger_identity_block}"

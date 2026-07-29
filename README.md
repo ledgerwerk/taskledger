@@ -366,10 +366,10 @@ taskledger release list
 taskledger release show 0.4.1
 ```
 
-Taskledger does not manage changelog entries or edit `CHANGELOG.md`. When you need
-release notes, changelog entries, or `CHANGELOG.md` updates, use the separate
+Taskledger does not manage changelog entries or edit [docs/changelog.md](docs/changelog.md). When you need
+release notes, changelog entries, or [docs/changelog.md](docs/changelog.md) updates, use the separate
 `releaseledger` tool, which owns changelog entries, changelog context rendering,
-and `CHANGELOG.md` builds. The ledgers stay isolated; load both skills when
+and [docs/changelog.md](docs/changelog.md) builds. The ledgers stay isolated; load both skills when
 cross-ledger release notes are needed.
 
 `taskledger next-action` is the preferred fresh-context entrypoint. It stays

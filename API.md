@@ -337,9 +337,9 @@ Top-level commands that are part of the supported surface are:
 - `symbols`
 - `deps`
 
-Taskledger does not manage changelog entries or edit `CHANGELOG.md`. Use the
+Taskledger does not manage changelog entries or edit [docs/changelog.md](docs/changelog.md). Use the
 separate `releaseledger` tool for changelog entries, changelog context, and
-`CHANGELOG.md` builds. Load both skills when cross-ledger release notes need
+[docs/changelog.md](docs/changelog.md) builds. Load both skills when cross-ledger release notes need
 task context.
 
 All CLI commands support `--cwd`; task-first workflows also support `--root` as
