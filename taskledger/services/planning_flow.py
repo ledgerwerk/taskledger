@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
+if TYPE_CHECKING:
+    from taskledger.cli_common import CommandRuntime
 from taskledger.domain.models import ActorRef, HarnessRef
 from taskledger.domain.policies import plan_propose_decision
 from taskledger.domain.states import EXIT_CODE_BAD_INPUT
@@ -35,6 +37,7 @@ def start_planning(
     workspace_root: Path,
     task_ref: str,
     *,
+    runtime: CommandRuntime | None = None,
     actor: ActorRef | None = None,
     harness: HarnessRef | None = None,
 ) -> dict[str, object]:
@@ -65,7 +68,8 @@ def start_planning(
         "plan.started",
         {"run_id": run.run_id},
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
+    paths = runtime.paths() if runtime is not None else resolve_v2_paths(workspace_root)
+    rebuild_v2_indexes(paths)
     return _tasks._lifecycle_payload(
         "plan start",
         updated,
@@ -83,6 +87,7 @@ def propose_plan(
     body: str,
     criteria: tuple[str, ...] = (),
     command_label: str = "plan propose",
+    runtime: CommandRuntime | None = None,
 ) -> dict[str, object]:
     task = resolve_task(workspace_root, task_ref)
     _tasks._ensure_not_archived(task, operation="propose plan for")
@@ -148,7 +153,8 @@ def propose_plan(
         "plan.proposed",
         {"plan_version": version},
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
+    paths = runtime.paths() if runtime is not None else resolve_v2_paths(workspace_root)
+    rebuild_v2_indexes(paths)
     warnings: list[str] = []
     if not plan_body.strip():
         warnings.append(
@@ -269,6 +275,7 @@ def amend_plan(
     drop_todos: tuple[str, ...] = (),
     remove_files: tuple[str, ...] = (),
     reason: str,
+    runtime: CommandRuntime | None = None,
 ) -> dict[str, object]:
     if not reason.strip():
         raise _tasks._cli_error("--reason is required.", EXIT_CODE_BAD_INPUT)
@@ -353,7 +360,8 @@ def amend_plan(
             "removed_files": sorted(remove_files_set),
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
+    paths = runtime.paths() if runtime is not None else resolve_v2_paths(workspace_root)
+    rebuild_v2_indexes(paths)
     return payload
 
 
@@ -373,6 +381,7 @@ def approve_plan(
     allow_empty_todos: bool = False,
     allow_lint_errors: bool = False,
     approval_source: str | None = None,
+    runtime: CommandRuntime | None = None,
 ) -> dict[str, object]:
     task = resolve_task(workspace_root, task_ref)
     _tasks._ensure_not_archived(task, operation="approve plan for")
@@ -529,7 +538,8 @@ def approve_plan(
             "approved_plan_hash": approved_hash,
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
+    paths = runtime.paths() if runtime is not None else resolve_v2_paths(workspace_root)
+    rebuild_v2_indexes(paths)
     payload = _tasks._lifecycle_payload(
         "plan approve",
         updated,

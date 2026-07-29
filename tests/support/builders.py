@@ -5,7 +5,9 @@ from pathlib import Path
 from taskledger.services.tasks import (
     activate_task,
     add_change,
+    add_question,
     add_validation_check,
+    answer_question,
     approve_plan,
     create_task,
     finish_implementation,
@@ -38,6 +40,58 @@ Test plan.
 def init_workspace(workspace: Path) -> Path:
     init_project_state(workspace)
     return workspace
+
+
+def create_planning_task(
+    workspace: Path,
+    *,
+    title: str = "Planning task",
+    slug: str = "planning-task",
+    description: str = "planning test",
+    plan_text: str | None = None,
+) -> str:
+    """Create a task in planning stage with a proposed plan.
+
+    Returns the task_id.  Use when the test target is plan lint/approve/etc.
+    and the setup does not need to exercise the CLI init/create/start/propose
+    contract.
+    """
+    task = create_task(
+        workspace,
+        title=title,
+        slug=slug,
+        description=description,
+    )
+    activate_task(workspace, task.id, reason="test setup")
+    start_planning(workspace, task.id)
+    if plan_text is not None:
+        propose_plan(workspace, task.id, body=plan_text)
+    return task.id
+
+
+def add_and_answer_question(
+    workspace: Path,
+    task_id: str,
+    *,
+    question_text: str = "Which database?",
+    answer_text: str = "PostgreSQL.",
+    required_for_plan: bool = True,
+) -> str:
+    """Add a question and answer it via service layer. Returns question_id."""
+    q = add_question(
+        workspace,
+        task_id,
+        text=question_text,
+        required_for_plan=required_for_plan,
+    )
+    answer_question(
+        workspace,
+        task_id,
+        q.id,
+        text=answer_text,
+        answer_source="explicit_user_chat",
+    )
+    return q.id
 
 
 def create_approved_task(

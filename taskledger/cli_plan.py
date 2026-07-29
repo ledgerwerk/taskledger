@@ -91,6 +91,7 @@ def start_command(
         payload = start_planning(
             state.cwd,
             task.id,
+            runtime=state.runtime,
             actor=resolved_actor,
             harness=resolved_harness,
         )
@@ -123,6 +124,7 @@ def propose_command(
             task.id,
             body=_read_plan_text_input(state.cwd, text=text, from_file=from_file),
             criteria=tuple(criterion or ()),
+            runtime=state.runtime,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)
@@ -531,6 +533,7 @@ def approve_command(
             allow_empty_todos=allow_empty_todos,
             allow_lint_errors=allow_lint_errors,
             approval_source=approval_source,
+            runtime=state.runtime,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)
@@ -561,6 +564,7 @@ def accept_command(
             allow_lint_errors=allow_lint_errors,
             reason=note if allow_lint_errors else None,
             approval_source="explicit_chat",
+            runtime=state.runtime,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)
@@ -628,6 +632,7 @@ def amend_command(
             drop_todos=tuple(drop_todo or ()),
             remove_files=tuple(remove_file or ()),
             reason=reason,
+            runtime=state.runtime,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)

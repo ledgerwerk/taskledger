@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 import typer
 
@@ -20,11 +20,66 @@ from taskledger.errors import (
 from taskledger.storage.paths import discover_workspace_root
 from taskledger.storage.task_store import TaskRecord, resolve_task_or_active
 
+if TYPE_CHECKING:
+    from taskledger.storage.project_context import TaskledgerProjectContext
+    from taskledger.storage.task_store import V2Paths
+
+
+@dataclass(slots=True)
+class CommandRuntime:
+    """Command-scoped cache for project context and resolved paths.
+
+    Lifetime is one CLI invocation.  Avoids repeated project discovery,
+    manifest parsing, and path construction inside a single command.
+    """
+
+    workspace_root: Path
+    _contexts: dict[tuple[bool, bool], TaskledgerProjectContext] = field(
+        default_factory=dict
+    )
+    _paths: V2Paths | None = None
+
+    def project_context(
+        self,
+        *,
+        require_initialized: bool = True,
+        allow_legacy: bool = True,
+    ) -> TaskledgerProjectContext:
+        from taskledger.storage.project_context import load_project_context
+
+        key = (require_initialized, allow_legacy)
+        if key not in self._contexts:
+            self._contexts[key] = load_project_context(
+                self.workspace_root,
+                require_initialized=require_initialized,
+                allow_legacy=allow_legacy,
+            )
+        return self._contexts[key]
+
+    def paths(self) -> V2Paths:
+        from taskledger.storage.task_store import v2_paths_from_context
+
+        if self._paths is None:
+            context = self.project_context(require_initialized=False)
+            self._paths = v2_paths_from_context(context)
+        return self._paths
+
+    def invalidate_layout(self) -> None:
+        """Clear cached context and paths after layout-changing mutations.
+
+        Call this after operations that can change ledger.toml,
+        .ledger-project.toml, config location, storage mount,
+        active ledger reference, migration state, or local overrides.
+        """
+        self._contexts.clear()
+        self._paths = None
+
 
 @dataclass(slots=True, frozen=True)
 class CLIState:
     cwd: Path
     json_output: bool
+    runtime: CommandRuntime | None = None
 
 
 TaskOption = Annotated[

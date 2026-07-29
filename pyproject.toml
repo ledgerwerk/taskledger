@@ -22,6 +22,7 @@ markers = [
     "slow: intentionally slower than normal unit tests",
     "subprocess: starts a child process or managed shell command",
     "git: shells out to git or requires a git repository",
+    "durable_io: verifies real flush/fsync/replace durability behavior",
 ]
 
 [project]
@@ -114,6 +115,27 @@ deps =
     pytest-xdist
 commands =
     pytest -q -n auto --dist=worksteal {posargs}
+
+[testenv:test-fast]
+deps =
+    pytest
+    pytest-xdist
+commands =
+    pytest -q -m 'unit and not slow' -n auto --dist=worksteal {posargs}
+
+[testenv:test-standard]
+deps =
+    pytest
+    pytest-xdist
+commands =
+    pytest -q -m 'not git and not subprocess and not slow' \
+        -n auto --dist=worksteal {posargs}
+
+[testenv:test-durable]
+deps =
+    pytest
+commands =
+    pytest -q -m 'durable_io' {posargs}
 """
 
 [tool.mypy]

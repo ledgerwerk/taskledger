@@ -10,7 +10,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Literal, TypedDict, cast
+from typing import TYPE_CHECKING, Literal, TypedDict, cast
+
+if TYPE_CHECKING:
+    from taskledger.cli_common import CommandRuntime
 
 import yaml
 
@@ -439,6 +442,7 @@ def start_planning(
     workspace_root: Path,
     task_ref: str,
     *,
+    runtime: CommandRuntime | None = None,
     actor: ActorRef | None = None,
     harness: HarnessRef | None = None,
 ) -> dict[str, object]:
@@ -447,6 +451,7 @@ def start_planning(
     return _start_planning(
         workspace_root,
         task_ref,
+        runtime=runtime,
         actor=actor,
         harness=harness,
     )
@@ -458,6 +463,7 @@ def propose_plan(
     *,
     body: str,
     criteria: tuple[str, ...] = (),
+    runtime: CommandRuntime | None = None,
 ) -> dict[str, object]:
     from taskledger.services.planning_flow import propose_plan as _propose_plan
 
@@ -466,6 +472,7 @@ def propose_plan(
         task_ref,
         body=body,
         criteria=criteria,
+        runtime=runtime,
     )
 
 
@@ -515,6 +522,7 @@ def amend_plan(
     drop_todos: tuple[str, ...] = (),
     remove_files: tuple[str, ...] = (),
     reason: str,
+    runtime: CommandRuntime | None = None,
 ) -> dict[str, object]:
     from taskledger.services.planning_flow import amend_plan as _amend_plan
 
@@ -525,6 +533,7 @@ def amend_plan(
         drop_todos=drop_todos,
         remove_files=remove_files,
         reason=reason,
+        runtime=runtime,
     )
 
 
@@ -594,6 +603,7 @@ def approve_plan(
     allow_empty_todos: bool = False,
     allow_lint_errors: bool = False,
     approval_source: str | None = None,
+    runtime: CommandRuntime | None = None,
 ) -> dict[str, object]:
     from taskledger.services.planning_flow import approve_plan as _approve_plan
 
@@ -612,6 +622,7 @@ def approve_plan(
         allow_empty_todos=allow_empty_todos,
         allow_lint_errors=allow_lint_errors,
         approval_source=approval_source,
+        runtime=runtime,
     )
 
 

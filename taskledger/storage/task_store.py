@@ -13,7 +13,10 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
+
+if TYPE_CHECKING:
+    from taskledger.storage.project_context import TaskledgerProjectContext
 
 from taskledger.domain.models import (
     ActiveActorState,
@@ -124,14 +127,12 @@ class V2Paths:
     introductions_index_path: Path
 
 
-def resolve_v2_paths(workspace_root: Path) -> V2Paths:
-    from taskledger.storage.paths import probe_taskledger_project
-    from taskledger.storage.project_context import load_project_context
+def v2_paths_from_context(context: TaskledgerProjectContext) -> V2Paths:
+    """Derive V2Paths from an already-loaded project context.
 
-    probe = probe_taskledger_project(workspace_root)
-    if probe.source == "none":
-        return _resolve_legacy_v2_paths(workspace_root)
-    context = load_project_context(workspace_root, require_initialized=False)
+    This avoids re-loading the context when it is already available,
+    e.g. from a command-scoped runtime.
+    """
     if context.mode == "canonical":
         taskledger_root = context.paths.data_root
         ledger_dir = context.paths.ledger_data_dir
@@ -158,7 +159,18 @@ def resolve_v2_paths(workspace_root: Path) -> V2Paths:
             dependencies_index_path=context.paths.dependencies_index_path,
             introductions_index_path=context.paths.introductions_index_path,
         )
-    return _resolve_legacy_v2_paths(workspace_root)
+    return _resolve_legacy_v2_paths(context.project_root)
+
+
+def resolve_v2_paths(workspace_root: Path) -> V2Paths:
+    from taskledger.storage.paths import probe_taskledger_project
+    from taskledger.storage.project_context import load_project_context
+
+    probe = probe_taskledger_project(workspace_root)
+    if probe.source == "none":
+        return _resolve_legacy_v2_paths(workspace_root)
+    context = load_project_context(workspace_root, require_initialized=False)
+    return v2_paths_from_context(context)
 
 
 def _resolve_legacy_v2_paths(workspace_root: Path) -> V2Paths:

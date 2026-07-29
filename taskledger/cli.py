@@ -49,6 +49,7 @@ from taskledger.cli_archive import (
 # cli_build and cli_changelog were removed; changelog/build commands are gone.
 from taskledger.cli_common import (
     CLIState,
+    CommandRuntime,
     TaskOption,
     TaskRefArgument,
     emit_error,
@@ -610,7 +611,11 @@ def main(
         ctx.obj = CLIState(cwd=raw_cwd, json_output=json_output)
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-    ctx.obj = CLIState(cwd=resolved_cwd, json_output=json_output)
+    ctx.obj = CLIState(
+        cwd=resolved_cwd,
+        json_output=json_output,
+        runtime=CommandRuntime(workspace_root=resolved_cwd),
+    )
     from taskledger.services.agent_logging import start_cli_recorder
 
     # When running under test runners like pytest, sys.argv contains test runner args

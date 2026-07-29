@@ -8,8 +8,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Keep the repository tree clean when running pytest from the checkout.
-sys.dont_write_bytecode = True
+# Redirect bytecode to .pytest_cache/pycache to keep the source tree clean
+# while allowing persistent bytecode reuse across repeated pytest runs.
+PYTEST_PYCACHE = ROOT / ".pytest_cache" / "pycache"
+if sys.pycache_prefix is None:
+    sys.pycache_prefix = str(PYTEST_PYCACHE)
+sys.dont_write_bytecode = False
 
 
 import shutil  # noqa: E402
@@ -47,6 +51,24 @@ from tests.support.builders import (  # noqa: E402
     create_implemented_task,
     init_workspace,
 )
+
+
+@pytest.fixture(autouse=True)
+def _taskledger_test_io_mode(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Enable fast I/O for ordinary tests; real fsync for durable_io tests.
+
+    Tests marked with ``durable_io`` verify real flush/fsync/replace
+    durability behavior and must run with the production default.
+    All other tests skip fsync via ``TASKLEDGER_TEST_FAST_IO=1".
+    """
+    if request.node.get_closest_marker("durable_io") is not None:
+        monkeypatch.delenv("TASKLEDGER_TEST_FAST_IO", raising=False)
+        return
+    monkeypatch.setenv("TASKLEDGER_TEST_FAST_IO", "1")
+
 
 # Typer rebuilds the full Click command tree on every CliRunner.invoke call.
 # Taskledger's CLI is intentionally broad, so repeated rebuilds dominate the

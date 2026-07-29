@@ -7,6 +7,11 @@ from typer.testing import CliRunner
 
 from taskledger.cli import app
 from taskledger.domain.states import EXIT_CODE_VALIDATION_FAILED
+from tests.support.builders import (
+    add_and_answer_question,
+    create_planning_task,
+    init_workspace,
+)
 
 
 def _make_runner() -> CliRunner:
@@ -19,28 +24,33 @@ def _make_runner() -> CliRunner:
 runner = _make_runner()
 
 
-def _init_project(tmp_path: Path) -> None:
+def _init_project_cli(tmp_path: Path) -> None:
+    """Initialize project via CLI for tests that need .ledger layout."""
     result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
     assert result.exit_code == 0, result.output
+
+
+def _init_project(tmp_path: Path) -> None:
+    init_workspace(tmp_path)
 
 
 def _json(result) -> dict[str, object]:
     return json.loads(result.stdout)
 
 
-def _create_task(tmp_path: Path, slug: str = "lint-task") -> None:
-    result = runner.invoke(
-        app,
-        ["--cwd", str(tmp_path), "task", "create", slug, "--description", "lint test"],
+def _create_and_start_planning(
+    tmp_path: Path,
+    slug: str = "lint-task",
+    plan_text: str | None = None,
+) -> str:
+    """Use service builders for init, create, activate, start planning."""
+    _init_project(tmp_path)
+    return create_planning_task(
+        tmp_path,
+        slug=slug,
+        description="lint test",
+        plan_text=plan_text,
     )
-    assert result.exit_code == 0, result.output
-
-
-def _start_planning(tmp_path: Path, slug: str = "lint-task") -> None:
-    result = runner.invoke(
-        app, ["--cwd", str(tmp_path), "plan", "start", "--task", slug]
-    )
-    assert result.exit_code == 0, result.output
 
 
 def _enable_planning_guidance(tmp_path: Path) -> None:
@@ -70,6 +80,7 @@ def _propose_plan(
     plan_text: str,
     slug: str = "lint-task",
 ) -> None:
+    """Propose a plan via CLI (this is a target command, not setup)."""
     result = runner.invoke(
         app,
         [
@@ -91,37 +102,15 @@ def _add_and_answer_required_question(
     slug: str,
     answer: str = "PostgreSQL.",
 ) -> None:
-    result = runner.invoke(
-        app,
-        [
-            "--cwd",
-            str(tmp_path),
-            "question",
-            "add",
-            "--task",
-            slug,
-            "--text",
-            "Which database?",
-            "--required-for-plan",
-        ],
+    """Add and answer a question via service builders."""
+    from taskledger.storage.task_store import resolve_active_task
+
+    task = resolve_active_task(tmp_path)
+    add_and_answer_question(
+        tmp_path,
+        task.id,
+        answer_text=answer,
     )
-    assert result.exit_code == 0, result.output
-    result = runner.invoke(
-        app,
-        [
-            "--cwd",
-            str(tmp_path),
-            "question",
-            "answer",
-            "--task",
-            slug,
-            "q-0001",
-            "--text",
-            answer,
-            "--from-user-chat",
-        ],
-    )
-    assert result.exit_code == 0, result.output
 
 
 # Full plan with all required fields
@@ -295,9 +284,7 @@ Create the workflow file.
 class TestPlanLintPasses:
     # specmason: req=REQ-0037 ac=AC-0422
     def test_plan_lint_passes_for_executable_plan(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "lint-pass")
-        _start_planning(tmp_path, "lint-pass")
+        _create_and_start_planning(tmp_path, "lint-pass")
         _propose_plan(tmp_path, _FULL_PLAN, slug="lint-pass")
 
         result = runner.invoke(
@@ -318,9 +305,7 @@ class TestPlanLintPasses:
 
     # specmason: req=REQ-0037 ac=AC-0435
     def test_plan_template_prints_stdout_when_no_file(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "template-stdout")
-        _start_planning(tmp_path, "template-stdout")
+        _create_and_start_planning(tmp_path, "template-stdout")
 
         result = runner.invoke(
             app,
@@ -333,8 +318,7 @@ class TestPlanLintPasses:
 
     # specmason: req=REQ-0037 ac=AC-0415
     def test_plan_guidance_human_message_when_no_profile(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "guidance-empty")
+        _create_and_start_planning(tmp_path, "guidance-empty")
 
         result = runner.invoke(
             app,
@@ -348,8 +332,7 @@ class TestPlanLintPasses:
 
     # specmason: req=REQ-0037 ac=AC-0416
     def test_plan_guidance_json_contract_when_no_profile(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "guidance-json-empty")
+        _create_and_start_planning(tmp_path, "guidance-json-empty")
 
         result = runner.invoke(
             app,
@@ -379,8 +362,7 @@ class TestPlanLintPasses:
 
     # specmason: req=REQ-0037 ac=AC-0417
     def test_plan_guidance_rejects_invalid_format(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "guidance-invalid-format")
+        _create_and_start_planning(tmp_path, "guidance-invalid-format")
 
         result = runner.invoke(
             app,
@@ -402,9 +384,7 @@ class TestPlanLintPasses:
 
     # specmason: req=REQ-0037 ac=AC-0433
     def test_plan_template_from_answers_writes_file(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "template-file")
-        _start_planning(tmp_path, "template-file")
+        _create_and_start_planning(tmp_path, "template-file")
         _add_and_answer_required_question(tmp_path, "template-file")
         plan_path = tmp_path / "plan.md"
 
@@ -432,10 +412,19 @@ class TestPlanLintPasses:
     def test_plan_template_include_guidance_writes_guidance_in_file(
         self, tmp_path: Path
     ) -> None:
-        _init_project(tmp_path)
+        _init_project_cli(tmp_path)
         _enable_planning_guidance(tmp_path)
-        _create_task(tmp_path, "template-guidance")
-        _start_planning(tmp_path, "template-guidance")
+        # Use service layer directly since workspace is already initialized
+        from taskledger.services.tasks import activate_task, create_task, start_planning
+
+        task = create_task(
+            tmp_path,
+            title="Template guidance",
+            slug="template-guidance",
+            description="lint test",
+        )
+        activate_task(tmp_path, task.id, reason="test setup")
+        start_planning(tmp_path, task.id)
         plan_path = tmp_path / "plan.md"
 
         result = runner.invoke(
@@ -468,9 +457,7 @@ class TestPlanLintPasses:
 
     # specmason: req=REQ-0037 ac=AC-0410
     def test_filled_plan_template_passes_lint(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "template-lint")
-        _start_planning(tmp_path, "template-lint")
+        _create_and_start_planning(tmp_path, "template-lint")
         _add_and_answer_required_question(tmp_path, "template-lint")
         plan_path = tmp_path / "plan.md"
 
@@ -555,9 +542,7 @@ class TestPlanLintPasses:
 class TestPlanLintErrors:
     # specmason: req=REQ-0037 ac=AC-0426
     def test_plan_lint_reports_missing_goal(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "no-goal")
-        _start_planning(tmp_path, "no-goal")
+        _create_and_start_planning(tmp_path, "no-goal")
         _propose_plan(tmp_path, _NO_GOAL_PLAN, slug="no-goal")
 
         result = runner.invoke(
@@ -585,9 +570,7 @@ class TestPlanLintErrors:
 
     # specmason: req=REQ-0037 ac=AC-0425
     def test_plan_lint_reports_missing_criteria(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "no-criteria")
-        _start_planning(tmp_path, "no-criteria")
+        _create_and_start_planning(tmp_path, "no-criteria")
         _propose_plan(tmp_path, _NO_CRITERIA_PLAN, slug="no-criteria")
 
         result = runner.invoke(
@@ -611,9 +594,7 @@ class TestPlanLintErrors:
 
     # specmason: req=REQ-0037 ac=AC-0428
     def test_plan_lint_reports_missing_todos(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "no-todos")
-        _start_planning(tmp_path, "no-todos")
+        _create_and_start_planning(tmp_path, "no-todos")
         _propose_plan(tmp_path, _NO_TODOS_PLAN, slug="no-todos")
 
         result = runner.invoke(
@@ -637,9 +618,7 @@ class TestPlanLintErrors:
 
     # specmason: req=REQ-0037 ac=AC-0419
     def test_plan_lint_allows_todo_waiver_reason(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "waived")
-        _start_planning(tmp_path, "waived")
+        _create_and_start_planning(tmp_path, "waived")
         _propose_plan(tmp_path, _WAIVED_TODOS_PLAN, slug="waived")
 
         result = runner.invoke(
@@ -654,9 +633,7 @@ class TestPlanLintErrors:
 
     # specmason: req=REQ-0037 ac=AC-0424
     def test_plan_lint_rejects_vague_todo(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "vague")
-        _start_planning(tmp_path, "vague")
+        _create_and_start_planning(tmp_path, "vague")
         _propose_plan(tmp_path, _VAGUE_TODO_PLAN, slug="vague")
 
         result = runner.invoke(
@@ -673,9 +650,7 @@ class TestPlanLintErrors:
 class TestPlanLintWarnings:
     # specmason: req=REQ-0037 ac=AC-0431
     def test_plan_lint_warns_on_placeholders(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "placeholder")
-        _start_planning(tmp_path, "placeholder")
+        _create_and_start_planning(tmp_path, "placeholder")
         _propose_plan(tmp_path, _PLACEHOLDER_PLAN, slug="placeholder")
 
         result = runner.invoke(
@@ -700,9 +675,7 @@ class TestPlanLintWarnings:
 
     # specmason: req=REQ-0037 ac=AC-0430
     def test_plan_lint_strict_fails_on_placeholders(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "strict-ph")
-        _start_planning(tmp_path, "strict-ph")
+        _create_and_start_planning(tmp_path, "strict-ph")
         _propose_plan(tmp_path, _PLACEHOLDER_PLAN, slug="strict-ph")
 
         result = runner.invoke(
@@ -730,9 +703,7 @@ class TestPlanLintWarnings:
     def test_plan_lint_warns_when_todos_lack_validation_hints_and_no_tests(
         self, tmp_path: Path
     ) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "todo-hints")
-        _start_planning(tmp_path, "todo-hints")
+        _create_and_start_planning(tmp_path, "todo-hints")
         _propose_plan(tmp_path, _NO_TODO_HINTS_PLAN, slug="todo-hints")
 
         result = runner.invoke(
@@ -754,9 +725,7 @@ class TestPlanLintWarnings:
     def test_plan_lint_strict_errors_when_todos_lack_validation_hints_and_no_tests(
         self, tmp_path: Path
     ) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "todo-hints-strict")
-        _start_planning(tmp_path, "todo-hints-strict")
+        _create_and_start_planning(tmp_path, "todo-hints-strict")
         _propose_plan(tmp_path, _NO_TODO_HINTS_PLAN, slug="todo-hints-strict")
 
         result = runner.invoke(
@@ -787,13 +756,14 @@ class TestPlanLintWarnings:
 class TestPlanLintVersioning:
     # specmason: req=REQ-0037 ac=AC-0420
     def test_plan_lint_defaults_to_latest_plan(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "multi")
-        _start_planning(tmp_path, "multi")
+        _create_and_start_planning(tmp_path, "multi")
         _propose_plan(tmp_path, _NO_GOAL_PLAN, slug="multi")
 
         # Propose a second plan via another planning cycle
-        _start_planning(tmp_path, "multi")
+        # Use service layer for second planning cycle start
+        from taskledger.services.tasks import start_planning as svc_start_planning
+
+        svc_start_planning(tmp_path, "multi")
         _propose_plan(tmp_path, _FULL_PLAN, slug="multi")
 
         result = runner.invoke(
@@ -809,9 +779,7 @@ class TestPlanLintVersioning:
 class TestPlanLintApprovalGate:
     # specmason: req=REQ-0037 ac=AC-0411
     def test_plan_approval_blocks_lint_errors(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "gate-block")
-        _start_planning(tmp_path, "gate-block")
+        _create_and_start_planning(tmp_path, "gate-block")
         _propose_plan(tmp_path, _NO_GOAL_PLAN, slug="gate-block")
 
         result = runner.invoke(
@@ -840,9 +808,7 @@ class TestPlanLintApprovalGate:
     def test_plan_approval_lint_escape_hatch_requires_reason(
         self, tmp_path: Path
     ) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "gate-reason")
-        _start_planning(tmp_path, "gate-reason")
+        _create_and_start_planning(tmp_path, "gate-reason")
         _propose_plan(tmp_path, _NO_GOAL_PLAN, slug="gate-reason")
 
         result = runner.invoke(
@@ -871,9 +837,7 @@ class TestPlanLintApprovalGate:
     def test_plan_approval_lint_escape_hatch_succeeds_with_reason(
         self, tmp_path: Path
     ) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "gate-ok")
-        _start_planning(tmp_path, "gate-ok")
+        _create_and_start_planning(tmp_path, "gate-ok")
         _propose_plan(tmp_path, _NO_GOAL_PLAN, slug="gate-ok")
 
         result = runner.invoke(
@@ -903,9 +867,7 @@ class TestPlanLintApprovalGate:
 class TestPlanLintMissingBody:
     # specmason: req=REQ-0037 ac=AC-0427
     def test_plan_lint_reports_missing_plan_body(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "empty-body")
-        _start_planning(tmp_path, "empty-body")
+        _create_and_start_planning(tmp_path, "empty-body")
         _propose_plan(tmp_path, _FRONT_MATTER_ONLY_PLAN, slug="empty-body")
 
         result = runner.invoke(
@@ -934,9 +896,7 @@ class TestPlanLintMissingBody:
 
     # specmason: req=REQ-0037 ac=AC-0412
     def test_plan_approval_blocks_missing_body(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "body-approve")
-        _start_planning(tmp_path, "body-approve")
+        _create_and_start_planning(tmp_path, "body-approve")
         _propose_plan(tmp_path, _FRONT_MATTER_ONLY_PLAN, slug="body-approve")
 
         result = runner.invoke(
@@ -963,9 +923,7 @@ class TestPlanLintMissingBody:
 
     # specmason: req=REQ-0037 ac=AC-0423
     def test_plan_lint_passes_with_body(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "has-body")
-        _start_planning(tmp_path, "has-body")
+        _create_and_start_planning(tmp_path, "has-body")
         _propose_plan(tmp_path, _FULL_PLAN, slug="has-body")
 
         result = runner.invoke(
@@ -989,9 +947,7 @@ class TestPlanLintMissingBody:
 class TestPlanLintHumanOutput:
     # specmason: req=REQ-0037 ac=AC-0421
     def test_plan_lint_human_output_renders_issue_details(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "human-details")
-        _start_planning(tmp_path, "human-details")
+        _create_and_start_planning(tmp_path, "human-details")
         _propose_plan(tmp_path, _VAGUE_TODO_PLAN, slug="human-details")
 
         result = runner.invoke(
@@ -1015,9 +971,7 @@ class TestPlanLintHumanOutput:
 
     # specmason: req=REQ-0037 ac=AC-0418
     def test_plan_lint_accepts_short_file_path_todo(self, tmp_path: Path) -> None:
-        _init_project(tmp_path)
-        _create_task(tmp_path, "short-path")
-        _start_planning(tmp_path, "short-path")
+        _create_and_start_planning(tmp_path, "short-path")
         _propose_plan(tmp_path, _SHORT_PATH_TODO_PLAN, slug="short-path")
 
         result = runner.invoke(
@@ -1036,9 +990,7 @@ class TestPlanLintHumanOutput:
 def test_plan_lint_warns_when_approval_ready_heading_is_missing(
     tmp_path: Path,
 ) -> None:
-    _init_project(tmp_path)
-    _create_task(tmp_path, "approval-heading-warning")
-    _start_planning(tmp_path, "approval-heading-warning")
+    _create_and_start_planning(tmp_path, "approval-heading-warning")
     _propose_plan(
         tmp_path,
         _FULL_PLAN,
@@ -1073,9 +1025,7 @@ def test_plan_lint_warns_when_approval_ready_heading_is_missing(
 def test_plan_lint_strict_errors_when_approval_ready_heading_is_missing(
     tmp_path: Path,
 ) -> None:
-    _init_project(tmp_path)
-    _create_task(tmp_path, "approval-heading-strict")
-    _start_planning(tmp_path, "approval-heading-strict")
+    _create_and_start_planning(tmp_path, "approval-heading-strict")
     _propose_plan(
         tmp_path,
         _FULL_PLAN,
@@ -1109,9 +1059,7 @@ def test_plan_lint_strict_errors_when_approval_ready_heading_is_missing(
 
 # specmason: req=REQ-0037 ac=AC-0413
 def test_plan_lint_does_not_require_out_of_scope_heading(tmp_path: Path) -> None:
-    _init_project(tmp_path)
-    _create_task(tmp_path, "approval-heading-complete")
-    _start_planning(tmp_path, "approval-heading-complete")
+    _create_and_start_planning(tmp_path, "approval-heading-complete")
     approval_body = _FULL_PLAN.replace(
         "## Goal\n\nTest goal for plan linting.",
         "# Approval Plan\n\n"
