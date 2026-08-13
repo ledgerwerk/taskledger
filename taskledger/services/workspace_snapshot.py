@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 from taskledger.domain.models import ActorRef, HarnessRef, TaskRecord, TaskRunRecord
+from taskledger.errors import LaunchError
 from taskledger.services import tasks as _tasks
 from taskledger.services.git_utils import (
     WorkspaceSnapshot,
@@ -43,6 +44,7 @@ class CurrentWorkspaceState:
     status_entries: tuple[GitStatusEntry, ...]
     diff_binary: str | None
     content_entries: tuple[WorktreePathEntry, ...]
+    content_captured: bool = False
 
     @property
     def status_hash(self) -> str | None:
@@ -173,6 +175,28 @@ def _sha256_bytes(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
+def _content_identity(
+    entries: tuple[WorktreePathEntry, ...],
+) -> tuple[str | None, str | None]:
+    if not entries:
+        return None, None
+    manifest = [
+        {
+            "path": entry.path,
+            "state": "missing" if not entry.exists else "present",
+            "kind": entry.kind,
+            "size": entry.size,
+            "content_hash": entry.content_hash,
+        }
+        for entry in entries
+    ]
+    paths_manifest = [{"path": entry.path, "status": entry.status} for entry in entries]
+    return (
+        _sha256_text(json.dumps(manifest, sort_keys=True, separators=(",", ":"))),
+        _sha256_text(json.dumps(paths_manifest, sort_keys=True, separators=(",", ":"))),
+    )
+
+
 def _status_from_xy(x: str, y: str) -> str:
     codes = {x, y}
     if "D" in codes:
@@ -232,8 +256,64 @@ def _entry_for_path(root: Path, path: str, status: str) -> WorktreePathEntry:
     return WorktreePathEntry(path, status, True, "other", None, None)
 
 
-def _is_taskledger_state_path(path: str) -> bool:
-    return path == ".taskledger" or path.startswith(".taskledger/")
+@dataclass(frozen=True, slots=True)
+class WorkspaceSnapshotExclusions:
+    """Resolved mutable Taskledger roots represented relative to Git root."""
+
+    git_root: Path
+    relative_prefixes: tuple[str, ...]
+
+    def excludes(self, path: str) -> bool:
+        normalized = path.replace("\\", "/").strip("/")
+        return any(
+            normalized == prefix or normalized.startswith(prefix + "/")
+            for prefix in self.relative_prefixes
+        )
+
+
+def _snapshot_exclusions(
+    workspace_root: Path,
+    git_worktree_root: Path,
+) -> WorkspaceSnapshotExclusions:
+    roots: set[Path] = {git_worktree_root / ".taskledger"}
+
+    try:
+        from taskledger.storage.project_context import load_project_context
+
+        context = load_project_context(
+            workspace_root,
+            require_initialized=False,
+            allow_legacy=True,
+        )
+    except LaunchError:
+        context = None
+
+    if context is not None:
+        roots.update(
+            {
+                context.paths.data_root,
+                context.paths.logs_root,
+                context.paths.indexes_root,
+            }
+        )
+
+    git_root = git_worktree_root.resolve()
+    prefixes: set[str] = set()
+    for candidate in roots:
+        try:
+            relative = candidate.resolve().relative_to(git_root)
+        except ValueError:
+            continue
+        if relative == Path("."):
+            continue
+        prefix = relative.as_posix().strip("/")
+        if prefix:
+            prefixes.add(prefix)
+
+    return WorkspaceSnapshotExclusions(
+        git_root=git_worktree_root,
+        relative_prefixes=tuple(sorted(prefixes)),
+    )
 
 
 def capture_workspace_content_snapshot(
@@ -242,6 +322,7 @@ def capture_workspace_content_snapshot(
     root = git_root(workspace_root)
     if root is None:
         return WorkspaceContentSnapshot(None, None, None, None, 0, (), utc_now_iso())
+    exclusions = _snapshot_exclusions(workspace_root, root)
 
     commit_result = run_git(root, "rev-parse", "HEAD", check=False)
     git_commit = commit_result.stdout.strip() if commit_result.returncode == 0 else None
@@ -260,32 +341,12 @@ def capture_workspace_content_snapshot(
             (
                 _entry_for_path(root, path, status)
                 for path, status in status_entries
-                if not _is_taskledger_state_path(path)
+                if not exclusions.excludes(path)
             ),
             key=lambda item: item.path,
         )
     )
-    manifest = [
-        {
-            "path": entry.path,
-            "state": "missing" if not entry.exists else "present",
-            "kind": entry.kind,
-            "size": entry.size,
-            "content_hash": entry.content_hash,
-        }
-        for entry in entries
-    ]
-    paths_manifest = [{"path": entry.path, "status": entry.status} for entry in entries]
-    content_hash = (
-        _sha256_text(json.dumps(manifest, sort_keys=True, separators=(",", ":")))
-        if entries
-        else None
-    )
-    paths_hash = (
-        _sha256_text(json.dumps(paths_manifest, sort_keys=True, separators=(",", ":")))
-        if entries
-        else None
-    )
+    content_hash, paths_hash = _content_identity(entries)
     return WorkspaceContentSnapshot(
         git_commit=git_commit,
         dirty=bool(entries),
@@ -307,6 +368,7 @@ def capture_current_workspace_state(
     root = git_root(workspace_root)
     if root is None:
         return CurrentWorkspaceState(None, None, (), None, ())
+    exclusions = _snapshot_exclusions(workspace_root, root)
 
     commit_result = run_git(root, "rev-parse", "HEAD", check=False)
     git_commit = commit_result.stdout.strip() if commit_result.returncode == 0 else None
@@ -324,7 +386,7 @@ def capture_current_workspace_state(
     status_entries = tuple(
         GitStatusEntry(path=p, status=s)
         for p, s in raw_entries
-        if not _is_taskledger_state_path(p)
+        if not exclusions.excludes(p)
     )
 
     diff_binary: str | None = None
@@ -340,7 +402,7 @@ def capture_current_workspace_state(
                 (
                     _entry_for_path(root, path, status)
                     for path, status in raw_entries
-                    if not _is_taskledger_state_path(path)
+                    if not exclusions.excludes(path)
                 ),
                 key=lambda item: item.path,
             )
@@ -353,6 +415,7 @@ def capture_current_workspace_state(
         status_entries=status_entries,
         diff_binary=diff_binary,
         content_entries=content_entries,
+        content_captured=include_content,
     )
 
 
@@ -461,11 +524,16 @@ def compare_implementation_snapshot(
             status_hash=current.status_hash,
         )
         content_entries = current.content_entries
+        content_hash, paths_hash = (
+            _content_identity(content_entries)
+            if current.content_captured
+            else (None, None)
+        )
         current_content = WorkspaceContentSnapshot(
             git_commit=current.commit,
             dirty=current.dirty,
-            content_hash=None,  # content hash computed lazily below if needed
-            paths_hash=None,
+            content_hash=content_hash,
+            paths_hash=paths_hash,
             entry_count=len(content_entries),
             entries=content_entries,
             captured_at=None,

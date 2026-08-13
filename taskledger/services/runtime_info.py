@@ -11,6 +11,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from taskledger.compat.ledgercore import (
+    LEDGERCORE_REQUIREMENT,
+    inspect_ledgercore_version,
+    ledgercore_is_compatible,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimeInfo:
@@ -26,6 +32,11 @@ class RuntimeInfo:
     console_script: str
     ledgercore_version: str | None
     ledgercore_package_file: str | None
+    ledgercore_module_version: str | None
+    ledgercore_distribution_version: str | None
+    ledgercore_version_mismatch: bool
+    ledgercore_required: str
+    ledgercore_compatible: bool
     migration_contract_version: int
     available_migrate_commands: tuple[str, ...]
 
@@ -42,6 +53,11 @@ class RuntimeInfo:
             "console_script": self.console_script,
             "ledgercore_version": self.ledgercore_version,
             "ledgercore_package_file": self.ledgercore_package_file,
+            "ledgercore_module_version": self.ledgercore_module_version,
+            "ledgercore_distribution_version": self.ledgercore_distribution_version,
+            "ledgercore_version_mismatch": self.ledgercore_version_mismatch,
+            "ledgercore_required": self.ledgercore_required,
+            "ledgercore_compatible": self.ledgercore_compatible,
             "migration_contract_version": self.migration_contract_version,
             "available_migrate_commands": list(self.available_migrate_commands),
         }
@@ -64,6 +80,12 @@ class RuntimeInfo:
             "Ledgercore",
             f"  version: {self.ledgercore_version or 'unknown'}",
             f"  package: {self.ledgercore_package_file or 'unknown'}",
+            f"  module_version: {self.ledgercore_module_version or 'unknown'}",
+            "  distribution_version: "
+            f"{self.ledgercore_distribution_version or 'unknown'}",
+            f"  version_mismatch: {self.ledgercore_version_mismatch}",
+            f"  required: {self.ledgercore_required}",
+            f"  compatible: {self.ledgercore_compatible}",
             "",
             "Migration",
             f"  contract_version: {self.migration_contract_version}",
@@ -94,16 +116,7 @@ def collect_runtime_info() -> RuntimeInfo:
     version = taskledger.__version__
     commit = _resolve_commit(version)
 
-    # Ledgercore is optional
-    ledgercore_version: str | None = None
-    ledgercore_package_file: str | None = None
-    try:
-        import ledgercore
-
-        ledgercore_version = getattr(ledgercore, "__version__", None)
-        ledgercore_package_file = str(Path(ledgercore.__file__).resolve())
-    except ImportError:
-        pass
+    ledgercore_info = inspect_ledgercore_version()
 
     # Discover available migrate commands from the typer app
     available_commands: list[str] = []
@@ -139,8 +152,13 @@ def collect_runtime_info() -> RuntimeInfo:
         python_executable=sys.executable,
         argv0=argv0,
         console_script=console_script,
-        ledgercore_version=ledgercore_version,
-        ledgercore_package_file=ledgercore_package_file,
+        ledgercore_version=ledgercore_info.module_version,
+        ledgercore_package_file=ledgercore_info.package_file,
+        ledgercore_module_version=ledgercore_info.module_version,
+        ledgercore_distribution_version=ledgercore_info.distribution_version,
+        ledgercore_version_mismatch=ledgercore_info.version_mismatch,
+        ledgercore_required=LEDGERCORE_REQUIREMENT,
+        ledgercore_compatible=ledgercore_is_compatible(ledgercore_info),
         migration_contract_version=3,
         available_migrate_commands=tuple(sorted(set(available_commands))),
     )

@@ -8,6 +8,7 @@ from typing import Any
 from typer.testing import CliRunner
 
 from taskledger.cli import app
+from taskledger.services.doctor import inspect_v2_project
 from taskledger.storage.events import load_events
 from taskledger.storage.task_store import resolve_run, resolve_task, resolve_v2_paths
 
@@ -53,14 +54,17 @@ def _write_local_config(tmp_path: Path) -> None:
     )
 
 
-def _init_git_project(tmp_path: Path) -> None:
+def _init_git_project(tmp_path: Path, *, project_storage: bool = False) -> None:
     _run_git(tmp_path, "init")
     _run_git(tmp_path, "config", "user.email", "test@example.invalid")
     _run_git(tmp_path, "config", "user.name", "Taskledger Test")
     (tmp_path / "tracked.txt").write_text("base\n", encoding="utf-8")
     _run_git(tmp_path, "add", ".")
     _run_git(tmp_path, "commit", "-m", "initial")
-    _invoke(["init"], cwd=tmp_path)
+    init_args = ["init"]
+    if project_storage:
+        init_args.extend(["--data-storage", "project"])
+    _invoke(init_args, cwd=tmp_path)
 
 
 def _prepare_implemented_task(
@@ -154,6 +158,38 @@ def test_validate_start_blocks_actual_content_change_after_finish(
     assert any(item["path"] == "tracked.txt" for item in changed_paths)
 
 
+def test_validate_start_succeeds_immediately_after_finish_with_project_storage(
+    tmp_path: Path,
+) -> None:
+    _init_git_project(tmp_path, project_storage=True)
+    task_id = _prepare_implemented_task(tmp_path)
+
+    result = _invoke(["validate", "start", "--task", task_id], cwd=tmp_path)
+
+    assert "started validation" in result.output
+
+
+def test_project_storage_source_change_still_blocks_validation(
+    tmp_path: Path,
+) -> None:
+    _init_git_project(tmp_path, project_storage=True)
+    task_id = _prepare_implemented_task(tmp_path)
+    (tmp_path / "tracked.txt").write_text("changed-after-finish\n", encoding="utf-8")
+
+    payload = _invoke_json(
+        ["validate", "start", "--task", task_id],
+        cwd=tmp_path,
+        ok=False,
+    )
+
+    assert payload["error"]["code"] == "IMPLEMENTATION_SNAPSHOT_MISMATCH"
+    details = payload["error"]["details"]
+    assert details["reason_code"] == "content_snapshot_mismatch"
+    changed_paths = details["details"]["changed_paths"]
+    assert any(item["path"] == "tracked.txt" for item in changed_paths)
+    assert not any(".ledger/taskledger/data/" in item["path"] for item in changed_paths)
+
+
 def test_can_validate_and_next_action_report_snapshot_mismatch(tmp_path: Path) -> None:
     _init_git_project(tmp_path)
     task_id = _prepare_implemented_task(tmp_path)
@@ -201,6 +237,70 @@ def test_refresh_implementation_snapshot_unblocks_validation_and_logs_event(
     assert any(event.event == "implementation.snapshot.refreshed" for event in events)
 
     _invoke(["validate", "start", "--task", task_id], cwd=tmp_path)
+
+
+def test_snapshot_refresh_is_idempotent_with_project_storage(
+    tmp_path: Path,
+) -> None:
+    _init_git_project(tmp_path, project_storage=True)
+    task_id = _prepare_implemented_task(tmp_path)
+    task = resolve_task(tmp_path, task_id)
+    run_id = task.latest_implementation_run or ""
+
+    first = _invoke_json(
+        [
+            "implement",
+            "snapshot",
+            "refresh",
+            "--task",
+            task_id,
+            "--reason",
+            "Accept current workspace",
+        ],
+        cwd=tmp_path,
+    )
+    first_hash = resolve_run(tmp_path, task_id, run_id).workspace_content_hash
+
+    second = _invoke_json(
+        [
+            "implement",
+            "snapshot",
+            "refresh",
+            "--task",
+            task_id,
+            "--reason",
+            "Confirm unchanged workspace",
+        ],
+        cwd=tmp_path,
+    )
+    second_hash = resolve_run(tmp_path, task_id, run_id).workspace_content_hash
+
+    assert first["result"]["new_snapshot"]["content_hash"] == first_hash
+    assert second["result"]["new_snapshot"]["content_hash"] == second_hash
+    assert first_hash == second_hash
+    _invoke(["validate", "start", "--task", task_id], cwd=tmp_path)
+
+
+def test_doctor_shared_capture_accepts_project_storage_snapshot(
+    tmp_path: Path,
+) -> None:
+    _init_git_project(tmp_path, project_storage=True)
+    _prepare_implemented_task(tmp_path)
+
+    clean = inspect_v2_project(tmp_path)
+    assert not any(
+        item.get("code") == "IMPLEMENTATION_SNAPSHOT_MISMATCH"
+        for item in clean["diagnostics"]
+        if isinstance(item, dict)
+    )
+
+    (tmp_path / "tracked.txt").write_text("changed-after-finish\n", encoding="utf-8")
+    changed = inspect_v2_project(tmp_path)
+    assert any(
+        item.get("code") == "IMPLEMENTATION_SNAPSHOT_MISMATCH"
+        for item in changed["diagnostics"]
+        if isinstance(item, dict)
+    )
 
 
 def test_refresh_implementation_snapshot_requires_reason(tmp_path: Path) -> None:

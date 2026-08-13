@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
+
+from taskledger.compat.ledgercore import LedgercoreVersionInfo
 
 
 class TestRuntimeInfo:
@@ -36,6 +39,10 @@ class TestRuntimeInfo:
         # Ledgercore should be importable in the test environment
         assert info.ledgercore_version is not None
         assert info.ledgercore_package_file is not None
+        assert info.ledgercore_module_version == info.ledgercore_version
+        assert info.ledgercore_distribution_version is not None
+        assert info.ledgercore_required == ">=0.6.1,<0.7.0"
+        assert info.ledgercore_version_mismatch is False
 
     def test_runtime_to_dict_has_expected_keys(self) -> None:
         from taskledger.services.runtime_info import collect_runtime_info
@@ -46,6 +53,11 @@ class TestRuntimeInfo:
         assert "taskledger_version" in d
         assert "taskledger_package_file" in d
         assert "available_migrate_commands" in d
+        assert "ledgercore_module_version" in d
+        assert "ledgercore_distribution_version" in d
+        assert "ledgercore_version_mismatch" in d
+        assert "ledgercore_required" in d
+        assert "ledgercore_compatible" in d
 
     def test_runtime_human_summary_is_nonempty(self) -> None:
         from taskledger.services.runtime_info import collect_runtime_info
@@ -78,3 +90,23 @@ class TestRuntimeInfo:
         data = json.loads(result.output)
         assert data["ok"] is True
         assert data["result"]["kind"] == "taskledger_runtime"
+
+    def test_runtime_reports_module_distribution_mismatch(self) -> None:
+        from taskledger.services.runtime_info import collect_runtime_info
+
+        probe = LedgercoreVersionInfo(
+            module_version="0.5.1",
+            distribution_version="0.6.1",
+            package_file="/tmp/ledgercore/__init__.py",
+            version_mismatch=True,
+        )
+        with patch(
+            "taskledger.services.runtime_info.inspect_ledgercore_version",
+            return_value=probe,
+        ):
+            info = collect_runtime_info()
+
+        assert info.ledgercore_module_version == "0.5.1"
+        assert info.ledgercore_distribution_version == "0.6.1"
+        assert info.ledgercore_version_mismatch is True
+        assert info.ledgercore_compatible is False

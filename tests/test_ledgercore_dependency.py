@@ -1,11 +1,24 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import tomllib
+
+from taskledger.compat.ledgercore import LEDGERCORE_REQUIREMENT
 from taskledger.ids import (
     allocate_ledger_task_id,
     next_project_id,
     normalize_local_resource_id,
     slugify_project_ref,
 )
+
+
+def test_ledgercore_requirement_matches_pyproject() -> None:
+    pyproject = tomllib.loads(
+        (Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    dependencies = pyproject["project"]["dependencies"]
+    assert f"ledgercore{LEDGERCORE_REQUIREMENT}" in dependencies
 
 
 def test_taskledger_uses_ledgercore_id_facade() -> None:

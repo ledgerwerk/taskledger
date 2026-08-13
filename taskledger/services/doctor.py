@@ -190,7 +190,10 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:  # no
         compare_implementation_snapshot,
     )
 
-    current_ws = capture_current_workspace_state(workspace_root)
+    current_ws = capture_current_workspace_state(
+        workspace_root,
+        include_content=True,
+    )
     for task in ctx.tasks:
         if task.status_stage != "implemented":
             continue

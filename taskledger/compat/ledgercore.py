@@ -1,4 +1,4 @@
-"""Ledgercore 0.6.0 compatibility boundary.
+"""Ledgercore 0.6.1 compatibility boundary.
 
 This module provides:
 - Strict public-API imports from ledgercore
@@ -18,13 +18,25 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
 
 # --- Version check ---
 
-_LEDGERCORE_MIN_VERSION = (0, 6, 0)
+LEDGERCORE_REQUIREMENT = ">=0.6.1,<0.7.0"
+_LEDGERCORE_MIN_VERSION = (0, 6, 1)
 _LEDGERCORE_MAX_VERSION_EXCL = (0, 7, 0)
+
+
+@dataclass(frozen=True, slots=True)
+class LedgercoreVersionInfo:
+    """Version and provenance information for the imported Ledgercore."""
+
+    module_version: str | None
+    distribution_version: str | None
+    package_file: str | None
+    version_mismatch: bool
 
 
 def _parse_version(version_str: str) -> tuple[int, int, int]:
@@ -38,37 +50,110 @@ def _parse_version(version_str: str) -> tuple[int, int, int]:
         raise ValueError(f"Invalid version string: {version_str!r}") from None
 
 
-def require_ledgercore_060() -> None:
-    """Verify that the installed Ledgercore version satisfies >=0.6.0,<0.7.0.
+def inspect_ledgercore_version() -> LedgercoreVersionInfo:
+    """Collect module, distribution, and import-path Ledgercore provenance."""
+    module_version: str | None = None
+    package_file: str | None = None
+    ledgercore_module: Any | None = None
+    try:
+        import ledgercore as imported_ledgercore
+
+        ledgercore_module = imported_ledgercore
+    except ImportError:
+        pass
+
+    if ledgercore_module is not None:
+        raw_module_version = getattr(ledgercore_module, "__version__", None)
+        module_version = (
+            raw_module_version if isinstance(raw_module_version, str) else None
+        )
+        module_file = getattr(ledgercore_module, "__file__", None)
+        if module_file is not None:
+            package_file = str(Path(module_file).resolve())
+
+    try:
+        distribution_version = importlib_metadata.version("ledgercore")
+    except importlib_metadata.PackageNotFoundError:
+        distribution_version = None
+
+    return LedgercoreVersionInfo(
+        module_version=module_version,
+        distribution_version=distribution_version,
+        package_file=package_file,
+        version_mismatch=(
+            module_version is not None
+            and distribution_version is not None
+            and module_version != distribution_version
+        ),
+    )
+
+
+def ledgercore_is_compatible(
+    info: LedgercoreVersionInfo | None = None,
+) -> bool:
+    """Return whether a Ledgercore probe satisfies the strict contract."""
+    inspected = info or inspect_ledgercore_version()
+    if (
+        inspected.module_version is None
+        or inspected.distribution_version is None
+        or inspected.version_mismatch
+    ):
+        return False
+    try:
+        version = _parse_version(inspected.module_version)
+    except ValueError:
+        return False
+    return _LEDGERCORE_MIN_VERSION <= version < _LEDGERCORE_MAX_VERSION_EXCL
+
+
+def require_supported_ledgercore() -> None:
+    """Verify Ledgercore satisfies the Taskledger compatibility contract.
 
     Raises:
         RuntimeError: If Ledgercore is missing or version is incompatible.
     """
-    try:
-        import ledgercore
-
-        version_str = getattr(ledgercore, "__version__", None)
-        if version_str is None:
-            raise RuntimeError(
-                "Ledgercore is installed but has no __version__ attribute. "
-                "Taskledger requires ledgercore>=0.6.0,<0.7.0."
-            )
-        version = _parse_version(version_str)
-        if version < _LEDGERCORE_MIN_VERSION:
-            raise RuntimeError(
-                f"Taskledger requires ledgercore>=0.6.0,<0.7.0, "
-                f"but found {version_str}."
-            )
-        if version >= _LEDGERCORE_MAX_VERSION_EXCL:
-            raise RuntimeError(
-                f"Taskledger requires ledgercore>=0.6.0,<0.7.0, "
-                f"but found {version_str}."
-            )
-    except ImportError:
+    info = inspect_ledgercore_version()
+    if info.module_version is None:
         raise RuntimeError(
-            "Taskledger requires ledgercore>=0.6.0,<0.7.0, but it is not installed. "
-            "Install it with: pip install 'ledgercore>=0.6.0,<0.7.0'"
+            f"Taskledger requires ledgercore{LEDGERCORE_REQUIREMENT}, "
+            "but the Ledgercore module is not importable. "
+            "Install it with: "
+            f"pip install 'ledgercore{LEDGERCORE_REQUIREMENT}'"
         ) from None
+    if info.distribution_version is None:
+        raise RuntimeError(
+            "Ledgercore distribution metadata is missing for the imported "
+            f"module ({info.package_file or 'unknown path'}). "
+            f"Taskledger requires ledgercore{LEDGERCORE_REQUIREMENT}."
+        )
+    if info.version_mismatch:
+        raise RuntimeError(
+            "Ledgercore runtime metadata mismatch: imported module reports "
+            f"{info.module_version}, installed distribution reports "
+            f"{info.distribution_version}. "
+            f"Imported package: {info.package_file or 'unknown path'}. "
+            f"Taskledger requires ledgercore{LEDGERCORE_REQUIREMENT}. "
+            "Ensure Taskledger and Ledgercore are installed in the same "
+            "environment and remove stale source/editable paths."
+        )
+
+    try:
+        version = _parse_version(info.module_version)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid Ledgercore version {info.module_version!r}. "
+            f"Taskledger requires ledgercore{LEDGERCORE_REQUIREMENT}."
+        ) from exc
+    if not (_LEDGERCORE_MIN_VERSION <= version < _LEDGERCORE_MAX_VERSION_EXCL):
+        raise RuntimeError(
+            f"Taskledger requires ledgercore{LEDGERCORE_REQUIREMENT}, "
+            f"but found {info.module_version}."
+        )
+
+
+def require_ledgercore_060() -> None:
+    """Compatibility alias for the supported Ledgercore requirement."""
+    require_supported_ledgercore()
 
 
 # --- Public API imports ---
@@ -170,7 +255,7 @@ def get_cli_apis() -> dict[str, Any]:
     """Get the CLI APIs, importing and validating on first call."""
     global _cli_apis
     if _cli_apis is None:
-        require_ledgercore_060()
+        require_supported_ledgercore()
         _cli_apis = _import_cli_apis()
     return _cli_apis
 
@@ -179,7 +264,7 @@ def get_migration_apis() -> dict[str, Any]:
     """Get the migration APIs, importing and validating on first call."""
     global _migration_apis
     if _migration_apis is None:
-        require_ledgercore_060()
+        require_supported_ledgercore()
         _migration_apis = _import_migration_apis()
     return _migration_apis
 
