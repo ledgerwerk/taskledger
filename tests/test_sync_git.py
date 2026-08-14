@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -519,7 +520,7 @@ def test_sync_git_internal_branch_setup_suppresses_taskledger_hook(
     hook.write_text(
         "#!/bin/sh\n"
         'if [ "${TASKLEDGER_GIT_HOOK:-}" = "1" ]; then exit 0; fi\n'
-        f"touch {marker}\n",
+        f"touch {shlex.quote(marker.as_posix())}\n",
         encoding="utf-8",
     )
     hook.chmod(0o755)
@@ -549,7 +550,10 @@ def test_run_git_preserves_non_taskledger_hook_behavior(tmp_path: Path) -> None:
     _git(tmp_path, "init", "-b", "main", str(repo))
     hook = repo / ".git" / "hooks" / "post-checkout"
     marker = tmp_path / "hook-ran"
-    hook.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    hook.write_text(
+        f"#!/bin/sh\ntouch {shlex.quote(marker.as_posix())}\n",
+        encoding="utf-8",
+    )
     hook.chmod(0o755)
     (repo / "README.md").write_text("state\n", encoding="utf-8")
     _git(repo, "add", "README.md")
