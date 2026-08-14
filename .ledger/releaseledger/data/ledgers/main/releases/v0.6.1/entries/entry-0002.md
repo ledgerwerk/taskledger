@@ -12,9 +12,9 @@ status: accepted
 audience: null
 scopes: []
 source_refs:
-- git:94965d3
+  - git:94965d3
 paths:
-- tests/conftest.py
+  - tests/conftest.py
 issues: []
 prs: []
 sources: []

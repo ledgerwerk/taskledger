@@ -270,6 +270,28 @@ class WorkspaceSnapshotExclusions:
             for prefix in self.relative_prefixes
         )
 
+    def classification(self, path: str) -> str:
+        """Classify a path using the same policy as snapshot capture."""
+        return "taskledger-managed" if self.excludes(path) else "project-input"
+
+
+def _canonical_snapshot_exclusion_error(
+    workspace_root: Path,
+    cause: LaunchError,
+) -> LaunchError:
+    return LaunchError(
+        "Cannot resolve canonical Taskledger roots for workspace snapshots. "
+        "Run `taskledger doctor` before continuing; snapshot refresh is not a "
+        "safe recovery for this layout error.",
+        code="WORKSPACE_SNAPSHOT_EXCLUSIONS_UNAVAILABLE",
+        exit_code=6,
+        details={
+            "workspace_root": str(workspace_root),
+            "cause": str(cause),
+        },
+        remediation=["Run `taskledger doctor` and repair the canonical layout."],
+    )
+
 
 def _snapshot_exclusions(
     workspace_root: Path,
@@ -277,6 +299,9 @@ def _snapshot_exclusions(
 ) -> WorkspaceSnapshotExclusions:
     roots: set[Path] = {git_worktree_root / ".taskledger"}
 
+    from taskledger.storage.ledgercore_backend import locate_taskledger_project
+
+    locator = locate_taskledger_project(workspace_root)
     try:
         from taskledger.storage.project_context import load_project_context
 
@@ -285,7 +310,9 @@ def _snapshot_exclusions(
             require_initialized=False,
             allow_legacy=True,
         )
-    except LaunchError:
+    except LaunchError as exc:
+        if locator is not None and not locator.is_legacy:
+            raise _canonical_snapshot_exclusion_error(workspace_root, exc) from exc
         context = None
 
     if context is not None:
@@ -427,6 +454,16 @@ def save_workspace_snapshot_manifest(
 ) -> str:
     paths = resolve_v2_paths(workspace_root)
     path = paths.runs_dir / task_id / f"{run_id}.workspace-snapshot.json"
+    snapshot_root = git_root(workspace_root)
+    if snapshot_root is not None:
+        try:
+            relative_manifest = path.resolve().relative_to(snapshot_root.resolve())
+        except ValueError:
+            relative_manifest = None
+        if relative_manifest is not None:
+            manifest_ref = relative_manifest.as_posix()
+            if any(entry.path == manifest_ref for entry in snapshot.entries):
+                raise _snapshot_self_reference_error(manifest_ref)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(snapshot.to_dict(), indent=2, sort_keys=True) + "\n")
     return f"runs/{task_id}/{path.name}"
@@ -450,6 +487,7 @@ def load_workspace_snapshot_manifest(
 def _changed_paths(
     expected: WorkspaceContentSnapshot | None,
     current: WorkspaceContentSnapshot,
+    exclusions: WorkspaceSnapshotExclusions | None = None,
 ) -> list[dict[str, object]]:
     if expected is None:
         return []
@@ -465,11 +503,38 @@ def _changed_paths(
         changes.append(
             {
                 "path": path,
+                "classification": (
+                    exclusions.classification(path)
+                    if exclusions is not None
+                    else "project-input"
+                ),
                 "expected": old.to_dict() if old else None,
                 "current": new.to_dict() if new else None,
             }
         )
     return changes
+
+
+def _self_reference_message(path: str) -> str:
+    return (
+        "Workspace snapshot invariant violated: the snapshot manifest is present "
+        f"in its own captured entries ({path}). Run `taskledger doctor` to "
+        "inspect the managed-root layout; do not refresh the snapshot again."
+    )
+
+
+def _snapshot_self_reference_error(path: str) -> LaunchError:
+    return LaunchError(
+        _self_reference_message(path),
+        code="WORKSPACE_SNAPSHOT_SELF_REFERENCE",
+        exit_code=6,
+        details={
+            "path": path,
+            "classification": "taskledger-managed",
+            "invariant": "workspace_snapshot_manifest_excluded",
+        },
+        remediation=["Run `taskledger doctor` and repair the managed-root layout."],
+    )
 
 
 def _command_hint() -> str:
@@ -541,6 +606,14 @@ def compare_implementation_snapshot(
     else:
         current_legacy = capture_workspace_snapshot(workspace_root)
         current_content = capture_workspace_content_snapshot(workspace_root)
+    snapshot_root = (
+        current.git_root if current is not None else git_root(workspace_root)
+    )
+    exclusions = (
+        _snapshot_exclusions(workspace_root, snapshot_root)
+        if snapshot_root is not None
+        else None
+    )
     expected_commit = impl_run.workspace_git_commit
     current_commit = current_content.git_commit or current_legacy.git_commit
     details: dict[str, object] = {"changed_paths": []}
@@ -602,6 +675,35 @@ def compare_implementation_snapshot(
             expected_manifest = load_workspace_snapshot_manifest(
                 workspace_root, task.id, impl_run.workspace_snapshot_ref
             )
+        managed_paths = (
+            [
+                entry.path
+                for entry in expected_manifest.entries
+                if exclusions is not None and exclusions.excludes(entry.path)
+            ]
+            if expected_manifest is not None
+            else []
+        )
+        if managed_paths:
+            details["invariant_violation"] = "workspace_snapshot_self_reference"
+            details["managed_paths"] = managed_paths
+            return ImplementationSnapshotEvaluation(
+                False,
+                "workspace_snapshot_self_reference",
+                _self_reference_message(managed_paths[0]),
+                impl_run.workspace_snapshot_format,
+                SNAPSHOT_FORMAT,
+                expected_commit,
+                current_commit,
+                impl_run.workspace_content_hash,
+                current_content.content_hash,
+                impl_run.workspace_status_hash,
+                current_legacy.status_hash,
+                impl_run.workspace_diff_hash,
+                current_legacy.diff_hash,
+                None,
+                details,
+            )
         if current_content.content_hash == impl_run.workspace_content_hash:
             reason = "content_snapshot_match"
             return ImplementationSnapshotEvaluation(
@@ -622,7 +724,9 @@ def compare_implementation_snapshot(
                 details,
             )
         reason = "content_snapshot_mismatch"
-        details["changed_paths"] = _changed_paths(expected_manifest, current_content)
+        details["changed_paths"] = _changed_paths(
+            expected_manifest, current_content, exclusions
+        )
         if expected_manifest is None and impl_run.workspace_snapshot_ref:
             details["manifest_missing"] = True
         return ImplementationSnapshotEvaluation(

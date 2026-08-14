@@ -143,7 +143,7 @@ def test_validate_start_ignores_staging_only_snapshot_change(tmp_path: Path) -> 
 def test_validate_start_blocks_actual_content_change_after_finish(
     tmp_path: Path,
 ) -> None:
-    _init_git_project(tmp_path)
+    _init_git_project(tmp_path, project_storage=True)
     task_id = _prepare_implemented_task(tmp_path)
     (tmp_path / "tracked.txt").write_text("changed-after-finish\n", encoding="utf-8")
 
@@ -155,7 +155,14 @@ def test_validate_start_blocks_actual_content_change_after_finish(
     details = payload["error"]["details"]
     assert details["reason_code"] == "content_snapshot_mismatch"
     changed_paths = details["details"]["changed_paths"]
-    assert any(item["path"] == "tracked.txt" for item in changed_paths)
+    tracked = next(item for item in changed_paths if item["path"] == "tracked.txt")
+    assert tracked["classification"] == "project-input"
+
+    human = _invoke(["validate", "start", "--task", task_id], cwd=tmp_path, ok=False)
+    assert "Changed workspace paths:" in human.output
+    assert "tracked.txt" in human.output
+    assert "expected: sha256:" in human.output
+    assert "current:  sha256:" in human.output
 
 
 def test_validate_start_succeeds_immediately_after_finish_with_project_storage(
@@ -186,7 +193,8 @@ def test_project_storage_source_change_still_blocks_validation(
     details = payload["error"]["details"]
     assert details["reason_code"] == "content_snapshot_mismatch"
     changed_paths = details["details"]["changed_paths"]
-    assert any(item["path"] == "tracked.txt" for item in changed_paths)
+    tracked = next(item for item in changed_paths if item["path"] == "tracked.txt")
+    assert tracked["classification"] == "project-input"
     assert not any(".ledger/taskledger/data/" in item["path"] for item in changed_paths)
 
 
@@ -212,7 +220,7 @@ def test_can_validate_and_next_action_report_snapshot_mismatch(tmp_path: Path) -
 def test_refresh_implementation_snapshot_unblocks_validation_and_logs_event(
     tmp_path: Path,
 ) -> None:
-    _init_git_project(tmp_path)
+    _init_git_project(tmp_path, project_storage=True)
     task_id = _prepare_implemented_task(tmp_path)
     task = resolve_task(tmp_path, task_id)
     old_run = resolve_run(tmp_path, task.id, task.latest_implementation_run or "")
@@ -235,6 +243,17 @@ def test_refresh_implementation_snapshot_unblocks_validation_and_logs_event(
     assert new_run.workspace_content_hash != old_run.workspace_content_hash
     events = load_events(resolve_v2_paths(tmp_path).events_dir)
     assert any(event.event == "implementation.snapshot.refreshed" for event in events)
+
+    can_payload = _invoke_json(["can", "validate", "--task", task_id], cwd=tmp_path)
+    assert can_payload["result"]["ok"] is True
+    _invoke(["task", "activate", task_id], cwd=tmp_path)
+    next_payload = _invoke_json(["next-action"], cwd=tmp_path)
+    assert next_payload["result"]["action"] == "validate"
+
+    manifest = resolve_v2_paths(tmp_path).ledger_dir / new_run.workspace_snapshot_ref
+    manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_path = manifest.relative_to(tmp_path).as_posix()
+    assert not any(entry["path"] == manifest_path for entry in manifest_data["entries"])
 
     _invoke(["validate", "start", "--task", task_id], cwd=tmp_path)
 

@@ -12,9 +12,9 @@ status: accepted
 audience: null
 scopes: []
 source_refs:
-- git:c1d0982
+  - git:c1d0982
 paths:
-- taskledger/compat/ledgercore.py
+  - taskledger/compat/ledgercore.py
 issues: []
 prs: []
 sources: []
