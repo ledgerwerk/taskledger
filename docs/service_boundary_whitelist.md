@@ -114,7 +114,12 @@ Current sanctioned imports:
 ## Catch-all exception whitelist (`except Exception`)
 
 Current allowed sites are listed with reasons in
-`tests/test_service_boundaries.py` under `EXCEPT_EXCEPTION_WHITELIST`.
+`tests/test_service_boundaries.py` under `EXCEPT_EXCEPTION_WHITELIST`. Each
+catch-all key uses the stable form
+`path::qualified_function:except-N`, where `N` is the ordinal of the
+catch-all handler within that function. It intentionally does not use source
+line numbers, so unrelated edits above an approved handler do not create
+policy churn.
 
 The reviewed resilience sites include storage validation, migration command
 and hook handling, and project-config parsing boundaries listed in the test
@@ -125,3 +130,5 @@ Policy intent:
 - Allow catch-all handling only in doctor/repair and resilience wrappers.
 - Block new catch-all sites unless explicitly reviewed and justified.
 - Require whitelist edits to be intentional and reasoned.
+- Fail when a new handler is added, an approved handler disappears, or a
+  function gains another catch-all handler.

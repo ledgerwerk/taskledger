@@ -120,143 +120,145 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     ),
 }
 EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
-    "taskledger/api/storage.py:125": (
+    "taskledger/api/storage.py::storage_validate:except-1": (
         "Storage validation is best effort when Ledgercore reports unreadable mounts."
     ),
-    "taskledger/api/repair.py:169": (
+    "taskledger/api/repair.py::repair_locks:except-1": (
         "Bulk lock repair reports individual failures while continuing other repairs."
     ),
-    "taskledger/cli.py:273": (
+    "taskledger/cli.py::_register_optional_group:except-1": (
         "Optional command group import fallback reports missing modules gracefully."
     ),
-    "taskledger/cli_migrate.py:510": (
+    "taskledger/cli_migrate.py::migrate_recover_command:except-1": (
         "Migration apply reports unexpected failures as structured CLI errors."
     ),
-    "taskledger/cli_migrate.py:611": (
+    "taskledger/cli_migrate.py::migrate_cleanup_command:except-1": (
         "Migration cleanup reports unexpected failures as structured CLI errors."
     ),
-    "taskledger/cli_ledger.py:122": (
+    "taskledger/cli_ledger.py::ledger_list_command:except-1": (
         "Ledger root fallback degrades gracefully when legacy storage probes fail."
     ),
-    "taskledger/cli_ledger.py:456": (
+    "taskledger/cli_ledger.py::ledger_doctor_command:except-1": (
         "Ledger diagnostics command reports unknown failures as structured CLI errors."
     ),
-    "taskledger/launcher.py:16": (
+    "taskledger/launcher.py::main:except-1": (
         "Launcher wrapper keeps user-facing startup errors consistent."
     ),
-    "taskledger/services/doctor.py:74": (
+    "taskledger/services/doctor.py::_build_scan_context:except-1": (
         "Doctor must continue scanning even when config parsing fails."
     ),
-    "taskledger/services/doctor.py:154": (
+    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-1": (
         "Doctor must continue scanning even when one task metadata read fails."
     ),
-    "taskledger/services/doctor.py:282": (
+    "taskledger/services/doctor.py::inspect_v2_locks:except-1": (
         "Doctor lock inspection degrades gracefully when lock inventory fails."
     ),
-    "taskledger/services/doctor.py:381": (
+    "taskledger/services/doctor.py::inspect_v2_schema:except-1": (
         "Doctor schema inspection degrades gracefully when storage.yaml is unreadable."
     ),
-    "taskledger/services/doctor.py:414": (
+    "taskledger/services/doctor.py::inspect_v2_schema:except-2": (
         "Doctor schema inspection records unreadable storage metadata as an error."
     ),
-    "taskledger/services/doctor.py:475": (
+    "taskledger/services/doctor.py::inspect_v2_indexes:except-1": (
         "Doctor index inspection degrades gracefully when event loading fails."
     ),
-    "taskledger/services/doctor_checks/project_scan.py:27": (
+    "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-1": (
         "Project scan continues past config load errors."
     ),
-    "taskledger/services/doctor_checks/project_scan.py:58": (
+    "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-2": (
         "Project scan continues past project UUID load errors."
     ),
-    "taskledger/services/doctor_checks/project_scan.py:90": (
+    "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-3": (
         "Project scan continues past ledger config load errors."
     ),
-    "taskledger/services/doctor_checks/project_scan.py:105": (
+    "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-4": (
         "Project scan continues past task metadata load errors."
     ),
-    "taskledger/services/doctor_checks/project_scan.py:120": (
+    "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-5": (
         "Project scan continues past run metadata load errors."
     ),
-    "taskledger/services/doctor_checks/task_checks.py:59": (
-        "Task scan continues past broken introduction ref resolution."
-    ),
-    "taskledger/services/tree.py:258": (
+    (
+        "taskledger/services/doctor_checks/task_checks.py::"
+        "_scan_task_integrity_phases:except-1"
+    ): ("Task scan continues past broken introduction ref resolution."),
+    "taskledger/services/tree.py::_build_task_nodes:except-1": (
         "Tree command handles task ref resolution errors by returning empty."
     ),
-    "taskledger/services/lock_inventory.py:214": (
+    "taskledger/services/lock_inventory.py::build_lock_inventory:except-1": (
         "Lock inventory preserves malformed lock read failures for diagnostics."
     ),
-    "taskledger/services/lock_inventory.py:226": (
+    "taskledger/services/lock_inventory.py::build_lock_inventory:except-2": (
         "Lock inventory preserves lock diagnosis failures for diagnostics."
     ),
-    "taskledger/storage/ledger_config.py:96": (
+    "taskledger/storage/ledger_config.py::load_ledger_config:except-1": (
         "Ledger config loader reports parse/runtime differences consistently "
         "across Python versions."
     ),
-    "taskledger/storage/ledger_config.py:180": (
+    "taskledger/storage/ledger_config.py::_load_toml_mapping:except-1": (
         "Ledger config loader reports parse/runtime differences consistently "
         "across Python versions."
     ),
-    "taskledger/storage/migrations.py:280": (
+    "taskledger/storage/migrations.py::_get_task_created_at:except-1": (
         "Migration scanner continues past one malformed legacy entry."
     ),
-    "taskledger/storage/migrations.py:363": (
+    "taskledger/storage/migrations.py::_merge_active_task_files:except-1": (
         "Migration planner emits actionable diagnostics for unknown migration errors."
     ),
-    "taskledger/storage/migrations.py:485": (
+    "taskledger/storage/migrations.py::_scan_file:except-1": (
         "Migration executor records unexpected write failures in audit output."
     ),
-    "taskledger/storage/init.py:258": (
+    "taskledger/storage/init.py::init_canonical_project_state:except-1": (
         "Canonical initialization restores the previous manifest after a failed write."
     ),
-    "taskledger/storage/paths.py:250": (
+    "taskledger/storage/paths.py::project_paths_for_root:except-1": (
         "Path resolution falls back when environment inspection raises errors."
     ),
-    "taskledger/migrations/hooks.py:169": (
+    "taskledger/migrations/hooks.py::finalize_migration:except-1": (
         "Migration index rebuild failures are translated into actionable launch errors."
     ),
-    "taskledger/storage/project_config.py:786": (
+    "taskledger/storage/project_config.py::load_project_config_document:except-1": (
         "Project config parsing normalizes TOML parser differences across runtimes."
     ),
-    "taskledger/storage/project_config.py:960": (
-        "Project config validation translates reference normalization failures."
-    ),
-    "taskledger/storage/sidecar_index.py:277": (
+    (
+        "taskledger/storage/project_config.py::"
+        "_validate_project_config_overrides:except-1"
+    ): ("Project config validation translates reference normalization failures."),
+    "taskledger/storage/sidecar_index.py::rebuild_sidecar_index:except-1": (
         "Sidecar index rebuild skips tasks with read failures and continues."
     ),
-    "taskledger/storage/task_index.py:171": (
+    "taskledger/storage/task_index.py::rebuild_task_index:except-1": (
         "Task index rebuild skips unparseable task files and continues."
     ),
-    "taskledger/storage/task_store.py:447": (
+    "taskledger/storage/task_store.py::save_task:except-1": (
         "save_task write-through index update degrades gracefully on failure."
     ),
-    "taskledger/storage/task_store.py:522": (
+    "taskledger/storage/task_store.py::rewrite_task_refs:except-1": (
         "rewrite_task_refs falls back to plain string replacement when "
         "front matter parsing fails."
     ),
-    "taskledger/storage/task_store.py:615": (
+    "taskledger/storage/task_store.py::save_question:except-1": (
         "save_question write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py:654": (
+    "taskledger/storage/task_store.py::save_run:except-1": (
         "save_run write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py:752": (
+    "taskledger/storage/task_store.py::save_code_review:except-1": (
         "save_code_review write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py:844": (
+    "taskledger/storage/task_store.py::save_todos:except-1": (
         "save_todos write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py:1140": (
+    "taskledger/storage/task_store.py::_task_latest_impl_run:except-1": (
         "_task_latest_impl_run returns None when task resolution fails."
     ),
-    "taskledger/storage/task_store.py:1240": (
+    "taskledger/storage/task_store.py::list_handoffs_with_errors:except-1": (
         "list_handoffs_with_errors tolerates malformed handoff records "
         "and continues scanning."
     ),
-    "taskledger/storage/task_store.py:1282": (
+    "taskledger/storage/task_store.py::save_handoff:except-1": (
         "save_handoff write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py:1311": (
+    "taskledger/storage/task_store.py::save_lock:except-1": (
         "save_lock write-through sidecar index update degrades gracefully."
     ),
 }
@@ -296,6 +298,38 @@ def _python_files() -> list[Path]:
 
 def _relative(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
+
+
+def _except_exception_sites(rel_path: str, tree: ast.AST) -> set[str]:
+    """Return stable semantic identities for catch-all exception handlers."""
+
+    sites: set[str] = set()
+    scope: list[str] = []
+    handler_counts: dict[str, int] = {}
+
+    class _Visitor(ast.NodeVisitor):
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            scope.append(node.name)
+            self.generic_visit(node)
+            scope.pop()
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            scope.append(node.name)
+            self.generic_visit(node)
+            scope.pop()
+
+        visit_AsyncFunctionDef = visit_FunctionDef
+
+        def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+            if isinstance(node.type, ast.Name) and node.type.id == "Exception":
+                qualified_scope = ".".join(scope) or "<module>"
+                ordinal = handler_counts.get(qualified_scope, 0) + 1
+                handler_counts[qualified_scope] = ordinal
+                sites.add(f"{rel_path}::{qualified_scope}:except-{ordinal}")
+            self.generic_visit(node)
+
+    _Visitor().visit(tree)
+    return sites
 
 
 # specmason: req=REQ-0048 ac=AC-0526
@@ -380,11 +414,7 @@ def test_except_exception_sites_are_whitelisted() -> None:
     for path in _python_files():
         rel = _relative(path)
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ExceptHandler):
-                continue
-            if isinstance(node.type, ast.Name) and node.type.id == "Exception":
-                found_sites.add(f"{rel}:{node.lineno}")
+        found_sites.update(_except_exception_sites(rel, tree))
 
     expected_sites = set(EXCEPT_EXCEPTION_WHITELIST)
     unexpected = sorted(found_sites - expected_sites)
@@ -392,6 +422,21 @@ def test_except_exception_sites_are_whitelisted() -> None:
 
     assert not unexpected, f"Unapproved except Exception sites: {unexpected}"
     assert not stale, f"Whitelist sites no longer present: {stale}"
+
+
+def test_except_exception_identity_ignores_source_line_shifts() -> None:
+    original = ast.parse(
+        "def load():\n    try:\n        return 1\n"
+        "    except Exception:\n        return 0\n"
+    )
+    shifted = ast.parse(
+        "\n\n\ndef load():\n    try:\n        return 1\n"
+        "    except Exception:\n        return 0\n"
+    )
+
+    assert _except_exception_sites("example.py", original) == _except_exception_sites(
+        "example.py", shifted
+    )
 
 
 # specmason: req=REQ-0048 ac=AC-0527

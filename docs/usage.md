@@ -68,7 +68,7 @@ registrations and the legacy source remain in place by default. Metadata-only ta
 are backed up and replaced atomically; authoritative split-brain targets are blocked.
 Do not create bindings or copy task directories manually.
 
-## Branch-local task work
+## Legacy branch-local task work (migration only)
 
 When creating a long-lived Git branch, fork the Taskledger ledger pointer so
 active task state, plans, todos, events, indexes, and releases stay isolated
@@ -120,10 +120,9 @@ taskledger validate check --criterion ac-0001 --status pass --evidence "pytest t
 
 Taskledger always provides built-in planning guidance via `taskledger plan guidance`.
 Project-local advisory guidance can extend this with project-specific advice. Configure
-it in the active project config file discovered for your workspace. Newer
-projects usually use `taskledger.toml`. Existing projects may still use
-`.taskledger.toml`; if both files exist, `.taskledger.toml` is discovered
-first.
+it in `.ledger/taskledger/config.toml` for canonical projects. Legacy
+`taskledger.toml` and `.taskledger.toml` files remain readable only during
+explicit migration.
 
 Configure `[prompt_profiles.planning]` in that active config:
 
@@ -200,7 +199,8 @@ harness instructions.
 
 ## Optional worker pipelines
 
-Projects may optionally configure worker pipelines in `taskledger.toml` to
+Projects may optionally configure worker pipelines in
+`.ledger/taskledger/config.toml` to
 guide fresh-context handoffs without changing the underlying task lifecycle.
 Worker pipelines are advisory overlays on the existing planning,
 implementation, and validation lifecycle. They can be three steps, four steps,
@@ -515,7 +515,7 @@ documentation updates, or follow-up implementation work.
 
 ```bash
 taskledger task export task-0030 -o task-0030.llm.md
-taskledger task export task-0030 --no-source-files -o task-0030.records.md
+taskledger task export task-0030 -o task-0030.records.md
 taskledger task export task-0030 --source-file README.md -o task-0030.llm.md
 taskledger --json task export task-0030 -o task-0030.llm.md
 ```
@@ -592,7 +592,7 @@ taskledger implement command -- ruff check --config=.ruff.toml .
 taskledger implement command --allow-failure -- python -c "raise SystemExit(7)"
 ```
 
-When `[agent_logging].enabled = true` in `taskledger.toml`, `taskledger`
+When `[agent_logging].enabled = true` in `.ledger/taskledger/config.toml`, `taskledger`
 records CLI invocations and managed command outputs. Keep logging opt-in because
 stdout/stderr may contain sensitive data. Route task-relevant commands through
 `plan command` and `implement command` so their output is included in task
@@ -643,7 +643,7 @@ taskledger implement restart --summary "Fix failed validation findings."
 ## Machine-readable output
 
 ```bash
-taskledger --json status --full
+taskledger --json info
 taskledger --json task active
 taskledger --json task show
 taskledger --json task show task-0001
@@ -656,11 +656,11 @@ taskledger --json review list --task task-0001
   "ok": true,
   "command": "status",
   "result": {
-    "kind": "taskledger_status",
+    "kind": "taskledger_info",
     "workspace_root": "/workspace",
-    "config_path": "/workspace/taskledger.toml",
-    "taskledger_dir": "/workspace/.taskledger",
-    "project_dir": "/workspace/.taskledger",
+    "config_path": "/workspace/.ledger/taskledger/config.toml",
+    "taskledger_dir": "/workspace/.ledger/taskledger",
+    "project_dir": "/workspace/.ledger/taskledger",
     "counts": {
       "tasks": 1,
       "introductions": 0,
@@ -686,7 +686,8 @@ taskledger init
 taskledger storage where
 taskledger storage path data
 taskledger storage path indexes
-taskledger storage set data user-data --local --move
+taskledger storage set data user-data --scope local
+# Use `taskledger migrate` for data relocation; `storage set` changes topology only.
 ```
 
 Default data is external at `../ledger`; indexes are checkout-specific cache data.
@@ -738,7 +739,7 @@ taskledger-export-{project_slug}-{ledger_ref}-{timestamp}.tar.gz
 taskledger-task-{project_slug}-{ledger_ref}-{task_id}-{timestamp}.tar.gz
 ```
 
-`project_slug` is derived from `project_name` in `taskledger.toml`.
+`project_slug` is derived from `project_name` in `.ledger/taskledger/config.toml`.
 If unset, taskledger falls back to the workspace directory name.
 UUID safety checks still use `project_uuid` only.
 

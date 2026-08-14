@@ -284,7 +284,7 @@ def _canonical_snapshot_exclusion_error(
         "Run `taskledger doctor` before continuing; snapshot refresh is not a "
         "safe recovery for this layout error.",
         code="WORKSPACE_SNAPSHOT_EXCLUSIONS_UNAVAILABLE",
-        exit_code=6,
+        exit_code=4,
         details={
             "workspace_root": str(workspace_root),
             "cause": str(cause),
@@ -527,7 +527,7 @@ def _snapshot_self_reference_error(path: str) -> LaunchError:
     return LaunchError(
         _self_reference_message(path),
         code="WORKSPACE_SNAPSHOT_SELF_REFERENCE",
-        exit_code=6,
+        exit_code=4,
         details={
             "path": path,
             "classification": "taskledger-managed",

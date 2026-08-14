@@ -19,6 +19,7 @@ transfer
 sync
 service_boundary_whitelist
 documentation_freshness
+release_checklist
 changelog
 ```
 

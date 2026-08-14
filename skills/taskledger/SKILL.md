@@ -144,13 +144,14 @@ If any `taskledger ...` command fails with a Python traceback before taskledger 
    - task-resource commands: `taskledger task show TASK_REF`, `taskledger task cancel TASK_REF --reason "..."`, `taskledger task uncancel TASK_REF --reason "..."`
    - workflow commands: `taskledger plan start --task TASK_REF`, `taskledger implement start --task TASK_REF`, `taskledger validate start --task TASK_REF`
 
-## Branch-scoped ledger protocol
+## Legacy branch-scoped ledger protocol (migration only)
 
-- `.taskledger/` is ignored local state. `taskledger.toml` is checked in and
+- For legacy projects without `.ledger/ledger.toml`, `.taskledger/` is ignored
+  local state and `taskledger.toml` is checked in and
   stores the current `ledger_ref` and next task number.
-- After creating a long-lived Git branch, run `taskledger ledger fork REF` and
+- After creating a long-lived Git branch in such a legacy project, run `taskledger ledger fork REF` and
   commit the `taskledger.toml` change with the branch work.
-- Default commands read only the current ledger under
+- Default legacy commands read only the current ledger under
   `.taskledger/ledgers/<ledger_ref>/`.
 - Duplicate logical task IDs in different ledgers are expected. Use
   `taskledger ledger adopt --from REF TASK_REF` when branch-local task history

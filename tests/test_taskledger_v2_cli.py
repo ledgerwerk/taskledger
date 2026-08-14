@@ -1848,7 +1848,7 @@ def test_plan_approval_blocks_open_questions_with_json_error(tmp_path: Path) -> 
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
     assert payload["command"] == "plan.approve"
-    assert payload["error"]["code"] == "WORKFLOW_REJECTION"
+    assert payload["error"]["code"] == "UNAVAILABLE"
 
 
 # specmason: req=REQ-0064 ac=AC-0689

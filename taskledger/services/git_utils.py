@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -59,12 +61,20 @@ def run_git(
     root: Path,
     *args: str,
     check: bool = True,
+    env: Mapping[str, str] | None = None,
+    suppress_taskledger_hooks: bool = False,
 ) -> subprocess.CompletedProcess[str]:
+    command_env = dict(env) if env is not None else None
+    if suppress_taskledger_hooks:
+        if command_env is None:
+            command_env = dict(os.environ)
+        command_env["TASKLEDGER_GIT_HOOK"] = "1"
     result = subprocess.run(
         ["git", "-C", root.as_posix(), *args],
         capture_output=True,
         text=True,
         check=False,
+        env=command_env,
     )
     if check and result.returncode != 0:
         stderr = result.stderr.strip() or result.stdout.strip()

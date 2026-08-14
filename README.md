@@ -100,8 +100,9 @@ taskledger validate check --criterion ac-0001 --status pass --evidence "pytest t
 ## Planning guidance profiles
 
 Taskledger supports project-local advisory planning guidance under
-`[prompt_profiles.planning]` in the active project config file (`taskledger.toml`
-or `.taskledger.toml` when legacy config is still present).
+`[prompt_profiles.planning]` in the active project config file
+(`.ledger/taskledger/config.toml`). Legacy `taskledger.toml` and
+`.taskledger.toml` projects remain readable only for explicit migration.
 
 ```toml
 [prompt_profiles.planning]
@@ -141,7 +142,8 @@ taskledger config set prompt_profiles.planning.question_policy always_before_pla
 
 ## Optional worker pipelines
 
-Projects may optionally configure worker pipelines in `taskledger.toml` to guide
+Projects may optionally configure worker pipelines in
+`.ledger/taskledger/config.toml` to guide
 fresh-context handoffs. Worker pipelines are advisory overlays on the existing
 planning, implementation, and validation lifecycle. They can be three steps,
 four steps, five steps, or custom. When no worker pipeline is configured, the
@@ -257,7 +259,7 @@ taskledger --root /path/to/repo init
 
 `init` writes a schema-3 `.ledger/ledger.toml` manifest and
 `.ledger/taskledger/config.toml`. Default data is external at `../ledger`; indexes
-are cache storage. Use `storage set data user-data --local` for a local override.
+are cache storage. Use `storage set data user-data --scope local` for a local override.
 
 Canonical discovery is fail-closed. Once `.ledger/ledger.toml` is found,
 Taskledger never falls back to a root `taskledger.toml`, `.taskledger.toml`, or
@@ -483,8 +485,11 @@ fresh-context transfer.
 
 ## Legacy storage layout
 
-`taskledger` keeps project-local configuration in the workspace root and durable
-records under the configured storage root. The checked-in `taskledger.toml`
+### Legacy branch-scoped layout (migration only)
+
+The following layout applies only to legacy projects without a canonical
+`.ledger/ledger.toml` manifest. New projects use the canonical Ledgercore
+layout described below. In legacy projects, checked-in `taskledger.toml`
 stores project identity plus the current branch-scoped ledger pointer and next
 task number. Operational task state remains ignored under
 `.taskledger/ledgers/<ledger_ref>/`:
@@ -598,7 +603,7 @@ Syncthing/rclone caveats.
 Use `--json` for machine-readable payloads:
 
 ```bash
-taskledger --json status --full
+taskledger --json info
 taskledger --json task active
 taskledger --json task show
 taskledger --json task show task-0001
@@ -610,13 +615,13 @@ Example status payload:
 ```json
 {
   "ok": true,
-  "command": "status",
+  "command": "info",
   "result": {
     "kind": "taskledger_status",
     "workspace_root": "/home/me/src/project-a",
-    "config_path": "/home/me/src/project-a/taskledger.toml",
-    "taskledger_dir": "/home/me/src/project-a/.taskledger",
-    "project_dir": "/home/me/src/project-a/.taskledger",
+    "config_path": "/home/me/src/project-a/.ledger/taskledger/config.toml",
+    "taskledger_dir": "/home/me/src/project-a/.ledger/taskledger",
+    "project_dir": "/home/me/src/project-a/.ledger/taskledger",
     "counts": {
       "tasks": 1,
       "introductions": 0,
@@ -640,7 +645,7 @@ Action/event logging is **enabled by default**. Taskledger writes immutable
 todo completion, validation checks, etc.) so `taskledger monitor` shows recent
 activity without extra configuration.
 
-To disable new action events, set in `taskledger.toml`:
+To disable new action events, set in `.ledger/taskledger/config.toml`:
 
 ```toml
 [event_logging]
@@ -746,7 +751,8 @@ taskledger-export-{project_slug}-{ledger_ref}-{timestamp}.tar.gz
 taskledger-task-{project_slug}-{ledger_ref}-{task_id}-{timestamp}.tar.gz
 ```
 
-`project_slug` is derived from `project_name` in `taskledger.toml`. If
+`project_slug` is derived from `project_name` in
+`.ledger/taskledger/config.toml`. If
 `project_name` is missing, taskledger falls back to the workspace directory name.
 Import safety still relies on `project_uuid`, not the name/slug.
 

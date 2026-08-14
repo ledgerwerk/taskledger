@@ -4,8 +4,12 @@ skill files against the actual CLI command inventory."""
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
+from typer.main import get_command
+
+from taskledger.cli import app
 from taskledger.command_inventory import COMMAND_METADATA
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -87,6 +91,7 @@ _FORBIDDEN = [
 
 
 _COMMAND_STARTERS = {tok.split()[0] for tok in _VALID_COMMANDS} | _SINGLE_TOKEN_COMMANDS
+_CLI_COMMAND = get_command(app)
 
 
 def _extract_command_tokens(line: str) -> str | None:
@@ -112,8 +117,6 @@ def _extract_command_tokens(line: str) -> str | None:
     if m2 is None:
         return first
     two_token = m2.group(1).strip()
-    if two_token in _VALID_COMMANDS:
-        return two_token
     # Try three tokens for nested sub-groups (e.g. `implement snapshot refresh`)
     m3 = re.search(
         r"taskledger(?:\s+--\S+)*\s+([a-z][\w-]*\s+[a-z][\w-]*\s+[a-z][\w-]*)",
@@ -123,7 +126,37 @@ def _extract_command_tokens(line: str) -> str | None:
         three_token = m3.group(1).strip()
         if three_token in _VALID_COMMANDS:
             return three_token
+    if two_token in _VALID_COMMANDS:
+        return two_token
     return two_token
+
+
+def _command_option_names(command_key: str) -> set[str]:
+    """Collect root, group, and leaf option names for a command path."""
+
+    command = _CLI_COMMAND
+    options = {option for param in command.params for option in param.opts}
+    for part in command_key.split():
+        commands = getattr(command, "commands", {})
+        command = commands[part]
+        options.update(option for param in command.params for option in param.opts)
+    return options | {"--help", "-h"}
+
+
+def _unknown_options(line: str, command_key: str) -> list[str]:
+    """Return options not registered by the resolved CLI command path."""
+
+    allowed = _command_option_names(command_key)
+    unknown: list[str] = []
+    for token in shlex.split(line, comments=True):
+        if token == "--":
+            break
+        if not token.startswith("-") or token == "-":
+            continue
+        option = token.split("=", 1)[0]
+        if option not in allowed and option not in unknown:
+            unknown.append(option)
+    return unknown
 
 
 # specmason: req=REQ-0010 ac=AC-0103
@@ -163,12 +196,24 @@ def test_command_examples_in_docs_use_valid_commands() -> None:
             if tokens is None:
                 continue
             if tokens in _VALID_COMMANDS:
+                unknown = _unknown_options(stripped, tokens)
+                if unknown:
+                    failures.append(
+                        f"{path}:{i}: unknown option(s) {unknown!r} for "
+                        f"'{tokens}' in: {stripped[:120]}"
+                    )
                 continue
             # Also check two-token form with hyphenated subcommand
             parts = tokens.split(None, 1)
             if len(parts) == 2:
                 two_token = f"{parts[0]} {parts[1]}"
                 if two_token in _VALID_COMMANDS:
+                    unknown = _unknown_options(stripped, two_token)
+                    if unknown:
+                        failures.append(
+                            f"{path}:{i}: unknown option(s) {unknown!r} for "
+                            f"'{two_token}' in: {stripped[:120]}"
+                        )
                     continue
                 # Try the three-token form for nested sub-groups.
                 m3 = re.search(
@@ -178,12 +223,32 @@ def test_command_examples_in_docs_use_valid_commands() -> None:
                 if m3 is not None:
                     three_token = m3.group(1).strip()
                     if three_token in _VALID_COMMANDS:
+                        unknown = _unknown_options(stripped, three_token)
+                        if unknown:
+                            failures.append(
+                                f"{path}:{i}: unknown option(s) {unknown!r} for "
+                                f"'{three_token}' in: {stripped[:120]}"
+                            )
                         continue
             failures.append(
                 f"{path}:{i}: unknown command '{tokens}' in: {stripped[:120]}"
             )
 
     assert not failures, "\n".join(failures)
+
+
+def test_command_examples_reject_unregistered_options() -> None:
+    assert _unknown_options(
+        "taskledger storage set data user-data --scope local --move",
+        "storage set",
+    ) == ["--move"]
+    assert (
+        _unknown_options(
+            "taskledger storage set data user-data --scope local",
+            "storage set",
+        )
+        == []
+    )
 
 
 # specmason: req=REQ-0010 ac=AC-0104

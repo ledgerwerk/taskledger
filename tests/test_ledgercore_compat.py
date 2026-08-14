@@ -29,14 +29,13 @@ class TestVersionCheck:
     """Test minimum version validation."""
 
     def test_parse_version_valid(self) -> None:
-        assert _parse_version("0.6.0") == (0, 6, 0)
-        assert _parse_version("1.2.3") == (1, 2, 3)
+        assert str(_parse_version("0.6.0")) == "0.6.0"
+        assert str(_parse_version("1.2.3")) == "1.2.3"
+        assert str(_parse_version("0.6.1+local")) == "0.6.1+local"
 
     def test_parse_version_invalid(self) -> None:
         with pytest.raises(ValueError, match="Invalid version"):
             _parse_version("invalid")
-        with pytest.raises(ValueError, match="Invalid version"):
-            _parse_version("0.6")
 
     def test_require_ledgercore_060_succeeds(self) -> None:
         """The compatibility alias accepts the supported boundary."""
@@ -111,8 +110,13 @@ class TestVersionCheck:
         ("version", "compatible"),
         [
             ("0.6.0", False),
+            ("0.6.1.dev1", False),
+            ("0.6.1rc1", False),
             ("0.6.1", True),
+            ("0.6.1.post1", True),
+            ("0.6.1+local", True),
             ("0.6.9", True),
+            ("0.7.0.dev1", False),
             ("0.7.0", False),
         ],
     )

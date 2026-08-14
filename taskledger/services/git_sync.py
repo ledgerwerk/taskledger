@@ -956,15 +956,45 @@ def _ensure_git_repo(
                     f"{repo_path}. Expected git repo."
                 )
             _run_git(repo_path, "init")
-    _ensure_branch(repo_path, branch)
+        _ensure_branch(repo_path, branch)
 
 
 def _ensure_branch(repo_path: Path, branch: str) -> None:
-    probe = _run_git(repo_path, "rev-parse", "--verify", branch, check=False)
-    if probe.returncode == 0:
-        _run_git(repo_path, "checkout", branch)
+    current = _run_git(
+        repo_path,
+        "symbolic-ref",
+        "--quiet",
+        "--short",
+        "HEAD",
+        check=False,
+        suppress_taskledger_hooks=True,
+    )
+    if current.returncode == 0 and current.stdout.strip() == branch:
         return
-    _run_git(repo_path, "checkout", "-b", branch)
+
+    probe = _run_git(
+        repo_path,
+        "rev-parse",
+        "--verify",
+        branch,
+        check=False,
+        suppress_taskledger_hooks=True,
+    )
+    if probe.returncode == 0:
+        _run_git(
+            repo_path,
+            "checkout",
+            branch,
+            suppress_taskledger_hooks=True,
+        )
+        return
+    _run_git(
+        repo_path,
+        "checkout",
+        "-b",
+        branch,
+        suppress_taskledger_hooks=True,
+    )
 
 
 def _write_sync_layout(repo_path: Path) -> None:

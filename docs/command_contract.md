@@ -257,9 +257,10 @@ Taskledger does not provide changelog entry, changelog context, or
 [docs/changelog.md](changelog.md) build commands; those belong to the separate `releaseledger`
 tool. Load both skills when cross-ledger release notes need task context.
 
-## Ledger commands
+## Legacy branch-scoped ledger commands (migration only)
 
-Branch-scoped ledgers isolate ignored local task state by the checked-in
+In legacy projects without a canonical manifest, branch-scoped ledgers isolate
+ignored local task state by the checked-in
 `ledger_ref` stored in `taskledger.toml`:
 
 ```bash
@@ -305,7 +306,7 @@ Rules:
 - `storage where` is read-only and reports the resolved workspace root,
   config path, `taskledger_dir`, project identity, ledger ref, Git detection,
   and active lock count.
-- `storage move` updates `taskledger.toml` atomically after the target has
+- In legacy projects, `storage move` updates `taskledger.toml` atomically after the target has
   been copied or explicitly adopted.
 - `sync preflight` performs only local checks. It must not perform network
   push/pull operations.

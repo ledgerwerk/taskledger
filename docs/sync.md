@@ -22,7 +22,8 @@ taskledger init
 taskledger storage where
 taskledger storage path data
 taskledger storage path indexes
-taskledger storage set data user-data --local --move
+taskledger storage set data user-data --scope local
+# Use `taskledger migrate` for data relocation; `storage set` changes topology only.
 ```
 
 The project UUID and Ledgercore binding keep shared projects isolated.
@@ -49,7 +50,7 @@ git clone <source-repo-url> project-a
 git clone <private-state-repo-url> taskledger-state
 
 cd project-a
-taskledger status --full
+taskledger info
 taskledger doctor
 taskledger task list
 ```

@@ -8,6 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from taskledger.cli import app
+from taskledger.services.git_utils import run_git
 
 pytestmark = [
     pytest.mark.cli,
@@ -506,3 +507,64 @@ def test_sync_git_hooks_install_rejects_cross_project_managed_hook(
 
     assert conflict_result.exit_code != 0
     assert "multi-project-safe" in _output(conflict_result)
+
+
+def test_sync_git_internal_branch_setup_suppresses_taskledger_hook(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "state-repo"
+    _git(tmp_path, "init", "-b", "main", str(repo))
+    hook = repo / ".git" / "hooks" / "post-checkout"
+    marker = tmp_path / "hook-ran"
+    hook.write_text(
+        "#!/bin/sh\n"
+        'if [ "${TASKLEDGER_GIT_HOOK:-}" = "1" ]; then exit 0; fi\n'
+        f"touch {marker}\n",
+        encoding="utf-8",
+    )
+    hook.chmod(0o755)
+    (repo / "README.md").write_text("state\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _git(
+        repo,
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "user.name=Test",
+        "commit",
+        "-m",
+        "init",
+    )
+    _git(repo, "branch", "other")
+
+    from taskledger.services.git_sync import _ensure_branch
+
+    _ensure_branch(repo, "other")
+
+    assert not marker.exists()
+
+
+def test_run_git_preserves_non_taskledger_hook_behavior(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _git(tmp_path, "init", "-b", "main", str(repo))
+    hook = repo / ".git" / "hooks" / "post-checkout"
+    marker = tmp_path / "hook-ran"
+    hook.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    hook.chmod(0o755)
+    (repo / "README.md").write_text("state\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _git(
+        repo,
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "user.name=Test",
+        "commit",
+        "-m",
+        "init",
+    )
+    _git(repo, "branch", "other")
+
+    run_git(repo, "checkout", "other")
+
+    assert marker.exists()

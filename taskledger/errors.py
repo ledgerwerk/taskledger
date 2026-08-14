@@ -64,9 +64,9 @@ def error_exit_code_for_code(code: str) -> int | None:
     if code == "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED":
         return 2
     if code in STORAGE_ERROR_CODES:
-        return 6
+        return 4
     if code == "TASKLEDGER_PROJECT_NOT_FOUND":
-        return 5
+        return 3
     return None
 
 

@@ -226,7 +226,7 @@ def test_json_failure_envelope_includes_structured_error(tmp_path: Path) -> None
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
     assert payload["command"] == "plan.approve"
-    assert payload["error"]["code"] == "WORKFLOW_REJECTION"
+    assert payload["error"]["code"] == "UNAVAILABLE"
     assert payload["error"]["message"]
     assert payload["error"]["exit_code"] == 3
 

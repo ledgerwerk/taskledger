@@ -623,11 +623,11 @@ def _exit_code_from_message(message: str, default: int) -> int:
     """Map exit codes to family contract (0-5 only)."""
     lowered = message.lower()
     if "not found" in lowered or lowered.startswith("no plans found"):
-        return 5
+        return 3
     if "lock already exists" in lowered:
         return 4  # CONFLICT
     if "invalid yaml" in lowered or "invalid lock file" in lowered:
-        return 6
+        return 4  # CONFLICT: storage data cannot be used safely
     return default
 
 
@@ -648,11 +648,9 @@ def _error_code_from_exit_code(exit_code: int) -> str | None:
     """Map exit codes to error codes. Family contract: 0-5 only."""
     return {
         2: "INVALID_INPUT",
-        3: "WORKFLOW_REJECTION",
+        3: "UNAVAILABLE",
         4: "LOCK_CONFLICT",
-        5: "NOT_FOUND",
-        6: "STORAGE_ERROR",
-        7: "VALIDATION_FAILED",
+        5: "EXTERNAL_FAILURE",
     }.get(exit_code)
 
 
@@ -660,11 +658,12 @@ def _default_remediation(exit_code: int) -> list[str]:
     """Default remediation messages by exit code."""
     return {
         2: ["Review the invalid input or command usage and retry."],
-        3: ["Move the task through the required workflow gate before retrying."],
+        3: [
+            "Check the requested resource or move through the required workflow "
+            "gate before retrying."
+        ],
         4: ["Inspect the active lock or break it explicitly if it is stale."],
-        5: ["Check the task or record reference and retry."],
-        6: ["Run `taskledger doctor` and repair the ledger state before retrying."],
-        7: ["Review the recorded validation results and resolve the failing checks."],
+        5: ["Inspect the external command or service failure and retry."],
     }.get(exit_code, [])
 
 

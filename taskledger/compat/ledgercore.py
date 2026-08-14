@@ -22,11 +22,13 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
 
+from packaging.specifiers import SpecifierSet
+from packaging.version import InvalidVersion, Version
+
 # --- Version check ---
 
 LEDGERCORE_REQUIREMENT = ">=0.6.1,<0.7.0"
-_LEDGERCORE_MIN_VERSION = (0, 6, 1)
-_LEDGERCORE_MAX_VERSION_EXCL = (0, 7, 0)
+_LEDGERCORE_SPECIFIER = SpecifierSet(LEDGERCORE_REQUIREMENT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,15 +41,18 @@ class LedgercoreVersionInfo:
     version_mismatch: bool
 
 
-def _parse_version(version_str: str) -> tuple[int, int, int]:
-    """Parse a version string like '0.6.0' into a tuple."""
-    parts = version_str.strip().split(".")
-    if len(parts) < 3:
-        raise ValueError(f"Invalid version string: {version_str!r}")
+def _parse_version(version_str: str) -> Version:
+    """Parse a PEP 440 version for strict compatibility comparisons."""
     try:
-        return (int(parts[0]), int(parts[1]), int(parts[2]))
-    except ValueError:
+        return Version(version_str.strip())
+    except InvalidVersion:
         raise ValueError(f"Invalid version string: {version_str!r}") from None
+
+
+def _is_supported_version(version: Version) -> bool:
+    """Apply PEP 440 specifier semantics to the declared version range."""
+
+    return version in _LEDGERCORE_SPECIFIER
 
 
 def inspect_ledgercore_version() -> LedgercoreVersionInfo:
@@ -103,7 +108,7 @@ def ledgercore_is_compatible(
         version = _parse_version(inspected.module_version)
     except ValueError:
         return False
-    return _LEDGERCORE_MIN_VERSION <= version < _LEDGERCORE_MAX_VERSION_EXCL
+    return _is_supported_version(version)
 
 
 def require_supported_ledgercore() -> None:
@@ -144,7 +149,7 @@ def require_supported_ledgercore() -> None:
             f"Invalid Ledgercore version {info.module_version!r}. "
             f"Taskledger requires ledgercore{LEDGERCORE_REQUIREMENT}."
         ) from exc
-    if not (_LEDGERCORE_MIN_VERSION <= version < _LEDGERCORE_MAX_VERSION_EXCL):
+    if not _is_supported_version(version):
         raise RuntimeError(
             f"Taskledger requires ledgercore{LEDGERCORE_REQUIREMENT}, "
             f"but found {info.module_version}."

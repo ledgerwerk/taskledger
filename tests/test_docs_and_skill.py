@@ -95,7 +95,7 @@ def test_readme_mentions_root_alias_and_json_envelope() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "--root" in readme
     assert '"ok": true' in readme
-    assert '"command": "status"' in readme
+    assert '"command": "info"' in readme
 
 
 # specmason: req=REQ-0016 ac=AC-0168
@@ -367,6 +367,15 @@ def test_command_examples_reference_registered_commands() -> None:
             if command is None:
                 continue
             assert command in COMMAND_METADATA, f"{path}:{line_number}: {command_line}"
+
+
+def test_command_examples_use_registered_options() -> None:
+    from tests.test_command_example_linter import _unknown_options
+
+    assert _unknown_options(
+        "taskledger storage set data user-data --scope local --move",
+        "storage set",
+    ) == ["--move"]
 
 
 def _taskledger_example_lines(path: Path) -> list[tuple[int, str]]:

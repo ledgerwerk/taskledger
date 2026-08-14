@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=69", "wheel", "setuptools_scm[toml]>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -38,6 +38,7 @@ dependencies = [
     "typer",
     "click",
     "PyYAML",
+    "packaging>=23,<26",
     "ledgercore>=0.6.1,<0.7.0",
     "tomlkit>=0.13,<1",
     "filelock>=3.16,<4",

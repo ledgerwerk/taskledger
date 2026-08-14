@@ -18,7 +18,7 @@ Run this once per workspace:
 ```bash
 taskledger init
 taskledger doctor
-taskledger status --full
+taskledger info
 ```
 
 `init` writes a schema-3 `.ledger/ledger.toml` registration and
@@ -287,7 +287,7 @@ taskledger task close --note "Fixed parser delimiter handling and validated pars
 taskledger release tag 0.4.2 --at-task parser-fix --note "0.4.2 released."
 taskledger task show
 taskledger task show parser-fix
-taskledger status --full
+taskledger info
 taskledger doctor
 ```
 
