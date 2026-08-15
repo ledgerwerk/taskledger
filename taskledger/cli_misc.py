@@ -1210,7 +1210,11 @@ def emit_can_command(ctx: typer.Context, task_ref: str | None, action: str) -> N
 
 def emit_reindex_command(ctx: typer.Context) -> None:
     state = cli_state_from_context(ctx)
-    payload = reindex(state.cwd)
+    try:
+        payload = reindex(state.cwd)
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
     emit_payload(ctx, payload, human="reindexed v2 task state")
 
 

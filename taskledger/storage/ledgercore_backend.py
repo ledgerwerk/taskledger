@@ -40,7 +40,11 @@ from ledgercore.manifest import (
     LedgerRegistration,
     MountDefinition,
 )
-from ledgercore.storage_binding import StorageBindingError, read_storage_binding
+from ledgercore.storage_binding import (
+    StorageBindingError,
+    read_storage_binding,
+    validate_storage_binding,
+)
 
 TOOL_NAME = "taskledger"
 DATA_MOUNT = "data"
@@ -302,6 +306,11 @@ def initialize_taskledger_bindings(
     return results
 
 
+def validate_taskledger_mount(mount: Any, *, allow_missing: bool = False) -> Any:
+    """Validate one resolved mount through the Ledgercore adapter boundary."""
+    return validate_storage_binding(mount, allow_missing=allow_missing)
+
+
 def initialize_taskledger_external_store(layout: Any) -> bool:
     """Initialize an external root only during explicit Taskledger init."""
     mount = layout.mounts[DATA_MOUNT]
@@ -453,6 +462,7 @@ __all__ = [
     "ensure_taskledger_ledger_registration",
     "execute_taskledger_layout_migration",
     "initialize_taskledger_bindings",
+    "validate_taskledger_mount",
     "load_taskledger_ledger_layout",
     "locate_taskledger_project",
     "initialize_taskledger_external_store",

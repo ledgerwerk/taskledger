@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -135,6 +136,7 @@ class TaskledgerProjectContext:
     legacy_locator: ProjectPaths | None
     loaded_project: Any | None = None
     storage_validation: Any | None = None
+    cache_recovery: Any | None = None
     local_overrides_present: bool = False
     # Compatibility fields are derived values, not configuration ownership.
     store_root: Path | None = None
@@ -388,9 +390,28 @@ def require_mutable_project_context(
     """Require a real initialized project before any command may write state."""
     context = load_project_context(
         start,
-        require_initialized=True,
+        require_initialized=False,
         allow_legacy=allow_legacy,
     )
+    cache_recovery = None
+    if context.mode == "canonical":
+        from taskledger.storage.index_cache import ensure_indexes_cache_for_mutation
+
+        cache_recovery = ensure_indexes_cache_for_mutation(context)
+        context = load_project_context(
+            start,
+            require_initialized=True,
+            allow_legacy=allow_legacy,
+        )
+        if cache_recovery is not None:
+            from dataclasses import replace
+
+            context = replace(context, cache_recovery=cache_recovery)
+            if cache_recovery.quarantine_path is not None:
+                logging.getLogger(__name__).warning(
+                    "Taskledger quarantined the unbound indexes cache at %s",
+                    cache_recovery.quarantine_path,
+                )
     if context.mode == "legacy":
         required = (
             context.paths.project_dir,

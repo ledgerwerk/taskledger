@@ -664,14 +664,23 @@ taskledger ledger doctor
 ```
 
 Checkout-scoped indexes under the resolved cache mount are optional derived
-caches or registries. Task, plan, and run commands must continue to work from
-canonical Markdown/YAML records even when cache files are absent. The remaining
-derived caches may be plain JSON arrays with no version metadata and can be
-rebuilt with:
+caches or registries. Read-only commands continue to work from canonical
+Markdown/YAML records and do not initialize a missing cache. Before a canonical
+mutation, Taskledger initializes a missing or empty cache binding and rebuilds
+the derived indexes. A non-empty cache without its binding marker is atomically
+quarantined beside the cache and rebuilt from canonical records. Conflicting or
+invalid markers, symlinks, and non-directory cache paths are not adopted
+automatically. The remaining derived caches may be plain JSON arrays with no
+version metadata and can be rebuilt explicitly with:
 
 ```bash
 taskledger reindex
 ```
+
+`taskledger repair index` uses the same recovery path and reports any quarantine
+location. The `indexes` mount is fixed to cache storage, so
+`taskledger storage set indexes cache` is an idempotent topology request;
+non-cache indexes storage is rejected directly.
 
 A newer storage version than the installed taskledger supports is rejected with
 a clear error.

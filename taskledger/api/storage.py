@@ -148,6 +148,23 @@ def storage_set(
 ) -> dict[str, object]:
     if mode not in {"copy", "move"}:
         raise LaunchError("mode must be copy or move")
+    if mount == "indexes":
+        if storage != "cache":
+            raise LaunchError(
+                "TASKLEDGER_STORAGE_BINDING_INVALID: The Taskledger indexes mount "
+                "is fixed to cache storage.",
+                details={"mount": mount, "requested_storage": storage},
+                remediation=["Run `taskledger repair index` to rebuild the cache."],
+            )
+        report = build_storage_location_report(
+            workspace_root, require_initialized=False
+        ).to_dict()
+        report["unchanged"] = True
+        report["message"] = "Indexes already use cache storage."
+        report["remediation"] = (
+            "Run `taskledger repair index` to rebuild the indexes cache."
+        )
+        return report
     if storage == "external" and not external_root:
         raise LaunchError("external storage requires --root")
     migrate_taskledger_mount(

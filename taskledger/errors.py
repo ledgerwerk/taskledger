@@ -36,6 +36,7 @@ STORAGE_ERROR_CODES = frozenset(
         "TASKLEDGER_LEDGER_SCHEMA_MIGRATION_REQUIRED",
         "TASKLEDGER_REGISTRATION_INVALID",
         "TASKLEDGER_STORAGE_BINDING_INVALID",
+        "TASKLEDGER_CACHE_RECOVERY_FAILED",
         "TASKLEDGER_EXTERNAL_STORE_INVALID",
         "TASKLEDGER_STORAGE_MIGRATION_ACTIVE_LOCKS",
         "TASKLEDGER_STORAGE_MIGRATION_BLOCKED",
@@ -273,6 +274,12 @@ class StorageCorruption(LaunchError):
     code = "STORAGE_CORRUPTION"
     exit_code = 4  # CONFLICT (storage corruption)
     error_type = "StorageCorruption"
+
+
+class CacheRecoveryFailed(LaunchError):
+    code = "TASKLEDGER_CACHE_RECOVERY_FAILED"
+    exit_code = 4
+    error_type = "CacheRecoveryFailed"
 
 
 class ActiveTaskNotFound(StorageCorruption):

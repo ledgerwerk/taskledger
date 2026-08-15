@@ -1564,12 +1564,18 @@ def task_dossier(
 
 
 def reindex(workspace_root: Path) -> dict[str, object]:
+    from taskledger.storage.project_context import require_mutable_project_context
+
+    context = require_mutable_project_context(workspace_root)
     paths = ensure_v2_layout(workspace_root)
     counts = rebuild_v2_indexes(paths)
     _append_event(
         workspace_root, "*", "repair.index", dict(cast(dict[str, object], counts))
     )
-    return {"kind": "taskledger_reindex", "counts": counts}
+    payload: dict[str, object] = {"kind": "taskledger_reindex", "counts": counts}
+    if context.cache_recovery is not None:
+        payload["cache_recovery"] = context.cache_recovery.to_dict()
+    return payload
 
 
 def repair_task_record(*args, **kwargs):  # type: ignore[no-untyped-def]

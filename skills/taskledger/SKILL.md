@@ -459,7 +459,13 @@ Lock recovery decision tree:
 - If doctor reports a running implementation run with no matching lock and the task is still resumable, run `taskledger implement resume --task TASK --run RUN --reason "Reacquire implementation lock."`.
 - Never use repair to bypass approval, validation, or active implementation locks.
 - If validation fails, record the failure and return to implementation or replanning.
-- If indexes are stale, run `taskledger repair index`; `taskledger reindex` is a compatibility alias.
+- Missing or empty checkout-local indexes caches are bootstrapped automatically
+  before canonical mutations and rebuilt from authoritative records. A
+  non-empty unbound cache is quarantined rather than deleted; conflicting
+  markers are not auto-adopted. Read-only commands do not bootstrap the cache.
+- If indexes are stale or an unusual cache-binding problem needs explicit
+  repair, run `taskledger repair index`; `taskledger reindex` is a compatibility
+  alias. Do not tell users to manually create `.ledger-project.toml`.
 - If a task is truly cancelled and the user wants to continue, use `taskledger task uncancel --task TASK_REF --reason "..." [--to STAGE]` to restore a safe durable stage before re-entering an active stage.
 - If dependencies must be bypassed, only a user waiver may unblock implementation.
 
