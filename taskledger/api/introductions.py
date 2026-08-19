@@ -3,7 +3,7 @@ from taskledger.storage.task_store import list_introductions, resolve_introducti
 
 __all__ = [
     "create_introduction",
+    "link_introduction",
     "list_introductions",
     "resolve_introduction",
-    "link_introduction",
 ]

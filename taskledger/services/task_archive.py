@@ -179,9 +179,11 @@ def unarchive_task(
     extra_notes: tuple[str, ...] = ()
     if stale_validation_blocked:
         extra_notes = (
-            "Unarchived from non-terminal state "
-            f"{task.status_stage}; "
-            "old implementation evidence must not be validated directly.",
+            (
+                "Unarchived from non-terminal state "
+                f"{task.status_stage}; "
+                "old implementation evidence must not be validated directly."
+            ),
         )
     updated = replace(
         task,

@@ -331,7 +331,7 @@ class TestStaticGuards:
             Path(__file__).parent.parent / "taskledger" / "cli_misc.py"
         ).read_text()
         # The pattern we want to avoid: typer.echo(render_json(payload))
-        assert "typer.echo(\n            render_json(" not in content or True
+        assert True
         # More specific: check for the old pattern of dumping full task dicts
         lines = content.splitlines()
         for i, line in enumerate(lines):

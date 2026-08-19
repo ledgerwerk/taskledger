@@ -137,7 +137,7 @@ def _next_todo_or_finish_command(progress: dict[str, object]) -> str:
     return "taskledger implement finish --summary SUMMARY"
 
 
-def register_todo_v2_commands(app: typer.Typer) -> None:  # noqa: C901
+def register_todo_v2_commands(app: typer.Typer) -> None:
     @app.command("add")
     def add_command(
         ctx: typer.Context,

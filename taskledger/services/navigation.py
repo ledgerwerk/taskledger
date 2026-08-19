@@ -627,8 +627,10 @@ def _inactive_status_next_action(
             )
             return (
                 "validate-reconcile",
-                "Implementation is finished, but validation is blocked by a "
-                "workspace snapshot mismatch.",
+                (
+                    "Implementation is finished, but validation is blocked by a "
+                    "workspace snapshot mismatch."
+                ),
                 next_item,
                 blockers,
                 progress,

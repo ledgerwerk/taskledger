@@ -75,11 +75,10 @@ def _safe_recovery_candidate(context: TaskledgerProjectContext) -> bool:
     if index_result is not None and index_result.path != root:
         return False
     report = context.storage_validation
-    if report is not None and any(
-        not result.valid and result.path != root for result in report.results
-    ):
-        return False
-    return True
+    return not (
+        report is not None
+        and any(not result.valid and result.path != root for result in report.results)
+    )
 
 
 def _expected_index_files_missing(context: TaskledgerProjectContext) -> bool:
@@ -169,10 +168,9 @@ def ensure_indexes_cache_for_mutation(
 
         quarantine: Path | None = None
         try:
-            if root.exists():
-                if any(root.iterdir()):
-                    quarantine = _unique_quarantine_path(root)
-                    root.rename(quarantine)
+            if root.exists() and any(root.iterdir()):
+                quarantine = _unique_quarantine_path(root)
+                root.rename(quarantine)
 
             initialize_taskledger_bindings(
                 layout,

@@ -977,8 +977,8 @@ def _append_code_reviews(
     lines: list[str],
     task: object,
     _load: object,
-    accepted_plan: object,  # noqa: ARG001
-    options: TaskReportOptions,  # noqa: ARG001
+    accepted_plan: object,
+    options: TaskReportOptions,
 ) -> None:
     from taskledger.domain.models import CodeReviewRecord, TaskRecord
 

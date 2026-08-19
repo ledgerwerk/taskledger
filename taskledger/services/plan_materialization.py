@@ -95,7 +95,7 @@ def materialize_plan_todos(
     if new_todos and not dry_run:
         updated = replace(
             task,
-            todos=tuple([*task.todos, *new_todos]),
+            todos=(*task.todos, *new_todos),
             updated_at=utc_now_iso(),
         )
         save_todos(

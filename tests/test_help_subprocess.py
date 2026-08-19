@@ -28,6 +28,7 @@ def _run_help(
         text=True,
         capture_output=True,
         timeout=timeout,
+        check=False,
     )
 
 

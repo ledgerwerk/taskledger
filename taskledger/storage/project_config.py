@@ -1272,12 +1272,13 @@ def _validate_prompt_profile(name: str, data: dict[str, object], path: Path) -> 
                 f"prompt_profiles.{name}.{bool_key} must be a boolean in {path}"
             )
     topics = data.get("required_question_topics")
-    if topics is not None:
-        if not isinstance(topics, list) or not all(isinstance(t, str) for t in topics):
-            raise LaunchError(
-                f"prompt_profiles.{name}.required_question_topics "
-                f"must be a list of strings in {path}"
-            )
+    if topics is not None and (
+        not isinstance(topics, list) or not all(isinstance(t, str) for t in topics)
+    ):
+        raise LaunchError(
+            f"prompt_profiles.{name}.required_question_topics "
+            f"must be a list of strings in {path}"
+        )
     extra = data.get("extra_guidance")
     if extra is not None:
         if not isinstance(extra, str):

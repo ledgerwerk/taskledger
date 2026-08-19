@@ -36,7 +36,7 @@ def test_missing_store_is_created_by_init(tmp_path: Path) -> None:
     project.mkdir()
 
     # Canonical init creates the external store if it doesn't exist.
-    context, created = init_canonical_project_state(project)
+    context, _created = init_canonical_project_state(project)
     assert context.paths.data_root.exists()
     assert (tmp_path / "ledger" / ".ledger-store.toml").is_file()
 

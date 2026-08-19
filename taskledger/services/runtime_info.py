@@ -81,8 +81,10 @@ class RuntimeInfo:
             f"  version: {self.ledgercore_version or 'unknown'}",
             f"  package: {self.ledgercore_package_file or 'unknown'}",
             f"  module_version: {self.ledgercore_module_version or 'unknown'}",
-            "  distribution_version: "
-            f"{self.ledgercore_distribution_version or 'unknown'}",
+            (
+                "  distribution_version: "
+                f"{self.ledgercore_distribution_version or 'unknown'}"
+            ),
             f"  version_mismatch: {self.ledgercore_version_mismatch}",
             f"  required: {self.ledgercore_required}",
             f"  compatible: {self.ledgercore_compatible}",

@@ -602,9 +602,7 @@ def mark_planning_guidance_viewed(
         return {"recorded": False, "run_id": run.run_id}
     updated = replace(
         run,
-        worklog=tuple(
-            [*run.worklog, f"{_PLANNING_GUIDANCE_WORKLOG_PREFIX} {utc_now_iso()}"]
-        ),
+        worklog=(*run.worklog, f"{_PLANNING_GUIDANCE_WORKLOG_PREFIX} {utc_now_iso()}"),
     )
     save_run(workspace_root, updated)
     _tasks._append_event(

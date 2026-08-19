@@ -360,10 +360,7 @@ def load_project_context(
     """Load Taskledger context without creating or mutating any files."""
     locator = locate_taskledger_project(start)
     if locator is not None and not locator.is_legacy:
-        try:
-            bundle = load_taskledger_ledger_layout(start)
-        except LaunchError:
-            raise
+        bundle = load_taskledger_ledger_layout(start)
         return _context_from_layout(
             start, bundle, require_initialized=require_initialized
         )

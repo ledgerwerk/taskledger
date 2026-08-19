@@ -155,9 +155,7 @@ def _should_skip_source(path: Path, workspace_root: Path) -> bool:
     if not parts:
         return True
     skipped_parts = set(_SKIP_PREFIXES)
-    if any(part in skipped_parts for part in parts):
-        return True
-    return False
+    return bool(any(part in skipped_parts for part in parts))
 
 
 def _collect_raw_bundle_files(

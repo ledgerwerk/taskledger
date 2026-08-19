@@ -252,5 +252,5 @@ def _optional_string_value(data: dict[str, object], key: str) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ValueError(f"Invalid {key}")
+        raise ValueError(f"Invalid {key}")  # noqa: TRY004
     return value

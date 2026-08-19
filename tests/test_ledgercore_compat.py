@@ -57,9 +57,9 @@ class TestVersionCheck:
                 "taskledger.compat.ledgercore.importlib_metadata.version",
                 return_value="0.5.0",
             ),
+            pytest.raises(RuntimeError, match=LEDGERCORE_REQUIREMENT),
         ):
-            with pytest.raises(RuntimeError, match=LEDGERCORE_REQUIREMENT):
-                require_ledgercore_060()
+            require_ledgercore_060()
 
     def test_require_ledgercore_new_version_fails(self) -> None:
         """Should raise with ledgercore >= 0.7.0."""
@@ -69,9 +69,9 @@ class TestVersionCheck:
                 "taskledger.compat.ledgercore.importlib_metadata.version",
                 return_value="0.7.0",
             ),
+            pytest.raises(RuntimeError, match=LEDGERCORE_REQUIREMENT),
         ):
-            with pytest.raises(RuntimeError, match=LEDGERCORE_REQUIREMENT):
-                require_ledgercore_060()
+            require_ledgercore_060()
 
     def test_version_probe_reports_module_distribution_and_path(self) -> None:
         with (

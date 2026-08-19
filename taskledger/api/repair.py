@@ -166,7 +166,7 @@ def repair_locks(
         try:
             break_lock(workspace_root, entry.task_id, reason=reason)
             repaired.append(entry.task_id)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             failed.append(
                 {
                     "task_id": entry.task_id,

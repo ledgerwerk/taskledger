@@ -443,7 +443,7 @@ def add_todo(
     )
     updated = replace(
         task,
-        todos=tuple([*task.todos, todo]),
+        todos=(*task.todos, todo),
         updated_at=utc_now_iso(),
     )
     save_todos(workspace_root, TodoCollection(task_id=updated.id, todos=updated.todos))
@@ -493,16 +493,14 @@ def set_todo_done(
             completed_by=resolved_actor if done else None,
             completed_in_harness=harness if done else None,
             evidence=(
-                tuple([*todo.evidence, evidence.strip()])
+                (*todo.evidence, evidence.strip())
                 if done and evidence and evidence.strip()
                 else todo.evidence
             ),
-            artifact_refs=tuple([*todo.artifact_refs, *artifacts])
+            artifact_refs=(*todo.artifact_refs, *artifacts)
             if done
             else todo.artifact_refs,
-            change_refs=tuple([*todo.change_refs, *changes])
-            if done
-            else todo.change_refs,
+            change_refs=(*todo.change_refs, *changes) if done else todo.change_refs,
         )
         if todo.id in {todo_id, normalized_todo_id}
         else todo

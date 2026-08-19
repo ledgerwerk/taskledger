@@ -75,7 +75,9 @@ def _list_records(
         try:
             records.append(loader(path))
         except LaunchError as exc:
-            logging.warning("Skipping malformed record %s: %s", path, exc)
+            logging.getLogger(__name__).warning(
+                "Skipping malformed record %s: %s", path, exc
+            )
     if sort_key is not None:
         records.sort(key=sort_key)
     return records
@@ -531,7 +533,7 @@ def rewrite_task_refs(task_dir: Path, old_task_id: str, new_task_id: str) -> Non
                 metadata["id"] = new_task_id
             metadata["task_id"] = new_task_id
             write_markdown_front_matter(md_file, metadata, body)
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Fall back to plain string replacement for unparseable files.
             content = md_file.read_text(encoding="utf-8")
             if old_task_id in content:
@@ -1149,7 +1151,7 @@ def _task_latest_impl_run(workspace_root: Path, task_id: str) -> str | None:
     try:
         task = resolve_task(workspace_root, task_id)
         return task.latest_implementation_run
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -1188,9 +1190,9 @@ def _looks_like_global_ref(value: str) -> bool:
         return True
     if value.upper().startswith("TL-"):
         return True
-    if re.fullmatch(r"[a-zA-Z][a-zA-Z0-9]{0,2}[-_][a-zA-Z]+[-_]\d+", value) is not None:
-        return True
-    return False
+    return (
+        re.fullmatch(r"[a-zA-Z][a-zA-Z0-9]{0,2}[-_][a-zA-Z]+[-_]\d+", value) is not None
+    )
 
 
 def _normalize_resource_ref(workspace_root: Path, ref: str, kind: str) -> str:
@@ -1249,7 +1251,7 @@ def list_handoffs_with_errors(
             metadata["context_body"] = ""
             handoff = TaskHandoffRecord.from_dict(metadata)
             result.append(handoff)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             label = _path_label(workspace_root, md_file)
             errors.append(f"Malformed handoff record {label}: {exc}")
     return sorted(result, key=lambda h: h.created_at), errors

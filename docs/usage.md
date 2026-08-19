@@ -593,10 +593,14 @@ taskledger implement command --allow-failure -- python -c "raise SystemExit(7)"
 ```
 
 When `[agent_logging].enabled = true` in `.ledger/taskledger/config.toml`, `taskledger`
-records CLI invocations and managed command outputs. Keep logging opt-in because
-stdout/stderr may contain sensitive data. Route task-relevant commands through
-`plan command` and `implement command` so their output is included in task
-transcripts and reports.
+records CLI invocations and managed command outputs. Both managed wrappers execute
+the exact argv after `--` without a shell and from the CLI invocation directory, or
+the explicit `--root` directory. Taskledger may discover an ancestor workspace for
+ledger state, but that does not change the child's cwd. Human mode displays captured
+stdout/stderr before the summary. JSON mode contains stdout/stderr and cwd only in
+the result object. Keep logging opt-in because stdout/stderr may contain sensitive
+data. Route task-relevant commands through `plan command` and `implement command`
+so their output is included in task transcripts and reports.
 
 > taskledger context --for implementation --format markdown
 > taskledger implement start

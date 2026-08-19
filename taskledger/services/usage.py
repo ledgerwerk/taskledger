@@ -376,7 +376,7 @@ def render_usage_text(  # noqa: C901
                 f"failed_validation={len(ready.get('failed_validation', []))} "
                 f"plan_review={len(ready.get('plan_review', []))}"
             )
-        return "\n".join([active_line, inbox_line, ready_line])
+        return f"{active_line}\n{inbox_line}\n{ready_line}"
 
     lines = ["SESSION"]
     actor = payload.get("actor")

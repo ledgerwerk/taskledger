@@ -587,9 +587,11 @@ def _append_accepted_plan(lines: list[str], accepted_plan: object) -> None:
         lines.extend(
             [
                 "WARNING: accepted plan body is empty.",
-                "Use acceptance criteria and todos below, but"
-                "planning rationale is missing."
-                "",
+                (
+                    "Use acceptance criteria and todos below, but"
+                    "planning rationale is missing."
+                    ""
+                ),
             ]
         )
 

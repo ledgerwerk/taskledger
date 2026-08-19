@@ -277,7 +277,7 @@ def _get_task_created_at(task_dir: Path) -> Any | None:
 
         metadata, _ = read_markdown_front_matter(task_md)
         return metadata.get("created_at")
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -482,7 +482,7 @@ def _scan_file(
 
     try:
         metadata, _ = read_markdown_front_matter(path)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         issues.append(
             MigrationScanIssue(
                 path=path,

@@ -1758,8 +1758,10 @@ def _apply_migration_phases(
                 "taskledger doctor",
             ],
             "warnings": [
-                "Migration-only destination override was used; canonical "
-                "project activation was not changed."
+                (
+                    "Migration-only destination override was used; canonical "
+                    "project activation was not changed."
+                )
             ],
         }
     from taskledger.storage.ledger_local_config import (

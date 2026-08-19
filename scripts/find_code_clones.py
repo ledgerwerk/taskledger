@@ -119,7 +119,7 @@ def _normalized_windows(
     if len(normalized) < min_lines:
         return []
     windows: list[tuple[int, tuple[str, ...]]] = []
-    for offset in range(0, len(normalized) - min_lines + 1):
+    for offset in range(len(normalized) - min_lines + 1):
         start_line = normalized[offset][0]
         body = tuple(item[1] for item in normalized[offset : offset + min_lines])
         windows.append((start_line, body))

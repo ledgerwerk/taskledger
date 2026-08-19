@@ -28,12 +28,15 @@ def run_command(argv: tuple[str, ...], *, cwd: Path) -> CommandResult:
         "stdin": subprocess.DEVNULL,
         "capture_output": True,
         "text": True,
-        "check": False,
     }
     if _IS_WINDOWS:
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
     try:
-        completed = subprocess.run(list(argv), **kwargs)  # type: ignore[call-overload]
+        completed = subprocess.run(
+            list(argv),
+            check=False,
+            **kwargs,  # type: ignore[call-overload]
+        )
     except FileNotFoundError:
         return CommandResult(127, "", f"command not found: {argv[0]}" if argv else "")
     except OSError as exc:

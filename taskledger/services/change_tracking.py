@@ -85,15 +85,15 @@ def add_change(
         workspace_root,
         replace(
             run,
-            change_refs=tuple([*run.change_refs, change.change_id]),
-            artifact_refs=tuple([*run.artifact_refs, *artifact_refs]),
+            change_refs=(*run.change_refs, change.change_id),
+            artifact_refs=(*run.artifact_refs, *artifact_refs),
         ),
     )
     save_task(
         workspace_root,
         replace(
             task,
-            code_change_log_refs=tuple([*task.code_change_log_refs, change.change_id]),
+            code_change_log_refs=(*task.code_change_log_refs, change.change_id),
             updated_at=utc_now_iso(),
         ),
     )
@@ -144,6 +144,7 @@ def run_planning_command(
     task_ref: str,
     *,
     argv: tuple[str, ...],
+    command_cwd: Path | None = None,
 ) -> dict[str, object]:
     from taskledger.services.agent_logging import record_managed_shell_command
 
@@ -166,7 +167,8 @@ def run_planning_command(
             run=run,
         )
     )
-    completed = command_runner.run_command(argv, cwd=workspace_root)
+    execution_cwd = (command_cwd or workspace_root).expanduser().resolve()
+    completed = command_runner.run_command(argv, cwd=execution_cwd)
     record_managed_shell_command(
         workspace_root,
         task_id=task.id,
@@ -176,6 +178,7 @@ def run_planning_command(
         exit_code=completed.returncode,
         stdout=completed.stdout,
         stderr=completed.stderr,
+        command_cwd=execution_cwd,
     )
     output = _tasks._command_output(argv, completed.stdout, completed.stderr)
     artifact_ref: str | None = None
@@ -189,10 +192,8 @@ def run_planning_command(
     summary = _tasks._command_summary(argv, completed.returncode, artifact_ref)
     updated_run = replace(
         run,
-        worklog=tuple([*run.worklog, summary]),
-        artifact_refs=tuple(
-            [*run.artifact_refs, *((artifact_ref,) if artifact_ref else ())]
-        ),
+        worklog=(*run.worklog, summary),
+        artifact_refs=(*run.artifact_refs, *((artifact_ref,) if artifact_ref else ())),
     )
     save_run(workspace_root, updated_run)
     save_task(
@@ -215,6 +216,7 @@ def run_planning_command(
         "task_id": task.id,
         "change": None,
         "exit_code": completed.returncode,
+        "cwd": str(execution_cwd),
         "artifact_path": artifact_ref,
         "stdout": completed.stdout,
         "stderr": completed.stderr,

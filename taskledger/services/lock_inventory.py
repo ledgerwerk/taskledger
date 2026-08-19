@@ -211,7 +211,7 @@ def build_lock_inventory(
         parse_error: str | None = None
         try:
             lock = read_lock(lock_path)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             parse_error = f"Failed to read lock {lock_path}: {exc}"
             logger.warning("Malformed lock file %s: %s", lock_path, exc)
 
@@ -223,7 +223,7 @@ def build_lock_inventory(
                     task_id=task_id,
                     current_actor=current_actor,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 parse_error = f"Failed to diagnose lock {lock_path}: {exc}"
                 logger.warning("Lock diagnosis failed %s: %s", lock_path, exc)
 

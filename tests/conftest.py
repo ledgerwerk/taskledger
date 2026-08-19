@@ -16,15 +16,15 @@ if sys.pycache_prefix is None:
 sys.dont_write_bytecode = False
 
 
-import shutil  # noqa: E402
-import weakref  # noqa: E402
-from typing import Any  # noqa: E402
+import shutil
+import weakref
+from typing import Any
 
-import pytest  # noqa: E402
-import typer.testing as typer_testing  # noqa: E402
-from typer import Typer  # noqa: E402
-from typer.main import get_command as _typer_get_command  # noqa: E402
-from typer.testing import CliRunner as _TyperCliRunner  # noqa: E402
+import pytest
+import typer.testing as typer_testing
+from typer import Typer
+from typer.main import get_command as _typer_get_command
+from typer.testing import CliRunner as _TyperCliRunner
 
 # Some test modules still instantiate ``CliRunner(mix_stderr=False)`` for
 # historical reasons. Newer Typer/Click releases reject that argument, so the
@@ -44,7 +44,7 @@ def _patched_cli_runner_init(
 
 _TyperCliRunner.__init__ = _patched_cli_runner_init  # type: ignore[assignment]
 
-from tests.support.builders import (  # noqa: E402
+from tests.support.builders import (
     create_approved_task,
     create_done_task,
     create_failed_validation_task,

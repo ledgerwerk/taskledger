@@ -24,7 +24,7 @@ def scan_project_config(  # noqa: C901
     discovered = locate_taskledger_project(workspace_root)
     try:
         context = load_project_context(workspace_root, require_initialized=False)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         if discovered is not None and not discovered.is_legacy:
             errors.append(str(exc))
             return
@@ -55,7 +55,7 @@ def scan_project_config(  # noqa: C901
                     f"{context.legacy_locator.taskledger_dir}; canonical mode is "
                     "active and legacy files are read-only."
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             errors.append(str(exc))
         return
 
@@ -87,7 +87,7 @@ def scan_project_config(  # noqa: C901
             from taskledger.storage.project_config import load_project_config_document
 
             load_project_config_document(resolved_paths.config_path)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             errors.append(str(exc))
 
     # Project UUID check
@@ -102,7 +102,7 @@ def scan_project_config(  # noqa: C901
                     " Run 'taskledger init' or 'taskledger migrate apply'"
                     " to generate one and commit the config change."
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             errors.append(f"Invalid project_uuid: {exc}")
 
     # Ledger config check
@@ -117,7 +117,7 @@ def scan_project_config(  # noqa: C901
                     f"Ledger directory missing: {ledger_dir}."
                     " Run: taskledger init or taskledger ledger switch."
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             errors.append(f"Invalid ledger config: {exc}")
 
     # Legacy unscoped state check
@@ -193,8 +193,10 @@ def scan_canonical_boundary(workspace_root: Path) -> dict[str, object]:
     repair_hints = [
         "Back up canonical and legacy roots before any recovery.",
         "Register Taskledger with `taskledger init`, then inspect both histories.",
-        "Do not auto-delete or merge shadow records; migrate explicitly after "
-        "verification.",
+        (
+            "Do not auto-delete or merge shadow records; migrate explicitly after "
+            "verification."
+        ),
     ]
 
     if not probe.registration_present and probe.orphan_config_present:

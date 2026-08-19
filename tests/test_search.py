@@ -131,7 +131,7 @@ def test_discovery_tokens_and_discover_files(tmp_path: Path):
 
 
 def test_read_text_file_returns_none_on_decode_error(tmp_path: Path):
-    paths, _ = init_project_state(tmp_path)
+    _paths, _ = init_project_state(tmp_path)
     p = tmp_path / "bin.txt"
     p.write_bytes(b"\xff\xfe\xff")
     assert _read_text_file(p) is None

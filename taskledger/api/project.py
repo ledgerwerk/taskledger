@@ -432,13 +432,13 @@ def _project_identity(workspace_root: Path) -> dict[str, object]:
 
 __all__ = [
     "init_project",
-    "project_status_summary",
-    "project_status",
     "project_doctor",
     "project_export",
-    "project_import",
     "project_export_archive",
+    "project_import",
     "project_import_archive",
     "project_snapshot",
+    "project_status",
+    "project_status_summary",
     "project_tree",
 ]

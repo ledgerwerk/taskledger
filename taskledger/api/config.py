@@ -745,9 +745,9 @@ def _config_key_matches_pattern(key: str, pattern: str) -> bool:
 
 __all__ = [
     "config_describe",
-    "config_list",
-    "config_keys",
     "config_get",
+    "config_keys",
+    "config_list",
     "config_set",
     "parse_config_value_text",
 ]

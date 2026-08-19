@@ -1217,6 +1217,7 @@ def run_implementation_command(
     task_ref: str,
     *,
     argv: tuple[str, ...],
+    command_cwd: Path | None = None,
 ) -> dict[str, object]:
     from taskledger.services.implementation_flow import (
         run_implementation_command as _run_implementation_command,
@@ -1226,6 +1227,7 @@ def run_implementation_command(
         workspace_root,
         task_ref,
         argv=argv,
+        command_cwd=command_cwd,
     )
 
 
@@ -2057,12 +2059,16 @@ def _render_plan_template(
         "",
         "- [ ] I ran `taskledger plan check --file plan.md`.",
         "- [ ] Every acceptance criterion uses `text`, not `description`.",
-        "- [ ] Todo mappings use supported keys only: "
-        "`id`, `id_hint`, `text`, `mandatory`, `validation_hint`, "
-        "`worker_step`.",
-        "- [ ] File references are plan-level `files:` entries "
-        "or are mentioned in todo text/body; "
-        "todo-level `files:` is not captured.",
+        (
+            "- [ ] Todo mappings use supported keys only: "
+            "`id`, `id_hint`, `text`, `mandatory`, `validation_hint`, "
+            "`worker_step`."
+        ),
+        (
+            "- [ ] File references are plan-level `files:` entries "
+            "or are mentioned in todo text/body; "
+            "todo-level `files:` is not captured."
+        ),
         "- [ ] The Markdown body explains enough context for implementation handoff.",
         "",
     ]

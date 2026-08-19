@@ -281,7 +281,9 @@ The plan file should use version ids like `plan-v1`, `plan-v2` in references. Do
    - Make the code changes
    - `taskledger implement change --path ... --kind edit --summary "..."`
    - Run verification through `taskledger implement command -- ...` so exit code and output are recorded.
-   - `implement command` mirrors the inner command exit code by default. Use `--allow-failure` when you intentionally want to record a non-zero command without failing the wrapper command.
+   - Managed `plan command` and `implement command` pass argv after `--` without a shell and run from the CLI invocation directory, or explicit `--root` directory. Workspace discovery does not change the child cwd.
+   - Human mode emits captured child stdout/stderr before the summary. JSON mode keeps stdout/stderr and the actual child cwd inside the result envelope.
+   - Both wrappers mirror the inner command exit code by default. Use `--allow-failure` when you intentionally want to record a non-zero inner command without failing the wrapper command; the recorded child failure remains unchanged.
    - Mark each todo done only after the relevant command or inspection evidence exists: `taskledger todo done <todo-id> --evidence "check-NNNN exited 0"`.
    - Optional: add `--source planner|implementer|user` to override the inferred source, though this is rarely needed.
 6. `taskledger implement checklist` after each meaningful change to track progress.
@@ -393,7 +395,7 @@ taskledger validate check --criterion ac-0001 --status pass --evidence "pytest t
 - Log every meaningful implementation change with `taskledger implement change`.
 - Record deviations from the approved plan with `taskledger implement deviation`.
 - Mark todos done with evidence: `taskledger todo done <todo-id> --evidence "pytest -q"`.
-- When transcript logging is enabled in project config, run task-relevant commands through `taskledger plan command -- ...` or `taskledger implement command -- ...` so stdout/stderr becomes durable transcript evidence.
+- When transcript logging is enabled in project config, run task-relevant commands through `taskledger plan command -- ...` or `taskledger implement command -- ...` so stdout/stderr becomes durable transcript evidence. The managed result and shell log include the actual child cwd.
 - Do not paste secrets into command arguments, evidence strings, or expected command output when transcript logging is enabled.
 - Use `taskledger handoff create --mode implementation|validation --intended-actor agent --intended-harness codex` when switching actor or harness.
 - Use `taskledger handoff claim handoff-0001` before continuing work from a handoff.

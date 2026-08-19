@@ -271,7 +271,7 @@ def _register_optional_group(
     try:
         module = importlib.import_module(module_name)
         register = getattr(module, register_name)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         _register_failed_group_placeholder(
             app,
             error=_optional_group_failure(
@@ -390,7 +390,7 @@ def _command_from_tokens(argv: tuple[str, ...]) -> str:
         if token in _ROOT_OPTIONS_WITH_VALUE:
             index += 2
             continue
-        if token.startswith("--cwd=") or token.startswith("--root="):
+        if token.startswith(("--cwd=", "--root=")):
             index += 1
             continue
         if token.startswith("-"):
@@ -443,7 +443,9 @@ def _usage_error_remediation(
                 "or `taskledger doctor indexes` for focused diagnostics."
             ),
         ]
-    extra_match = re.search(r"unexpected extra argument \(([^)]+)\)", message, re.I)
+    extra_match = re.search(
+        r"unexpected extra argument \(([^)]+)\)", message, re.IGNORECASE
+    )
     if extra_match is None:
         return remediation
     extra = extra_match.group(1).strip()
@@ -577,7 +579,12 @@ def main(
     # discovery, config loading, and agent-log recording overhead.
     argv = tuple(sys.argv[1:])
     if _is_help_or_introspection(argv):
-        ctx.obj = CLIState(cwd=Path.cwd(), json_output=json_output)
+        current = Path.cwd().resolve()
+        ctx.obj = CLIState(
+            cwd=current,
+            json_output=json_output,
+            command_cwd=current,
+        )
         return
 
     if cwd is not None and root is not None and cwd != root:
@@ -606,15 +613,24 @@ def main(
     except LaunchError as exc:
         if is_tolerant:
             # For tolerant commands, use the raw cwd without failing
-            ctx.obj = CLIState(cwd=raw_cwd, json_output=json_output)
+            ctx.obj = CLIState(
+                cwd=raw_cwd,
+                json_output=json_output,
+                command_cwd=raw_cwd,
+            )
             return
-        ctx.obj = CLIState(cwd=raw_cwd, json_output=json_output)
+        ctx.obj = CLIState(
+            cwd=raw_cwd,
+            json_output=json_output,
+            command_cwd=raw_cwd,
+        )
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
     ctx.obj = CLIState(
         cwd=resolved_cwd,
         json_output=json_output,
         runtime=CommandRuntime(workspace_root=resolved_cwd),
+        command_cwd=raw_cwd,
     )
     from taskledger.services.agent_logging import start_cli_recorder
 
@@ -743,8 +759,10 @@ def init_command(
         payload,
         human="\n".join(
             [
-                "initialized taskledger: "
-                f"{payload.get('root', payload.get('project_root', '?'))}",
+                (
+                    "initialized taskledger: "
+                    f"{payload.get('root', payload.get('project_root', '?'))}"
+                ),
                 f"project name: {payload['project_name']}",
                 *[f"- {item}" for item in cast(list[str], payload["created"])],
             ]

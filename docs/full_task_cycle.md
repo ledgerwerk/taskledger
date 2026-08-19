@@ -118,10 +118,12 @@ taskledger plan command -- pytest tests/test_parser.py -q
 taskledger plan command -- python -m compileall taskledger
 ```
 
-`plan command` records command exit code and output in planning diagnostics.
-With transcript logging enabled, the same output is also captured in the
-ledger-level command transcript. Use it to build evidence into the plan before
-proposal.
+`plan command` records command exit code, stdout, stderr, and actual child cwd in
+planning diagnostics. It passes the inner argv without a shell and runs from the CLI
+invocation directory. Workspace discovery may use an ancestor for Taskledger state,
+but it must not change the managed child's cwd. With transcript logging enabled, the
+same output is also captured in the ledger-level command transcript. Use it to build
+evidence into the plan before proposal.
 
 ## 6. Materialize Todos And Approve
 
@@ -188,7 +190,10 @@ taskledger implement status
 ```
 
 Use `implement command` when you want taskledger to record a command run as
-part of implementation. With transcript logging enabled, it also records managed
+part of implementation. It preserves the inner argv, runs from the CLI invocation
+directory, and records the child cwd, exit code, stdout, and stderr. In human mode,
+captured child output is shown before the command summary. In JSON mode, streams stay
+inside the result envelope. With transcript logging enabled, it also records managed
 stdout/stderr in the task transcript. Use `implement deviation` when the
 implementation differs from the approved plan.
 

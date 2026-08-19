@@ -28,13 +28,13 @@ from taskledger.storage.worker_pipeline_config import WorkerPipelineConfig
 
 __all__ = [
     "CRITERION_KEYS",
+    "PLAN_INPUT_REMEDIATION",
     "TODO_KEYS",
+    "ParsedPlanInput",
     "PlanInputError",
     "PlanInputIssue",
-    "ParsedPlanInput",
     "check_plan_input",
     "parse_plan_input",
-    "PLAN_INPUT_REMEDIATION",
     "plan_input_error",
     "plan_input_schema_text",
 ]
@@ -426,7 +426,7 @@ def _report_unknown_criterion_keys(
     strict: bool,
     issues: list[PlanInputIssue],
 ) -> None:
-    for key in item.keys():
+    for key in item:
         if key in CRITERION_KEYS:
             continue
         issues.append(
@@ -549,7 +549,7 @@ def _report_unknown_todo_keys(
     strict: bool,
     issues: list[PlanInputIssue],
 ) -> None:
-    for key in item.keys():
+    for key in item:
         if key in TODO_KEYS:
             continue
         if key == _TODO_FILES:

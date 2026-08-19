@@ -279,6 +279,38 @@ def test_managed_shell_capture_and_transcript_report_rendering(tmp_path: Path) -
     assert "| Time | Exit | Command | Result |" in report.stdout
 
 
+# specmason: req=REQ-0004 ac=AC-0057
+def test_managed_shell_log_records_nested_child_cwd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _init_project(tmp_path)
+    _enable_agent_logging(tmp_path)
+    task_id = _prepare_approved_task(tmp_path)
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    monkeypatch.chdir(nested)
+
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "implement",
+            "command",
+            "--task",
+            task_id,
+            "--",
+            sys.executable,
+            "-c",
+            "import os; print(os.getcwd())",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    logs = load_agent_command_logs(tmp_path, task_id=task_id)
+    managed = [item for item in logs if item.command_kind == "managed_shell"][-1]
+    assert managed.cwd == str(nested.resolve())
+
+
 # specmason: req=REQ-0004 ac=AC-0061
 def test_task_transcript_json_contract(tmp_path: Path) -> None:
     _init_project(tmp_path)

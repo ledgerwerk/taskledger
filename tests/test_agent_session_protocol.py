@@ -174,13 +174,15 @@ def test_plan_propose_releases_planning_lock(tmp_path: Path) -> None:
                 "--task",
                 "lock-rel",
                 "--text",
-                "---\n"
-                "acceptance_criteria:\n"
-                '  - text: "Pass."\n'
-                "todos:\n"
-                '  - text: "Do it."\n'
-                "---\n\n"
-                "# Plan\n\nPlan text.\n",
+                (
+                    "---\n"
+                    "acceptance_criteria:\n"
+                    '  - text: "Pass."\n'
+                    "todos:\n"
+                    '  - text: "Do it."\n'
+                    "---\n\n"
+                    "# Plan\n\nPlan text.\n"
+                ),
             ],
         ).exit_code
         == 0

@@ -108,10 +108,12 @@ class TestLedgercoreImportBoundary:
             for node in ast.walk(tree):
                 if not isinstance(node, ast.ImportFrom):
                     continue
-                if node.module and node.module.startswith("ledgercore"):
-                    # Allow if the file itself is in the allowlist
-                    if rel not in LEDGERCORE_IMPORT_ALLOWLIST:
-                        violations.append(f"{rel}:{node.lineno} (from {node.module})")
+                if (
+                    node.module
+                    and node.module.startswith("ledgercore")
+                    and rel not in LEDGERCORE_IMPORT_ALLOWLIST
+                ):
+                    violations.append(f"{rel}:{node.lineno} (from {node.module})")
 
         assert not violations, (
             "Direct ledgercore import found outside allowlist:\n"

@@ -451,6 +451,7 @@ def record_managed_shell_command(
     exit_code: int,
     stdout: str,
     stderr: str,
+    command_cwd: Path | None = None,
 ) -> None:
     config = _load_agent_logging_config(workspace_root)
     if not config.enabled or not config.capture_managed_shell:
@@ -496,7 +497,7 @@ def record_managed_shell_command(
         command_kind="managed_shell",
         argv=argv,
         command_line=shlex.join(argv) if argv else "",
-        cwd=str(workspace_root),
+        cwd=str(command_cwd or workspace_root),
         exit_code=exit_code,
         status="succeeded" if exit_code == 0 else "failed",
         task_id=task_id,
@@ -514,7 +515,7 @@ def record_managed_shell_command(
         visible_stdout_excerpt=stdout_excerpt,
         visible_stderr_excerpt=stderr_excerpt,
         visible_combined_excerpt=combined_excerpt,
-        redactions_applied=tuple([*stdout_patterns, *stderr_patterns]),
+        redactions_applied=(*stdout_patterns, *stderr_patterns),
     )
     append_agent_command_log(workspace_root, record)
 

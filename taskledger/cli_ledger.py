@@ -119,7 +119,7 @@ def ledger_list_command(ctx: typer.Context) -> None:
                         active_data = load_yaml_object(
                             active_yaml, "active task state", missing="empty"
                         )
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S110
                         pass
                 active_id = active_data.get("task_id") if active_data else None
                 entries.append(
@@ -453,7 +453,7 @@ def ledger_doctor_command(ctx: typer.Context) -> None:
                         ),
                     }
                 )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         issues.append(
             {"check": "active_task_check", "status": "warn", "message": str(exc)}
         )

@@ -122,7 +122,7 @@ def storage_validate(
                             "reason": f"Mount {mount_name} not found",
                         }
                     )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass  # Best effort for strict checks
     valid = bool(report is not None and report.valid)
     if strict:

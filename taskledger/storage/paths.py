@@ -247,7 +247,7 @@ def project_paths_for_root(
         try:
             ledger = load_ledger_config(config_path)
             ledger_ref = ledger.ref
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
     ledger_dir = project_dir / "ledgers" / ledger_ref
     indexes_dir = ledger_dir / "indexes"

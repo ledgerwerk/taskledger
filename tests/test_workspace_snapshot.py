@@ -219,7 +219,7 @@ def test_snapshot_exclusion_resolution_fails_closed_for_broken_canonical_context
         del args, kwargs
         raise LaunchError("canonical context is unreadable")
 
-    import taskledger.storage.project_context as project_context
+    from taskledger.storage import project_context
 
     monkeypatch.setattr(project_context, "load_project_context", fail_context)
 

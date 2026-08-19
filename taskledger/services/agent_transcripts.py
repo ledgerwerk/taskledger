@@ -391,9 +391,10 @@ def _first_validation_finish_index(rows: Sequence[dict[str, object]]) -> int | N
     for row in rows:
         command = str(row["display_command"])
         if command.startswith(
-            "taskledger validate finish --result passed"
-        ) or command.startswith(
-            "taskledger validate finish --result failed",
+            (
+                "taskledger validate finish --result passed",
+                "taskledger validate finish --result failed",
+            )
         ):
             return _row_index(row)
     return None
@@ -417,11 +418,13 @@ def _missing_planning_guidance(
             continue
         if command.startswith("taskledger plan guidance"):
             guidance_seen = True
-        if (
-            command.startswith("taskledger plan template")
-            or command.startswith("taskledger plan upsert")
-            or command.startswith("taskledger plan propose")
-            or command.startswith("taskledger plan approve")
+        if command.startswith(
+            (
+                "taskledger plan template",
+                "taskledger plan upsert",
+                "taskledger plan propose",
+                "taskledger plan approve",
+            )
         ):
             first_plan_work = idx
             break

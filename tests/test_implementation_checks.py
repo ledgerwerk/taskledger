@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -359,3 +360,167 @@ class TestImplementCommandCreatesCheck:
         assert r.exit_code == 0
         payload = json.loads(r.output)
         assert payload["result"]["check"]["status"] == "failed"
+
+
+# specmason: req=REQ-0026 ac=AC-0321
+def test_implement_command_preserves_exact_child_argv(tmp_path: Path) -> None:
+    root = _prepare_task_with_impl_run(tmp_path)
+    result = CliRunner().invoke(
+        app,
+        [
+            "--root",
+            root,
+            "--json",
+            "implement",
+            "command",
+            "--",
+            sys.executable,
+            "-c",
+            "import sys; print(repr(sys.argv[1:]))",
+            "--maxfail=1",
+            "-k",
+            "not slow",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)["result"]
+    assert "['--maxfail=1', '-k', 'not slow']" in payload["stdout"]
+    assert payload["cwd"] == str(tmp_path.resolve())
+
+
+# specmason: req=REQ-0026 ac=AC-0321
+def test_implement_command_runs_from_nested_invocation_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = Path(_prepare_task_with_impl_run(tmp_path))
+    nested = root / "subproject"
+    nested.mkdir()
+    monkeypatch.chdir(nested)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "--json",
+            "implement",
+            "command",
+            "--task",
+            "test-checks",
+            "--",
+            sys.executable,
+            "-c",
+            "import os; print(os.getcwd())",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)["result"]
+    assert payload["cwd"] == str(nested.resolve())
+    assert str(nested.resolve()) in payload["stdout"]
+
+
+# specmason: req=REQ-0026 ac=AC-0321
+def test_implement_command_human_mode_emits_child_output(tmp_path: Path) -> None:
+    root = _prepare_task_with_impl_run(tmp_path)
+    result = CliRunner().invoke(
+        app,
+        [
+            "--root",
+            root,
+            "implement",
+            "command",
+            "--",
+            sys.executable,
+            "-c",
+            (
+                "import sys; print('managed stdout marker'); "
+                "print('managed stderr marker', file=sys.stderr)"
+            ),
+        ],
+    )
+    combined = result.output + str(getattr(result, "stderr", ""))
+    assert result.exit_code == 0, combined
+    assert "managed stdout marker" in combined
+    assert "managed stderr marker" in combined
+    assert "recorded check check-" in combined
+
+
+# specmason: req=REQ-0026 ac=AC-0321
+def test_plan_command_preserves_cwd_and_json_streams(tmp_path: Path) -> None:
+    runner = CliRunner()
+    create = runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_path),
+            "task",
+            "create",
+            "Planning task",
+            "--slug",
+            "planning-task",
+        ],
+    )
+    assert create.exit_code == 0, create.output
+    activate = runner.invoke(
+        app, ["--root", str(tmp_path), "task", "activate", "planning-task"]
+    )
+    assert activate.exit_code == 0, activate.output
+    start = runner.invoke(app, ["--root", str(tmp_path), "plan", "start"])
+    assert start.exit_code == 0, start.output
+
+    result = runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_path),
+            "--json",
+            "plan",
+            "command",
+            "--",
+            sys.executable,
+            "-c",
+            "import os, sys; print(os.getcwd()); print(repr(sys.argv[1:]))",
+            "--maxfail=1",
+            "-k",
+            "not slow",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)["result"]
+    assert payload["cwd"] == str(tmp_path.resolve())
+    assert str(tmp_path.resolve()) in payload["stdout"]
+    assert "['--maxfail=1', '-k', 'not slow']" in payload["stdout"]
+    json.loads(result.output)
+
+
+# specmason: req=REQ-0026 ac=AC-0321
+def test_plan_command_human_mode_emits_child_output(tmp_path: Path) -> None:
+    runner = CliRunner()
+    for args in (
+        ["task", "create", "Planning task", "--slug", "planning-task"],
+        ["task", "activate", "planning-task"],
+        ["plan", "start"],
+    ):
+        result = runner.invoke(app, ["--root", str(tmp_path), *args])
+        assert result.exit_code == 0, result.output
+
+    result = runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_path),
+            "plan",
+            "command",
+            "--",
+            sys.executable,
+            "-c",
+            (
+                "import sys; print('planning stdout marker'); "
+                "print('planning stderr marker', file=sys.stderr)"
+            ),
+        ],
+    )
+    combined = result.output + str(getattr(result, "stderr", ""))
+    assert result.exit_code == 0, combined
+    assert "planning stdout marker" in combined
+    assert "planning stderr marker" in combined
+    assert "ran planning command exit=0" in combined

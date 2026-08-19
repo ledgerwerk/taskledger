@@ -255,7 +255,7 @@ def _build_task_nodes(
     if task_ref:
         try:
             target = resolve_task(workspace_root, task_ref, include_archived=True)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return [], []
         # Collect all descendants
         subtree_ids = _collect_subtree_ids(target.id, children_by_parent)

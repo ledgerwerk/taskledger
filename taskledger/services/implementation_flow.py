@@ -365,7 +365,7 @@ def log_implementation(
         task_ref,
         action="log implementation work",
     )
-    updated = replace(run, worklog=tuple([*run.worklog, message.strip()]))
+    updated = replace(run, worklog=(*run.worklog, message.strip()))
     save_run(workspace_root, updated)
     _tasks._append_event(
         workspace_root,
@@ -389,7 +389,7 @@ def add_implementation_deviation(
     )
     updated = replace(
         run,
-        deviations_from_plan=tuple([*run.deviations_from_plan, message.strip()]),
+        deviations_from_plan=(*run.deviations_from_plan, message.strip()),
     )
     save_run(workspace_root, updated)
     _tasks._append_event(
@@ -415,9 +415,7 @@ def add_implementation_artifact(
     )
     updated = replace(
         run,
-        artifact_refs=tuple(
-            [*run.artifact_refs, f"{path}: {summary.strip()}"],
-        ),
+        artifact_refs=(*run.artifact_refs, f"{path}: {summary.strip()}"),
     )
     save_run(workspace_root, updated)
     _tasks._append_event(
@@ -434,6 +432,7 @@ def run_implementation_command(
     task_ref: str,
     *,
     argv: tuple[str, ...],
+    command_cwd: Path | None = None,
 ) -> dict[str, object]:
     from taskledger.services.agent_logging import record_managed_shell_command
 
@@ -447,7 +446,8 @@ def run_implementation_command(
         task_ref,
         action="record implementation commands",
     )
-    completed = command_runner.run_command(argv, cwd=workspace_root)
+    execution_cwd = (command_cwd or workspace_root).expanduser().resolve()
+    completed = command_runner.run_command(argv, cwd=execution_cwd)
     record_managed_shell_command(
         workspace_root,
         task_id=task.id,
@@ -457,6 +457,7 @@ def run_implementation_command(
         exit_code=completed.returncode,
         stdout=completed.stdout,
         stderr=completed.stderr,
+        command_cwd=execution_cwd,
     )
     output = _tasks._command_output(argv, completed.stdout, completed.stderr)
     artifact_ref: str | None = None
@@ -488,6 +489,7 @@ def run_implementation_command(
         "check": check.to_dict(),
         "change": None,
         "exit_code": completed.returncode,
+        "cwd": str(execution_cwd),
         "artifact_path": artifact_ref,
         "stdout": completed.stdout,
         "stderr": completed.stderr,
@@ -588,9 +590,11 @@ def _implementation_finish_warnings(
         return []
 
     return [
-        "Warning: implementation has manual change records but no git-backed "
-        "scan. Recommended: taskledger implement scan-changes --from-git "
-        '--summary "Implementation diff summary."'
+        (
+            "Warning: implementation has manual change records but no git-backed "
+            "scan. Recommended: taskledger implement scan-changes --from-git "
+            '--summary "Implementation diff summary."'
+        )
     ]
 
 

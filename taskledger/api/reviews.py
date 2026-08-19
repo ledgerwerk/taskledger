@@ -5,7 +5,7 @@ from taskledger.services.code_review import (
 )
 
 __all__ = [
-    "record_code_review",
     "list_code_review_records",
+    "record_code_review",
     "show_code_review",
 ]

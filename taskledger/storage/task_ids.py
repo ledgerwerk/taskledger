@@ -175,7 +175,7 @@ __all__ = [
     "TaskIdInventory",
     "allocate_task_directory",
     "next_task_id",
-    "reserve_task_directory",
     "reserve_task_directories",
+    "reserve_task_directory",
     "scan_task_id_inventory",
 ]

@@ -209,7 +209,7 @@ def add_validation_check(
         details=details.strip() if details else None,
         evidence=tuple(item.strip() for item in evidence if item.strip()),
     )
-    updated = replace(run, checks=tuple([*run.checks, check]))
+    updated = replace(run, checks=(*run.checks, check))
     save_run(workspace_root, updated)
     _tasks._append_event(
         workspace_root,
@@ -275,7 +275,7 @@ def waive_criterion(
         waiver=waiver,
     )
 
-    updated = replace(run, checks=tuple([*run.checks, check]))
+    updated = replace(run, checks=(*run.checks, check))
     save_run(workspace_root, updated)
     _tasks._append_event(
         workspace_root,

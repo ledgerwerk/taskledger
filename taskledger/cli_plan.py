@@ -32,6 +32,7 @@ from taskledger.cli_common import (
     TaskRefArgument,
     cli_state_from_context,
     emit_error,
+    emit_managed_command_streams,
     emit_payload,
     launch_error_exit_code,
     read_text_input,
@@ -99,12 +100,9 @@ def start_command(
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
     human = f"started planning {payload['task_id']}"
-    human = "\n".join(
-        [
-            human,
-            "Next: taskledger plan guidance",
-            "Then: taskledger plan template --include-guidance --file plan.md",
-        ]
+    human = (
+        f"{human}\nNext: taskledger plan guidance\n"
+        "Then: taskledger plan template --include-guidance --file plan.md"
     )
     emit_payload(ctx, payload, human=human)
 
@@ -657,10 +655,12 @@ def plan_command_command(
             state.cwd,
             task.id,
             argv=argv,
+            command_cwd=state.managed_command_cwd,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    emit_managed_command_streams(ctx, payload)
     emit_payload(
         ctx,
         payload,
@@ -778,8 +778,10 @@ def register_plan_v2_commands(app: typer.Typer) -> None:
 
 def _render_plan_lint(payload: PlanLintPayload) -> str:
     lines = [
-        f"Plan lint {'passed' if payload['passed'] else 'failed'} "
-        f"for {payload['plan_id']}"
+        (
+            f"Plan lint {'passed' if payload['passed'] else 'failed'} "
+            f"for {payload['plan_id']}"
+        )
     ]
     summary = payload.get("summary", {})
     errors = int(summary.get("errors", 0)) if isinstance(summary, dict) else 0

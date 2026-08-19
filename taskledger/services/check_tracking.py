@@ -80,8 +80,8 @@ def add_check(
         workspace_root,
         replace(
             run,
-            check_refs=tuple([*run.check_refs, check.check_id]),
-            artifact_refs=tuple([*run.artifact_refs, *artifact_refs]),
+            check_refs=(*run.check_refs, check.check_id),
+            artifact_refs=(*run.artifact_refs, *artifact_refs),
         ),
     )
     save_task(
@@ -109,9 +109,12 @@ def classify_check_command(
     normalized = tuple(part.lower() for part in argv)
     if "pytest" in normalized:
         return "test"
-    if len(normalized) >= 3 and normalized[:2] == ("python", "-m"):
-        if normalized[2] == "pytest":
-            return "test"
+    if (
+        len(normalized) >= 3
+        and normalized[:2] == ("python", "-m")
+        and normalized[2] == "pytest"
+    ):
+        return "test"
     if normalized[0] == "ruff":
         if "format" in normalized:
             return "format"

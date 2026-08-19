@@ -185,16 +185,14 @@ def repair_planning_command_changes(
         if not dry_run:
             updated_run = replace(
                 run,
-                worklog=tuple([*run.worklog, change.summary]),
-                artifact_refs=tuple(
-                    [
-                        *run.artifact_refs,
-                        *(
-                            (change.change_id,)
-                            if not change.change_id.startswith("artifact_")
-                            else ()
-                        ),
-                    ]
+                worklog=(*run.worklog, change.summary),
+                artifact_refs=(
+                    *run.artifact_refs,
+                    *(
+                        (change.change_id,)
+                        if not change.change_id.startswith("artifact_")
+                        else ()
+                    ),
                 ),
             )
             save_run(workspace_root, updated_run)

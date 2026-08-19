@@ -149,8 +149,10 @@ def worker_contract(context_for: str) -> tuple[list[str], list[str]]:
     if context_for == "spec-reviewer":
         return (
             [
-                "judge whether the focused run satisfies the plan and "
-                "acceptance criteria",
+                (
+                    "judge whether the focused run satisfies the plan and "
+                    "acceptance criteria"
+                ),
                 "cite concrete evidence for pass, fail, or unclear findings",
             ],
             [

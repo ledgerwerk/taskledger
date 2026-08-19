@@ -443,7 +443,16 @@ to a durable non-active stage rather than directly re-entering an active stage.
 ## Managed command wrappers
 
 `plan command` and `implement command` mirror the inner command exit code by
-default.
+default. Both wrappers pass the argument vector after `--` to the child without a
+shell. They execute the child from the CLI invocation directory, or the explicit
+`--root` directory, even when Taskledger discovers an ancestor workspace root for
+ledger state, artifacts, and logs.
+
+Captured stdout and stderr are included in the command result. Human mode emits
+those streams before the recorded-command summary, while JSON mode keeps them only
+inside the single JSON result envelope. The result and managed-shell log also record
+the child cwd. `--allow-failure` changes only the wrapper exit code; the recorded
+child exit code and failed check remain unchanged.
 
 Use `--allow-failure` when you intentionally want to record a non-zero inner
 exit code while returning wrapper exit code `0`:

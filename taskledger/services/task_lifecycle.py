@@ -753,7 +753,7 @@ def edit_task(
     for label in add_labels:
         if label not in labels:
             labels.append(label)
-    notes = tuple([*task.notes, *[note for note in add_notes if note]])
+    notes = (*task.notes, *[note for note in add_notes if note])
     updated = replace(
         task,
         title=title or task.title,

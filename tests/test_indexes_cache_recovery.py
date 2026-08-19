@@ -203,7 +203,7 @@ def test_rebuild_failure_is_structured_and_retryable(
     def fail_rebuild(_paths):
         raise OSError("read-only cache")
 
-    import taskledger.storage.indexes as indexes
+    from taskledger.storage import indexes
 
     monkeypatch.setattr(indexes, "rebuild_v2_indexes", fail_rebuild)
     with pytest.raises(CacheRecoveryFailed) as error:

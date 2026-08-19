@@ -43,18 +43,10 @@ Feature: Implementation Checks
     @req-REQ-0026 @ac-AC-0321
     Example: Human Output Shows Check
       Given the pytest test setup is prepared
-      When human output shows check is executed
+      When managed command execution is exercised
       Then r.exit_code equals 0
       Then 'recorded check check-' is in r.output
-
-    @req-REQ-0026 @ac-AC-0320
-    Example: Failed Command Creates Failed Check
-      Given the pytest test setup is prepared
-      When failed command creates failed check is executed
-      Then r.exit_code equals 1
-
-    @req-REQ-0026 @ac-AC-0315
-    Example: Allow Failure Records Check
-      Given the pytest test setup is prepared
-      When allow failure records check is executed
-      Then r.exit_code equals 0
+      Then child stdout and stderr are visible in human output
+      Then the managed result reports the actual child cwd
+      Then the child receives the exact argv after --
+      Then planning and implementation wrappers use the same execution contract

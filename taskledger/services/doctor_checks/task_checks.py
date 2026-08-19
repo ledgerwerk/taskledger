@@ -36,7 +36,7 @@ def _scan_task_integrity_phases(  # noqa: C901
     diagnostics: list[dict[str, object]],
 ) -> None:
     """Scan per-task integrity: plans, todos, run/lock consistency, change refs."""
-    from taskledger.domain.policies import derive_active_stage  # noqa: F811
+    from taskledger.domain.policies import derive_active_stage
     from taskledger.storage.task_store import (
         change_markdown_path,
         list_changes,
@@ -56,7 +56,7 @@ def _scan_task_integrity_phases(  # noqa: C901
         if task.introduction_ref:
             try:
                 resolve_introduction(workspace_root, task.introduction_ref)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 broken_links.append(
                     {
                         "task_id": task.id,

@@ -37,20 +37,14 @@ class ArchiveImportRequest:
 def looks_like_archive_output_target(value: str) -> bool:
     candidate = value.strip()
     lowered = candidate.lower()
-    if (
-        lowered.endswith(".tar.gz")
-        or lowered.endswith(".tgz")
-        or lowered.endswith(".json")
-    ):
+    if lowered.endswith((".tar.gz", ".tgz", ".json")):
         return True
     path = Path(candidate)
     if path.is_absolute():
         return True
     if "/" in candidate or "\\" in candidate:
         return True
-    if path.parent != Path("."):
-        return True
-    return False
+    return path.parent != Path(".")
 
 
 def resolve_archive_export_request(

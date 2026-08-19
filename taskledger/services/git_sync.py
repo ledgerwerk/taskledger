@@ -791,18 +791,21 @@ def install_git_hooks(
         if hook_path.exists():
             existing = hook_path.read_text(encoding="utf-8")
             managed = _HOOK_MARKER in existing
-            if managed and not force:
-                if _hook_targets_differ(
+            if (
+                managed
+                and not force
+                and _hook_targets_differ(
                     existing,
                     workspace_root=workspace_root,
                     repo_path=config.repo_path,
                     project_path=config.project_path,
-                ):
-                    raise LaunchError(
-                        "Existing taskledger-managed hook targets a different "
-                        "workspace or project_path. Shared sync repos are not "
-                        "multi-project-safe for single-project hooks without --force."
-                    )
+                )
+            ):
+                raise LaunchError(
+                    "Existing taskledger-managed hook targets a different "
+                    "workspace or project_path. Shared sync repos are not "
+                    "multi-project-safe for single-project hooks without --force."
+                )
             if not managed and not force:
                 skipped.append(hook_name)
                 sample_path = hooks_dir / f"{hook_name}.taskledger.sample"

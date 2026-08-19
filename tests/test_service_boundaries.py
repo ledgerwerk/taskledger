@@ -488,10 +488,12 @@ def test_tasks_validation_gate_wrapper_has_no_local_import_workaround() -> None:
 
     target: ast.FunctionDef | ast.AsyncFunctionDef | None = None
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if node.name == "_build_validation_gate_report":
-                target = node
-                break
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == "_build_validation_gate_report"
+        ):
+            target = node
+            break
 
     assert target is not None, "_build_validation_gate_report not found"
     local_imports = [

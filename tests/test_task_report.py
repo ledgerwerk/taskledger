@@ -429,7 +429,7 @@ class TestCLIReport:
         ws = init_workspace(tmp_path)
         task_id = create_done_task(ws, allow_lint_errors=True)
 
-        exit_code, stdout, stderr = _invoke(
+        exit_code, _stdout, _stderr = _invoke(
             [
                 "task",
                 "report",

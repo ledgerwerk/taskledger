@@ -36,39 +36,39 @@ def _actor() -> ActorRef:
 
 
 def _task(**overrides) -> TaskRecord:
-    defaults = dict(
-        id="task-0001",
-        slug="task-0001",
-        title="Task",
-        body="desc",
-        status_stage="draft",
-    )
+    defaults = {
+        "id": "task-0001",
+        "slug": "task-0001",
+        "title": "Task",
+        "body": "desc",
+        "status_stage": "draft",
+    }
     defaults.update(overrides)
     return TaskRecord(**defaults)
 
 
 def _lock(**overrides) -> TaskLock:
-    defaults = dict(
-        lock_id="lock-1",
-        task_id="task-0001",
-        stage="planning",
-        run_id="run-0001",
-        created_at="2026-04-24T08:00:00+00:00",
-        expires_at=None,
-        reason="test",
-        holder=_actor(),
-    )
+    defaults = {
+        "lock_id": "lock-1",
+        "task_id": "task-0001",
+        "stage": "planning",
+        "run_id": "run-0001",
+        "created_at": "2026-04-24T08:00:00+00:00",
+        "expires_at": None,
+        "reason": "test",
+        "holder": _actor(),
+    }
     defaults.update(overrides)
     return TaskLock(**defaults)
 
 
 def _run(**overrides) -> TaskRunRecord:
-    defaults = dict(
-        run_id="run-0001",
-        task_id="task-0001",
-        run_type="planning",
-        status="running",
-    )
+    defaults = {
+        "run_id": "run-0001",
+        "task_id": "task-0001",
+        "run_type": "planning",
+        "status": "running",
+    }
     defaults.update(overrides)
     return TaskRunRecord(**defaults)
 

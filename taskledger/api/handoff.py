@@ -249,11 +249,11 @@ def cancel_handoff_api(
 
 
 __all__ = [
-    "render_handoff",
-    "create_handoff",
-    "list_all_handoffs",
-    "show_handoff",
+    "cancel_handoff_api",
     "claim_handoff_api",
     "close_handoff_api",
-    "cancel_handoff_api",
+    "create_handoff",
+    "list_all_handoffs",
+    "render_handoff",
+    "show_handoff",
 ]

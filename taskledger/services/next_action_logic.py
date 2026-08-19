@@ -29,8 +29,8 @@ from taskledger.services.next_action_payload import (
 __all__ = [
     "_answer_snapshot_hash",
     "_answered_question_next_item",
-    "_commands_for_next_item",
     "_command",
+    "_commands_for_next_item",
     "_compact_next_action_blockers",
     "_criterion_next_item",
     "_criterion_report_by_id",

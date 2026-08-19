@@ -71,7 +71,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
 
     try:
         active_state = load_active_task_state(workspace_root)
-    except Exception:
+    except Exception:  # noqa: BLE001
         active_state = None
 
     return DoctorScanContext(
@@ -88,7 +88,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
     )
 
 
-def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:  # noqa: C901
+def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
     ctx = _build_scan_context(workspace_root)
 
     errors: list[str] = []
@@ -151,7 +151,7 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:  # no
         try:
             if lock_is_expired(lock):
                 expired_locks.append(lock.to_dict())
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             errors.append(str(exc))
         # Use pre-built run_map instead of resolve_run per task.
         run = ctx.run_by_key.get((lock.task_id, lock.run_id))
@@ -282,7 +282,7 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
     try:
         paths = resolve_v2_paths(workspace_root)
         inventory = build_lock_inventory(paths)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return {
             "kind": "taskledger_lock_inspection",
             "healthy": False,
@@ -381,7 +381,7 @@ def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
             for item in cast(list[str], payload["errors"])
             if "schema" in item.lower() or "version" in item.lower()
         ]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         schema_errors = [str(exc)]
     needed, issues = inspect_records_for_migration(workspace_root)
     schema_errors.extend(issue.message for issue in issues)
@@ -414,7 +414,7 @@ def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
                 f" {TASKLEDGER_STORAGE_LAYOUT_VERSION}."
                 " Run 'taskledger migrate apply --backup'."
             )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         schema_errors.append(f"Cannot read storage.yaml: {exc}")
 
     return {
@@ -475,7 +475,7 @@ def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
     event_errors: list[str] = []
     try:
         load_events(paths.events_dir)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         event_errors.append(str(exc))
     healthy = not missing and not event_errors and not stale_task_entries
     return {

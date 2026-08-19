@@ -80,6 +80,11 @@ class CLIState:
     cwd: Path
     json_output: bool
     runtime: CommandRuntime | None = None
+    command_cwd: Path | None = None
+
+    @property
+    def managed_command_cwd(self) -> Path:
+        return self.command_cwd or self.cwd
 
 
 TaskOption = Annotated[
@@ -289,6 +294,26 @@ def emit_payload(
         else:
             human = str(payload)
     typer.echo(human)
+
+
+def emit_managed_command_streams(
+    ctx: typer.Context,
+    payload: dict[str, object],
+) -> None:
+    state = cli_state_from_context(ctx)
+    if state.json_output:
+        return
+
+    stdout = payload.get("stdout")
+    stderr = payload.get("stderr")
+    if isinstance(stdout, str) and stdout:
+        typer.echo(stdout, nl=False)
+        if not stdout.endswith("\n"):
+            typer.echo()
+    if isinstance(stderr, str) and stderr:
+        typer.echo(stderr, err=True, nl=False)
+        if not stderr.endswith("\n"):
+            typer.echo(err=True)
 
 
 def emit_error(
@@ -659,8 +684,10 @@ def _default_remediation(exit_code: int) -> list[str]:
     return {
         2: ["Review the invalid input or command usage and retry."],
         3: [
-            "Check the requested resource or move through the required workflow "
-            "gate before retrying."
+            (
+                "Check the requested resource or move through the required workflow "
+                "gate before retrying."
+            )
         ],
         4: ["Inspect the active lock or break it explicitly if it is stale."],
         5: ["Inspect the external command or service failure and retry."],

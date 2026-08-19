@@ -86,8 +86,10 @@ def _render_legacy_storage_where(payload: dict[str, object]) -> str:
         f"Workspace: {payload.get('workspace_root')}",
         f"Config: {payload.get('config_path')}",
         f"Storage: {payload.get('taskledger_dir')}",
-        f"Project: {payload.get('project_name')} "
-        f"[{payload.get('project_uuid') or 'no UUID'}]",
+        (
+            f"Project: {payload.get('project_name')} "
+            f"[{payload.get('project_uuid') or 'no UUID'}]"
+        ),
         f"Ledger: {payload.get('ledger_ref')}",
         f"Inside workspace: {payload.get('inside_workspace')}",
     ]

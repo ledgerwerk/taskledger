@@ -304,10 +304,14 @@ def command_command(
             state.cwd,
             task.id,
             argv=argv,
+            command_cwd=state.managed_command_cwd,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    from taskledger.cli_common import emit_managed_command_streams
+
+    emit_managed_command_streams(ctx, payload)
     check_data: dict[str, object] = payload.get("check") or {}  # type: ignore[assignment]
     emit_payload(
         ctx,

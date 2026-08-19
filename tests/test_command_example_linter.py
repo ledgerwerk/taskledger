@@ -185,9 +185,9 @@ def test_command_examples_in_docs_use_valid_commands() -> None:
             # Skip lines that are prose (not code-like)
             # Code lines in markdown are indented or inside ``` blocks
             # Prose lines start with -, *, #, or plain text
-            if stripped.startswith("-") or stripped.startswith("*"):
+            if stripped.startswith(("-", "*")):
                 continue
-            if stripped.startswith("# ") or stripped.startswith("## "):
+            if stripped.startswith(("# ", "## ")):
                 continue
             # Skip lines with backtick-quoted taskledger (prose references)
             if "`taskledger" in stripped:
