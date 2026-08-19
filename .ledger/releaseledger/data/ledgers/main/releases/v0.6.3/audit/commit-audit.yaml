@@ -1,0 +1,135 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.6.3
+git_base_ref: v0.6.2
+git_base_sha: 196a79e85e7abf1296637bec7500c689011e054d
+git_head_ref: HEAD
+git_head_sha: 713acfa2be8891f88d889121dd769656443947f3
+git_range: 196a79e85e7abf1296637bec7500c689011e054d..713acfa2be8891f88d889121dd769656443947f3
+commit_count: 1
+rows:
+  - sha: 713acfa2be8891f88d889121dd769656443947f3
+    source_ref: git:713acfa2be8891f88d889121dd769656443947f3
+    short_sha: 713acfa
+    changed_paths:
+      - docs/command_contract.md
+      - docs/full_task_cycle.md
+      - docs/usage.md
+      - scripts/find_code_clones.py
+      - skills/taskledger/SKILL.md
+      - specs/behavior/features/implementation_checks/implementation-checks.feature
+      - taskledger/api/__init__.py
+      - taskledger/api/config.py
+      - taskledger/api/handoff.py
+      - taskledger/api/introductions.py
+      - taskledger/api/locks.py
+      - taskledger/api/plans.py
+      - taskledger/api/project.py
+      - taskledger/api/questions.py
+      - taskledger/api/repair.py
+      - taskledger/api/reviews.py
+      - taskledger/api/search.py
+      - taskledger/api/storage.py
+      - taskledger/api/task_runs.py
+      - taskledger/api/tasks.py
+      - taskledger/cli.py
+      - taskledger/cli_archive.py
+      - taskledger/cli_common.py
+      - taskledger/cli_implement.py
+      - taskledger/cli_ledger.py
+      - taskledger/cli_misc.py
+      - taskledger/cli_plan.py
+      - taskledger/cli_storage.py
+      - taskledger/domain/__init__.py
+      - taskledger/services/agent_logging.py
+      - taskledger/services/agent_transcripts.py
+      - taskledger/services/change_tracking.py
+      - taskledger/services/check_tracking.py
+      - taskledger/services/command_runner.py
+      - taskledger/services/doctor.py
+      - taskledger/services/doctor_checks/project_scan.py
+      - taskledger/services/doctor_checks/task_checks.py
+      - taskledger/services/git_sync.py
+      - taskledger/services/handoff.py
+      - taskledger/services/implementation_flow.py
+      - taskledger/services/lock_inventory.py
+      - taskledger/services/navigation.py
+      - taskledger/services/next_action_logic.py
+      - taskledger/services/plan_input.py
+      - taskledger/services/plan_materialization.py
+      - taskledger/services/planning_flow.py
+      - taskledger/services/runtime_info.py
+      - taskledger/services/task_archive.py
+      - taskledger/services/task_collections.py
+      - taskledger/services/task_export.py
+      - taskledger/services/task_lifecycle.py
+      - taskledger/services/task_repair.py
+      - taskledger/services/task_reports.py
+      - taskledger/services/tasks.py
+      - taskledger/services/tree.py
+      - taskledger/services/usage.py
+      - taskledger/services/validation_flow.py
+      - taskledger/services/worker_context.py
+      - taskledger/storage/__init__.py
+      - taskledger/storage/index_cache.py
+      - taskledger/storage/layout_migration.py
+      - taskledger/storage/ledgercore_backend.py
+      - taskledger/storage/migrations.py
+      - taskledger/storage/paths.py
+      - taskledger/storage/project_config.py
+      - taskledger/storage/project_context.py
+      - taskledger/storage/repos.py
+      - taskledger/storage/task_ids.py
+      - taskledger/storage/task_store.py
+      - taskledger/storage/worker_pipeline_config.py
+      - tests/conftest.py
+      - tests/test_agent_command_logging.py
+      - tests/test_agent_session_protocol.py
+      - tests/test_command_example_linter.py
+      - tests/test_compact_mutation_output.py
+      - tests/test_doctor.py
+      - tests/test_domain_policies.py
+      - tests/test_help_subprocess.py
+      - tests/test_implementation_checks.py
+      - tests/test_import_boundaries.py
+      - tests/test_indexes_cache_recovery.py
+      - tests/test_ledgercore_compat.py
+      - tests/test_search.py
+      - tests/test_service_boundaries.py
+      - tests/test_task_report.py
+      - tests/test_taskledger_sibling_storage.py
+      - tests/test_workspace_snapshot.py
+    stats:
+      files_changed: 0
+      insertions: 675
+      deletions: 383
+    inspected: true
+    inspected_paths:
+      - taskledger/cli.py
+      - taskledger/cli_common.py
+      - taskledger/cli_implement.py
+      - taskledger/cli_plan.py
+      - taskledger/services/agent_logging.py
+      - taskledger/services/command_runner.py
+      - taskledger/services/implementation_flow.py
+      - tests/test_agent_command_logging.py
+      - tests/test_implementation_checks.py
+      - docs/command_contract.md
+      - docs/full_task_cycle.md
+      - docs/usage.md
+    observed_behavior:
+      Managed plan and implement command wrappers now preserve the
+      exact child argv, execute from the CLI invocation directory or explicit root,
+      capture stdout and stderr in structured results, show those streams in human mode,
+      and record the child cwd in managed command logs. Focused tests cover argv, cwd,
+      human output, JSON output, and transcript logging.
+    public_impact: public
+    decision: accepted
+    evidence_subject: "feat: improve transcript logging"
+    target_entry_id: entry-0001
+    notes:
+      The remaining changed paths are import/export ordering, formatting, lint
+      cleanup, and supporting refactors without separate release-note behavior.
