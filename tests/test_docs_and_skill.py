@@ -317,10 +317,10 @@ def test_docs_and_skill_describe_isolated_ledger() -> None:
 def test_behavior_spec_docs_do_not_promote_bdd_runners() -> None:
     """Verify docs do not reference an external BDD runner or pytest-bdd/behave.
 
-    ARCHITECTURE.md is generated from records; this test catches
+    docs/architecture.md is generated from records; this test catches
     regressions if the source drifts back to the old wording.
     """
-    architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    architecture = (ROOT / "docs" / "architecture.md").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")

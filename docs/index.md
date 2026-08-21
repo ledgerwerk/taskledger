@@ -10,6 +10,7 @@
 
 usage
 full_task_cycle
+architecture
 architecture_taskledger_split
 multi_repo
 api

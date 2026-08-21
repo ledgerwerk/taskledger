@@ -66,8 +66,7 @@ is `taskledger/command_inventory.py` and `docs/command_contract.md`.
 
 ## Architecture records
 
-Arc42 architecture records live under the Archledger direct sibling mount
-`../ledger/archledger/<project-uuid>/` and are the source of
-`ARCHITECTURE.md`. Skills (`skills/taskledger/SKILL.md`) and
-`docs/architecture_taskledger_split.md` live outside the Python package and
-outside the archledger build output.
+Arc42 architecture records live under the canonical Archledger data mount
+`.ledger/archledger/data/` and are the source of `docs/architecture.md`. Skills
+(`skills/taskledger/SKILL.md`) and `docs/architecture_taskledger_split.md` live
+outside the Python package and outside the Archledger build output.

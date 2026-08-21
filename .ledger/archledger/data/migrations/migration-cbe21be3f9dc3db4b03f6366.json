@@ -1,0 +1,14 @@
+{
+  "migration_id": "migration-cbe21be3f9dc3db4b03f6366",
+  "migration": "identity-ledgercore",
+  "completed_at": "2026-08-21T09:03:50.559860+00:00",
+  "project_uuid_before": "081c7c05-2d10-42b7-9b37-3d814c2f400a",
+  "project_uuid_after": "081c7c05-2d10-42b7-9b37-3d814c2f400a",
+  "source_fingerprint": "sha256:1ba4d0cdcaf09e4a0f706e6d3325b36bb8f07c99a47f99b9a4350efa9e384508",
+  "canonical_fingerprint": "sha256:1ba4d0cdcaf09e4a0f706e6d3325b36bb8f07c99a47f99b9a4350efa9e384508",
+  "legacy_source_preserved": true,
+  "cleanup_available": true,
+  "cleanup_command": "archledger migrate cleanup identity-ledgercore --dry-run",
+  "copied_paths": [],
+  "rewritten_paths": []
+}
