@@ -13,7 +13,7 @@ from pathlib import Path
 
 from taskledger.domain.models import TaskRecord
 from taskledger.services.tasks import resolve_task
-from taskledger.storage.paths import resolve_project_paths
+from taskledger.storage.paths import probe_taskledger_project, resolve_project_paths
 from taskledger.storage.project_config import (
     PromptProfile,
     load_project_config_overrides,
@@ -25,6 +25,8 @@ def load_workflow_guidance(
     workspace_root: Path,
 ) -> PromptProfile | None:
     """Read project config and return the planning prompt profile, if any."""
+    if probe_taskledger_project(workspace_root).source == "none":
+        return None
     paths = resolve_project_paths(workspace_root)
     overrides = load_project_config_overrides(paths)
     config = merge_project_config(overrides)

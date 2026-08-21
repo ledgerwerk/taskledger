@@ -250,9 +250,12 @@ def test_refresh_implementation_snapshot_unblocks_validation_and_logs_event(
     next_payload = _invoke_json(["next-action"], cwd=tmp_path)
     assert next_payload["result"]["action"] == "validate"
 
-    manifest = resolve_v2_paths(tmp_path).ledger_dir / new_run.workspace_snapshot_ref
+    paths = resolve_v2_paths(tmp_path)
+    manifest = paths.runtime_root / Path(new_run.workspace_snapshot_ref).relative_to(
+        "runtime"
+    )
     manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
-    manifest_path = manifest.relative_to(tmp_path).as_posix()
+    manifest_path = new_run.workspace_snapshot_ref
     assert not any(entry["path"] == manifest_path for entry in manifest_data["entries"])
 
     _invoke(["validate", "start", "--task", task_id], cwd=tmp_path)

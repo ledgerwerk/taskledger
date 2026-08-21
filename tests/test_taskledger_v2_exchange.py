@@ -25,6 +25,7 @@ from taskledger.exchange import (
     read_project_archive,
 )
 from taskledger.storage.agent_logs import load_agent_command_logs
+from taskledger.storage.task_store import resolve_v2_paths, task_lock_path
 from tests.support.builders import init_workspace
 
 pytestmark = [pytest.mark.cli, pytest.mark.integration, pytest.mark.slow]
@@ -176,9 +177,9 @@ def _archive_with_extra_member(*, member_name: str, member_size: int) -> bytes:
 
 
 def _task_lock_paths(project_root: Path, task_id: str) -> list[Path]:
-    return sorted(
-        (project_root / ".taskledger" / "ledgers").glob(f"*/tasks/{task_id}/lock.yaml")
-    )
+    paths = resolve_v2_paths(project_root)
+    path = task_lock_path(paths, task_id)
+    return [path] if path.exists() else []
 
 
 def _prepare_active_implementation(project_root: Path, *, slug: str) -> None:

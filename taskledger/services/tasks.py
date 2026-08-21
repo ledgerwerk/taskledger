@@ -98,7 +98,6 @@ from taskledger.storage.locks import (
 from taskledger.storage.project_config import load_worker_pipeline_config
 from taskledger.storage.task_store import (
     TaskVisibility,
-    ensure_v2_layout,
     list_changes,
     list_plans,
     list_questions,
@@ -110,6 +109,7 @@ from taskledger.storage.task_store import (
     load_requirements,
     load_todos,
     overwrite_plan,
+    require_v2_layout,
     resolve_plan,
     resolve_question,
     resolve_run,
@@ -1569,7 +1569,7 @@ def reindex(workspace_root: Path) -> dict[str, object]:
     from taskledger.storage.project_context import require_mutable_project_context
 
     context = require_mutable_project_context(workspace_root)
-    paths = ensure_v2_layout(workspace_root)
+    paths = require_v2_layout(workspace_root)
     counts = rebuild_v2_indexes(paths)
     _append_event(
         workspace_root, "*", "repair.index", dict(cast(dict[str, object], counts))
@@ -1768,6 +1768,7 @@ def _acquire_lock(
         harness=harness,
     )
     try:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
         write_lock(lock_path, lock)
     except LaunchError as exc:
         raise _cli_error(

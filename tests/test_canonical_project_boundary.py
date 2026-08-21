@@ -96,6 +96,42 @@ def _tree_snapshot(root: Path) -> dict[str, bytes | None]:
     return snapshot
 
 
+def test_doctor_on_uninitialized_project_is_read_only(tmp_path: Path) -> None:
+    before = _tree_snapshot(tmp_path)
+
+    result = runner.invoke(app, ["--root", str(tmp_path), "doctor"])
+
+    assert result.exit_code == 0
+    assert _tree_snapshot(tmp_path) == before
+    assert "TASKLEDGER_NOT_INITIALIZED" in result.output
+    assert "taskledger init" in result.output
+
+
+def test_task_create_on_uninitialized_project_fails_closed(tmp_path: Path) -> None:
+    before = _tree_snapshot(tmp_path)
+
+    result = runner.invoke(app, ["--root", str(tmp_path), "task", "create", "Example"])
+
+    assert result.exit_code != 0
+    assert _tree_snapshot(tmp_path) == before
+    assert "TASKLEDGER_NOT_INITIALIZED" in result.output
+    assert "taskledger init" in result.output
+
+
+def test_legacy_initializer_is_not_used_by_production_modules() -> None:
+    package_root = Path(__file__).parents[1] / "taskledger"
+    offenders: list[str] = []
+    for path in package_root.rglob("*.py"):
+        if path.name == "task_store.py":
+            continue
+        for number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            if "ensure_v2_layout" in line:
+                offenders.append(f"{path}:{number}")
+    assert offenders == []
+
+
 @pytest.mark.parametrize(
     "argv",
     [

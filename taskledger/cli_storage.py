@@ -341,8 +341,8 @@ def register_storage_commands(app: typer.Typer) -> None:
     ) -> None:
         """Set storage topology for a mount.
 
-        This command changes configuration only. It does NOT copy, move, or
-        delete data. If data relocation is needed, use `taskledger migrate`.
+        This command changes configuration only. It does not copy, move, or
+        delete data. Use `taskledger migrate` for explicit data relocation.
         """
         state = cli_state_from_context(ctx)
 
@@ -365,7 +365,7 @@ def register_storage_commands(app: typer.Typer) -> None:
                 storage=storage,
                 target=scope,
                 external_root=resolved_root,
-                mode="copy",  # Topology-only, no data movement
+                mode="copy",  # Compatibility parameter; storage_set is topology-only
             )
         except LaunchError as exc:
             emit_error(ctx, exc)

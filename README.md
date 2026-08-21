@@ -849,4 +849,4 @@ source refs, evidence refs, reviews, and handoffs.
 
 ## Canonical Ledger layout
 
-New projects use a schema-3 Ledgercore manifest. Taskledger configuration is stored at `.ledger/taskledger/config.toml`. The default persistent `data` mount is external storage rooted at `../ledger`, while `indexes` is cache storage. A machine-local `.ledger/ledger.local.toml` may select `user-data`; use `taskledger storage where`, `taskledger storage set`, and `taskledger storage clear-override` for storage operations. Legacy projects remain readable for explicit migration.
+New projects use a schema-3 Ledgercore manifest. Taskledger configuration is stored at `.ledger/taskledger/config.toml`. The mounts are durable `data` (external `../ledger` by default), checkout-local `runtime` (user-data), diagnostic `logs` (user-data), and rebuildable `indexes` (cache). A machine-local `.ledger/ledger.local.toml` may select `user-data` for `data`; use `taskledger storage where`, `taskledger storage set`, and `taskledger storage clear-override` for storage operations. Legacy `.taskledger/` projects remain readable only for explicit migration.

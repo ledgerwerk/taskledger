@@ -488,8 +488,10 @@ def load_project_config_overrides(paths: ProjectPaths) -> dict[str, object]:
 
 
 def load_worker_pipeline_config(workspace_root: Path) -> WorkerPipelineConfig | None:
-    from taskledger.storage.paths import resolve_project_paths
+    from taskledger.storage.paths import probe_taskledger_project, resolve_project_paths
 
+    if probe_taskledger_project(workspace_root).source == "none":
+        return None
     paths = resolve_project_paths(workspace_root)
     overrides = load_project_config_overrides(paths)
     return merge_project_config(overrides).worker_pipeline

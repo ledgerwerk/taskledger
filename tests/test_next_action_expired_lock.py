@@ -23,9 +23,7 @@ def _json(output: str) -> dict:
 
 
 def _expire_lock(tmp: Path, task_id: str) -> dict:
-    lock_path = (
-        tmp / ".taskledger" / "ledgers" / "main" / "tasks" / task_id / "lock.yaml"
-    )
+    lock_path = tmp / ".taskledger" / "checkouts" / "main" / "locks" / f"{task_id}.yaml"
     lock_payload = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
     lock_payload["expires_at"] = "2000-01-01T00:00:00+00:00"
     lock_path.write_text(

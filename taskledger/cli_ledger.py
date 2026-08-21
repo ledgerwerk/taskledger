@@ -172,6 +172,7 @@ def ledger_fork_command(
             load_project_locator,
             resolve_taskledger_root,
         )
+        from taskledger.storage.project_context import load_project_context
 
         validate_ledger_ref(ref)
         locator = load_project_locator(state.cwd)
@@ -181,16 +182,29 @@ def ledger_fork_command(
             raise LaunchError(f"Cannot fork ledger '{ref}' onto itself.")
 
         root = resolve_taskledger_root(state.cwd)
+        context = load_project_context(state.cwd, require_initialized=False)
         new_ledger_dir = root / "ledgers" / ref
+        new_logs_dir = context.paths.logs_root / "ledgers" / ref
+        new_indexes_dir = context.paths.indexes_root / "ledgers" / ref
+        new_runtime_dir = context.paths.runtime_root / "checkouts" / ref
 
         if new_ledger_dir.exists():
             raise LaunchError(
                 f"Ledger '{ref}' already exists. Use 'taskledger ledger switch {ref}'."
             )
 
-        # Create the new ledger directory structure
-        for subdir in ("tasks", "events", "indexes", "intros", "releases"):
-            (new_ledger_dir / subdir).mkdir(parents=True, exist_ok=True)
+        # Create the new ledger namespace across all canonical mounts.
+        for directory in (
+            new_ledger_dir,
+            new_ledger_dir / "intros",
+            new_ledger_dir / "tasks",
+            new_ledger_dir / "releases",
+            new_logs_dir / "events",
+            new_logs_dir / "agent-logs",
+            new_indexes_dir,
+            new_runtime_dir,
+        ):
+            directory.mkdir(parents=True, exist_ok=True)
 
         # Write empty index files
         from taskledger.storage.atomic import atomic_write_text
@@ -200,7 +214,7 @@ def ledger_fork_command(
             "dependencies.json",
             "introductions.json",
         ):
-            atomic_write_text(new_ledger_dir / "indexes" / index_file, "[]\n")
+            atomic_write_text(new_indexes_dir / index_file, "[]\n")
 
         # Update config to point to the new ledger
         previous_ref = config.ref

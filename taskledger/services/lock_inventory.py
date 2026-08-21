@@ -204,8 +204,16 @@ def build_lock_inventory(
     Parse errors are preserved per-file and never silenced.
     """
     entries: list[LockInventoryEntry] = []
-    for lock_path in sorted(paths.tasks_dir.glob("task-*/lock.yaml")):
-        parent_name = lock_path.parent.name
+    lock_paths = list(
+        (paths.runtime_root / "checkouts" / paths.ledger_ref / "locks").glob("*.yaml")
+    )
+    lock_paths.extend(paths.tasks_dir.glob("task-*/lock.yaml"))
+    for lock_path in sorted(lock_paths):
+        parent_name = (
+            lock_path.stem
+            if lock_path.parent.name == "locks"
+            else lock_path.parent.name
+        )
         task_id = parent_name if parent_name.startswith("task-") else None
         lock: TaskLock | None = None
         parse_error: str | None = None

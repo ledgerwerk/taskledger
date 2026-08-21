@@ -6,6 +6,7 @@ import importlib
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Literal, TypeVar, cast
@@ -48,7 +49,10 @@ from ledgercore.storage_binding import (
 
 TOOL_NAME = "taskledger"
 DATA_MOUNT = "data"
+RUNTIME_MOUNT = "runtime"
+LOGS_MOUNT = "logs"
 INDEX_MOUNT = "indexes"
+TASKLEDGER_MOUNTS = (DATA_MOUNT, RUNTIME_MOUNT, LOGS_MOUNT, INDEX_MOUNT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,6 +201,8 @@ def build_taskledger_manifest_with_registration(
             cast(Literal["project", "external", "user-data", "cache"], data_storage),
             external_root if data_storage == "external" else None,
         ),
+        RUNTIME_MOUNT: MountDefinition(RUNTIME_MOUNT, "user-data", None),
+        LOGS_MOUNT: MountDefinition(LOGS_MOUNT, "user-data", None),
         INDEX_MOUNT: MountDefinition(INDEX_MOUNT, "cache", None),
     }
     registrations = dict(manifest.ledgers) if manifest is not None else {}
@@ -264,6 +270,8 @@ def ensure_taskledger_ledger_registration(
                                     else {}
                                 ),
                             },
+                            RUNTIME_MOUNT: {"storage": "user-data"},
+                            LOGS_MOUNT: {"storage": "user-data"},
                             INDEX_MOUNT: {"storage": "cache"},
                         }
                     }
@@ -286,13 +294,15 @@ def initialize_taskledger_bindings(
     if initialize_config:
         results["config"] = _call(lambda: initialize_config_binding(layout))
     if initialize_data:
-        data_mount = layout.mounts[DATA_MOUNT]
-        results[DATA_MOUNT] = _call(
-            lambda: initialize_storage_binding(
-                data_mount,
-                require_empty=not (data_mount.path / ".ledger-project.toml").exists(),
+        for mount_name in (DATA_MOUNT, RUNTIME_MOUNT, LOGS_MOUNT):
+            mount = layout.mounts[mount_name]
+            results[mount_name] = _call(
+                partial(
+                    initialize_storage_binding,
+                    mount,
+                    require_empty=not (mount.path / ".ledger-project.toml").exists(),
+                )
             )
-        )
     if initialize_indexes:
         indexes_mount = layout.mounts[INDEX_MOUNT]
         results[INDEX_MOUNT] = _call(
@@ -340,7 +350,7 @@ def set_taskledger_mount_target(
             TOOL_NAME,
             mount,
             storage=storage,
-            root=external_root,
+            root=external_root if storage == "external" else None,
         )
         _call(
             lambda: write_ledger_local_config(
@@ -380,7 +390,11 @@ def migrate_taskledger_mount(
     if target == "local":
         overrides = _call(
             lambda: ledgercore.set_local_mount_override(
-                loaded, TOOL_NAME, mount, storage=storage, root=external_root
+                loaded,
+                TOOL_NAME,
+                mount,
+                storage=storage,
+                root=external_root if storage == "external" else None,
             )
         )
         manifest = loaded.manifest
@@ -457,6 +471,9 @@ def recover_taskledger_migration(journal_path: Path) -> Any:
 __all__ = [
     "DATA_MOUNT",
     "INDEX_MOUNT",
+    "LOGS_MOUNT",
+    "RUNTIME_MOUNT",
+    "TASKLEDGER_MOUNTS",
     "TOOL_NAME",
     "LedgerProjectLocator",
     "ResolvedLedgerLayout",

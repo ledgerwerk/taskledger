@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from taskledger.errors import LaunchError
+from taskledger.storage.init import init_project_state
 from taskledger.storage.taskledger_migration import require_no_active_taskledger_locks
 
 
@@ -32,10 +33,12 @@ class _FakeInventory:
 
 
 def test_migration_quiescence_allows_empty_lock_set(tmp_path: Path) -> None:
+    init_project_state(tmp_path)
     require_no_active_taskledger_locks(tmp_path)
 
 
 def test_migration_quiescence_reports_active_locks(tmp_path: Path, monkeypatch) -> None:
+    init_project_state(tmp_path)
     from taskledger.services import lock_inventory
 
     fake_entries = [

@@ -56,11 +56,11 @@ from taskledger.storage.project_identity import (
 )
 from taskledger.storage.task_store import (
     V2Paths,
-    ensure_v2_layout,
     load_active_locks,
     load_active_task_state,
     overwrite_plan,
     plan_markdown_path,
+    require_v2_layout,
     resolve_task,
     resolve_v2_paths,
     save_active_task_state,
@@ -252,7 +252,7 @@ def import_project_payload(
             "renumbered": renumbered,
             "imported_task_ids": imported_task_ids,
         }
-    paths = ensure_v2_layout(workspace_root)
+    paths = require_v2_layout(workspace_root)
     if replace:
         _clear_v2_state(paths)
     else:
@@ -744,6 +744,7 @@ def _clear_v2_state(paths: V2Paths) -> None:
         paths.introductions_dir,
         paths.releases_dir,
         paths.events_dir,
+        paths.runtime_root / "checkouts" / paths.ledger_ref / "locks",
     ):
         if directory.exists():
             shutil.rmtree(directory)
@@ -778,7 +779,7 @@ def write_project_archive(
     overwrite: bool = False,
 ) -> dict[str, object]:
     """Export current-ledger state into a gzip-compressed tar archive."""
-    paths = ensure_v2_layout(workspace_root)
+    paths = require_v2_layout(workspace_root)
     locator = load_project_locator(workspace_root)
     project_uuid = load_project_uuid(locator.config_path)
     if project_uuid is None:
@@ -1250,7 +1251,7 @@ def _collect_artifact_members(
     artifact_roots = [paths.tasks_dir.glob("task-*/artifacts/**/*")]
     if selected_task_ids is None:
         artifact_roots.append(
-            (paths.project_dir / "agent-logs" / "artifacts").glob("**/*")
+            (paths.events_dir.parent / "agent-logs" / "artifacts").glob("**/*")
         )
     members: list[tuple[str, Path]] = []
     for iterator in artifact_roots:
@@ -1263,8 +1264,13 @@ def _collect_artifact_members(
                 )
                 if match is None or match.group(1) not in selected_task_ids:
                     continue
-            relative = source_path.relative_to(paths.project_dir)
-            archive_name = f"{ARTIFACTS_PREFIX}{relative.as_posix()}"
+            try:
+                relative = source_path.relative_to(paths.project_dir)
+                archive_root = ""
+            except ValueError:
+                relative = source_path.relative_to(paths.events_dir.parent)
+                archive_root = "logs/"
+            archive_name = f"{ARTIFACTS_PREFIX}{archive_root}{relative.as_posix()}"
             members.append((archive_name, source_path))
     members.sort(key=lambda item: item[0])
     return members
@@ -1279,7 +1285,7 @@ def _extract_artifact_members(
 ) -> int:
     if not artifact_members:
         return 0
-    paths = ensure_v2_layout(workspace_root)
+    paths = require_v2_layout(workspace_root)
     with tarfile.open(source_path, "r:gz") as tar:
         members = {m.name: m for m in tar.getmembers()}
         extracted = 0
@@ -1306,7 +1312,10 @@ def _extract_artifact_members(
             if stream is None:
                 raise LaunchError(f"Archive member {member_name!r} cannot be read")
             content = stream.read()
-            destination = paths.project_dir / relative
+            if relative.parts and relative.parts[0] == "logs":
+                destination = paths.events_dir.parent / Path(*relative.parts[1:])
+            else:
+                destination = paths.project_dir / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(content)
             extracted += 1

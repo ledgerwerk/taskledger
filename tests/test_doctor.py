@@ -5,6 +5,8 @@ from __future__ import annotations
 import py_compile
 from pathlib import Path
 
+import pytest
+
 from taskledger.domain.handoff import TaskHandoffRecord
 from taskledger.domain.models import (
     AcceptanceCriterion,
@@ -36,6 +38,12 @@ from taskledger.storage.task_store import (
     save_task,
     save_todos,
 )
+
+
+@pytest.fixture(autouse=True)
+def _initialized_doctor_project(tmp_path: Path) -> None:
+    """Doctor unit tests operate on an explicitly initialized legacy fixture."""
+    ensure_v2_layout(tmp_path)
 
 
 def _actor() -> ActorRef:

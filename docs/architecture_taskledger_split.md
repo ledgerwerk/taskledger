@@ -25,13 +25,17 @@ task -> plan -> approval -> implement -> validate -> done
 ## Storage model
 
 Markdown records are canonical. Task, plan, and run reads come from those
-records directly. The authoritative Taskledger data mount is
-`../ledger/taskledger/<project-uuid>` under the shared sibling base. The
-`task_sidecars.json` summary index and other rebuildable indexes are
-checkout-scoped cache data. Action and event logging is enabled by default and
-appends immutable `TaskEvent` records to the ledger-level `events/`
-directory. Active stages require visible lock files, and stale locks are
-reported instead of being cleared silently.
+records directly. Canonical Taskledger uses four Ledgercore mounts: durable
+`data`, checkout-local `runtime`, diagnostic `logs`, and rebuildable cache
+`indexes`. The default data mount is external sibling storage; runtime and logs
+use user-data and indexes use cache. Local machine overrides live in
+`.ledger/ledger.local.toml`.
+
+Active/session state and workspace snapshot manifests are runtime data. Raw event
+and agent-command logs are diagnostic logs. Small semantic run summaries and
+task records remain in data. Indexes are always derived from data and may be
+deleted and rebuilt without task-history loss. The historical `.taskledger/`
+layout and root `taskledger.toml` are compatibility and migration inputs only.
 
 ## Lifecycle flow
 

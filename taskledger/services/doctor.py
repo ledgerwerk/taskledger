@@ -23,7 +23,6 @@ from taskledger.storage.paths import (
 )
 from taskledger.storage.task_store import (
     V2Paths,
-    ensure_v2_layout,
     list_changes_from_paths,
     list_plans_from_paths,
     list_questions_from_paths,
@@ -31,6 +30,8 @@ from taskledger.storage.task_store import (
     list_tasks,
     load_active_locks_from_paths,
     load_active_task_state,
+    require_v2_layout,
+    resolve_v2_paths,
 )
 
 
@@ -54,7 +55,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
     """Build the immutable scan context once at the start of a doctor invocation."""
     resolved_paths = resolve_project_paths(workspace_root)
     locator = load_project_locator(workspace_root)
-    paths = ensure_v2_layout(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
 
     tasks = tuple(list_tasks(workspace_root))
     task_by_id: dict[str, TaskRecord] = {task.id: task for task in tasks}
@@ -235,8 +236,8 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
             '`taskledger repair lock <task> --reason "..."`.'
         )
 
-    # Counts computed via path-bound readers to avoid repeated
-    # ensure_v2_layout / load_project_context calls per task.
+    # Counts are computed via path-bound readers to avoid repeated
+    # resolution and context loading per task.
     total_plans = sum(
         len(list_plans_from_paths(ctx.paths, task.id)) for task in ctx.tasks
     )
@@ -425,7 +426,7 @@ def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
 
 
 def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = require_v2_layout(workspace_root)
     missing = [
         str(path.relative_to(paths.project_dir))
         for path in (
@@ -489,7 +490,7 @@ def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
 
 def cleanup_orphan_slug_dirs(workspace_root: Path) -> dict[str, object]:
     """Remove empty slug-named directories under tasks/ that have no task.md."""
-    paths = ensure_v2_layout(workspace_root)
+    paths = require_v2_layout(workspace_root)
     tasks = list_tasks(workspace_root)
     task_slugs = {task.slug for task in tasks if task.slug}
     removed: list[str] = []
@@ -511,7 +512,7 @@ def cleanup_orphan_slug_dirs(workspace_root: Path) -> dict[str, object]:
 
 
 def _inspect_v2_project_with_boundary(workspace_root: Path) -> dict[str, object]:
-    from taskledger.errors import TaskledgerRegistrationMissing
+    from taskledger.errors import LaunchError, TaskledgerRegistrationMissing
     from taskledger.services.doctor_checks.project_scan import (
         scan_canonical_boundary,
     )
@@ -551,4 +552,29 @@ def _inspect_v2_project_with_boundary(workspace_root: Path) -> dict[str, object]
             "expired_locks": [],
             "run_lock_mismatches": [],
             "diagnostics": diagnostics,
+        }
+    except LaunchError as exc:
+        if exc.code != "TASKLEDGER_NOT_INITIALIZED":
+            raise
+        return {
+            "kind": "taskledger_doctor",
+            "counts": {
+                "tasks": 0,
+                "plans": 0,
+                "questions": 0,
+                "runs": 0,
+                "changes": 0,
+                "locks": 0,
+                "active_task": 0,
+            },
+            "healthy": False,
+            "errors": [str(exc)],
+            "warnings": [],
+            "repair_hints": list(exc.remediation),
+            "broken_links": [],
+            "expired_locks": [],
+            "run_lock_mismatches": [],
+            "diagnostics": [
+                {"severity": "error", "code": exc.code, "message": str(exc)}
+            ],
         }

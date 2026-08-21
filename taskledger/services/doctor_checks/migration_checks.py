@@ -19,6 +19,8 @@ def scan_migration_state(
 
     # Detect orphan slug directories (empty dirs matching task slugs)
     task_slugs = {task.slug for task in tasks if task.slug}
+    if not paths.tasks_dir.exists():
+        return
     for child in paths.tasks_dir.iterdir():
         if (
             child.is_dir()

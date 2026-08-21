@@ -178,4 +178,4 @@ Evidence import is explicit and auditable through
 
 ## Canonical mounts
 
-Canonical sync includes the durable data mount and optional logs mount. Cache indexes are excluded and can be deleted and rebuilt. Workspace and cache family roots are resolved by Ledgercore and are not changed by `taskledger storage move`.
+Canonical state sync includes the durable `data` mount by default. `runtime`, `logs`, and cache `indexes` are excluded from application-source sync; indexes can be deleted and rebuilt from data. An explicit audit policy may include selected logs. Workspace, user-data, and cache roots are resolved by Ledgercore and are not changed by `taskledger storage move`.

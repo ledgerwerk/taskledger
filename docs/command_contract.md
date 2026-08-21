@@ -730,10 +730,11 @@ from local process checks; inspect handoffs or ask the user before repairing.
 ## Layout and migration commands
 
 `taskledger config path` reports the project-located Taskledger configuration.
-`taskledger storage path data|indexes` reports named resolved mounts.
+`taskledger storage path data|runtime|logs|indexes` reports named resolved mounts.
 Use `storage validate`, `storage set`, and `storage clear-override` for schema-3
-storage selection. Legacy layout conversion remains explicit through
-`migrate status`, `migrate plan`, and `migrate apply`.
+storage selection. `storage set` changes topology only; use the explicit
+migration commands for data relocation. Legacy layout conversion remains explicit
+through `migrate status`, `migrate plan`, and `migrate apply`.
 
 Migration inspection and apply share these options:
 

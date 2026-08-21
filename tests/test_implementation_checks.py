@@ -160,6 +160,8 @@ class TestClassifyCheckCommand:
 def _prepare_task_with_impl_run(tmp_path: Path) -> str:
     """Create a task with an active implementation run for testing."""
     runner = CliRunner()
+    initialized = runner.invoke(app, ["--root", str(tmp_path), "init"])
+    assert initialized.exit_code == 0, initialized.output
     r = runner.invoke(
         app,
         [
@@ -447,6 +449,8 @@ def test_implement_command_human_mode_emits_child_output(tmp_path: Path) -> None
 # specmason: req=REQ-0026 ac=AC-0321
 def test_plan_command_preserves_cwd_and_json_streams(tmp_path: Path) -> None:
     runner = CliRunner()
+    initialized = runner.invoke(app, ["--root", str(tmp_path), "init"])
+    assert initialized.exit_code == 0, initialized.output
     create = runner.invoke(
         app,
         [
@@ -495,6 +499,8 @@ def test_plan_command_preserves_cwd_and_json_streams(tmp_path: Path) -> None:
 # specmason: req=REQ-0026 ac=AC-0321
 def test_plan_command_human_mode_emits_child_output(tmp_path: Path) -> None:
     runner = CliRunner()
+    initialized = runner.invoke(app, ["--root", str(tmp_path), "init"])
+    assert initialized.exit_code == 0, initialized.output
     for args in (
         ["task", "create", "Planning task", "--slug", "planning-task"],
         ["task", "activate", "planning-task"],

@@ -886,13 +886,7 @@ def test_next_action_with_expired_lock_returns_repair_hint(tmp_path: Path) -> No
     )
 
     lock_path = (
-        tmp_path
-        / ".taskledger"
-        / "ledgers"
-        / "main"
-        / "tasks"
-        / "task-0001"
-        / "lock.yaml"
+        tmp_path / ".taskledger" / "checkouts" / "main" / "locks" / "task-0001.yaml"
     )
     lock_payload = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
     lock_payload["expires_at"] = "2000-01-01T00:00:00+00:00"

@@ -13,6 +13,8 @@ from taskledger.storage.ledger_config import LedgerConfig, load_ledger_config
 from taskledger.storage.ledgercore_backend import (
     DATA_MOUNT,
     INDEX_MOUNT,
+    LOGS_MOUNT,
+    RUNTIME_MOUNT,
     TaskledgerLedgerLayout,
     load_taskledger_ledger_layout,
     locate_taskledger_project,
@@ -59,7 +61,7 @@ CANONICAL_LEDGER_NAME = "taskledger"
 CANONICAL_LEDGER_CODE = "tl"
 CANONICAL_CONFIG_VERSION = 3
 CANONICAL_STORAGE_LAYOUT_VERSION = 5
-CANONICAL_MOUNT_NAMES = (DATA_MOUNT, INDEX_MOUNT)
+CANONICAL_MOUNT_NAMES = (DATA_MOUNT, RUNTIME_MOUNT, LOGS_MOUNT, INDEX_MOUNT)
 CANONICAL_DATA_RELATIVE_PATH = Path("data")
 CANONICAL_INDEX_RELATIVE_PATH = Path("indexes")
 LEGACY_CONFIG_FILENAMES = (".taskledger.toml", "taskledger.toml")
@@ -76,6 +78,7 @@ class TaskledgerPaths:
     workspace_root: Path
     config_path: Path
     data_root: Path
+    runtime_root: Path
     logs_root: Path
     indexes_root: Path
     storage_meta_path: Path
@@ -159,6 +162,7 @@ def _paths_for_mounts(
     workspace_root: Path,
     config_path: Path,
     data_root: Path,
+    runtime_root: Path,
     logs_root: Path,
     indexes_root: Path,
     ledger_ref: str,
@@ -179,12 +183,13 @@ def _paths_for_mounts(
         workspace_root=workspace_root,
         config_path=config_path,
         data_root=data_root,
+        runtime_root=runtime_root,
         logs_root=logs_root,
         indexes_root=indexes_root,
         storage_meta_path=_safe_child(data_root, "storage.yaml"),
         state_path=_safe_child(data_root, "state.toml"),
-        actor_path=_safe_child(data_root, "actor.yaml"),
-        harness_path=_safe_child(data_root, "harness.yaml"),
+        actor_path=_safe_child(runtime_root, "actor.yaml"),
+        harness_path=_safe_child(runtime_root, "harness.yaml"),
         ledger_ref=ledger_ref,
         ledger_data_dir=data_ledger,
         ledger_logs_dir=logs_ledger,
@@ -194,7 +199,10 @@ def _paths_for_mounts(
         tasks_dir=_safe_child(data_ledger, "tasks"),
         events_dir=_safe_child(logs_ledger, "events"),
         agent_logs_dir=_safe_child(logs_ledger, "agent-logs"),
-        active_task_path=_safe_child(data_ledger, "active-task.yaml"),
+        active_task_path=_safe_child(
+            _safe_child(runtime_root, "checkouts", ledger_ref),
+            "active-task.yaml",
+        ),
         repo_registry_path=_safe_child(data_ledger, "repos.json"),
         task_index_path=_safe_child(indexes_ledger, "tasks.json"),
         sidecar_index_path=_safe_child(indexes_ledger, "task_sidecars.json"),
@@ -220,6 +228,7 @@ def _legacy_context(project_paths: ProjectPaths) -> TaskledgerProjectContext:
     paths = _paths_for_mounts(
         project_paths.workspace_root,
         project_paths.config_path,
+        data_root,
         data_root,
         data_root,
         data_root,
@@ -264,14 +273,29 @@ def _legacy_marker_root(start: Path) -> Path | None:
 
 
 def _validate_registration(layout: Any) -> None:
-    if set(layout.mounts) != set(CANONICAL_MOUNT_NAMES):
+    mount_names = set(layout.mounts)
+    if mount_names not in (set(CANONICAL_MOUNT_NAMES), {DATA_MOUNT, INDEX_MOUNT}):
         raise LaunchError(
             "TASKLEDGER_REGISTRATION_INVALID: Taskledger registration must define "
-            "exactly data and indexes mounts."
+            "data, runtime, logs, and indexes mounts."
         )
     if layout.mounts[DATA_MOUNT].storage not in {"project", "external", "user-data"}:
         raise LaunchError(
             "TASKLEDGER_STORAGE_BINDING_INVALID: data must be persistent."
+        )
+    runtime_mount = layout.mounts.get(RUNTIME_MOUNT)
+    if runtime_mount is not None and runtime_mount.storage != "user-data":
+        raise LaunchError(
+            "TASKLEDGER_STORAGE_BINDING_INVALID: runtime must use user-data."
+        )
+    logs_mount = layout.mounts.get(LOGS_MOUNT)
+    if logs_mount is not None and logs_mount.storage not in {
+        "project",
+        "external",
+        "user-data",
+    }:
+        raise LaunchError(
+            "TASKLEDGER_STORAGE_BINDING_INVALID: logs must use persistent storage."
         )
     if layout.mounts[INDEX_MOUNT].storage != "cache":
         raise LaunchError("TASKLEDGER_STORAGE_BINDING_INVALID: indexes must be cache.")
@@ -303,10 +327,20 @@ def _context_from_layout(
                 f"Missing Taskledger config {config_path}. Run `taskledger init`."
             )
     data_root = layout.mounts[DATA_MOUNT].path
+    runtime_mount = layout.mounts.get(RUNTIME_MOUNT)
+    logs_mount = layout.mounts.get(LOGS_MOUNT)
+    runtime_root = runtime_mount.path if runtime_mount is not None else data_root
+    logs_root = logs_mount.path if logs_mount is not None else data_root
     indexes_root = layout.mounts[INDEX_MOUNT].path
     ledger = _load_state(data_root / "state.toml")
     paths = _paths_for_mounts(
-        layout.project_root, config_path, data_root, data_root, indexes_root, ledger.ref
+        layout.project_root,
+        config_path,
+        data_root,
+        runtime_root,
+        logs_root,
+        indexes_root,
+        ledger.ref,
     )
     if require_initialized:
         if not data_root.exists() or not paths.storage_meta_path.exists():
@@ -369,7 +403,11 @@ def load_project_context(
         legacy_root = locator.project_root
     if not allow_legacy or legacy_root is None:
         raise LaunchError(
-            "No canonical Ledger project or readable legacy Taskledger project found."
+            "TASKLEDGER_NOT_INITIALIZED: Taskledger is not initialized for this "
+            "project. Run `taskledger init`.",
+            code="TASKLEDGER_NOT_INITIALIZED",
+            remediation=["Run `taskledger init`"],
+            details={"project_root": str(start.resolve())},
         )
     legacy = load_project_locator(legacy_root)
     return _legacy_context(
@@ -460,6 +498,8 @@ def canonical_mount_specs(
     suffix = f"/{project_uuid}" if project_uuid else ""
     return {
         DATA_MOUNT: ("workspace", "project", f"taskledger{suffix}"),
+        RUNTIME_MOUNT: ("user-data", "checkout", f"taskledger-runtime{suffix}"),
+        LOGS_MOUNT: ("user-data", "checkout", f"taskledger-logs{suffix}"),
         INDEX_MOUNT: ("cache", "checkout", "taskledger-indexes"),
     }
 

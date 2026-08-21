@@ -84,6 +84,7 @@ def init_project(
         create_sibling_store=create_sibling_store,
         data_storage=data_storage,
         external_root=external_root,
+        local_storage_override=local_storage_override,
     )
     assert context.layout is not None
     return {
@@ -103,7 +104,7 @@ def init_project(
                 "storage": str(context.layout.mounts[name].storage),
                 "source": str(context.layout.mounts[name].source),
             }
-            for name in ("data", "indexes")
+            for name in context.layout.mounts
         },
         "local_storage_override": local_storage_override,
     }

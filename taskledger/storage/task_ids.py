@@ -10,7 +10,7 @@ from typing import Literal
 from taskledger.errors import LaunchError
 from taskledger.ids import TASK_ID_FORMAT
 from taskledger.storage.frontmatter import read_markdown_front_matter
-from taskledger.storage.task_store import V2Paths, ensure_v2_layout
+from taskledger.storage.task_store import V2Paths, require_v2_layout
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,7 +143,7 @@ def allocate_task_directory(
     *,
     max_attempts: int = 32,
 ) -> tuple[str, Path]:
-    paths = ensure_v2_layout(workspace_root)
+    paths = require_v2_layout(workspace_root)
     for _ in range(max_attempts):
         candidate = scan_task_id_inventory(paths).next_task_id
         try:

@@ -38,6 +38,16 @@ def _data_root(tmp_path: Path) -> Path:
     return context.paths.data_root
 
 
+def _logs_root(tmp_path: Path) -> Path:
+    context = load_project_context(tmp_path)
+    return context.paths.logs_root
+
+
+def _runtime_root(tmp_path: Path) -> Path:
+    context = load_project_context(tmp_path)
+    return context.paths.runtime_root
+
+
 def _json(result) -> dict[str, object]:
     return json.loads(result.stdout)
 
@@ -97,7 +107,9 @@ def test_break_lock_writes_audit_file_and_repair_event(tmp_path: Path) -> None:
 
     events = [
         json.loads(line)
-        for path in sorted((project_dir / "events").glob("*.ndjson"))
+        for path in sorted(
+            (_logs_root(tmp_path) / "ledgers" / "main" / "events").glob("*.ndjson")
+        )
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
@@ -129,9 +141,7 @@ def test_stale_lock_blocks_new_run_until_explicit_break(tmp_path: Path) -> None:
         == 0
     )
 
-    lock_path = (
-        _data_root(tmp_path) / "ledgers" / "main" / "tasks" / "task-0001" / "lock.yaml"
-    )
+    lock_path = _runtime_root(tmp_path) / "checkouts/main/locks/task-0001.yaml"
     lock_payload = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
     lock_payload["expires_at"] = "2000-01-01T00:00:00+00:00"
     lock_path.write_text(

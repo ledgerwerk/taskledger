@@ -793,4 +793,4 @@ Evidence import is explicit and auditable through
 
 ## Canonical project layout
 
-Taskledger uses a schema-3 `.ledger/ledger.toml` manifest and `.ledger/taskledger/config.toml`. The default persistent `data` mount is external storage rooted at `../ledger`; `indexes` is cache storage. A machine-local `.ledger/ledger.local.toml` may select `user-data` for `data`. Use `taskledger storage where`, `taskledger storage path data|indexes`, `taskledger storage set`, and `taskledger storage clear-override` to inspect or change mounts.
+Taskledger uses a schema-3 `.ledger/ledger.toml` manifest and `.ledger/taskledger/config.toml`. The canonical mounts are durable `data` (external storage rooted at `../ledger`), checkout-local `runtime` (user-data), diagnostic `logs` (user-data), and rebuildable `indexes` (cache). A machine-local `.ledger/ledger.local.toml` may select `user-data` for `data`. Use `taskledger storage where`, `taskledger storage path data|runtime|logs|indexes`, `taskledger storage set`, and `taskledger storage clear-override` to inspect or change mounts.

@@ -39,11 +39,11 @@ from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.task_store import (
     clear_active_task_state,
-    ensure_v2_layout,
     list_runs,
     list_tasks,
     list_tasks_by_visibility,
     load_active_task_state,
+    require_v2_layout,
     resolve_task,
     resolve_v2_paths,
     save_active_task_state,
@@ -288,7 +288,10 @@ def create_task(
     labels: tuple[str, ...] = (),
     owner: str | None = None,
 ) -> TaskRecord:
-    paths = ensure_v2_layout(workspace_root)
+    from taskledger.storage.project_context import require_mutable_project_context
+
+    require_mutable_project_context(workspace_root)
+    paths = require_v2_layout(workspace_root)
     all_tasks = list_tasks(workspace_root)
     visible_tasks = list_tasks_by_visibility(workspace_root, visibility="visible")
     task_slug = _tasks._unique_slug(visible_tasks, slug or title)
@@ -328,7 +331,10 @@ def create_follow_up_task(
     copy_links: bool = False,
     reason: str | None = None,
 ) -> dict[str, object]:
-    paths = ensure_v2_layout(workspace_root)
+    from taskledger.storage.project_context import require_mutable_project_context
+
+    require_mutable_project_context(workspace_root)
+    paths = require_v2_layout(workspace_root)
     parent = _tasks._task_with_sidecars(
         workspace_root,
         resolve_task(workspace_root, parent_ref),
@@ -467,7 +473,10 @@ def record_completed_task(
                 "Change summary must not be empty.", EXIT_CODE_BAD_INPUT
             )
 
-    paths = ensure_v2_layout(workspace_root)
+    from taskledger.storage.project_context import require_mutable_project_context
+
+    require_mutable_project_context(workspace_root)
+    paths = require_v2_layout(workspace_root)
     all_tasks = list_tasks(workspace_root)
     visible_tasks = list_tasks_by_visibility(workspace_root, visibility="visible")
     task_slug = _tasks._unique_slug(visible_tasks, slug or title)

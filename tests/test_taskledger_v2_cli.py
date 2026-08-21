@@ -16,8 +16,10 @@ from taskledger.storage.task_store import (
     list_runs,
     resolve_run,
     resolve_task,
+    resolve_v2_paths,
     save_run,
     save_task,
+    task_lock_path,
 )
 from tests.support.builders import create_approved_task, init_workspace
 
@@ -953,15 +955,7 @@ def test_v2_lock_break_and_expired_lock_report(tmp_path: Path) -> None:
     )
     runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start", "--task", "lock-task"])
 
-    lock_path = (
-        tmp_path
-        / ".taskledger"
-        / "ledgers"
-        / "main"
-        / "tasks"
-        / "task-0001"
-        / "lock.yaml"
-    )
+    lock_path = task_lock_path(resolve_v2_paths(tmp_path), "task-0001")
     payload = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
     payload["expires_at"] = "2000-01-01T00:00:00+00:00"
     lock_path.write_text(
@@ -1870,15 +1864,7 @@ def test_expired_lock_requires_explicit_break_json_error(tmp_path: Path) -> None
         app, ["--cwd", str(tmp_path), "plan", "start", "--task", "stale-lock-task"]
     )
 
-    lock_path = (
-        tmp_path
-        / ".taskledger"
-        / "ledgers"
-        / "main"
-        / "tasks"
-        / "task-0001"
-        / "lock.yaml"
-    )
+    lock_path = task_lock_path(resolve_v2_paths(tmp_path), "task-0001")
     payload = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
     payload["expires_at"] = "2000-01-01T00:00:00+00:00"
     lock_path.write_text(

@@ -19,7 +19,6 @@ from taskledger.services.storage_migration import (
 from taskledger.storage.ledgercore_backend import (
     inspect_taskledger_migration,
     load_taskledger_ledger_layout,
-    migrate_taskledger_mount,
     recover_taskledger_migration,
     set_taskledger_mount_target,
 )
@@ -32,8 +31,10 @@ def storage_where(workspace_root: Path) -> dict[str, object]:
 
 
 def storage_path(workspace_root: Path, mount: str) -> dict[str, object]:
-    if mount not in {"data", "indexes"}:
-        raise LaunchError("Unknown mount. Expected one of: data, indexes.")
+    if mount not in {"data", "runtime", "logs", "indexes"}:
+        raise LaunchError(
+            "Unknown mount. Expected one of: data, runtime, logs, indexes."
+        )
     context = load_project_context(workspace_root)
     if context.layout is None:
         raise LaunchError(
@@ -104,7 +105,7 @@ def storage_validate(
             from taskledger.storage.paths import resolve_project_paths
 
             paths = resolve_project_paths(workspace_root)
-            for mount_name in ("data", "indexes"):
+            for mount_name in ("data", "runtime", "logs", "indexes"):
                 mount_path = getattr(paths, f"{mount_name}_path", None)
                 if mount_path and mount_path.exists():
                     results.append(
@@ -148,6 +149,7 @@ def storage_set(
 ) -> dict[str, object]:
     if mode not in {"copy", "move"}:
         raise LaunchError("mode must be copy or move")
+    del mode
     if mount == "indexes":
         if storage != "cache":
             raise LaunchError(
@@ -165,16 +167,19 @@ def storage_set(
             "Run `taskledger repair index` to rebuild the indexes cache."
         )
         return report
+    if mount != "data":
+        raise LaunchError(
+            "Only the data mount can be changed through storage set; runtime and "
+            "logs are fixed local mounts."
+        )
     if storage == "external" and not external_root:
-        raise LaunchError("external storage requires --root")
-    migrate_taskledger_mount(
+        raise LaunchError("external storage requires --storage-root")
+    set_taskledger_mount_target(
         workspace_root,
         mount=mount,
         storage=storage,
         external_root=external_root,
         target=target,
-        mode=mode,
-        quiescence_check=lambda: require_no_active_taskledger_locks(workspace_root),
     )
     return build_storage_location_report(
         workspace_root, require_initialized=False

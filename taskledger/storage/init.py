@@ -17,6 +17,7 @@ from taskledger.storage.ledgercore_backend import (
     locate_taskledger_project,
     read_ledger_manifest,
     read_storage_binding,
+    set_taskledger_mount_target,
 )
 from taskledger.storage.meta import StorageMeta, write_storage_meta
 from taskledger.storage.paths import (
@@ -182,6 +183,7 @@ def init_canonical_project_state(
     create_sibling_store: bool = False,
     data_storage: str = "external",
     external_root: str | None = "../ledger",
+    local_storage_override: bool = False,
 ) -> tuple[TaskledgerProjectContext, list[str]]:
     """Create a schema-3 project through the Ledgercore adapter."""
     del create_sibling_store
@@ -229,12 +231,13 @@ def init_canonical_project_state(
             if existing_data is not None:
                 data_storage = str(existing_data.storage)
                 external_root = existing_data.external_root
+    shared_data_storage = "external" if local_storage_override else data_storage
     try:
         ensure_taskledger_ledger_registration(
             root,
             project_uuid=selected_uuid,
             project_name=effective_name,
-            data_storage=data_storage,
+            data_storage=shared_data_storage,
             external_root=external_root,
         )
         bundle = load_taskledger_ledger_layout(root, validate_storage=False)
@@ -250,6 +253,23 @@ def init_canonical_project_state(
             initialize_data=True,
             initialize_indexes=True,
         )
+        if local_storage_override:
+            set_taskledger_mount_target(
+                root,
+                mount="data",
+                storage=data_storage,
+                external_root=external_root,
+                target="local",
+            )
+            layout = load_taskledger_ledger_layout(
+                root, validate_storage=False
+            ).resolved_layout
+            initialize_taskledger_bindings(
+                layout,
+                initialize_config=False,
+                initialize_data=True,
+                initialize_indexes=False,
+            )
         if layout.tool_config_path is not None and not layout.tool_config_path.exists():
             atomic_write_text(
                 layout.tool_config_path, render_canonical_taskledger_config()
@@ -271,6 +291,7 @@ def init_canonical_project_state(
         paths.tasks_dir,
         paths.events_dir,
         paths.agent_logs_dir,
+        paths.runtime_root / "checkouts" / paths.ledger_ref,
         paths.ledger_data_dir / "tombstones",
         paths.data_root / "migrations",
     ):

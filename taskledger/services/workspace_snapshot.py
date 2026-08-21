@@ -453,7 +453,14 @@ def save_workspace_snapshot_manifest(
     snapshot: WorkspaceContentSnapshot,
 ) -> str:
     paths = resolve_v2_paths(workspace_root)
-    path = paths.runs_dir / task_id / f"{run_id}.workspace-snapshot.json"
+    path = (
+        paths.runtime_root
+        / "checkouts"
+        / paths.ledger_ref
+        / "workspace-snapshots"
+        / task_id
+        / f"{run_id}.workspace-snapshot.json"
+    )
     snapshot_root = git_root(workspace_root)
     if snapshot_root is not None:
         try:
@@ -466,7 +473,10 @@ def save_workspace_snapshot_manifest(
                 raise _snapshot_self_reference_error(manifest_ref)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(snapshot.to_dict(), indent=2, sort_keys=True) + "\n")
-    return f"runs/{task_id}/{path.name}"
+    return (
+        f"runtime/checkouts/{paths.ledger_ref}/workspace-snapshots/"
+        f"{task_id}/{path.name}"
+    )
 
 
 def load_workspace_snapshot_manifest(
@@ -475,7 +485,10 @@ def load_workspace_snapshot_manifest(
     ref: str,
 ) -> WorkspaceContentSnapshot | None:
     paths = resolve_v2_paths(workspace_root)
-    path = paths.ledger_dir / ref
+    if ref.startswith("runtime/checkouts/"):
+        path = paths.runtime_root / Path(ref).relative_to("runtime")
+    else:
+        path = paths.ledger_dir / ref
     if not path.exists():
         return None
     data = json.loads(path.read_text())

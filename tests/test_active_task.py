@@ -9,7 +9,11 @@ from typer.testing import CliRunner
 from taskledger.api.tasks import activate_task, create_task, deactivate_task
 from taskledger.cli import app
 from taskledger.errors import NoActiveTask
-from taskledger.storage.task_store import load_active_task_state, resolve_active_task
+from taskledger.storage.task_store import (
+    ensure_v2_layout,
+    load_active_task_state,
+    resolve_active_task,
+)
 from tests.support.builders import init_workspace
 
 pytestmark = [pytest.mark.cli, pytest.mark.integration, pytest.mark.slow]
@@ -54,6 +58,7 @@ def _json(result) -> dict[str, object]:
 
 # specmason: req=REQ-0001 ac=AC-0004
 def test_active_task_state_round_trips(tmp_path: Path) -> None:
+    ensure_v2_layout(tmp_path)
     create_task(tmp_path, title="Active", description="desc", slug="active")
 
     activated = activate_task(tmp_path, "active", reason="work")

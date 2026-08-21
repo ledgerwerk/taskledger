@@ -109,7 +109,7 @@ def test_workspace_content_snapshot_excludes_canonical_taskledger_project_data(
     context, _ = init_canonical_project_state(tmp_path, data_storage="project")
     (tmp_path / "tracked.txt").write_text("changed\n", encoding="utf-8")
 
-    generated = context.paths.data_root / "ledgers" / "main" / "runs" / "runtime.json"
+    generated = context.paths.runtime_root / "checkouts" / "main" / "runtime.json"
     generated.parent.mkdir(parents=True, exist_ok=True)
     generated.write_text("runtime\n", encoding="utf-8")
 
@@ -117,7 +117,7 @@ def test_workspace_content_snapshot_excludes_canonical_taskledger_project_data(
     paths = {entry.path for entry in snapshot.entries}
 
     assert "tracked.txt" in paths
-    assert generated.relative_to(context.paths.workspace_root).as_posix() not in paths
+    assert not any(path.endswith("runtime.json") for path in paths)
 
 
 def test_workspace_content_snapshot_never_hashes_its_own_manifest(
@@ -126,10 +126,10 @@ def test_workspace_content_snapshot_never_hashes_its_own_manifest(
     _init_git(tmp_path)
     context, _ = init_canonical_project_state(tmp_path, data_storage="project")
     manifest = (
-        context.paths.data_root
-        / "ledgers"
+        context.paths.runtime_root
+        / "checkouts"
         / "main"
-        / "runs"
+        / "workspace-snapshots"
         / "task-0004"
         / "run-0002.workspace-snapshot.json"
     )
@@ -141,23 +141,18 @@ def test_workspace_content_snapshot_never_hashes_its_own_manifest(
     paths = {entry.path for entry in snapshot.entries}
 
     assert "tracked.txt" in paths
-    assert manifest.relative_to(tmp_path).as_posix() not in paths
+    assert not any(path.endswith(manifest.name) for path in paths)
 
 
-def test_snapshot_manifest_self_reference_raises_invariant_error(
+def test_snapshot_manifests_are_stored_outside_the_source_repository(
     tmp_path: Path,
 ) -> None:
     _init_git(tmp_path)
     context, _ = init_canonical_project_state(tmp_path, data_storage="project")
-    manifest = (
-        context.paths.data_root
-        / "ledgers"
-        / "main"
-        / "runs"
-        / "task-0004"
-        / "run-0002.workspace-snapshot.json"
+    manifest_ref = (
+        "runtime/checkouts/main/workspace-snapshots/"
+        "task-0004/run-0002.workspace-snapshot.json"
     )
-    manifest_ref = manifest.relative_to(tmp_path).as_posix()
     snapshot = WorkspaceContentSnapshot(
         git_commit="HEAD",
         dirty=True,
@@ -177,11 +172,14 @@ def test_snapshot_manifest_self_reference_raises_invariant_error(
         captured_at=None,
     )
 
-    with pytest.raises(LaunchError) as raised:
-        save_workspace_snapshot_manifest(tmp_path, "task-0004", "run-0002", snapshot)
-
-    assert raised.value.code == "WORKSPACE_SNAPSHOT_SELF_REFERENCE"
-    assert "do not refresh" in str(raised.value)
+    saved_ref = save_workspace_snapshot_manifest(
+        tmp_path, "task-0004", "run-0002", snapshot
+    )
+    assert saved_ref == manifest_ref
+    assert (
+        context.paths.runtime_root / "checkouts/main/workspace-snapshots/task-0004/"
+        "run-0002.workspace-snapshot.json"
+    ).is_file()
 
 
 def test_workspace_content_snapshot_does_not_hide_taskledger_project_config(

@@ -62,6 +62,7 @@ def _make_v2_paths(workspace: Path) -> V2Paths:
     return V2Paths(
         workspace_root=workspace,
         taskledger_root=workspace / ".taskledger",
+        runtime_root=workspace / ".taskledger",
         ledger_ref="main",
         ledger_dir=ledger_dir,
         project_dir=ledger_dir,

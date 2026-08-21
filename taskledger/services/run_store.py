@@ -39,14 +39,19 @@ def show_lock(
         task_id=task.id,
         current_actor=current_actor,
     )
-    lock_file_rel = lock_path.relative_to(paths.project_dir).as_posix()
+    try:
+        lock_file_rel = lock_path.relative_to(paths.project_dir).as_posix()
+    except ValueError:
+        lock_file_rel = (
+            f"runtime/{lock_path.relative_to(paths.runtime_root).as_posix()}"
+        )
     return {
         "kind": "task_lock",
         "task_id": task.id,
         "lock": lock.to_dict() if lock is not None else None,
         "status": lock_status(lock),
         "diagnostics": diagnostics.to_dict(),
-        "storage_root": paths.project_dir.as_posix(),
+        "storage_root": paths.runtime_root.as_posix(),
         "inside_workspace": _is_within(paths.project_dir, workspace_root),
         "lock_file": lock_file_rel,
     }

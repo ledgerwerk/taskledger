@@ -6,11 +6,11 @@ from pathlib import Path
 from taskledger.domain.models import AgentCommandLogRecord
 from taskledger.errors import LaunchError
 from taskledger.storage.atomic import atomic_write_text
-from taskledger.storage.task_store import V2Paths, ensure_v2_layout, resolve_v2_paths
+from taskledger.storage.task_store import V2Paths, require_v2_layout, resolve_v2_paths
 
 
 def agent_logs_dir(paths: V2Paths) -> Path:
-    return paths.project_dir / "agent-logs"
+    return paths.events_dir.parent / "agent-logs"
 
 
 def agent_log_artifacts_dir(paths: V2Paths) -> Path:
@@ -21,7 +21,7 @@ def append_agent_command_log(
     workspace_root: Path,
     record: AgentCommandLogRecord,
 ) -> Path:
-    paths = ensure_v2_layout(workspace_root)
+    paths = require_v2_layout(workspace_root)
     logs_dir = agent_logs_dir(paths)
     logs_dir.mkdir(parents=True, exist_ok=True)
     agent_log_artifacts_dir(paths).mkdir(parents=True, exist_ok=True)
@@ -132,13 +132,16 @@ def write_agent_command_artifact(
     suffix: str,
     content: str,
 ) -> str:
-    paths = ensure_v2_layout(workspace_root)
+    paths = require_v2_layout(workspace_root)
     artifacts_dir = agent_log_artifacts_dir(paths)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     safe_suffix = suffix.replace("/", "-").replace("\\", "-")
     artifact_path = artifacts_dir / f"{log_id}.{safe_suffix}"
     atomic_write_text(artifact_path, content)
-    return str(artifact_path.relative_to(paths.project_dir))
+    try:
+        return str(artifact_path.relative_to(paths.project_dir))
+    except ValueError:
+        return f"logs/{artifact_path.relative_to(paths.events_dir.parent)}"
 
 
 __all__ = [

@@ -41,6 +41,8 @@ from taskledger.storage.project_context import (
     CANONICAL_LEDGER_NAME,
     DATA_MOUNT,
     INDEX_MOUNT,
+    LOGS_MOUNT,
+    RUNTIME_MOUNT,
     TaskledgerProjectContext,
     load_project_context,
 )
@@ -411,10 +413,12 @@ def _manifest_document(path: Path) -> dict[str, object]:
 
 
 def _target_registration(project_uuid: str | None = None) -> dict[str, object]:
-    # Schema-3 mounts: data is external (sibling-ledger), indexes are cache.
+    # Schema-3 mounts separate durable, runtime, logs, and cache state.
     return {
         "mounts": {
             DATA_MOUNT: {"storage": "external", "root": "../ledger"},
+            RUNTIME_MOUNT: {"storage": "user-data"},
+            LOGS_MOUNT: {"storage": "user-data"},
             INDEX_MOUNT: {"storage": "cache"},
         },
     }

@@ -53,11 +53,11 @@ def resolve_taskledger_root(workspace_root: Path) -> Path:
 
 def resolve_project_paths(workspace_root: Path) -> ProjectPaths:
     if probe_taskledger_project(workspace_root).source == "none":
-        locator = load_project_locator(workspace_root)
-        return project_paths_for_root(
-            locator.workspace_root,
-            locator.taskledger_dir,
-            config_path=locator.config_path,
+        raise LaunchError(
+            "TASKLEDGER_NOT_INITIALIZED: Taskledger is not initialized for this "
+            "project. Run `taskledger init`.",
+            code="TASKLEDGER_NOT_INITIALIZED",
+            remediation=["Run `taskledger init`"],
         )
     from taskledger.storage.project_context import load_project_context
 
@@ -122,6 +122,18 @@ def probe_taskledger_project(start: Path) -> TaskledgerProjectProbe:
     if legacy_config_path is not None:
         return TaskledgerProjectProbe(
             project_root=legacy_config_path.parent.resolve(),
+            source="legacy",
+            manifest_path=None,
+            registration_present=False,
+            tool_config_path=legacy_config_path.resolve(),
+            orphan_config_present=False,
+        )
+    legacy_root = _find_legacy_workspace_root(start_path)
+    if legacy_root is not None:
+        legacy_dir = legacy_root / DEFAULT_TASKLEDGER_DIR_NAME
+        legacy_config_path = legacy_dir / LEGACY_PROJECT_CONFIG_FILENAME
+        return TaskledgerProjectProbe(
+            project_root=legacy_root.resolve(),
             source="legacy",
             manifest_path=None,
             registration_present=False,
