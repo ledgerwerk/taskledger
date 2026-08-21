@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 130
 term: Worker Pipeline
-definition: An optional advisory overlay that guides fresh-context handoffs through
+definition:
+  An optional advisory overlay that guides fresh-context handoffs through
   sequential worker steps.
 body_format: markdown
 kind: glossary

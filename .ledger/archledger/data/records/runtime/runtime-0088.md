@@ -9,11 +9,12 @@ section: runtime_view
 order: 55
 version: 6
 participants:
-- taskledger implement start
-- taskledger validate start
-- taskledger implement snapshot refresh
+  - taskledger implement start
+  - taskledger validate start
+  - taskledger implement snapshot refresh
 trigger: Implementation start captures snapshot and validation start enforces it
-result: Validation runs only when the current workspace matches the implementation
+result:
+  Validation runs only when the current workspace matches the implementation
   snapshot; mismatches are recovered with implement snapshot refresh.
 body_format: markdown
 ---

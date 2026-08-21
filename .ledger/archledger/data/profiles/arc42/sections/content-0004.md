@@ -10,6 +10,7 @@ body_format: markdown
 kind: content
 version: 5
 ---
+
 Taskledger uses a layered architecture with clear dependency direction: upper layers depend on lower layers, never the reverse.
 
 1. **CLI Layer** (`taskledger/cli*.py`) — Typer commands that parse arguments, resolve task references, call service functions, and render output (human text or JSON).

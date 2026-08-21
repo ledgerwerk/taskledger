@@ -7,11 +7,12 @@ status: accepted
 section: runtime_view
 order: 30
 participants:
-- taskledger handoff create
-- taskledger handoff claim
-- taskledger handoff close
+  - taskledger handoff create
+  - taskledger handoff claim
+  - taskledger handoff close
 trigger: Worker runs taskledger handoff create
-result: Receiving worker claims the handoff and closes it after completing the intended
+result:
+  Receiving worker claims the handoff and closes it after completing the intended
   next action.
 body_format: markdown
 kind: runtime

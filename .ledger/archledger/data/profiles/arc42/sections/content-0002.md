@@ -10,6 +10,7 @@ body_format: markdown
 kind: content
 version: 5
 ---
+
 Taskledger operates under several fixed constraints that shape its architecture:
 
 - **Python 3.10+ with minimal dependencies**: The runtime depends only on `typer`, `click`, `PyYAML`, `tomli` (Python <3.11), and `ledgercore` for atomic I/O, JSON I/O, YAML I/O, front matter parsing, and cross-ledger ref parsing. No database, no network server, no external service is required.

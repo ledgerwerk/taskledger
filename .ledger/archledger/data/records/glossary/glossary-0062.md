@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 20
 term: Plan
-definition: A proposed implementation plan with acceptance criteria that gates implementation
+definition:
+  A proposed implementation plan with acceptance criteria that gates implementation
   start.
 body_format: markdown
 kind: glossary

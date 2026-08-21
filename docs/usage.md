@@ -602,6 +602,14 @@ the result object. Keep logging opt-in because stdout/stderr may contain sensiti
 data. Route task-relevant commands through `plan command` and `implement command`
 so their output is included in task transcripts and reports.
 
+Managed commands use a usable inherited Python virtualenv first, then a valid
+`.venv` or `venv` in the command directory or workspace, preferring the command
+directory. Taskledger adjusts only the child `PATH` and `VIRTUAL_ENV` (and removes
+child `PYTHONHOME` for auto-detected environments); it preserves argv, `PYTHONPATH`,
+the child cwd, no-shell execution, and the parent environment. Use portable forms
+such as `python -m pytest`, `pytest`, `ruff`, or `mypy` rather than hard-coding an
+absolute virtualenv interpreter path.
+
 > taskledger context --for implementation --format markdown
 > taskledger implement start
 > taskledger implement log --message "Started implementation."

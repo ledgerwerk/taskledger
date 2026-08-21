@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 60
 term: Todo
-definition: A concrete implementation step materialized from the accepted plan; gates
+definition:
+  A concrete implementation step materialized from the accepted plan; gates
   implementation completion.
 body_format: markdown
 kind: glossary

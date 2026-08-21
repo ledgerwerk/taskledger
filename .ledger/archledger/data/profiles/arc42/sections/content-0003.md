@@ -10,6 +10,7 @@ body_format: markdown
 kind: content
 version: 3
 ---
+
 Taskledger operates as a self-contained tool within a software development project. It interacts with four categories of external actors:
 
 1. **Agent harnesses** (pi, codex, chatgpt, and similar) invoke taskledger CLI commands to create tasks, propose plans, log implementation changes, run validation checks, and manage handoffs. They consume `--json` output.

@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 40
 term: Lock
-definition: A concurrency control mechanism preventing simultaneous actors on the
+definition:
+  A concurrency control mechanism preventing simultaneous actors on the
   same task stage.
 body_format: markdown
 kind: glossary

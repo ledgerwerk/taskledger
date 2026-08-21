@@ -7,7 +7,8 @@ status: proposed
 section: architecture_constraints
 order: 10
 category: technical
-impact: Limits runtime to Python 3.10+ with three dependencies; no database or native
+impact:
+  Limits runtime to Python 3.10+ with three dependencies; no database or native
   extensions.
 body_format: markdown
 kind: constraint

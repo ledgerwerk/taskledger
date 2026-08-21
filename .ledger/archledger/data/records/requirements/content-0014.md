@@ -6,7 +6,7 @@ title: Explicit lifecycle gates with user approval
 status: proposed
 section: introduction_and_goals
 order: 20
-source: ''
+source: ""
 priority: must
 stakeholders: []
 quality_goals: []

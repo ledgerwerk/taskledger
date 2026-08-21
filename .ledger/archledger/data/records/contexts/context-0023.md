@@ -9,11 +9,11 @@ order: 40
 context_kind: library
 partner: Python import
 inputs:
-- taskledger.api.* function calls from host projects
+  - taskledger.api.* function calls from host projects
 outputs:
-- json_envelopes as_python_dictionaries
+  - json_envelopes as_python_dictionaries
 channels:
-- in_process_python_imports
+  - in_process_python_imports
 body_format: markdown
 kind: context
 version: 8

@@ -7,12 +7,14 @@ status: accepted
 section: runtime_view
 order: 80
 participants:
-- taskledger doctor
-- taskledger migrate
-- taskledger reindex
-trigger: Developer upgrades taskledger and runs taskledger doctor which reports storage
+  - taskledger doctor
+  - taskledger migrate
+  - taskledger reindex
+trigger:
+  Developer upgrades taskledger and runs taskledger doctor which reports storage
   version mismatch
-result: Storage layout is upgraded to TASKLEDGER_STORAGE_LAYOUT_VERSION with audit;
+result:
+  Storage layout is upgraded to TASKLEDGER_STORAGE_LAYOUT_VERSION with audit;
   indexes are rebuilt; doctor passes cleanly.
 body_format: markdown
 kind: runtime

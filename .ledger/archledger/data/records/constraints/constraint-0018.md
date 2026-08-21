@@ -7,7 +7,8 @@ status: proposed
 section: architecture_constraints
 order: 30
 category: technical
-impact: JSON envelope shape and exit codes are public API contracts; breaking changes
+impact:
+  JSON envelope shape and exit codes are public API contracts; breaking changes
   require version bumps.
 body_format: markdown
 kind: constraint

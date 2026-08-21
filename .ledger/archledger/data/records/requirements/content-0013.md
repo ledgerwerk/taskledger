@@ -6,7 +6,7 @@ title: Durable task lifecycle state
 status: proposed
 section: introduction_and_goals
 order: 10
-source: ''
+source: ""
 priority: must
 stakeholders: []
 quality_goals: []

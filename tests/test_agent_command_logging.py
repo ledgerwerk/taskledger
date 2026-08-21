@@ -311,6 +311,53 @@ def test_managed_shell_log_records_nested_child_cwd(
     assert managed.cwd == str(nested.resolve())
 
 
+def test_managed_runner_receives_workspace_and_command_cwd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _init_project(tmp_path)
+    task_id = _prepare_approved_task(tmp_path)
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    monkeypatch.chdir(nested)
+    calls: dict[str, object] = {}
+
+    def fake_run_managed_command(
+        argv: tuple[str, ...],
+        *,
+        cwd: Path,
+        workspace_root: Path,
+    ) -> CommandResult:
+        calls.update(argv=argv, cwd=cwd, workspace_root=workspace_root)
+        return CommandResult(0, "", "")
+
+    monkeypatch.setattr(
+        "taskledger.services.implementation_flow.command_runner.run_managed_command",
+        fake_run_managed_command,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "implement",
+            "command",
+            "--task",
+            task_id,
+            "--",
+            sys.executable,
+            "-c",
+            "pass",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert calls == {
+        "argv": (sys.executable, "-c", "pass"),
+        "cwd": nested.resolve(),
+        "workspace_root": tmp_path.resolve(),
+    }
+
+
 # specmason: req=REQ-0004 ac=AC-0061
 def test_task_transcript_json_contract(tmp_path: Path) -> None:
     _init_project(tmp_path)
@@ -431,12 +478,17 @@ def test_task_transcript_failures_mode_renders_failed_rows_only(
     _enable_agent_logging(tmp_path)
     task_id = _prepare_approved_task(tmp_path)
 
-    def fake_run_command(argv: tuple[str, ...], *, cwd: Path) -> CommandResult:
+    def fake_run_managed_command(
+        argv: tuple[str, ...],
+        *,
+        cwd: Path,
+        workspace_root: Path,
+    ) -> CommandResult:
         return CommandResult(returncode=3, stdout="", stderr="")
 
     monkeypatch.setattr(
-        "taskledger.services.implementation_flow.command_runner.run_command",
-        fake_run_command,
+        "taskledger.services.implementation_flow.command_runner.run_managed_command",
+        fake_run_managed_command,
     )
 
     failing = runner.invoke(

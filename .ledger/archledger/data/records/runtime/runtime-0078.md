@@ -7,12 +7,13 @@ status: accepted
 section: runtime_view
 order: 90
 participants:
-- taskledger next-action
-- taskledger pipeline show
-- taskledger context --worker
-- taskledger handoff create --worker
+  - taskledger next-action
+  - taskledger pipeline show
+  - taskledger context --worker
+  - taskledger handoff create --worker
 trigger: Agent runs taskledger next-action and receives worker_pipeline.next_step
-result: Worker pipeline provides advisory hints for fresh-context handoffs through
+result:
+  Worker pipeline provides advisory hints for fresh-context handoffs through
   sequential worker steps without changing lifecycle gates.
 body_format: markdown
 kind: runtime

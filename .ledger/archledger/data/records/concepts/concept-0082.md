@@ -7,15 +7,15 @@ status: proposed
 section: cross_cutting_concepts
 order: 80
 applies_to:
-- taskledger review record
+  - taskledger review record
 body_format: markdown
 source_refs:
-- path: taskledger/domain/review.py
-  role: implements
-- path: taskledger/services/code_review.py
-  role: implements
+  - path: taskledger/domain/review.py
+    role: implements
+  - path: taskledger/services/code_review.py
+    role: implements
 test_refs:
-- tests/test_code_reviews.py
+  - tests/test_code_reviews.py
 kind: concept
 version: 4
 ---

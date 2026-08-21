@@ -7,8 +7,8 @@ status: proposed
 section: quality_requirements
 order: 20
 category: reliability
-source: ''
-measure: ''
+source: ""
+measure: ""
 scenarios: []
 body_format: markdown
 kind: quality

@@ -282,6 +282,7 @@ The plan file should use version ids like `plan-v1`, `plan-v2` in references. Do
    - `taskledger implement change --path ... --kind edit --summary "..."`
    - Run verification through `taskledger implement command -- ...` so exit code and output are recorded.
    - Managed `plan command` and `implement command` pass argv after `--` without a shell and run from the CLI invocation directory, or explicit `--root` directory. Workspace discovery does not change the child cwd.
+   - Use normal project commands such as `python -m pytest`, `pytest`, `ruff`, or `mypy` inside managed commands. Taskledger resolves a usable inherited or workspace-local virtualenv for child executable lookup; do not hard-code an absolute virtualenv interpreter path unless the project explicitly requires it.
    - Human mode emits captured child stdout/stderr before the summary. JSON mode keeps stdout/stderr and the actual child cwd inside the result envelope.
    - Both wrappers mirror the inner command exit code by default. Use `--allow-failure` when you intentionally want to record a non-zero inner command without failing the wrapper command; the recorded child failure remains unchanged.
    - Mark each todo done only after the relevant command or inspection evidence exists: `taskledger todo done <todo-id> --evidence "check-NNNN exited 0"`.

@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 10
 term: Task
-definition: The primary unit of work with a managed lifecycle through planning, implementation,
+definition:
+  The primary unit of work with a managed lifecycle through planning, implementation,
   and validation stages.
 body_format: markdown
 kind: glossary

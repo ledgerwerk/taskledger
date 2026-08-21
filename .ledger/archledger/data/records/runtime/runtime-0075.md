@@ -7,13 +7,14 @@ status: accepted
 section: runtime_view
 order: 60
 participants:
-- taskledger sync git init
-- taskledger sync git commit
-- taskledger sync git status
-- taskledger sync git pull
-- taskledger sync git push
+  - taskledger sync git init
+  - taskledger sync git commit
+  - taskledger sync git status
+  - taskledger sync git pull
+  - taskledger sync git push
 trigger: Developer runs taskledger sync git init to set up an external sync repo
-result: Taskledger state is shared through a dedicated Git repository that the user
+result:
+  Taskledger state is shared through a dedicated Git repository that the user
   pushes and pulls manually.
 body_format: markdown
 kind: runtime

@@ -9,25 +9,25 @@ level: 1
 parent: block-0029
 order: 60
 interfaces:
-- Service read models -> terminal TUI
-- Dashboard/report payloads -> HTML or Markdown
+  - Service read models -> terminal TUI
+  - Dashboard/report payloads -> HTML or Markdown
 location:
-- taskledger/tui/
-- taskledger/services/tui_read_model.py
-- taskledger/services/dashboard.py
-- taskledger/services/task_reports.py
+  - taskledger/tui/
+  - taskledger/services/tui_read_model.py
+  - taskledger/services/dashboard.py
+  - taskledger/services/task_reports.py
 fulfilled_requirements: []
 risks: []
 tags: []
 body_format: markdown
 source_refs:
-- path: taskledger/tui/
-  role: implements
-- path: taskledger/services/tui_read_model.py
-  role: implements
+  - path: taskledger/tui/
+    role: implements
+  - path: taskledger/services/tui_read_model.py
+    role: implements
 test_refs:
-- tests/test_tui_cli.py
-- tests/test_tui_read_model.py
+  - tests/test_tui_cli.py
+  - tests/test_tui_read_model.py
 archived_reason: TUI and HTML dashboard removed from taskledger; task-0126 ledger-isolation
 archived_from: records/building_blocks/block-0083.md
 kind: block

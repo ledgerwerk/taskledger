@@ -7,14 +7,15 @@ status: accepted
 section: runtime_view
 order: 20
 participants:
-- plan start
-- implement start
-- validate start
-- implement finish
-- validate finish
-- lock show
+  - plan start
+  - implement start
+  - validate start
+  - implement finish
+  - validate finish
+  - lock show
 trigger: Service calls _start_run for planning implementation or validation
-result: Active stage lock and run are paired; release happens on finish or explicit
+result:
+  Active stage lock and run are paired; release happens on finish or explicit
   break.
 body_format: markdown
 kind: runtime

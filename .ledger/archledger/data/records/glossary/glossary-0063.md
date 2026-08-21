@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 30
 term: Run
-definition: A record of an active work session (planning, implementation, or validation)
+definition:
+  A record of an active work session (planning, implementation, or validation)
   paired with a lock.
 body_format: markdown
 kind: glossary

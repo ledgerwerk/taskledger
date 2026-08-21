@@ -15,6 +15,7 @@ body_format: markdown
 kind: block
 version: 3
 ---
+
 ## Motivation
 
 Taskledger decomposes into core layers with downward dependency flow. This isolates persistence, business rules, orchestration, and public interfaces. Low-level persistence primitives are delegated to `ledgercore`, but the layer boundary above it stays in `taskledger/storage/`.

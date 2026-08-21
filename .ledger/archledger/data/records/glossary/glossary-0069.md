@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 90
 term: Harness
-definition: The execution environment running taskledger (agent harness, manual terminal,
+definition:
+  The execution environment running taskledger (agent harness, manual terminal,
   or CI).
 body_format: markdown
 kind: glossary

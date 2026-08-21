@@ -9,24 +9,24 @@ order: 20
 context_kind: user
 partner: terminal user
 inputs:
-- task create
-- task show
-- task activate
-- plan accept
-- implement finish
-- validate finish
-- lock break
-- doctor
-- status
-- next-action
-- monitor
-- config get
-- config set
-- review record
+  - task create
+  - task show
+  - task activate
+  - plan accept
+  - implement finish
+  - validate finish
+  - lock break
+  - doctor
+  - status
+  - next-action
+  - monitor
+  - config get
+  - config set
+  - review record
 outputs:
-- human_rendering plan_review_brief doctor_diagnostics monitor_snapshot
+  - human_rendering plan_review_brief doctor_diagnostics monitor_snapshot
 channels:
-- terminal_cli human_readable_output optional_actor_overrides
+  - terminal_cli human_readable_output optional_actor_overrides
 body_format: markdown
 kind: context
 version: 8

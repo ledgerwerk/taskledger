@@ -9,18 +9,18 @@ order: 30
 context_kind: ci
 partner: CI runner
 inputs:
-- status
-- doctor
-- validate
-- validate status
-- export
-- snapshot
-- trace
-- next-action
+  - status
+  - doctor
+  - validate
+  - validate status
+  - export
+  - snapshot
+  - trace
+  - next-action
 outputs:
-- json_envelopes exit_codes archive_files snapshot_directories
+  - json_envelopes exit_codes archive_files snapshot_directories
 channels:
-- ci_pipeline_invocations deterministic_exit_codes
+  - ci_pipeline_invocations deterministic_exit_codes
 body_format: markdown
 kind: context
 version: 7

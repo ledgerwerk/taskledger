@@ -2,7 +2,7 @@
 schema_version: 4
 id: strategy-0024
 type: strategy_item
-title: 'Layered architecture: CLI → Services → Domain → Storage'
+title: "Layered architecture: CLI → Services → Domain → Storage"
 status: accepted
 section: solution_strategy
 order: 10

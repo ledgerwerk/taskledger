@@ -45,12 +45,17 @@ def _init_project(tmp_path: Path) -> None:
 
 
 def _stub_planning_command(monkeypatch: pytest.MonkeyPatch, *, exit_code: int) -> None:
-    def fake_run_command(argv: tuple[str, ...], *, cwd: Path) -> CommandResult:
+    def fake_run_managed_command(
+        argv: tuple[str, ...],
+        *,
+        cwd: Path,
+        workspace_root: Path,
+    ) -> CommandResult:
         return CommandResult(exit_code, "", "")
 
     monkeypatch.setattr(
-        "taskledger.services.change_tracking.command_runner.run_command",
-        fake_run_command,
+        "taskledger.services.change_tracking.command_runner.run_managed_command",
+        fake_run_managed_command,
     )
 
 

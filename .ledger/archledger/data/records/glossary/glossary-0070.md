@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 100
 term: Stage
-definition: A position in the task lifecycle state machine (draft, planning, plan_review,
+definition:
+  A position in the task lifecycle state machine (draft, planning, plan_review,
   approved, etc.).
 body_format: markdown
 kind: glossary

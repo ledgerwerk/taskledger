@@ -10,6 +10,7 @@ body_format: markdown
 kind: content
 version: 4
 ---
+
 ## Current canonical storage boundary
 
 The current canonical design uses the schema-3 Ledgercore project at `.ledger/ledger.toml` with Taskledger configuration at `.ledger/task/config.toml`. Taskledger mounts are separated into authoritative durable `data`, checkout-local `runtime`, diagnostic `logs`, and rebuildable cache `indexes`. Canonical initialization never creates `.taskledger/` or root `taskledger.toml`; those names are legacy migration inputs only.

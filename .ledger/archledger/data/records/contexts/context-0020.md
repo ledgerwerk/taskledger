@@ -9,36 +9,36 @@ order: 10
 context_kind: agent
 partner: agent harness (pi, codex, chatgpt)
 inputs:
-- task create
-- plan start
-- plan guidance
-- plan template
-- plan check
-- plan upsert
-- plan lint
-- plan review
-- plan accept
-- question add
-- question answer
-- todo add
-- todo done
-- implement start
-- implement change
-- implement command
-- implement finish
-- handoff create
-- handoff claim
-- handoff close
-- context
-- next-action
-- review record
+  - task create
+  - plan start
+  - plan guidance
+  - plan template
+  - plan check
+  - plan upsert
+  - plan lint
+  - plan review
+  - plan accept
+  - question add
+  - question answer
+  - todo add
+  - todo done
+  - implement start
+  - implement change
+  - implement command
+  - implement finish
+  - handoff create
+  - handoff claim
+  - handoff close
+  - context
+  - next-action
+  - review record
 outputs:
-- json_envelopes human_rendering handoff_context next_action context review_evidence
+  - json_envelopes human_rendering handoff_context next_action context review_evidence
 channels:
-- CLI subprocess invocations from agent harnesses
-- structured stderr/stdout
-- deterministic exit codes
-- taskledger trace bundles
+  - CLI subprocess invocations from agent harnesses
+  - structured stderr/stdout
+  - deterministic exit codes
+  - taskledger trace bundles
 body_format: markdown
 kind: context
 version: 8

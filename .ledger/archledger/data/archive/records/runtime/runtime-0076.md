@@ -7,10 +7,10 @@ status: archived
 section: runtime_view
 order: 70
 participants:
-- taskledger report html (removed)
-- taskledger serve (removed)
+  - taskledger report html (removed)
+  - taskledger serve (removed)
 trigger: Developer runs taskledger report html or taskledger serve
-result: ''
+result: ""
 body_format: markdown
 archived_reason: HTML report and serve dashboard removed; task-0126 ledger-isolation
 archived_from: records/runtime/runtime-0076.md

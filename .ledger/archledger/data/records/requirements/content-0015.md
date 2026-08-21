@@ -6,7 +6,7 @@ title: Fresh-context handoffs for agent continuation
 status: proposed
 section: introduction_and_goals
 order: 30
-source: ''
+source: ""
 priority: must
 stakeholders: []
 quality_goals: []

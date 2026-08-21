@@ -7,7 +7,8 @@ status: proposed
 section: architecture_constraints
 order: 40
 category: technical
-impact: Skill distribution is separate from package distribution; skill installation
+impact:
+  Skill distribution is separate from package distribution; skill installation
   is a distinct step.
 body_format: markdown
 kind: constraint

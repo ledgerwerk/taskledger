@@ -9,10 +9,10 @@ section: runtime_view
 order: 35
 version: 6
 participants:
-- taskledger plan check
-- taskledger plan upsert
-- taskledger plan lint
-- taskledger plan review
+  - taskledger plan check
+  - taskledger plan upsert
+  - taskledger plan lint
+  - taskledger plan review
 trigger: Agent or user runs taskledger plan check and plan upsert
 result: Plan is upserted with no parse errors, lint findings, or stale answers.
 body_format: markdown

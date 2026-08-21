@@ -9,10 +9,10 @@ section: cross_cutting_concepts
 order: 70
 version: 5
 applies_to:
-- taskledger plan check
-- taskledger plan upsert
-- taskledger plan lint
-- taskledger plan review
+  - taskledger plan check
+  - taskledger plan upsert
+  - taskledger plan lint
+  - taskledger plan review
 body_format: markdown
 ---
 

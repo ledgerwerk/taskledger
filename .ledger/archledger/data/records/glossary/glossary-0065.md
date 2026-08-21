@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 50
 term: Handoff
-definition: A context transfer record enabling a different actor to continue work
+definition:
+  A context transfer record enabling a different actor to continue work
   from where the previous actor left off.
 body_format: markdown
 kind: glossary

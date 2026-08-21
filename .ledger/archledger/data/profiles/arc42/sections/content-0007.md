@@ -10,6 +10,7 @@ body_format: markdown
 kind: content
 version: 3
 ---
+
 Taskledger is a single-node, file-system-based tool. Deployment consists of:
 
 - **Installation**: `pip install taskledger` (PyPI) or local `pip install -e .`

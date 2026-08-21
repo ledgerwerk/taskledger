@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 110
 term: Sidecar
-definition: A collection of related records (todos, links, plans, etc.) attached to
+definition:
+  A collection of related records (todos, links, plans, etc.) attached to
   a task.
 body_format: markdown
 kind: glossary

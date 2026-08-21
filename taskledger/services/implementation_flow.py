@@ -447,7 +447,11 @@ def run_implementation_command(
         action="record implementation commands",
     )
     execution_cwd = (command_cwd or workspace_root).expanduser().resolve()
-    completed = command_runner.run_command(argv, cwd=execution_cwd)
+    completed = command_runner.run_managed_command(
+        argv,
+        cwd=execution_cwd,
+        workspace_root=workspace_root,
+    )
     record_managed_shell_command(
         workspace_root,
         task_id=task.id,

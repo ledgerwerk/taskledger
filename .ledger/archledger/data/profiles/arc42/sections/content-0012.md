@@ -10,4 +10,5 @@ body_format: markdown
 kind: content
 version: 3
 ---
+
 Domain terms used throughout taskledger. The full glossary lives in the per-term `glossary-NNNN` records under `.ledger/archledger/data/records/glossary/`. Each term is stored as a record with `term`, `definition`, and reference metadata rather than in this section body.

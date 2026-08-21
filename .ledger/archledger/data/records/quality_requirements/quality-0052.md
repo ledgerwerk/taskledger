@@ -2,13 +2,13 @@
 schema_version: 4
 id: quality-0052
 type: quality_requirement
-title: 'Data integrity: atomic writes and front matter validation'
+title: "Data integrity: atomic writes and front matter validation"
 status: proposed
 section: quality_requirements
 order: 10
 category: reliability
-source: ''
-measure: ''
+source: ""
+measure: ""
 scenarios: []
 body_format: markdown
 kind: quality

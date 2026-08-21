@@ -7,23 +7,23 @@ status: archived
 section: runtime_view
 order: 100
 participants:
-- coding agent
-- taskledger CLI
-- BDD services
-- task storage
+  - coding agent
+  - taskledger CLI
+  - BDD services
+  - task storage
 trigger: An actor wants executable examples linked to task acceptance criteria.
 result: External automation results are persisted as traceable validation evidence.
 body_format: markdown
 source_refs:
-- path: taskledger/cli_bdd.py
-  role: implements
-- path: taskledger/services/bdd_gherkin.py
-  role: implements
-- path: taskledger/services/bdd_reports.py
-  role: implements
+  - path: taskledger/cli_bdd.py
+    role: implements
+  - path: taskledger/services/bdd_gherkin.py
+    role: implements
+  - path: taskledger/services/bdd_reports.py
+    role: implements
 test_refs:
-- tests/test_bdd_cli.py
-- tests/test_bdd_validation_integration.py
+  - tests/test_bdd_cli.py
+  - tests/test_bdd_validation_integration.py
 archived_reason: BDD example scenario removed from taskledger; task-0126 ledger-isolation
 archived_from: records/runtime/runtime-0084.md
 kind: runtime

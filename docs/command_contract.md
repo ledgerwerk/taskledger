@@ -448,6 +448,18 @@ shell. They execute the child from the CLI invocation directory, or the explicit
 `--root` directory, even when Taskledger discovers an ancestor workspace root for
 ledger state, artifacts, and logs.
 
+Managed commands preserve the caller environment, but resolve child executable lookup
+deterministically. A usable inherited `VIRTUAL_ENV` takes precedence. Otherwise
+Taskledger checks `<command-cwd>/.venv`, `<command-cwd>/venv`, then the workspace
+root's `.venv` and `venv`, in that order. A candidate must contain `pyvenv.cfg` and
+a platform-appropriate Python executable. For an auto-detected environment, only
+the child environment is changed: its scripts directory is prepended to `PATH`,
+`VIRTUAL_ENV` is set, and inherited `PYTHONHOME` is removed. If no candidate is
+valid, the inherited environment is used unchanged. `PYTHONPATH` is preserved.
+This does not rewrite argv, invoke a shell, change the parent environment, or
+activate project environments for Taskledger's internal subprocesses. Portable
+commands such as `python -m pytest`, `pytest`, `ruff`, and `mypy` remain valid.
+
 Captured stdout and stderr are included in the command result. Human mode emits
 those streams before the recorded-command summary, while JSON mode keeps them only
 inside the single JSON result envelope. The result and managed-shell log also record

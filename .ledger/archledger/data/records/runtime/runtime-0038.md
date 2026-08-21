@@ -7,10 +7,10 @@ status: accepted
 section: runtime_view
 order: 40
 participants:
-- taskledger doctor
-- taskledger doctor locks
-- taskledger doctor schema
-- taskledger doctor indexes
+  - taskledger doctor
+  - taskledger doctor locks
+  - taskledger doctor schema
+  - taskledger doctor indexes
 trigger: User runs taskledger doctor
 result: Structured diagnostics with severity, code, message, and repair hints.
 body_format: markdown

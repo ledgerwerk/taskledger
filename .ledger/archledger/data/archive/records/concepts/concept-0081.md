@@ -9,16 +9,16 @@ order: 70
 applies_to: []
 body_format: markdown
 source_refs:
-- path: taskledger/domain/bdd.py
-  role: implements
-- path: taskledger/services/bdd_gherkin.py
-  role: implements
-- path: taskledger/services/bdd_reports.py
-  role: implements
+  - path: taskledger/domain/bdd.py
+    role: implements
+  - path: taskledger/services/bdd_gherkin.py
+    role: implements
+  - path: taskledger/services/bdd_reports.py
+    role: implements
 test_refs:
-- tests/test_bdd_gherkin.py
-- tests/test_bdd_report_import.py
-- tests/test_bdd_validation_integration.py
+  - tests/test_bdd_gherkin.py
+  - tests/test_bdd_report_import.py
+  - tests/test_bdd_validation_integration.py
 archived_reason: BDD traceability removed from taskledger; task-0126 ledger-isolation
 archived_from: records/concepts/concept-0081.md
 kind: concept

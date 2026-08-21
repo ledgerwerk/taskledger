@@ -125,6 +125,11 @@ but it must not change the managed child's cwd. With transcript logging enabled,
 same output is also captured in the ledger-level command transcript. Use it to build
 evidence into the plan before proposal.
 
+Managed planning commands use a usable inherited Python virtualenv when present,
+then inspect `.venv` and `venv` beside the command cwd and at the workspace root.
+This affects only child executable lookup, so the portable examples above retain
+their exact argv, direct no-shell execution, and documented child cwd.
+
 ## 6. Materialize Todos And Approve
 
 Plans can include todos in front matter, or todos can be added manually. Approval
@@ -196,6 +201,10 @@ captured child output is shown before the command summary. In JSON mode, streams
 inside the result envelope. With transcript logging enabled, it also records managed
 stdout/stderr in the task transcript. Use `implement deviation` when the
 implementation differs from the approved plan.
+
+Managed implementation commands use the same inherited-then-local virtualenv
+precedence as `plan command`. Taskledger changes only the child environment, not
+the recorded argv, parent environment, or direct subprocess semantics.
 
 ### Fresh-worker implementation
 

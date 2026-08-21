@@ -2,21 +2,21 @@
 schema_version: 4
 id: runtime-0035
 type: runtime_scenario
-title: 'Task lifecycle: create through done'
+title: "Task lifecycle: create through done"
 status: accepted
 section: runtime_view
 order: 10
 participants:
-- task create
-- plan start
-- plan upsert
-- plan accept
-- implement start
-- implement change
-- implement finish
-- validate start
-- validate check
-- validate finish
+  - task create
+  - plan start
+  - plan upsert
+  - plan accept
+  - implement start
+  - implement change
+  - implement finish
+  - validate start
+  - validate check
+  - validate finish
 trigger: User or agent runs taskledger task create
 result: Task reaches done with all todos complete and all mandatory criteria passed.
 body_format: markdown

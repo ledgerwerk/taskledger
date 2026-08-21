@@ -7,10 +7,11 @@ status: accepted
 section: runtime_view
 order: 50
 participants:
-- taskledger ledger fork
-- taskledger ledger adopt
-- taskledger ledger status
-trigger: Developer creates a long-lived Git branch and runs taskledger ledger fork
+  - taskledger ledger fork
+  - taskledger ledger adopt
+  - taskledger ledger status
+trigger:
+  Developer creates a long-lived Git branch and runs taskledger ledger fork
   REF
 result: Each long-lived branch has its own isolated task ledger under .taskledger/ledgers/.
 body_format: markdown

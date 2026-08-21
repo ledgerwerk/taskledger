@@ -7,7 +7,8 @@ status: proposed
 section: glossary
 order: 120
 term: Front Matter
-definition: The YAML metadata block at the top of a canonical record file, delimited
+definition:
+  The YAML metadata block at the top of a canonical record file, delimited
   by ---.
 body_format: markdown
 kind: glossary
