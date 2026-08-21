@@ -1,0 +1,323 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.6.4
+git_base_ref: v0.6.3
+git_base_sha: ecce3598f1de4ee6362bbdceae350198962e4258
+git_head_ref: HEAD
+git_head_sha: 975a4ccaced0d887eaf2ac79d1bee90dd37a3cc8
+git_range: ecce3598f1de4ee6362bbdceae350198962e4258..975a4ccaced0d887eaf2ac79d1bee90dd37a3cc8
+commit_count: 3
+rows:
+  - sha: 6a11769c822b83be5a1a901549ea5e7de8bc8699
+    source_ref: git:6a11769c822b83be5a1a901549ea5e7de8bc8699
+    short_sha: 6a11769
+    changed_paths:
+      - README.md
+      - docs/architecture_taskledger_split.md
+      - docs/command_contract.md
+      - docs/sync.md
+      - docs/usage.md
+      - taskledger/api/project.py
+      - taskledger/api/storage.py
+      - taskledger/cli_ledger.py
+      - taskledger/cli_storage.py
+      - taskledger/errors.py
+      - taskledger/exchange.py
+      - taskledger/services/doctor.py
+      - taskledger/services/doctor_checks/migration_checks.py
+      - taskledger/services/lock_inventory.py
+      - taskledger/services/run_store.py
+      - taskledger/services/task_lifecycle.py
+      - taskledger/services/tasks.py
+      - taskledger/services/workflow_guidance.py
+      - taskledger/services/workspace_snapshot.py
+      - taskledger/storage/agent_logs.py
+      - taskledger/storage/init.py
+      - taskledger/storage/layout_migration.py
+      - taskledger/storage/ledgercore_backend.py
+      - taskledger/storage/paths.py
+      - taskledger/storage/project_config.py
+      - taskledger/storage/project_context.py
+      - taskledger/storage/task_ids.py
+      - taskledger/storage/task_store.py
+      - tests/test_active_task.py
+      - tests/test_canonical_project_boundary.py
+      - tests/test_delta_remaining_contracts.py
+      - tests/test_doctor.py
+      - tests/test_event_logging_config.py
+      - tests/test_implementation_checks.py
+      - tests/test_lock_inventory.py
+      - tests/test_locks_audit.py
+      - tests/test_next_action_expired_lock.py
+      - tests/test_taskledger_migration_v3.py
+      - tests/test_taskledger_storage_commands_v3.py
+      - tests/test_taskledger_v2_cli.py
+      - tests/test_taskledger_v2_exchange.py
+      - tests/test_validation_git_snapshot_recovery.py
+      - tests/test_workspace_snapshot.py
+    stats:
+      files_changed: 0
+      insertions: 485
+      deletions: 179
+    inspected: true
+    inspected_paths:
+      - taskledger/storage/ledgercore_backend.py
+      - taskledger/storage/project_context.py
+      - taskledger/storage/paths.py
+      - taskledger/storage/task_store.py
+      - taskledger/storage/init.py
+      - taskledger/api/storage.py
+      - taskledger/api/project.py
+      - taskledger/cli_storage.py
+      - taskledger/cli_ledger.py
+      - tests/test_canonical_project_boundary.py
+      - tests/test_taskledger_storage_commands_v3.py
+    observed_behavior:
+      Canonical storage now separates durable data, runtime state,
+      logs, and cache indexes; uninitialized projects fail closed without creating legacy
+      storage, while explicit initialization and local overrides remain supported.
+    public_impact: public
+    decision: accepted
+    evidence_subject:
+      "feat: better support for v2 ledger storage, prevent old taskledger
+      storage"
+    target_entry_id: entry-0001
+    notes: Reviewed storage, initialization, CLI/API, and focused regression changes.
+  - sha: 2bc422877908d6d158bf75b24bc1928687eeedf6
+    source_ref: git:2bc422877908d6d158bf75b24bc1928687eeedf6
+    short_sha: 2bc4228
+    changed_paths:
+      - .archledger/source-state.json
+      - .ledger/archledger/.archledger-migration-20260821T090309Z/config.toml
+      - .ledger/archledger/.ledger-project.toml
+      - .ledger/archledger/config.toml
+      - .ledger/archledger/data/.ledger-project.toml
+      - .ledger/archledger/data/archive/records/building_blocks/block-0083.md
+      - .ledger/archledger/data/archive/records/concepts/concept-0081.md
+      - .ledger/archledger/data/archive/records/runtime/runtime-0076.md
+      - .ledger/archledger/data/archive/records/runtime/runtime-0084.md
+      - .ledger/archledger/data/document-state.json
+      - .ledger/archledger/data/migrations/20260821T090309Z-ledgercore-0.4-repository-storage.json
+      - .ledger/archledger/data/migrations/migration-cbe21be3f9dc3db4b03f6366.json
+      - .ledger/archledger/data/profiles/arc42/sections/content-0001.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0002.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0003.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0004.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0005.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0006.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0007.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0008.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0009.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0010.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0011.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0012.md
+      - .ledger/archledger/data/records/building_blocks/block-0029.md
+      - .ledger/archledger/data/records/building_blocks/block-0030.md
+      - .ledger/archledger/data/records/building_blocks/block-0031.md
+      - .ledger/archledger/data/records/building_blocks/block-0032.md
+      - .ledger/archledger/data/records/building_blocks/block-0033.md
+      - .ledger/archledger/data/records/building_blocks/block-0034.md
+      - .ledger/archledger/data/records/concepts/concept-0040.md
+      - .ledger/archledger/data/records/concepts/concept-0041.md
+      - .ledger/archledger/data/records/concepts/concept-0042.md
+      - .ledger/archledger/data/records/concepts/concept-0043.md
+      - .ledger/archledger/data/records/concepts/concept-0044.md
+      - .ledger/archledger/data/records/concepts/concept-0045.md
+      - .ledger/archledger/data/records/concepts/concept-0082.md
+      - .ledger/archledger/data/records/concepts/concept-0085.md
+      - .ledger/archledger/data/records/concepts/concept-0086.md
+      - .ledger/archledger/data/records/constraints/constraint-0016.md
+      - .ledger/archledger/data/records/constraints/constraint-0017.md
+      - .ledger/archledger/data/records/constraints/constraint-0018.md
+      - .ledger/archledger/data/records/constraints/constraint-0019.md
+      - .ledger/archledger/data/records/contexts/context-0020.md
+      - .ledger/archledger/data/records/contexts/context-0021.md
+      - .ledger/archledger/data/records/contexts/context-0022.md
+      - .ledger/archledger/data/records/contexts/context-0023.md
+      - .ledger/archledger/data/records/decisions/adr-0046.md
+      - .ledger/archledger/data/records/decisions/adr-0047.md
+      - .ledger/archledger/data/records/decisions/adr-0048.md
+      - .ledger/archledger/data/records/decisions/adr-0049.md
+      - .ledger/archledger/data/records/decisions/adr-0050.md
+      - .ledger/archledger/data/records/decisions/adr-0051.md
+      - .ledger/archledger/data/records/deployment/deploy-0039.md
+      - .ledger/archledger/data/records/glossary/glossary-0061.md
+      - .ledger/archledger/data/records/glossary/glossary-0062.md
+      - .ledger/archledger/data/records/glossary/glossary-0063.md
+      - .ledger/archledger/data/records/glossary/glossary-0064.md
+      - .ledger/archledger/data/records/glossary/glossary-0065.md
+      - .ledger/archledger/data/records/glossary/glossary-0066.md
+      - .ledger/archledger/data/records/glossary/glossary-0067.md
+      - .ledger/archledger/data/records/glossary/glossary-0068.md
+      - .ledger/archledger/data/records/glossary/glossary-0069.md
+      - .ledger/archledger/data/records/glossary/glossary-0070.md
+      - .ledger/archledger/data/records/glossary/glossary-0071.md
+      - .ledger/archledger/data/records/glossary/glossary-0072.md
+      - .ledger/archledger/data/records/glossary/glossary-0073.md
+      - .ledger/archledger/data/records/quality_requirements/quality-0052.md
+      - .ledger/archledger/data/records/quality_requirements/quality-0053.md
+      - .ledger/archledger/data/records/quality_requirements/quality-0054.md
+      - .ledger/archledger/data/records/quality_requirements/quality-0055.md
+      - .ledger/archledger/data/records/quality_requirements/quality-0056.md
+      - .ledger/archledger/data/records/requirements/content-0013.md
+      - .ledger/archledger/data/records/requirements/content-0014.md
+      - .ledger/archledger/data/records/requirements/content-0015.md
+      - .ledger/archledger/data/records/risks/risk-0057.md
+      - .ledger/archledger/data/records/risks/risk-0058.md
+      - .ledger/archledger/data/records/risks/risk-0059.md
+      - .ledger/archledger/data/records/risks/risk-0060.md
+      - .ledger/archledger/data/records/runtime/runtime-0035.md
+      - .ledger/archledger/data/records/runtime/runtime-0036.md
+      - .ledger/archledger/data/records/runtime/runtime-0037.md
+      - .ledger/archledger/data/records/runtime/runtime-0038.md
+      - .ledger/archledger/data/records/runtime/runtime-0074.md
+      - .ledger/archledger/data/records/runtime/runtime-0075.md
+      - .ledger/archledger/data/records/runtime/runtime-0077.md
+      - .ledger/archledger/data/records/runtime/runtime-0078.md
+      - .ledger/archledger/data/records/runtime/runtime-0087.md
+      - .ledger/archledger/data/records/runtime/runtime-0088.md
+      - .ledger/archledger/data/records/stakeholders/content-0079.md
+      - .ledger/archledger/data/records/stakeholders/content-0080.md
+      - .ledger/archledger/data/records/strategy/strategy-0024.md
+      - .ledger/archledger/data/records/strategy/strategy-0025.md
+      - .ledger/archledger/data/records/strategy/strategy-0026.md
+      - .ledger/archledger/data/records/strategy/strategy-0027.md
+      - .ledger/archledger/data/records/strategy/strategy-0028.md
+      - .ledger/archledger/data/source-state.json
+      - .ledger/archledger/data/storage.yaml
+      - .ledger/archledger/migrations/migration-66baa70bad8a0bb5ae852133.json
+      - .ledger/ledger.toml
+      - docs/architecture.md
+      - docs/architecture_taskledger_split.md
+      - docs/index.md
+      - tests/test_docs_and_skill.py
+    stats:
+      files_changed: 0
+      insertions: 1995
+      deletions: 1370
+    inspected: true
+    inspected_paths:
+      - docs/architecture.md
+      - docs/architecture_taskledger_split.md
+      - docs/index.md
+      - tests/test_docs_and_skill.py
+      - .ledger/ledger.toml
+    observed_behavior:
+      Architecture documentation moved to docs/architecture.md, generated
+      from the canonical Archledger data mount, with navigation and documentation tests
+      updated to the new source and output locations.
+    public_impact: docs
+    decision: accepted
+    evidence_subject: "doc: move architecture into docs"
+    target_entry_id: entry-0002
+    notes:
+      Reviewed documentation output, source-layout migration, navigation, and documentation
+      test updates.
+  - sha: 975a4ccaced0d887eaf2ac79d1bee90dd37a3cc8
+    source_ref: git:975a4ccaced0d887eaf2ac79d1bee90dd37a3cc8
+    short_sha: 975a4cc
+    changed_paths:
+      - .ledger/archledger/data/archive/records/building_blocks/block-0083.md
+      - .ledger/archledger/data/archive/records/concepts/concept-0081.md
+      - .ledger/archledger/data/archive/records/runtime/runtime-0076.md
+      - .ledger/archledger/data/archive/records/runtime/runtime-0084.md
+      - .ledger/archledger/data/migrations/migration-cbe21be3f9dc3db4b03f6366.json
+      - .ledger/archledger/data/profiles/arc42/sections/content-0001.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0002.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0003.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0004.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0007.md
+      - .ledger/archledger/data/profiles/arc42/sections/content-0012.md
+      - .ledger/archledger/data/records/building_blocks/block-0029.md
+      - .ledger/archledger/data/records/concepts/concept-0082.md
+      - .ledger/archledger/data/records/concepts/concept-0085.md
+      - .ledger/archledger/data/records/concepts/concept-0086.md
+      - .ledger/archledger/data/records/constraints/constraint-0016.md
+      - .ledger/archledger/data/records/constraints/constraint-0018.md
+      - .ledger/archledger/data/records/constraints/constraint-0019.md
+      - .ledger/archledger/data/records/contexts/context-0020.md
+      - .ledger/archledger/data/records/contexts/context-0021.md
+      - .ledger/archledger/data/records/contexts/context-0022.md
+      - .ledger/archledger/data/records/contexts/context-0023.md
+      - .ledger/archledger/data/records/decisions/adr-0046.md
+      - .ledger/archledger/data/records/decisions/adr-0047.md
+      - .ledger/archledger/data/records/decisions/adr-0048.md
+      - .ledger/archledger/data/records/decisions/adr-0049.md
+      - .ledger/archledger/data/records/decisions/adr-0050.md
+      - .ledger/archledger/data/records/decisions/adr-0051.md
+      - .ledger/archledger/data/records/glossary/glossary-0061.md
+      - .ledger/archledger/data/records/glossary/glossary-0062.md
+      - .ledger/archledger/data/records/glossary/glossary-0063.md
+      - .ledger/archledger/data/records/glossary/glossary-0064.md
+      - .ledger/archledger/data/records/glossary/glossary-0065.md
+      - .ledger/archledger/data/records/glossary/glossary-0066.md
+      - .ledger/archledger/data/records/glossary/glossary-0069.md
+      - .ledger/archledger/data/records/glossary/glossary-0070.md
+      - .ledger/archledger/data/records/glossary/glossary-0071.md
+      - .ledger/archledger/data/records/glossary/glossary-0072.md
+      - .ledger/archledger/data/records/glossary/glossary-0073.md
+      - .ledger/archledger/data/records/quality_requirements/quality-0052.md
+      - .ledger/archledger/data/records/quality_requirements/quality-0053.md
+      - .ledger/archledger/data/records/quality_requirements/quality-0054.md
+      - .ledger/archledger/data/records/quality_requirements/quality-0055.md
+      - .ledger/archledger/data/records/quality_requirements/quality-0056.md
+      - .ledger/archledger/data/records/requirements/content-0013.md
+      - .ledger/archledger/data/records/requirements/content-0014.md
+      - .ledger/archledger/data/records/requirements/content-0015.md
+      - .ledger/archledger/data/records/risks/risk-0058.md
+      - .ledger/archledger/data/records/risks/risk-0059.md
+      - .ledger/archledger/data/records/risks/risk-0060.md
+      - .ledger/archledger/data/records/runtime/runtime-0035.md
+      - .ledger/archledger/data/records/runtime/runtime-0036.md
+      - .ledger/archledger/data/records/runtime/runtime-0037.md
+      - .ledger/archledger/data/records/runtime/runtime-0038.md
+      - .ledger/archledger/data/records/runtime/runtime-0074.md
+      - .ledger/archledger/data/records/runtime/runtime-0075.md
+      - .ledger/archledger/data/records/runtime/runtime-0077.md
+      - .ledger/archledger/data/records/runtime/runtime-0078.md
+      - .ledger/archledger/data/records/runtime/runtime-0087.md
+      - .ledger/archledger/data/records/runtime/runtime-0088.md
+      - .ledger/archledger/data/records/stakeholders/content-0079.md
+      - .ledger/archledger/data/records/stakeholders/content-0080.md
+      - .ledger/archledger/data/records/strategy/strategy-0024.md
+      - .ledger/archledger/migrations/migration-66baa70bad8a0bb5ae852133.json
+      - docs/architecture.md
+      - docs/command_contract.md
+      - docs/full_task_cycle.md
+      - docs/usage.md
+      - skills/taskledger/SKILL.md
+      - taskledger/services/change_tracking.py
+      - taskledger/services/command_runner.py
+      - taskledger/services/implementation_flow.py
+      - tests/test_agent_command_logging.py
+      - tests/test_agent_session_protocol.py
+      - tests/test_command_runner.py
+    stats:
+      files_changed: 0
+      insertions: 720
+      deletions: 319
+    inspected: true
+    inspected_paths:
+      - taskledger/services/command_runner.py
+      - taskledger/services/change_tracking.py
+      - taskledger/services/implementation_flow.py
+      - docs/command_contract.md
+      - docs/full_task_cycle.md
+      - docs/usage.md
+      - tests/test_command_runner.py
+      - tests/test_agent_command_logging.py
+      - tests/test_agent_session_protocol.py
+    observed_behavior:
+      Managed planning and implementation commands now select a valid
+      inherited or local Python virtual environment for child execution while preserving
+      argv, working directory, parent environment, and direct no-shell behavior.
+    public_impact: public
+    decision: accepted
+    evidence_subject: "feat: better handling of virtualenv environments"
+    target_entry_id: entry-0003
+    notes:
+      Reviewed command environment resolution, managed command call sites, user-facing
+      documentation, and focused tests.
