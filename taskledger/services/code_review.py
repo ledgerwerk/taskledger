@@ -266,25 +266,37 @@ def _validate_handoff(
             f"Review handoff {handoff.handoff_id} is focused on {handoff.focus_run_id}, not {effective_run_id}.",  # noqa: E501
             EXIT_CODE_BAD_INPUT,
         )
-    if actor is not None and handoff.claimed_by is not None:
-        if (actor.actor_type, actor.actor_name, actor.session_id) != (
-            handoff.claimed_by.actor_type,
-            handoff.claimed_by.actor_name,
-            handoff.claimed_by.session_id,
-        ):
-            raise _tasks._cli_error(
-                f"Review handoff {handoff.handoff_id} is claimed by {handoff.claimed_by.actor_name} in session {handoff.claimed_by.session_id}; reviewer identity does not match.",  # noqa: E501
-                EXIT_CODE_BAD_INPUT,
+    if (
+        actor is not None
+        and handoff.claimed_by is not None
+        and (
+            (actor.actor_type, actor.actor_name, actor.session_id)
+            != (
+                handoff.claimed_by.actor_type,
+                handoff.claimed_by.actor_name,
+                handoff.claimed_by.session_id,
             )
-    if harness is not None and handoff.claimed_in_harness is not None:
-        if (harness.name, harness.session_id) != (
-            handoff.claimed_in_harness.name,
-            handoff.claimed_in_harness.session_id,
-        ):
-            raise _tasks._cli_error(
-                f"Review handoff {handoff.handoff_id} is claimed in harness {handoff.claimed_in_harness.name}/{handoff.claimed_in_harness.session_id}; reviewer harness does not match.",  # noqa: E501
-                EXIT_CODE_BAD_INPUT,
+        )
+    ):
+        raise _tasks._cli_error(
+            f"Review handoff {handoff.handoff_id} is claimed by {handoff.claimed_by.actor_name} in session {handoff.claimed_by.session_id}; reviewer identity does not match.",  # noqa: E501
+            EXIT_CODE_BAD_INPUT,
+        )
+    if (
+        harness is not None
+        and handoff.claimed_in_harness is not None
+        and (
+            (harness.name, harness.session_id)
+            != (
+                handoff.claimed_in_harness.name,
+                handoff.claimed_in_harness.session_id,
             )
+        )
+    ):
+        raise _tasks._cli_error(
+            f"Review handoff {handoff.handoff_id} is claimed in harness {handoff.claimed_in_harness.name}/{handoff.claimed_in_harness.session_id}; reviewer harness does not match.",  # noqa: E501
+            EXIT_CODE_BAD_INPUT,
+        )
 
     if handoff.task_id != task_id:
         raise _tasks._cli_error(
