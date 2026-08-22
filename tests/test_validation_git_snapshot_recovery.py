@@ -353,7 +353,7 @@ def test_project_file_addition_reports_added_path(tmp_path: Path) -> None:
     item = next(entry for entry in changed if entry["path"] == "added-after-finish.txt")
     assert item["expected"] is None
     assert item["current"]["content_hash"].startswith("sha256:")
-    assert item["current"]["size"] == len("added\n")
+    assert item["current"]["size"] == added.stat().st_size
 
 
 def test_project_file_deletion_reports_missing_path(tmp_path: Path) -> None:
