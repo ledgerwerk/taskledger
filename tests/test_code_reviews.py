@@ -361,7 +361,14 @@ def test_review_handoff_is_run_scoped_and_recording_derives_run(tmp_path: Path) 
 
 def test_review_handoff_coexists_with_implementation_lock_and_navigation(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Override CI auto-detection so persisted identity is used.
+    monkeypatch.setenv("TASKLEDGER_ACTOR_TYPE", "agent")
+    monkeypatch.setenv("TASKLEDGER_ACTOR_NAME", "pi-reviewer")
+    monkeypatch.setenv("TASKLEDGER_ACTOR_ROLE", "reviewer")
+    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
+    monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session")
     ws = init_workspace(tmp_path)
     task_id = create_approved_task(ws, allow_lint_errors=True)
     start_implementation(ws, task_id)

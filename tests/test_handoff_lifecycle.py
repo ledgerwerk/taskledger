@@ -116,10 +116,34 @@ def test_cannot_claim_already_claimed():
 
         handoff = create_handoff(workspace, "task-0001", mode="implementation")
 
-        claim_handoff(workspace, "task-0001", handoff["handoff_id"])
+        actor_a = ActorRef(
+            actor_type="agent", actor_name="alice", role="implementer", session_id="s-a"
+        )
+        harness_a = HarnessRef(
+            harness_id="h-a", name="pi", kind="agent_harness", session_id="s-a"
+        )
+        claim_handoff(
+            workspace,
+            "task-0001",
+            handoff["handoff_id"],
+            actor=actor_a,
+            harness=harness_a,
+        )
 
+        actor_b = ActorRef(
+            actor_type="agent", actor_name="bob", role="implementer", session_id="s-b"
+        )
+        harness_b = HarnessRef(
+            harness_id="h-b", name="pi", kind="agent_harness", session_id="s-b"
+        )
         with pytest.raises(LaunchError, match="Cannot claim"):
-            claim_handoff(workspace, "task-0001", handoff["handoff_id"])
+            claim_handoff(
+                workspace,
+                "task-0001",
+                handoff["handoff_id"],
+                actor=actor_b,
+                harness=harness_b,
+            )
 
 
 # specmason: req=REQ-0023 ac=AC-0295
@@ -352,7 +376,16 @@ def test_handoff_lifecycle_preserves_context_metadata_on_claim_close_cancel() ->
         assert cancelled.context_body
 
 
-def test_handoff_create_and_claim_use_persisted_identity(tmp_path: Path) -> None:
+def test_handoff_create_and_claim_use_persisted_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Override CI auto-detection so persisted identity is used.
+    monkeypatch.setenv("TASKLEDGER_ACTOR_TYPE", "agent")
+    monkeypatch.setenv("TASKLEDGER_ACTOR_NAME", "pi-reviewer")
+    monkeypatch.setenv("TASKLEDGER_ACTOR_ROLE", "reviewer")
+    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
+    monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session")
     init_project(tmp_path)
     create_task(tmp_path, title="Review task", description="Test", slug="task-0001")
     save_actor_state(

@@ -31,6 +31,10 @@ FUNCTION_LINE_WHITELIST: dict[str, str] = {
         "Migration inspect logic covers candidate discovery,"
         " config analysis, and issue assembly."
     ),
+    "taskledger/cli_misc.py::register_handoff_v2_commands": (
+        "Handoff v2 command registration covers create, claim, release,"
+        " retarget, review, show, list, close, and cancel command wiring."
+    ),
 }
 
 CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {

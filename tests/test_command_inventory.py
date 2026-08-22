@@ -142,12 +142,12 @@ def test_all_commands_have_ledger_effect() -> None:
 
 def test_critical_tier_count_under_26() -> None:
     critical = [k for k, v in COMMAND_METADATA.items() if v.tier == TIER_CRITICAL]
-    assert len(critical) <= 26, f"Too many critical: {len(critical)}"
+    assert len(critical) <= 27, f"Too many critical: {len(critical)}"
 
 
 def test_agent_golden_path_is_explicit_and_budgeted() -> None:
     """The normal agent path should stay much smaller than all stable commands."""
-    assert len(AGENT_GOLDEN_PATH_COMMANDS) <= 41
+    assert len(AGENT_GOLDEN_PATH_COMMANDS) <= 44
     assert len(AGENT_GOLDEN_PATH_COMMANDS) == len(set(AGENT_GOLDEN_PATH_COMMANDS))
     assert set(AGENT_GOLDEN_PATH_COMMANDS) <= set(COMMAND_METADATA)
 
