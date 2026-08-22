@@ -1,0 +1,137 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.6.5
+git_base_ref: v0.6.4
+git_base_sha: 475e19e50ccb4e55564bedb67b29eee86361c179
+git_head_ref: HEAD
+git_head_sha: b0b6bc01ece1d0c89b5c11df9a7683fd012a7a22
+git_range: 475e19e50ccb4e55564bedb67b29eee86361c179..b0b6bc01ece1d0c89b5c11df9a7683fd012a7a22
+commit_count: 3
+rows:
+  - sha: 0c7434861cd0326e498453d3396e4e8cfecf052e
+    source_ref: git:0c7434861cd0326e498453d3396e4e8cfecf052e
+    short_sha: 0c74348
+    changed_paths:
+      - taskledger/services/implementation_flow.py
+      - taskledger/services/workspace_snapshot.py
+      - tests/test_validation_git_snapshot_recovery.py
+      - tests/test_workspace_snapshot.py
+    stats:
+      files_changed: 0
+      insertions: 179
+      deletions: 17
+    inspected: true
+    inspected_paths:
+      - taskledger/services/implementation_flow.py
+      - taskledger/services/workspace_snapshot.py
+      - tests/test_validation_git_snapshot_recovery.py
+      - tests/test_workspace_snapshot.py
+    observed_behavior:
+      Implementation snapshot capture now excludes its generated manifest,
+      writes manifests atomically, reports added and deleted project files during validation,
+      and rejects unstable snapshot baselines during finish or refresh.
+    public_impact: public
+    decision: accepted
+    evidence_subject: "feat: workspace snapshot improved"
+    target_entry_id: entry-0001
+    notes:
+      Reviewed snapshot capture, persistence, comparison, implementation-flow integration,
+      and focused regression tests.
+  - sha: 84066428f775df58774ed86e2fe92b8977165c5d
+    source_ref: git:84066428f775df58774ed86e2fe92b8977165c5d
+    short_sha: "8406642"
+    changed_paths:
+      - .ruff.toml
+      - API.md
+      - README.md
+      - docs/api.md
+      - skills/taskledger/SKILL.md
+      - taskledger/api/handoff.py
+      - taskledger/cli_misc.py
+      - taskledger/cli_review.py
+      - taskledger/command_inventory.py
+      - taskledger/domain/handoff.py
+      - taskledger/domain/review.py
+      - taskledger/domain/states.py
+      - taskledger/services/actors.py
+      - taskledger/services/code_review.py
+      - taskledger/services/handoff_lifecycle.py
+      - taskledger/services/navigation.py
+      - taskledger/services/next_action_payload.py
+      - taskledger/services/worker_context.py
+      - taskledger/services/workspace_snapshot.py
+      - tests/test_actor_harness_state.py
+      - tests/test_code_reviews.py
+      - tests/test_handoff_lifecycle.py
+    stats:
+      files_changed: 0
+      insertions: 1274
+      deletions: 44
+    inspected: true
+    inspected_paths:
+      - .ruff.toml
+      - API.md
+      - README.md
+      - docs/api.md
+      - skills/taskledger/SKILL.md
+      - taskledger/api/handoff.py
+      - taskledger/cli_misc.py
+      - taskledger/cli_review.py
+      - taskledger/command_inventory.py
+      - taskledger/domain/handoff.py
+      - taskledger/domain/review.py
+      - taskledger/domain/states.py
+      - taskledger/services/actors.py
+      - taskledger/services/code_review.py
+      - taskledger/services/handoff_lifecycle.py
+      - taskledger/services/navigation.py
+      - taskledger/services/next_action_payload.py
+      - taskledger/services/worker_context.py
+      - taskledger/services/workspace_snapshot.py
+      - tests/test_actor_harness_state.py
+      - tests/test_code_reviews.py
+      - tests/test_handoff_lifecycle.py
+    observed_behavior:
+      Added run-scoped, read-only review handoffs with persisted actor
+      and harness identity, claim/release/retarget lifecycle operations, snapshot-drift
+      detection, durable review evidence, navigation guidance, and public CLI/API/skill
+      documentation.
+    public_impact: public
+    decision: accepted
+    evidence_subject: "feat: better handout"
+    target_entry_id: entry-0002
+    notes:
+      Reviewed handoff API and CLI wiring, lifecycle and identity enforcement,
+      review evidence binding, navigation behavior, documentation, and regression coverage.
+  - sha: b0b6bc01ece1d0c89b5c11df9a7683fd012a7a22
+    source_ref: git:b0b6bc01ece1d0c89b5c11df9a7683fd012a7a22
+    short_sha: b0b6bc0
+    changed_paths:
+      - tests/test_code_reviews.py
+      - tests/test_command_inventory.py
+      - tests/test_handoff_lifecycle.py
+      - tests/test_service_boundaries.py
+    stats:
+      files_changed: 0
+      insertions: 49
+      deletions: 5
+    inspected: true
+    inspected_paths:
+      - tests/test_code_reviews.py
+      - tests/test_command_inventory.py
+      - tests/test_handoff_lifecycle.py
+      - tests/test_service_boundaries.py
+    observed_behavior:
+      Expanded regression coverage for review-handoff identity and
+      claim behavior, adjusted command inventory budgets for the new commands, and documented
+      the CLI service-boundary exception.
+    public_impact: public
+    decision: accepted
+    evidence_subject: "fix: pytest"
+    target_entry_id: entry-0003
+    notes:
+      Reviewed all changed test and contract files; this commit contains validation
+      coverage and command-contract maintenance only.
