@@ -14,6 +14,7 @@ from taskledger.services.git_utils import (
     git_root,
     run_git,
 )
+from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     list_runs,
@@ -262,13 +263,14 @@ class WorkspaceSnapshotExclusions:
 
     git_root: Path
     relative_prefixes: tuple[str, ...]
+    relative_paths: tuple[str, ...] = ()
 
     def excludes(self, path: str) -> bool:
         normalized = path.replace("\\", "/").strip("/")
         return any(
             normalized == prefix or normalized.startswith(prefix + "/")
             for prefix in self.relative_prefixes
-        )
+        ) or normalized in self.relative_paths
 
     def classification(self, path: str) -> str:
         """Classify a path using the same policy as snapshot capture."""
@@ -296,6 +298,8 @@ def _canonical_snapshot_exclusion_error(
 def _snapshot_exclusions(
     workspace_root: Path,
     git_worktree_root: Path,
+    *,
+    exclude_paths: tuple[Path, ...] = (),
 ) -> WorkspaceSnapshotExclusions:
     roots: set[Path] = {git_worktree_root / ".taskledger"}
 
@@ -321,11 +325,13 @@ def _snapshot_exclusions(
                 context.paths.data_root,
                 context.paths.logs_root,
                 context.paths.indexes_root,
+                context.paths.runtime_root,
             }
         )
 
     git_root = git_worktree_root.resolve()
     prefixes: set[str] = set()
+    relative_paths: set[str] = set()
     for candidate in roots:
         try:
             relative = candidate.resolve().relative_to(git_root)
@@ -337,19 +343,59 @@ def _snapshot_exclusions(
         if prefix:
             prefixes.add(prefix)
 
+    for candidate in exclude_paths:
+        try:
+            relative = candidate.resolve().relative_to(git_root)
+        except ValueError:
+            continue
+        if relative != Path("."):
+            relative_paths.add(relative.as_posix().strip("/"))
+
     return WorkspaceSnapshotExclusions(
         git_root=git_worktree_root,
         relative_prefixes=tuple(sorted(prefixes)),
+        relative_paths=tuple(sorted(relative_paths)),
     )
+
+
+def workspace_snapshot_manifest_path(
+    workspace_root: Path,
+    task_id: str,
+    run_id: str,
+) -> Path:
+    paths = resolve_v2_paths(workspace_root)
+    return (
+        paths.runtime_root
+        / "checkouts"
+        / paths.ledger_ref
+        / "workspace-snapshots"
+        / task_id
+        / f"{run_id}.workspace-snapshot.json"
+    )
+
+
+def _snapshot_path_from_ref(workspace_root: Path, ref: str | None) -> Path | None:
+    if not ref:
+        return None
+    paths = resolve_v2_paths(workspace_root)
+    if ref.startswith("runtime/checkouts/"):
+        return paths.runtime_root / Path(ref).relative_to("runtime")
+    return paths.ledger_dir / ref
 
 
 def capture_workspace_content_snapshot(
     workspace_root: Path,
+    *,
+    snapshot_path: Path | None = None,
 ) -> WorkspaceContentSnapshot:
     root = git_root(workspace_root)
     if root is None:
         return WorkspaceContentSnapshot(None, None, None, None, 0, (), utc_now_iso())
-    exclusions = _snapshot_exclusions(workspace_root, root)
+    exclusions = _snapshot_exclusions(
+        workspace_root,
+        root,
+        exclude_paths=(snapshot_path,) if snapshot_path is not None else (),
+    )
 
     commit_result = run_git(root, "rev-parse", "HEAD", check=False)
     git_commit = commit_result.stdout.strip() if commit_result.returncode == 0 else None
@@ -390,12 +436,17 @@ def capture_current_workspace_state(
     *,
     include_diff: bool = False,
     include_content: bool = False,
+    snapshot_path: Path | None = None,
 ) -> CurrentWorkspaceState:
     """Capture the current Git workspace state once for reuse across tasks."""
     root = git_root(workspace_root)
     if root is None:
         return CurrentWorkspaceState(None, None, (), None, ())
-    exclusions = _snapshot_exclusions(workspace_root, root)
+    exclusions = _snapshot_exclusions(
+        workspace_root,
+        root,
+        exclude_paths=(snapshot_path,) if snapshot_path is not None else (),
+    )
 
     commit_result = run_git(root, "rev-parse", "HEAD", check=False)
     git_commit = commit_result.stdout.strip() if commit_result.returncode == 0 else None
@@ -453,14 +504,7 @@ def save_workspace_snapshot_manifest(
     snapshot: WorkspaceContentSnapshot,
 ) -> str:
     paths = resolve_v2_paths(workspace_root)
-    path = (
-        paths.runtime_root
-        / "checkouts"
-        / paths.ledger_ref
-        / "workspace-snapshots"
-        / task_id
-        / f"{run_id}.workspace-snapshot.json"
-    )
+    path = workspace_snapshot_manifest_path(workspace_root, task_id, run_id)
     snapshot_root = git_root(workspace_root)
     if snapshot_root is not None:
         try:
@@ -469,10 +513,16 @@ def save_workspace_snapshot_manifest(
             relative_manifest = None
         if relative_manifest is not None:
             manifest_ref = relative_manifest.as_posix()
-            if any(entry.path == manifest_ref for entry in snapshot.entries):
+            if any(
+                (snapshot_root / entry.path).resolve() == path.resolve()
+                for entry in snapshot.entries
+            ):
                 raise _snapshot_self_reference_error(manifest_ref)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(snapshot.to_dict(), indent=2, sort_keys=True) + "\n")
+    atomic_write_text(
+        path,
+        json.dumps(snapshot.to_dict(), indent=2, sort_keys=True) + "\n",
+    )
     return (
         f"runtime/checkouts/{paths.ledger_ref}/workspace-snapshots/"
         f"{task_id}/{path.name}"
@@ -618,12 +668,24 @@ def compare_implementation_snapshot(
         )
     else:
         current_legacy = capture_workspace_snapshot(workspace_root)
-        current_content = capture_workspace_content_snapshot(workspace_root)
+        snapshot_path = _snapshot_path_from_ref(
+            workspace_root, impl_run.workspace_snapshot_ref
+        )
+        current_content = capture_workspace_content_snapshot(
+            workspace_root, snapshot_path=snapshot_path
+        )
     snapshot_root = (
         current.git_root if current is not None else git_root(workspace_root)
     )
+    snapshot_path = _snapshot_path_from_ref(
+        workspace_root, impl_run.workspace_snapshot_ref
+    )
     exclusions = (
-        _snapshot_exclusions(workspace_root, snapshot_root)
+        _snapshot_exclusions(
+            workspace_root,
+            snapshot_root,
+            exclude_paths=(snapshot_path,) if snapshot_path is not None else (),
+        )
         if snapshot_root is not None
         else None
     )
@@ -827,7 +889,12 @@ def refresh_implementation_snapshot(
 
     old_eval = compare_implementation_snapshot(workspace_root, task, impl_run)
     legacy = capture_workspace_snapshot(workspace_root)
-    content = capture_workspace_content_snapshot(workspace_root)
+    snapshot_path = workspace_snapshot_manifest_path(
+        workspace_root, task.id, impl_run.run_id
+    )
+    content = capture_workspace_content_snapshot(
+        workspace_root, snapshot_path=snapshot_path
+    )
     snapshot_ref = save_workspace_snapshot_manifest(
         workspace_root, task.id, impl_run.run_id, content
     )
@@ -844,6 +911,15 @@ def refresh_implementation_snapshot(
         workspace_snapshot_format=SNAPSHOT_FORMAT,
         workspace_snapshot_ref=snapshot_ref,
     )
+    evaluation = compare_implementation_snapshot(workspace_root, task, updated)
+    if not evaluation.ok:
+        raise LaunchError(
+            "Implementation snapshot refresh produced an unstable baseline.",
+            code="SNAPSHOT_REFRESH_UNSTABLE",
+            exit_code=4,
+            details={"evaluation": evaluation.to_dict()},
+            remediation=["Run `taskledger doctor` and inspect snapshot storage."],
+        )
     save_run(workspace_root, updated)
     _tasks._append_event(
         workspace_root,

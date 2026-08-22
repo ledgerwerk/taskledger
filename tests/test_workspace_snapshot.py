@@ -12,6 +12,7 @@ from taskledger.services.workspace_snapshot import (
     capture_current_workspace_state,
     capture_workspace_content_snapshot,
     save_workspace_snapshot_manifest,
+    workspace_snapshot_manifest_path,
 )
 from taskledger.storage.init import init_canonical_project_state
 
@@ -288,6 +289,40 @@ def test_workspace_content_snapshot_excludes_nested_project_storage_under_parent
     assert "releaseledger/src.txt" in paths
     assert "releaseledger/.ledger/taskledger/config.toml" in paths
     assert generated.relative_to(repo).as_posix() not in paths
+
+
+def test_snapshot_collection_excludes_explicit_output_path(
+    tmp_path: Path,
+) -> None:
+    _init_git(tmp_path)
+    init_canonical_project_state(tmp_path, data_storage="project")
+    output = tmp_path / "generated" / "snapshot.json"
+    output.parent.mkdir(parents=True)
+    output.write_text("old\n", encoding="utf-8")
+    (tmp_path / "tracked.txt").write_text("changed\n", encoding="utf-8")
+
+    snapshot = capture_workspace_content_snapshot(tmp_path, snapshot_path=output)
+
+    assert "tracked.txt" in {entry.path for entry in snapshot.entries}
+    assert "generated/snapshot.json" not in {entry.path for entry in snapshot.entries}
+
+
+def test_project_local_snapshot_manifest_path_is_resolved_and_excluded(
+    tmp_path: Path,
+) -> None:
+    _init_git(tmp_path)
+    context, _ = init_canonical_project_state(tmp_path, data_storage="project")
+    output = workspace_snapshot_manifest_path(tmp_path, "task-0001", "run-0001")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text("old\n", encoding="utf-8")
+    (tmp_path / "tracked.txt").write_text("changed\n", encoding="utf-8")
+
+    snapshot = capture_workspace_content_snapshot(tmp_path, snapshot_path=output)
+    paths = {entry.path for entry in snapshot.entries}
+
+    assert "tracked.txt" in paths
+    assert not any(path.endswith(output.name) for path in paths)
+    assert output.is_relative_to(context.paths.runtime_root)
 
 
 def test_shared_workspace_content_capture_matches_direct_capture(

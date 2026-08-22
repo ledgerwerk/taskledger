@@ -338,6 +338,41 @@ def test_refresh_implementation_snapshot_requires_reason(tmp_path: Path) -> None
     assert result.exit_code != 0
 
 
+def test_project_file_addition_reports_added_path(tmp_path: Path) -> None:
+    _init_git_project(tmp_path, project_storage=True)
+    task_id = _prepare_implemented_task(tmp_path)
+    added = tmp_path / "added-after-finish.txt"
+    added.write_text("added\n", encoding="utf-8")
+
+    payload = _invoke_json(
+        ["validate", "start", "--task", task_id], cwd=tmp_path, ok=False
+    )
+
+    assert payload["error"]["details"]["reason_code"] == "content_snapshot_mismatch"
+    changed = payload["error"]["details"]["details"]["changed_paths"]
+    item = next(entry for entry in changed if entry["path"] == "added-after-finish.txt")
+    assert item["expected"] is None
+    assert item["current"]["content_hash"].startswith("sha256:")
+    assert item["current"]["size"] == len("added\n")
+
+
+def test_project_file_deletion_reports_missing_path(tmp_path: Path) -> None:
+    _init_git_project(tmp_path, project_storage=True)
+    task_id = _prepare_implemented_task(tmp_path)
+    (tmp_path / "tracked.txt").unlink()
+
+    payload = _invoke_json(
+        ["validate", "start", "--task", task_id], cwd=tmp_path, ok=False
+    )
+
+    assert payload["error"]["details"]["reason_code"] == "content_snapshot_mismatch"
+    changed = payload["error"]["details"]["details"]["changed_paths"]
+    item = next(entry for entry in changed if entry["path"] == "tracked.txt")
+    assert item["expected"]["content_hash"].startswith("sha256:")
+    assert item["current"]["exists"] is False
+    assert item["current"]["kind"] == "missing"
+
+
 def test_no_git_workspace_remains_compatible(tmp_path: Path) -> None:
     # Create a canonical project without initializing Git.
     _invoke(["init"], cwd=tmp_path)

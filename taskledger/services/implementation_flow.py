@@ -521,11 +521,18 @@ def finish_implementation(
     from taskledger.services.workspace_snapshot import (
         SNAPSHOT_FORMAT,
         capture_workspace_content_snapshot,
+        compare_implementation_snapshot,
         save_workspace_snapshot_manifest,
+        workspace_snapshot_manifest_path,
     )
 
     snapshot = capture_workspace_snapshot(workspace_root)
-    content_snapshot = capture_workspace_content_snapshot(workspace_root)
+    snapshot_path = workspace_snapshot_manifest_path(
+        workspace_root, task.id, run.run_id
+    )
+    content_snapshot = capture_workspace_content_snapshot(
+        workspace_root, snapshot_path=snapshot_path
+    )
     snapshot_ref = save_workspace_snapshot_manifest(
         workspace_root, task.id, run.run_id, content_snapshot
     )
@@ -545,6 +552,15 @@ def finish_implementation(
         workspace_snapshot_format=SNAPSHOT_FORMAT,
         workspace_snapshot_ref=snapshot_ref,
     )
+    evaluation = compare_implementation_snapshot(workspace_root, task, finished)
+    if not evaluation.ok:
+        raise _tasks.LaunchError(
+            "Implementation finish produced an unstable snapshot baseline.",
+            code="SNAPSHOT_REFRESH_UNSTABLE",
+            exit_code=4,
+            details={"evaluation": evaluation.to_dict()},
+            remediation=["Run `taskledger doctor` and inspect snapshot storage."],
+        )
     save_run(workspace_root, finished)
     updated = replace(task, status_stage="implemented", updated_at=utc_now_iso())
     save_task(workspace_root, updated)
