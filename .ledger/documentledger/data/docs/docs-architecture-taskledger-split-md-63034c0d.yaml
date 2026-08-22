@@ -42,24 +42,24 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for taskledger architecture.
         tracked_hashes:
-          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
-          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+          body_hash: 03439fb945a2d44c44b4034da743b1ad95d7faf9b5e71d36c97c783656015706
+          public_contract_hash: ab6e7ca47495f432f183cabb3fe8db514012b03dd18f51e04f5be93639800a3e
       - source_id: py:module:taskledger/services/tasks.py
         source_path: taskledger/services/tasks.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for taskledger architecture.
         tracked_hashes:
-          body_hash: d1f811e004475405c34fd88d4f215b025aef419ba0fc7775e6cf224aa20258e3
-          public_contract_hash: d97b72f6a3644cece87ac96edef0dc23c2e62bada5ae4726502dcf95fee6e2e2
+          body_hash: c2be395a0efe4a25fc7b086561b6ba2187d68215a580a3f5ba679904e71e77a1
+          public_contract_hash: 88c209fcb0cbec00ba42c1a4592ca3bfc9c674d47aa2bcb33c147327b4cd1f64
       - source_id: py:module:taskledger/storage/task_store.py
         source_path: taskledger/storage/task_store.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for taskledger architecture.
         tracked_hashes:
-          body_hash: 8596b23b2e310a5b4c110fdb7bacffb2af5933efe2a5584808f1157096cf9db6
-          public_contract_hash: 36507ae533b5dd01ca93b9b753c2d91347451387616f2c63f1e8327a9631c172
+          body_hash: 14962e1e01add6642f10f96a4b7a7493543da8e2441f322507ea8fdb93cb56cb
+          public_contract_hash: 54e2e1a86891083aa2cafe4118c7cac181e41fc14ac860e879797fb63b98e116
   - section_id: md:section:docs/architecture_taskledger_split.md::owning-layers
     doc_path: docs/architecture_taskledger_split.md
     heading_path:
@@ -89,8 +89,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for owning layers.
         tracked_hashes:
-          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
-          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+          body_hash: 03439fb945a2d44c44b4034da743b1ad95d7faf9b5e71d36c97c783656015706
+          public_contract_hash: ab6e7ca47495f432f183cabb3fe8db514012b03dd18f51e04f5be93639800a3e
       - source_id: py:module:taskledger/domain/models.py
         source_path: taskledger/domain/models.py
         coverage: architecture
@@ -105,16 +105,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for owning layers.
         tracked_hashes:
-          body_hash: d1f811e004475405c34fd88d4f215b025aef419ba0fc7775e6cf224aa20258e3
-          public_contract_hash: d97b72f6a3644cece87ac96edef0dc23c2e62bada5ae4726502dcf95fee6e2e2
+          body_hash: c2be395a0efe4a25fc7b086561b6ba2187d68215a580a3f5ba679904e71e77a1
+          public_contract_hash: 88c209fcb0cbec00ba42c1a4592ca3bfc9c674d47aa2bcb33c147327b4cd1f64
       - source_id: py:module:taskledger/storage/task_store.py
         source_path: taskledger/storage/task_store.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for owning layers.
         tracked_hashes:
-          body_hash: 8596b23b2e310a5b4c110fdb7bacffb2af5933efe2a5584808f1157096cf9db6
-          public_contract_hash: 36507ae533b5dd01ca93b9b753c2d91347451387616f2c63f1e8327a9631c172
+          body_hash: 14962e1e01add6642f10f96a4b7a7493543da8e2441f322507ea8fdb93cb56cb
+          public_contract_hash: 54e2e1a86891083aa2cafe4118c7cac181e41fc14ac860e879797fb63b98e116
   - section_id: md:section:docs/architecture_taskledger_split.md::storage-model
     doc_path: docs/architecture_taskledger_split.md
     heading_path:
@@ -123,25 +123,34 @@ sections:
     heading_slug: storage-model
     line_span:
       - 25
-      - 34
-    section_hash: 0c0b572ba7277f171fb91f76306ce51b57cee66a430a1531a93f28ec49cc2ba4
+      - 39
+    section_hash: ee72b029dc69fe6f77d93031a1ba7b5207a7976dac018007e2758489ba028ded
     summary: Storage model
     text: "## Storage model
 
 
       Markdown records are canonical. Task, plan, and run reads come from those
 
-      records directly. The `task_sidecars.json` summary index under
+      records directly. Canonical Taskledger uses four Ledgercore mounts: durable
 
-      `.taskledger/ledgers/<ledger_ref>/` is a derived cache that per-task sidecar
+      `data`, checkout-local `runtime`, diagnostic `logs`, and rebuildable cache
 
-      writes update in place. Action and event logging is enabled by default and
+      `indexes`. The default data mount is external sibling storage; runtime and logs
 
-      appends immutable `TaskEvent` records to the ledger-level `events/`
+      use user-data and indexes use cache. Local machine overrides live in
 
-      directory. Active stages require visible lock files, and stale locks are
+      `.ledger/ledger.local.toml`.
 
-      reported instead of being cleared silently."
+
+      Active/session state and workspace snapshot manifests are runtime data. Raw event
+
+      and agent-command logs are diagnostic logs. Small semantic run summaries and
+
+      task records remain in data. Indexes are always derived from data and may be
+
+      deleted and rebuilt without task-history loss. The historical `.taskledger/`
+
+      layout and root `taskledger.toml` are compatibility and migration inputs only."
     links:
       - source_id: py:module:taskledger/domain/models.py
         source_path: taskledger/domain/models.py
@@ -165,8 +174,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for storage model.
         tracked_hashes:
-          body_hash: 8596b23b2e310a5b4c110fdb7bacffb2af5933efe2a5584808f1157096cf9db6
-          public_contract_hash: 36507ae533b5dd01ca93b9b753c2d91347451387616f2c63f1e8327a9631c172
+          body_hash: 14962e1e01add6642f10f96a4b7a7493543da8e2441f322507ea8fdb93cb56cb
+          public_contract_hash: 54e2e1a86891083aa2cafe4118c7cac181e41fc14ac860e879797fb63b98e116
   - section_id: md:section:docs/architecture_taskledger_split.md::lifecycle-flow
     doc_path: docs/architecture_taskledger_split.md
     heading_path:
@@ -174,8 +183,8 @@ sections:
       - Lifecycle flow
     heading_slug: lifecycle-flow
     line_span:
-      - 35
-      - 50
+      - 40
+      - 55
     section_hash: 783135f58f53afe57efbd14d398712aa0f80327b8fd4af9faa7ad13f2235a32b
     summary: Lifecycle flow
     text: '## Lifecycle flow
@@ -221,23 +230,23 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for lifecycle flow.
         tracked_hashes:
-          body_hash: aac2b0a90f6d3ff215f95627604de880da28008e5824299a1328c598d3282cfb
-          public_contract_hash: c8eea6da233863fee959f7b373e3e1937ff4153a88dad55db92b2bcf658e4932
+          body_hash: 9f92732fd489976f87318ad88e5482f8e8afa1c1bf0e047926f5bd2050104f2b
+          public_contract_hash: 11bce2d1b38bd74016f608d58d88cd1ab82019e8751369bb572689943a5cdcdf
       - source_id: py:module:taskledger/services/planning_flow.py
         source_path: taskledger/services/planning_flow.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for lifecycle flow.
         tracked_hashes:
-          body_hash: 8f08d2e00e4da943d49e11fdf7e665c396f0295589c1d289fd0ff28b77bb30e8
-          public_contract_hash: c4b299b43313a9cf137cd93064db9968b38018f147555b50d6ac0d158cc8aa3a
+          body_hash: 3dbe71a2d8c4f850478fc09ae0f7c859d7cfc83e71d44677ab516af763fda359
+          public_contract_hash: 226b28c8574d2d3ab4c9f95e83c8b79a8e54b22862a9cac6e66594b6aa14c6c9
       - source_id: py:module:taskledger/services/validation_flow.py
         source_path: taskledger/services/validation_flow.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for lifecycle flow.
         tracked_hashes:
-          body_hash: 65732bac4a575ea235efc41c7364efed95d05a9356276e06c3b379ce814c19be
+          body_hash: 86b7de0f3f95a1aea02e967933e96a3e39c68bfeb91d7c11f9fc0c9e42183f88
           public_contract_hash: a5c8bea901396ea33fd3c7f86c59f13ba0a7c9c2b9ed28c40c81debf9b30fec1
   - section_id: md:section:docs/architecture_taskledger_split.md::command-surface
     doc_path: docs/architecture_taskledger_split.md
@@ -246,8 +255,8 @@ sections:
       - Command surface
     heading_slug: command-surface
     line_span:
-      - 51
-      - 61
+      - 56
+      - 66
     section_hash: 75da1928df026d9f877c4d444d993d0847e689df2346c42fbe45f3f6fb199817
     summary: Command surface
     text: "## Command surface
@@ -275,17 +284,41 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for command surface.
         tracked_hashes:
-          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
-          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+          body_hash: 03439fb945a2d44c44b4034da743b1ad95d7faf9b5e71d36c97c783656015706
+          public_contract_hash: ab6e7ca47495f432f183cabb3fe8db514012b03dd18f51e04f5be93639800a3e
       - source_id: py:module:taskledger/command_inventory.py
         source_path: taskledger/command_inventory.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for command surface.
         tracked_hashes:
-          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
-          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
-last_fresh_scan_version: 6
-last_fresh_hash: f8dd0dfa90c795f52c069a1ab31a4e18092d9768a71487c3e69360c89bfffb0f
-notes: Documentation links validated after final scan version 6.
-version: 258
+          body_hash: 17b2dac343c28626a1af86c26c8ddd25d954d81aaf415e5cc69ee555dab3fe3e
+          public_contract_hash: be479011be39cf235d4ec0a4c20b6d7706cd430b5a71ccd3b64277cf0bd2bcb4
+  - section_id: md:section:docs/architecture_taskledger_split.md::architecture-records
+    doc_path: docs/architecture_taskledger_split.md
+    heading_path:
+      - Taskledger architecture
+      - Architecture records
+    heading_slug: architecture-records
+    line_span:
+      - 67
+      - 72
+    section_hash: 72f9d1a60a7c4abd27dea70e81e8539cafdd685614bd4d44d50d98809272f4f8
+    summary: Architecture records
+    text: "## Architecture records
+
+
+      Arc42 architecture records live under the canonical Archledger data mount
+
+      `.ledger/archledger/data/` and are the source of `docs/architecture.md`. Skills
+
+      (`skills/taskledger/SKILL.md`) and `docs/architecture_taskledger_split.md` live
+
+      outside the Python package and outside the Archledger build output."
+    links: []
+last_fresh_scan_version: 8
+last_fresh_hash: d0396d82a3c757dc5b75664dcd447ae7a62f359750d87e5a1f4e561c1ab134b0
+notes:
+  Re-baselined documentation after the schema-3 Documentledger migration and
+  scan source-index refresh; repository source content was unchanged.
+version: 282

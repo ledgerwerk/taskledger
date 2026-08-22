@@ -39,8 +39,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for multi repo context.
         tracked_hashes:
-          body_hash: 1d11d6520901034d036df36b6465aeb7de92b518bfc5e805a5506a89fc21f506
-          public_contract_hash: e79ddac789a730c17db3c405610f7858263d46c2465d483e379afd6a67a63c89
+          body_hash: 61e4eef8993a2346f63b9f9b3ad86b87fadfd49ea87d916dafa5d06f0a5ecc43
+          public_contract_hash: 21480e65b00374962e02056e438b6d149f00e2d74fe7bdfb6b9a44194db19b60
   - section_id: md:section:docs/multi_repo.md::common-workflow
     doc_path: docs/multi_repo.md
     heading_path:
@@ -119,8 +119,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for common workflow.
         tracked_hashes:
-          body_hash: 230c491193480a4f63a4f37dae7c4496e3f85cd0b7aef3ad55ff129c824e602d
-          public_contract_hash: c24c84f30a49469f5b5605df77e6c50ba91838c5ab34633fc3d8262ae9f5f3f3
+          body_hash: a1e694b981396c43299542cf9a6cbfe37d8c5c13e04bef3cf0479dbf18a61dd3
+          public_contract_hash: 3f32b2851a0b0eb06f49442e8d52a6e12dd4cc56b96b83e3e141b484207b029d
       - source_id: py:module:taskledger/services/file_links.py
         source_path: taskledger/services/file_links.py
         coverage: architecture
@@ -135,8 +135,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for common workflow.
         tracked_hashes:
-          body_hash: 1d11d6520901034d036df36b6465aeb7de92b518bfc5e805a5506a89fc21f506
-          public_contract_hash: e79ddac789a730c17db3c405610f7858263d46c2465d483e379afd6a67a63c89
+          body_hash: 61e4eef8993a2346f63b9f9b3ad86b87fadfd49ea87d916dafa5d06f0a5ecc43
+          public_contract_hash: 21480e65b00374962e02056e438b6d149f00e2d74fe7bdfb6b9a44194db19b60
   - section_id: md:section:docs/multi_repo.md::mental-model
     doc_path: docs/multi_repo.md
     heading_path:
@@ -171,7 +171,9 @@ sections:
         tracked_hashes:
           body_hash: 36e57fab87fd5f4a9b64a3e72e3b6c3501e7b9b0137bbff6e81d6397e1dcf2f4
           public_contract_hash: 01e1e7adfcf48ac4be4c8d60494d4fd6a119e7bc0ed63018a810d1d9500d6f71
-last_fresh_scan_version: 6
+last_fresh_scan_version: 8
 last_fresh_hash: ba3a8c2eba0e4d91eb1757cfa44035b1cab1e3e3bce5d4ca01b683f5ae4d699f
-notes: Documentation links validated after final scan version 6.
-version: 257
+notes:
+  Re-baselined documentation after the schema-3 Documentledger migration and
+  scan source-index refresh; repository source content was unchanged.
+version: 282

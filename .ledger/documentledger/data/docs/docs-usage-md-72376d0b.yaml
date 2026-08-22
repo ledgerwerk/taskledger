@@ -55,16 +55,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for usage.
         tracked_hashes:
-          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
-          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+          body_hash: 03439fb945a2d44c44b4034da743b1ad95d7faf9b5e71d36c97c783656015706
+          public_contract_hash: ab6e7ca47495f432f183cabb3fe8db514012b03dd18f51e04f5be93639800a3e
       - source_id: py:module:taskledger/command_inventory.py
         source_path: taskledger/command_inventory.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for usage.
         tracked_hashes:
-          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
-          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+          body_hash: 17b2dac343c28626a1af86c26c8ddd25d954d81aaf415e5cc69ee555dab3fe3e
+          public_contract_hash: be479011be39cf235d4ec0a4c20b6d7706cd430b5a71ccd3b64277cf0bd2bcb4
   - section_id: md:section:docs/usage.md::installation
     doc_path: docs/usage.md
     heading_path:
@@ -154,8 +154,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for shell completion.
         tracked_hashes:
-          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
-          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+          body_hash: 03439fb945a2d44c44b4034da743b1ad95d7faf9b5e71d36c97c783656015706
+          public_contract_hash: ab6e7ca47495f432f183cabb3fe8db514012b03dd18f51e04f5be93639800a3e
   - section_id: md:section:docs/usage.md::initialize-state
     doc_path: docs/usage.md
     heading_path:
@@ -164,30 +164,47 @@ sections:
     heading_slug: initialize-state
     line_span:
       - 31
-      - 43
-    section_hash: 09c077714de89b89e804a6eaf7391b321089aa98f8feb4ea25e8a31d694ff07d
+      - 52
+    section_hash: ea61cba1693a80c30ebb3a394173e21ed457e6dafb91daa86802ff4768f861dd
     summary: Initialize state
-    text: '## Initialize state
+    text: "## Initialize state
 
 
       ```bash
 
       taskledger init
 
-      taskledger init --taskledger-dir /mnt/cloud/taskledger/project-a
+      taskledger storage where
 
       ```
 
 
-      `taskledger init` writes `taskledger.toml` in the workspace root. The
+      `taskledger init` writes a schema-3 Ledger manifest at `.ledger/ledger.toml` and
 
-      config defaults to `taskledger_dir = ".taskledger"` and stores only safe
+      Taskledger configuration at `.ledger/taskledger/config.toml`. Default data is
 
-      branch-scoped ledger state such as `ledger_ref` and
+      external at `../ledger`; indexes are cache storage. Use `taskledger storage where`
 
-      `ledger_next_task_number`. `.taskledger/` remains ignored and stores
+      and `taskledger storage set` for storage selection. Branch state remains in
 
-      operational task state under `.taskledger/ledgers/<ledger_ref>/`.'
+      the resolved data mount's `state.toml`.
+
+
+      The manifest registration is authoritative. A `.ledger/taskledger/` directory
+
+      or `config.toml` does not register Taskledger until `[ledgers.taskledger]` is
+
+      present in `.ledger/ledger.toml`. Once a canonical manifest is found, discovery
+
+      never falls back to `taskledger.toml`, `.taskledger.toml`, or `.taskledger/`.
+
+      Reads are side-effect free, and canonical-unregistered mutations fail before
+
+      writing; use `taskledger init` to add the registration. Doctor reports orphan
+
+      configs, legacy shadows, and split-brain histories. Back up and recover those
+
+      histories explicitly—Taskledger does not merge or delete them automatically."
     links:
       - source_id: py:module:taskledger/cli.py
         source_path: taskledger/cli.py
@@ -195,28 +212,71 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for initialize state.
         tracked_hashes:
-          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
-          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+          body_hash: 03439fb945a2d44c44b4034da743b1ad95d7faf9b5e71d36c97c783656015706
+          public_contract_hash: ab6e7ca47495f432f183cabb3fe8db514012b03dd18f51e04f5be93639800a3e
       - source_id: py:module:taskledger/storage/init.py
         source_path: taskledger/storage/init.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for initialize state.
         tracked_hashes:
-          body_hash: b9aab943a83ec8d8dbc9192cdaa81999fe64376784c7ab71aacf4ab09f93a543
-          public_contract_hash: 1f3f75192e8510fea1f8a7f9a4841288aac5709599276280e133203d4eb0771f
-  - section_id: md:section:docs/usage.md::branch-local-task-work
+          body_hash: f9f8e95a643183820978ce85ac81e0bd93e996efc7b4d82c4cd56e64cb9cdf55
+          public_contract_hash: cbaec41acca85984593e661065ce6420774345331cdc91490c26cc8bdb544c7f
+  - section_id: md:section:docs/usage.md::storage-migration-recovery
     doc_path: docs/usage.md
     heading_path:
       - Usage
-      - Branch-local task work
-    heading_slug: branch-local-task-work
+      - Storage migration recovery
+    heading_slug: storage-migration-recovery
     line_span:
-      - 44
-      - 73
-    section_hash: 2f683fe49ded30cf5c5c1cf7137f65d4bb55ec8ed48aa1aa8f339e08363c190b
-    summary: Branch-local task work
-    text: '## Branch-local task work
+      - 53
+      - 70
+    section_hash: f8b5c9ad41d544b787d45ca011772e073c21077f5c2260e69faaac29f36891cc
+    summary: Storage migration recovery
+    text: "## Storage migration recovery
+
+
+      Legacy Taskledger data is discovered independently from the canonical Ledger manifest.
+
+      The canonical manifest UUID is authoritative when it differs from the legacy Taskledger
+
+      UUID. Inspect and apply with the same destination and source options:
+
+
+      ```bash
+
+      taskledger migrate plan --sibling-ledger-root ../ledger
+
+      taskledger migrate plan --sibling-ledger-root ../ledger --source-data-root ../ledger/taskledger/LEGACY_UUID/data
+
+      taskledger migrate apply --sibling-ledger-root ../ledger
+
+      ```
+
+
+      `--source-data-root` selects a data root. `--source-checkout-id` selects a checkout
+
+      identifier and is not a filesystem path. Backups are automatic. Existing ledger
+
+      registrations and the legacy source remain in place by default. Metadata-only
+      targets
+
+      are backed up and replaced atomically; authoritative split-brain targets are blocked.
+
+      Do not create bindings or copy task directories manually."
+    links: []
+  - section_id: md:section:docs/usage.md::legacy-branch-local-task-work-migration-only
+    doc_path: docs/usage.md
+    heading_path:
+      - Usage
+      - Legacy branch-local task work (migration only)
+    heading_slug: legacy-branch-local-task-work-migration-only
+    line_span:
+      - 71
+      - 100
+    section_hash: 121705c70becf026682345c326c72412bb18913211c740382d81a81e35cf3677
+    summary: Legacy branch-local task work (migration only)
+    text: '## Legacy branch-local task work (migration only)
 
 
       When creating a long-lived Git branch, fork the Taskledger ledger pointer so
@@ -276,18 +336,18 @@ sections:
         source_path: taskledger/cli_ledger.py
         coverage: architecture
         impact: behavior
-        reason: Tracks the owning implementation for branch local task work.
+        reason: Moved the legacy branch-work link to the current migration-only section.
         tracked_hashes:
-          body_hash: 2fe3dccb062c3f8f2bf025405d12f7097279becd69f2c383a906edfb36204ca4
-          public_contract_hash: 089ce07e54a73cc3f1c4227c516671d4049031988da1cdefa9251bae77229659
+          body_hash: 1138aaa40bff24d567eada8eb77c5653b49f30e371ea5844e0c76ed11b24b5c8
+          public_contract_hash: 0ee1a22a293affd1b85db8463627b1cad229e82a3e67bd7f836934f8275c27ce
       - source_id: py:module:taskledger/storage/ledger_config.py
         source_path: taskledger/storage/ledger_config.py
         coverage: architecture
         impact: behavior
-        reason: Tracks the owning implementation for branch local task work.
+        reason: Moved the legacy branch-work link to the current migration-only section.
         tracked_hashes:
-          body_hash: 84a049e7b0fc590591532eaa6b07bc1d491f58d99582b7d4c793cbb36ee7626f
-          public_contract_hash: 87a081240602c556e839993a9a25e721316f0da75e6c4fdd54c55413b5576fd2
+          body_hash: 41dace5f11091f07cf04faaf854329d3d3ae195751cebe31dae5f7513d80a71a
+          public_contract_hash: c4c63743f1a58a0c92bea7f22dbfe361fa4ee7d199106a204bb8cdee1008dde1
   - section_id: md:section:docs/usage.md::opaque-links-and-external-artifacts
     doc_path: docs/usage.md
     heading_path:
@@ -295,8 +355,8 @@ sections:
       - Opaque links and external artifacts
     heading_slug: opaque-links-and-external-artifacts
     line_span:
-      - 74
-      - 91
+      - 101
+      - 118
     section_hash: 5e2bf801405ec0f1f814d62074607b472d28bd83a69e3549477fdafd24716b98
     summary: Opaque links and external artifacts
     text: '## Opaque links and external artifacts
@@ -339,8 +399,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for opaque links and external artifacts.
         tracked_hashes:
-          body_hash: 230c491193480a4f63a4f37dae7c4496e3f85cd0b7aef3ad55ff129c824e602d
-          public_contract_hash: c24c84f30a49469f5b5605df77e6c50ba91838c5ab34633fc3d8262ae9f5f3f3
+          body_hash: a1e694b981396c43299542cf9a6cbfe37d8c5c13e04bef3cf0479dbf18a61dd3
+          public_contract_hash: 3f32b2851a0b0eb06f49442e8d52a6e12dd4cc56b96b83e3e141b484207b029d
       - source_id: py:module:taskledger/refs.py
         source_path: taskledger/refs.py
         coverage: architecture
@@ -364,39 +424,38 @@ sections:
       - Planning guidance profiles
     heading_slug: planning-guidance-profiles
     line_span:
-      - 92
-      - 173
-    section_hash: 2c392cf63883fc584fe936316ce3f049f656ffaf047f8f43a2410922578430d5
+      - 119
+      - 199
+    section_hash: c510927f6827cdbfe7b97e2f6d4e97e09090217c7e0232811b97502d98e7e2cd
     summary: Planning guidance profiles
     text:
       "## Planning guidance profiles\n\nTaskledger always provides built-in planning\
       \ guidance via `taskledger plan guidance`.\nProject-local advisory guidance can\
-      \ extend this with project-specific advice. Configure\nit in the active project\
-      \ config file discovered for your workspace. Newer\nprojects usually use `taskledger.toml`.\
-      \ Existing projects may still use\n`.taskledger.toml`; if both files exist, `.taskledger.toml`\
-      \ is discovered\nfirst.\n\nConfigure `[prompt_profiles.planning]` in that active\
-      \ config:\n\n```toml\n[prompt_profiles.planning]\nprofile = \"strict\"\nquestion_policy\
-      \ = \"always_before_plan\"\nmax_required_questions = 3\nmin_acceptance_criteria\
-      \ = 2\ntodo_granularity = \"atomic\"\nrequire_files = true\nrequire_test_commands\
-      \ = true\nrequire_expected_outputs = true\nrequire_validation_hints = true\nplan_body_detail\
-      \ = \"detailed\"\nrequired_question_topics = [\"scope\", \"compatibility\", \"\
-      test strategy\"]\nextra_guidance = \"Every plan must mention docs, tests, and\
-      \ rollback or repair behavior.\"\n```\n\nAccepted values:\n\n- `profile`: `compact`,\
-      \ `balanced`, `strict`, `exploratory`\n- `question_policy`: `ask_when_missing`,\
-      \ `always_before_plan`, `minimal`\n- `todo_granularity`: `minimal`, `implementation_steps`,\
-      \ `atomic`\n- `plan_body_detail`: `terse`, `normal`, `detailed`\n- `max_required_questions`\
-      \ and `min_acceptance_criteria` must be positive integers\n- `require_files`,\
-      \ `require_test_commands`, `require_expected_outputs`, and\n  `require_validation_hints`\
-      \ must be booleans\n- `required_question_topics` must be a list of strings\n-\
-      \ `extra_guidance` must be a string up to 4000 characters\n\nInspect guidance\
-      \ for the active task:\n\n```bash\ntaskledger plan guidance\ntaskledger plan guidance\
-      \ --task task-0001\ntaskledger --json plan guidance\ntaskledger plan guidance\
-      \ --format json\n```\n\nPlanning workflow integration:\n\n```bash\ntaskledger\
-      \ plan start\ntaskledger plan guidance\ntaskledger plan template --include-guidance\
-      \ --file plan.md\n  # edit plan.md\ntaskledger plan check --file plan.md\ntaskledger\
+      \ extend this with project-specific advice. Configure\nit in `.ledger/taskledger/config.toml`\
+      \ for canonical projects. Legacy\n`taskledger.toml` and `.taskledger.toml` files\
+      \ remain readable only during\nexplicit migration.\n\nConfigure `[prompt_profiles.planning]`\
+      \ in that active config:\n\n```toml\n[prompt_profiles.planning]\nprofile = \"\
+      strict\"\nquestion_policy = \"always_before_plan\"\nmax_required_questions = 3\n\
+      min_acceptance_criteria = 2\ntodo_granularity = \"atomic\"\nrequire_files = true\n\
+      require_test_commands = true\nrequire_expected_outputs = true\nrequire_validation_hints\
+      \ = true\nplan_body_detail = \"detailed\"\nrequired_question_topics = [\"scope\"\
+      , \"compatibility\", \"test strategy\"]\nextra_guidance = \"Every plan must mention\
+      \ docs, tests, and rollback or repair behavior.\"\n```\n\nAccepted values:\n\n\
+      - `profile`: `compact`, `balanced`, `strict`, `exploratory`\n- `question_policy`:\
+      \ `ask_when_missing`, `always_before_plan`, `minimal`\n- `todo_granularity`: `minimal`,\
+      \ `implementation_steps`, `atomic`\n- `plan_body_detail`: `terse`, `normal`, `detailed`\n\
+      - `max_required_questions` and `min_acceptance_criteria` must be positive integers\n\
+      - `require_files`, `require_test_commands`, `require_expected_outputs`, and\n\
+      \  `require_validation_hints` must be booleans\n- `required_question_topics` must\
+      \ be a list of strings\n- `extra_guidance` must be a string up to 4000 characters\n\
+      \nInspect guidance for the active task:\n\n```bash\ntaskledger plan guidance\n\
+      taskledger plan guidance --task task-0001\ntaskledger --json plan guidance\ntaskledger\
+      \ plan guidance --format json\n```\n\nPlanning workflow integration:\n\n```bash\n\
+      taskledger plan start\ntaskledger plan guidance\ntaskledger plan template --include-guidance\
+      \ --file plan.md\n# edit plan.md\ntaskledger plan check --file plan.md\ntaskledger\
       \ plan upsert --file plan.md\ntaskledger plan lint --version 1\ntaskledger plan\
       \ review --version 1\n```\n\nRevising a proposed plan safely:\n\n```bash\ntaskledger\
-      \ plan revise\ntaskledger plan export --version latest --file ./plan.md\n  # edit\
+      \ plan revise\ntaskledger plan export --version latest --file ./plan.md\n# edit\
       \ ./plan.md (never edit .taskledger/ directly)\ntaskledger plan upsert --file\
       \ ./plan.md\ntaskledger plan diff --from 1 --to 2\n```\n\nFor structured scope\
       \ trims, use:\n\n```bash\ntaskledger plan amend --drop-criterion ac-0007 --drop-todo\
@@ -411,16 +470,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for planning guidance profiles.
         tracked_hashes:
-          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
-          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+          body_hash: b7371f1ffb6d0e13c0b85b89befe815dbdd83cd83f38bbc8f4ab3f6c79f58064
+          public_contract_hash: 881e0327a0a834879f3c9f44128039aec7b26c68a820335b6c9b2e07c2646d5b
       - source_id: py:module:taskledger/services/workflow_guidance.py
         source_path: taskledger/services/workflow_guidance.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for planning guidance profiles.
         tracked_hashes:
-          body_hash: a445ece87903cec9ce8cc15d8f07f75f921a7243a8e9d2b1cedc124a49edccf6
-          public_contract_hash: d4b0ef51ee8d3b882f3de8387f9f86fb4e0c2bd463133be4e59ca2841f6fe247
+          body_hash: aad5a574f96f597e41981635f6b3b4ef6f7e435a4bfbcfe8227380999283a74e
+          public_contract_hash: 211c79712cf75afaf439810415c9931b646dc74f4832903cbb39905031057dc2
   - section_id: md:section:docs/usage.md::optional-worker-pipelines
     doc_path: docs/usage.md
     heading_path:
@@ -428,34 +487,35 @@ sections:
       - Optional worker pipelines
     heading_slug: optional-worker-pipelines
     line_span:
-      - 174
-      - 266
-    section_hash: 8b25e7f9160e33a3ae49124d0c5bd1242bf4abbe8523fd6445fb8701ae4c07fb
+      - 200
+      - 293
+    section_hash: 875c0d465d82be019283cdd770d5046a88dd7e676858152f56682749f573ed44
     summary: Optional worker pipelines
     text:
       "## Optional worker pipelines\n\nProjects may optionally configure worker\
-      \ pipelines in `taskledger.toml` to\nguide fresh-context handoffs without changing\
-      \ the underlying task lifecycle.\nWorker pipelines are advisory overlays on the\
-      \ existing planning,\nimplementation, and validation lifecycle. They can be three\
-      \ steps, four steps,\nfive steps, or custom. When no worker pipeline is configured,\
-      \ taskledger\nbehavior is unchanged.\n\nExample configuration:\n\n```toml\n[worker_pipeline]\n\
-      enabled = true\nname = \"api-contract-first\"\nmode = \"guided\"\n\n[[worker_pipeline.steps]]\n\
-      id = \"planner\"\nlifecycle_stage = \"planning\"\nbase_context = \"planner\"\n\
-      \n[[worker_pipeline.steps]]\nid = \"tester\"\nlabel = \"Test Writer\"\nlifecycle_stage\
-      \ = \"implementation\"\nbase_context = \"implementer\"\nactor_role = \"implementer\"\
-      \nkind = \"check\"\ndescription = \"Add or update failing tests before code changes.\"\
-      \nrequired_output = [\"New or updated failing tests with a short summary.\"]\n\
-      must_not = [\"Do not change production code in this step.\"]\ntodo_tag = \"tests\"\
-      \ntest_command_policy = \"may_fail\"\n\n[[worker_pipeline.steps]]\nid = \"coder\"\
-      \nlifecycle_stage = \"implementation\"\nbase_context = \"implementer\"\nkind =\
-      \ \"todo\"\ndescription = \"Implement the approved change and make the tests pass.\"\
-      \nrequired_output = [\"Code changes plus passing targeted checks.\"]\nmust_not\
-      \ = [\"Do not skip required validation evidence.\"]\ntodo_tag = \"implementation\"\
-      \ntest_command_policy = \"must_pass\"\n\n[[worker_pipeline.steps]]\nid = \"domain-reviewer\"\
-      \nlifecycle_stage = \"review\"\nbase_context = \"spec-reviewer\"\nkind = \"review\"\
-      \n```\n\nSupported top-level keys are `enabled`, `name`, `mode`, and `steps`.\n\
-      Supported step keys are `id`, `label`, `lifecycle_stage`,\n`base_context`, `actor_role`,\
-      \ `kind`, `description`,\n`required_output`, `must_not`, `todo_tag`, and\n`test_command_policy`.\
+      \ pipelines in\n`.ledger/taskledger/config.toml` to\nguide fresh-context handoffs\
+      \ without changing the underlying task lifecycle.\nWorker pipelines are advisory\
+      \ overlays on the existing planning,\nimplementation, and validation lifecycle.\
+      \ They can be three steps, four steps,\nfive steps, or custom. When no worker\
+      \ pipeline is configured, taskledger\nbehavior is unchanged.\n\nExample configuration:\n\
+      \n```toml\n[worker_pipeline]\nenabled = true\nname = \"api-contract-first\"\n\
+      mode = \"guided\"\n\n[[worker_pipeline.steps]]\nid = \"planner\"\nlifecycle_stage\
+      \ = \"planning\"\nbase_context = \"planner\"\n\n[[worker_pipeline.steps]]\nid\
+      \ = \"tester\"\nlabel = \"Test Writer\"\nlifecycle_stage = \"implementation\"\n\
+      base_context = \"implementer\"\nactor_role = \"implementer\"\nkind = \"check\"\
+      \ndescription = \"Add or update failing tests before code changes.\"\nrequired_output\
+      \ = [\"New or updated failing tests with a short summary.\"]\nmust_not = [\"Do\
+      \ not change production code in this step.\"]\ntodo_tag = \"tests\"\ntest_command_policy\
+      \ = \"may_fail\"\n\n[[worker_pipeline.steps]]\nid = \"coder\"\nlifecycle_stage\
+      \ = \"implementation\"\nbase_context = \"implementer\"\nkind = \"todo\"\ndescription\
+      \ = \"Implement the approved change and make the tests pass.\"\nrequired_output\
+      \ = [\"Code changes plus passing targeted checks.\"]\nmust_not = [\"Do not skip\
+      \ required validation evidence.\"]\ntodo_tag = \"implementation\"\ntest_command_policy\
+      \ = \"must_pass\"\n\n[[worker_pipeline.steps]]\nid = \"domain-reviewer\"\nlifecycle_stage\
+      \ = \"review\"\nbase_context = \"spec-reviewer\"\nkind = \"review\"\n```\n\nSupported\
+      \ top-level keys are `enabled`, `name`, `mode`, and `steps`.\nSupported step keys\
+      \ are `id`, `label`, `lifecycle_stage`,\n`base_context`, `actor_role`, `kind`,\
+      \ `description`,\n`required_output`, `must_not`, `todo_tag`, and\n`test_command_policy`.\
       \ `guided` mode remains advisory: it does not add\nnew planning, implementation,\
       \ or validation gates. Instead it augments\n`taskledger next-action` with worker-step\
       \ metadata plus ready-to-run worker\ncontext and handoff commands for the pending\
@@ -495,9 +555,9 @@ sections:
       - Release boundary tags
     heading_slug: release-boundary-tags
     line_span:
-      - 267
-      - 282
-    section_hash: 170c3a3d472dcffd50daa2b13554340e804c260315d9f4330b89ecc831acb8d5
+      - 294
+      - 309
+    section_hash: e15ad3959122128dd1caebdc4e30cf94400d857a5f60e9cd7d1c2c3fdb80f22c
     summary: Release boundary tags
     text: '## Release boundary tags
 
@@ -505,7 +565,8 @@ sections:
       Use taskledger only to record the task boundary for a release. Taskledger does
       not
 
-      manage changelog entries or edit `CHANGELOG.md`; that belongs to the separate
+      manage changelog entries or edit [docs/changelog.md](changelog.md); that belongs
+      to the separate
 
       `releaseledger` tool.
 
@@ -523,7 +584,8 @@ sections:
 
       Release boundaries must point to done tasks. When the user asks for release notes,
 
-      changelog entries, or `CHANGELOG.md` updates, use `releaseledger`. Load both
+      changelog entries, or [docs/changelog.md](changelog.md) updates, use `releaseledger`.
+      Load both
 
       skills when cross-ledger release notes need task context.'
     links:
@@ -550,8 +612,8 @@ sections:
       - Recording manually completed work
     heading_slug: recording-manually-completed-work
     line_span:
-      - 283
-      - 294
+      - 310
+      - 321
     section_hash: 58b14fcfce4270a9b1b660613ee09704b0d0e39ce4d7c464c21878174d012da8
     summary: Recording manually completed work
     text: '## Recording manually completed work
@@ -590,8 +652,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for recording manually completed work.
         tracked_hashes:
-          body_hash: 0550f08df72c1e62fcc46443bd468ea25ad77beef7b6390823ef239f8772a677
-          public_contract_hash: 78d63207cbc0d7927d88b0dcdde15e9ff17e5717c470812d3a0867535210d5a9
+          body_hash: 53c0bbae5b685271c4b3b99cb9171c16753abda8574b75798b84bd68934e0638
+          public_contract_hash: 87064567e7301379b50e68b2370b223a442d559c1be3ccbd704db3007a61a865
   - section_id: md:section:docs/usage.md::archiving-tasks
     doc_path: docs/usage.md
     heading_path:
@@ -599,8 +661,8 @@ sections:
       - Archiving tasks
     heading_slug: archiving-tasks
     line_span:
-      - 295
-      - 306
+      - 322
+      - 333
     section_hash: 122cff598b26216de89744bf92429a798ec62de942f51fa3c572cb0321369f3a
     summary: Archiving tasks
     text: '## Archiving tasks
@@ -629,15 +691,15 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for archiving tasks.
         tracked_hashes:
-          body_hash: 778d872bfdb3c1b99133b5cc320ff9e914fc8aa9e13f60df7963cc3acecaea98
-          public_contract_hash: c6d0642090ec9fd5395c86f3d691cbcc318af1343d74957dfbd36f8346598756
+          body_hash: 9ef921ea97a7ba93de915b77589fcab634136bd1706e6d0493d3cbfa662b4e2b
+          public_contract_hash: 62eba1684e3eea987b7148fb0731b78dbde66103e91b22b4bd663c51712b19ab
       - source_id: py:module:taskledger/services/task_archive.py
         source_path: taskledger/services/task_archive.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for archiving tasks.
         tracked_hashes:
-          body_hash: d0fd6ee825c9ff22cc54cd051857910259e657c9e99ecb347b1823cc4af97e04
+          body_hash: 907f340b1f734147f677edccd0f522d41abef884b0fd970ceefb52a822b8c7e2
           public_contract_hash: 7e8564e7efc7ae866d3b0e49ddf5a67af68a34a6cd5cec6cc98a255f74577da3
   - section_id: md:section:docs/usage.md::post-completion-follow-up-deltas
     doc_path: docs/usage.md
@@ -646,8 +708,8 @@ sections:
       - Post-completion follow-up deltas
     heading_slug: post-completion-follow-up-deltas
     line_span:
-      - 307
-      - 325
+      - 334
+      - 352
     section_hash: 38634d0fe481d46157003a3f77b2ecf2cf2e91f275b9cdcd974e595b1aee52b6
     summary: Post-completion follow-up deltas
     text: '## Post-completion follow-up deltas
@@ -698,8 +760,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for post completion follow up deltas.
         tracked_hashes:
-          body_hash: 0550f08df72c1e62fcc46443bd468ea25ad77beef7b6390823ef239f8772a677
-          public_contract_hash: 78d63207cbc0d7927d88b0dcdde15e9ff17e5717c470812d3a0867535210d5a9
+          body_hash: 53c0bbae5b685271c4b3b99cb9171c16753abda8574b75798b84bd68934e0638
+          public_contract_hash: 87064567e7301379b50e68b2370b223a442d559c1be3ccbd704db3007a61a865
   - section_id: md:section:docs/usage.md::fresh-context-entrypoint
     doc_path: docs/usage.md
     heading_path:
@@ -707,8 +769,8 @@ sections:
       - Fresh-context entrypoint
     heading_slug: fresh-context-entrypoint
     line_span:
-      - 326
-      - 387
+      - 353
+      - 414
     section_hash: d97f0718218e87a7e764e55c6a6e506392e83a6c83ede8b212703ddf836d8953
     summary: Fresh-context entrypoint
     text:
@@ -752,16 +814,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for fresh context entrypoint.
         tracked_hashes:
-          body_hash: a63b4bf64f5929b558a9c353caa77871b077c9193bde39571842a6e225a5d76b
-          public_contract_hash: 5dbb8d57ac6679f0ae5f8859ff225b087b14c7ebabf84789e670a522520b7858
+          body_hash: 9733e0ee48e3bc88fa42789196c39b8d0046fbd91c522fcb02ae52be8b5bb710
+          public_contract_hash: 9fb255dd50ea61d2c448b3762b86b297dc35c9b9793fc6d047f034bc5457cdae
       - source_id: py:module:taskledger/services/usage.py
         source_path: taskledger/services/usage.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for fresh context entrypoint.
         tracked_hashes:
-          body_hash: 6d6b0a95c42c45d9093183fb40897ba4490542deafa5dc6694a823ecc8fbdfc3
-          public_contract_hash: d10ca84312dfc2e967383bf5399b16f08cb7690fa3ef798083bfe243943b0ffb
+          body_hash: 7c79b186243757c1901c0c4f0dd7d5ddb6327e7b890075125f20b090f9367b9b
+          public_contract_hash: 2daf8845ec037211f54c4b8dcef82da83beacc3daf16ff342f3e5ac33029491e
   - section_id: md:section:docs/usage.md::compact-implementation-loop
     doc_path: docs/usage.md
     heading_path:
@@ -769,22 +831,51 @@ sections:
       - Compact implementation loop
     heading_slug: compact-implementation-loop
     line_span:
-      - 388
-      - 410
-    section_hash: 3e9f6b352ae1d33becb070b447ec5797b77b3e3406a53820bf29b2d23dc540bb
+      - 415
+      - 437
+    section_hash: 6e7cc17211c8b434200a94f8db3c2cc76f6535a7cd6701cfa334a58c9e899351
     summary: Compact implementation loop
-    text:
-      "## Compact implementation loop\n\nFor routine same-session implementation,\
-      \ prefer `next-action` and the next todo\nover a broad generated context read:\n\
-      \n```bash\ntaskledger --json next-action\ntaskledger --json todo next\ntaskledger\
-      \ todo show todo-0003\n  # implement only that todo\npytest tests/...\ntaskledger\
-      \ todo done todo-0003 --evidence \"pytest tests/... passed\"\ntaskledger --json\
-      \ next-action\n```\n\nRules for agents:\n\n- Install the `taskledger` skill in\
-      \ the coding harness before relying on agent-driven workflows.\n- Prefer `next-action`\
-      \ and `todo next` over generated context during normal work.\n- Use the todo `validation_hint`\
-      \ before marking a todo done.\n- Record concise evidence with `todo done`.\n-\
-      \ Do not create handoffs or context bundles unless the user asked to switch harness\
-      \ or session."
+    text: '## Compact implementation loop
+
+
+      For routine same-session implementation, prefer `next-action` and the next todo
+
+      over a broad generated context read:
+
+
+      ```bash
+
+      taskledger --json next-action
+
+      taskledger --json todo next
+
+      taskledger todo show todo-0003
+
+      # implement only that todo
+
+      pytest tests/...
+
+      taskledger todo done todo-0003 --evidence "pytest tests/... passed"
+
+      taskledger --json next-action
+
+      ```
+
+
+      Rules for agents:
+
+
+      - Install the `taskledger` skill in the coding harness before relying on agent-driven
+      workflows.
+
+      - Prefer `next-action` and `todo next` over generated context during normal work.
+
+      - Use the todo `validation_hint` before marking a todo done.
+
+      - Record concise evidence with `todo done`.
+
+      - Do not create handoffs or context bundles unless the user asked to switch harness
+      or session.'
     links:
       - source_id: py:module:taskledger/services/next_action_payload.py
         source_path: taskledger/services/next_action_payload.py
@@ -792,15 +883,15 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for compact implementation loop.
         tracked_hashes:
-          body_hash: a63b4bf64f5929b558a9c353caa77871b077c9193bde39571842a6e225a5d76b
-          public_contract_hash: 5dbb8d57ac6679f0ae5f8859ff225b087b14c7ebabf84789e670a522520b7858
+          body_hash: 9733e0ee48e3bc88fa42789196c39b8d0046fbd91c522fcb02ae52be8b5bb710
+          public_contract_hash: 9fb255dd50ea61d2c448b3762b86b297dc35c9b9793fc6d047f034bc5457cdae
       - source_id: py:module:taskledger/services/task_collections.py
         source_path: taskledger/services/task_collections.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for compact implementation loop.
         tracked_hashes:
-          body_hash: e4307ef9120f7f9c1aba033c7006e107ae72f1a3b3edbf5b935922b3cf617509
+          body_hash: dc3ffa1c38ba30ffac58a196b7a1690bd40877702b4227c2eb655c67b6b33fb6
           public_contract_hash: 97ae38fd36e3410bf142fb4db9b878a4257c7e0f12b18ae3e95217f840ddb9f9
   - section_id: md:section:docs/usage.md::fresh-session-startup-and-monitoring
     doc_path: docs/usage.md
@@ -809,8 +900,8 @@ sections:
       - Fresh-session startup and monitoring
     heading_slug: fresh-session-startup-and-monitoring
     line_span:
-      - 411
-      - 442
+      - 438
+      - 469
     section_hash: 1921e09fb226437fb1ae73b306318510d02791ec556c68e5eab99b7384c0212e
     summary: Fresh-session startup and monitoring
     text: '## Fresh-session startup and monitoring
@@ -883,8 +974,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for fresh session startup and monitoring.
         tracked_hashes:
-          body_hash: 6d6b0a95c42c45d9093183fb40897ba4490542deafa5dc6694a823ecc8fbdfc3
-          public_contract_hash: d10ca84312dfc2e967383bf5399b16f08cb7690fa3ef798083bfe243943b0ffb
+          body_hash: 7c79b186243757c1901c0c4f0dd7d5ddb6327e7b890075125f20b090f9367b9b
+          public_contract_hash: 2daf8845ec037211f54c4b8dcef82da83beacc3daf16ff342f3e5ac33029491e
   - section_id: md:section:docs/usage.md::linked-file-baselines-and-drift
     doc_path: docs/usage.md
     heading_path:
@@ -893,9 +984,9 @@ sections:
       - Linked file baselines and drift
     heading_slug: linked-file-baselines-and-drift
     line_span:
-      - 443
-      - 615
-    section_hash: e73bcb0546414263f61bb9929e97492bad52c24e7597d1dbbda8cc2ee257acec
+      - 470
+      - 654
+    section_hash: 565c0682b0a2719b02f5422e9a5d85073b4deaadf20c5d8e3b154ce177bee5a6
     summary: Linked file baselines and drift
     text:
       "### Linked file baselines and drift\n\nLinked files can now capture a baseline\
@@ -923,71 +1014,83 @@ sections:
       \ bundle, and optional source-file snapshots.\nUse it when handing a completed\
       \ task to an LLM or coding agent for review,\ndocumentation updates, or follow-up\
       \ implementation work.\n\n```bash\ntaskledger task export task-0030 -o task-0030.llm.md\n\
-      taskledger task export task-0030 --no-source-files -o task-0030.records.md\ntaskledger\
-      \ task export task-0030 --source-file README.md -o task-0030.llm.md\ntaskledger\
-      \ --json task export task-0030 -o task-0030.llm.md\n```\n\nDistinction:\n\n- `task\
-      \ report`: human-readable review/archive report.\n- `context`: canonical fresh\
-      \ continuation context for an active agent.\n- `handoff show`: durable transfer\
-      \ context created for another session or actor.\n- `task dossier`: advanced/compatibility\
-      \ full-context dump.\n- `task transcript`: command audit trail.\n- `task export`:\
-      \ single-file LLM handoff/archive of one complete task bundle.\n\n```text\ntodo-work:\
-      \ Implementation is in progress; 1 todos remain.\nNext todo: todo-0001 -- Update\
-      \ next-action JSON payload.\nCommand: taskledger todo show todo-0001\nMark todo\
-      \ done after evidence exists: taskledger todo done todo-0001 --evidence \"...\"\
-      \nProgress: 0/1 todos done\n```\n\n```json\n{\n  \"kind\": \"task_next_action\"\
-      ,\n  \"action\": \"todo-work\",\n  \"next_command\": \"taskledger todo show todo-0001\"\
-      ,\n  \"next_item\": {\n    \"kind\": \"todo\",\n    \"id\": \"todo-0001\",\n \
-      \   \"text\": \"Update next-action JSON payload.\",\n    \"validation_hint\":\
-      \ \"Run: pytest tests/test_todo_implementation_gate.py -q; Expected: pass\",\n\
-      \    \"done_command_hint\": \"taskledger todo done todo-0001 --evidence \\\"...\\\
-      \"\"\n  },\n  \"commands\": [\n    {\n      \"kind\": \"inspect\",\n      \"label\"\
-      : \"Show next todo\",\n      \"command\": \"taskledger todo show todo-0001\",\n\
-      \      \"primary\": true\n    },\n    {\n      \"kind\": \"complete\",\n     \
-      \ \"label\": \"Mark todo done after evidence exists\",\n      \"command\": \"\
-      taskledger todo done todo-0001 --evidence \\\"...\\\"\",\n      \"primary\": false\n\
-      \    }\n  ],\n  \"progress\": {\n    \"todos\": {\n      \"total\": 1,\n     \
-      \ \"done\": 0,\n      \"open\": 1,\n      \"open_ids\": [\"todo-0001\"]\n    }\n\
-      \  },\n  \"blocking\": []\n}\n```\n\nAll approval escape hatches require `--reason`:\n\
-      \n```bash\ntaskledger plan approve --version 1 --actor user --approval-source\
-      \ explicit_chat --note \"Ready.\" --no-materialize-todos --reason \"trivial task\"\
-      \ntaskledger plan approve --version 1 --actor user --approval-source explicit_chat\
-      \ --note \"Ready.\" --allow-empty-criteria --reason \"no criteria needed\"\ntaskledger\
+      taskledger task export task-0030 -o task-0030.records.md\ntaskledger task export\
+      \ task-0030 --source-file README.md -o task-0030.llm.md\ntaskledger --json task\
+      \ export task-0030 -o task-0030.llm.md\n```\n\nDistinction:\n\n- `task report`:\
+      \ human-readable review/archive report.\n- `context`: canonical fresh continuation\
+      \ context for an active agent.\n- `handoff show`: durable transfer context created\
+      \ for another session or actor.\n- `task dossier`: advanced/compatibility full-context\
+      \ dump.\n- `task transcript`: command audit trail.\n- `task export`: single-file\
+      \ LLM handoff/archive of one complete task bundle.\n\n```text\ntodo-work: Implementation\
+      \ is in progress; 1 todos remain.\nNext todo: todo-0001 -- Update next-action\
+      \ JSON payload.\nCommand: taskledger todo show todo-0001\nMark todo done after\
+      \ evidence exists: taskledger todo done todo-0001 --evidence \"...\"\nProgress:\
+      \ 0/1 todos done\n```\n\n```json\n{\n  \"kind\": \"task_next_action\",\n  \"action\"\
+      : \"todo-work\",\n  \"next_command\": \"taskledger todo show todo-0001\",\n  \"\
+      next_item\": {\n    \"kind\": \"todo\",\n    \"id\": \"todo-0001\",\n    \"text\"\
+      : \"Update next-action JSON payload.\",\n    \"validation_hint\": \"Run: pytest\
+      \ tests/test_todo_implementation_gate.py -q; Expected: pass\",\n    \"done_command_hint\"\
+      : \"taskledger todo done todo-0001 --evidence \\\"...\\\"\"\n  },\n  \"commands\"\
+      : [\n    {\n      \"kind\": \"inspect\",\n      \"label\": \"Show next todo\"\
+      ,\n      \"command\": \"taskledger todo show todo-0001\",\n      \"primary\":\
+      \ true\n    },\n    {\n      \"kind\": \"complete\",\n      \"label\": \"Mark\
+      \ todo done after evidence exists\",\n      \"command\": \"taskledger todo done\
+      \ todo-0001 --evidence \\\"...\\\"\",\n      \"primary\": false\n    }\n  ],\n\
+      \  \"progress\": {\n    \"todos\": {\n      \"total\": 1,\n      \"done\": 0,\n\
+      \      \"open\": 1,\n      \"open_ids\": [\"todo-0001\"]\n    }\n  },\n  \"blocking\"\
+      : []\n}\n```\n\nAll approval escape hatches require `--reason`:\n\n```bash\ntaskledger\
       \ plan approve --version 1 --actor user --approval-source explicit_chat --note\
-      \ \"Ready.\" --allow-lint-errors --reason \"user accepted rough plan\"\n```\n\n\
-      Use `plan command` to record diagnostic commands during planning:\n\n```bash\n\
-      taskledger plan command -- pytest tests/ -q\ntaskledger plan command --allow-failure\
-      \ -- pytest tests/ -q\ntaskledger implement command -- ruff check --config=.ruff.toml\
-      \ .\ntaskledger implement command --allow-failure -- python -c \"raise SystemExit(7)\"\
-      \n```\n\nWhen `[agent_logging].enabled = true` in `taskledger.toml`, `taskledger`\n\
-      records CLI invocations and managed command outputs. Keep logging opt-in because\n\
-      stdout/stderr may contain sensitive data. Route task-relevant commands through\n\
-      `plan command` and `implement command` so their output is included in task\ntranscripts\
-      \ and reports.\n\n> taskledger context --for implementation --format markdown\n\
-      > taskledger implement start\n> taskledger implement log --message \"Started implementation.\"\
-      \n> taskledger implement change --path taskledger/storage/task_store.py --kind\
-      \ edit --summary \"Updated storage semantics.\"\n> taskledger implement scan-changes\
-      \ --from-git --summary \"Implementation diff summary.\"\n> taskledger implement\
-      \ finish --summary \"Implemented the approved plan.\"\n> taskledger review record\
-      \ --result pass --summary \"No blocking code-quality issues.\"\n>\n> taskledger\
-      \ context --for validation --format markdown\n> taskledger validate start\n> taskledger\
-      \ validate check --criterion ac-0001 --status pass --evidence \"pytest -q tests/test_taskledger_v2_cli.py\"\
-      \n> taskledger validate finish --result passed --summary \"Validated the rewrite.\"\
-      \n\nCode review evidence can also be recorded after `validate finish` has moved\
-      \ the\ntask to `done`. This appends durable review evidence to the task and does\
-      \ not\nreopen or otherwise mutate the task lifecycle stage.\n\nWhen a user explicitly\
-      \ asks an agent for a review, the agent should persist\nthe final review with\
-      \ `taskledger review record` before answering. A\nchat-only review is not durable\
-      \ task evidence. Post-completion review\nrecords are append-only and do not reopen\
-      \ the task.\n\nIf validation finds an implementation bug and the accepted plan\
-      \ is still\ncorrect, restart implementation instead of replanning:\n\n```bash\n\
-      taskledger validate finish --result failed --summary \"Parser edge case still\
-      \ fails.\"\ntaskledger next-action\ntaskledger context --for implementation --format\
-      \ markdown\ntaskledger implement restart --summary \"Fix failed validation findings.\"\
-      \n```\n\nIf validation finds an implementation bug and the accepted plan is still\n\
-      correct, restart implementation instead of replanning:\n\n```bash\ntaskledger\
-      \ validate finish --result failed --summary \"Parser edge case still fails.\"\n\
-      taskledger next-action\ntaskledger context --for implementation --format markdown\n\
-      taskledger implement restart --summary \"Fix failed validation findings.\"\n```"
+      \ \"Ready.\" --no-materialize-todos --reason \"trivial task\"\ntaskledger plan\
+      \ approve --version 1 --actor user --approval-source explicit_chat --note \"Ready.\"\
+      \ --allow-empty-criteria --reason \"no criteria needed\"\ntaskledger plan approve\
+      \ --version 1 --actor user --approval-source explicit_chat --note \"Ready.\" --allow-lint-errors\
+      \ --reason \"user accepted rough plan\"\n```\n\nUse `plan command` to record diagnostic\
+      \ commands during planning:\n\n```bash\ntaskledger plan command -- pytest tests/\
+      \ -q\ntaskledger plan command --allow-failure -- pytest tests/ -q\ntaskledger\
+      \ implement command -- ruff check --config=.ruff.toml .\ntaskledger implement\
+      \ command --allow-failure -- python -c \"raise SystemExit(7)\"\n```\n\nWhen `[agent_logging].enabled\
+      \ = true` in `.ledger/taskledger/config.toml`, `taskledger`\nrecords CLI invocations\
+      \ and managed command outputs. Both managed wrappers execute\nthe exact argv after\
+      \ `--` without a shell and from the CLI invocation directory, or\nthe explicit\
+      \ `--root` directory. Taskledger may discover an ancestor workspace for\nledger\
+      \ state, but that does not change the child's cwd. Human mode displays captured\n\
+      stdout/stderr before the summary. JSON mode contains stdout/stderr and cwd only\
+      \ in\nthe result object. Keep logging opt-in because stdout/stderr may contain\
+      \ sensitive\ndata. Route task-relevant commands through `plan command` and `implement\
+      \ command`\nso their output is included in task transcripts and reports.\n\nManaged\
+      \ commands use a usable inherited Python virtualenv first, then a valid\n`.venv`\
+      \ or `venv` in the command directory or workspace, preferring the command\ndirectory.\
+      \ Taskledger adjusts only the child `PATH` and `VIRTUAL_ENV` (and removes\nchild\
+      \ `PYTHONHOME` for auto-detected environments); it preserves argv, `PYTHONPATH`,\n\
+      the child cwd, no-shell execution, and the parent environment. Use portable forms\n\
+      such as `python -m pytest`, `pytest`, `ruff`, or `mypy` rather than hard-coding\
+      \ an\nabsolute virtualenv interpreter path.\n\n> taskledger context --for implementation\
+      \ --format markdown\n> taskledger implement start\n> taskledger implement log\
+      \ --message \"Started implementation.\"\n> taskledger implement change --path\
+      \ taskledger/storage/task_store.py --kind edit --summary \"Updated storage semantics.\"\
+      \n> taskledger implement scan-changes --from-git --summary \"Implementation diff\
+      \ summary.\"\n> taskledger implement finish --summary \"Implemented the approved\
+      \ plan.\"\n> taskledger review record --result pass --summary \"No blocking code-quality\
+      \ issues.\"\n>\n> taskledger context --for validation --format markdown\n> taskledger\
+      \ validate start\n> taskledger validate check --criterion ac-0001 --status pass\
+      \ --evidence \"pytest -q tests/test_taskledger_v2_cli.py\"\n> taskledger validate\
+      \ finish --result passed --summary \"Validated the rewrite.\"\n\nCode review evidence\
+      \ can also be recorded after `validate finish` has moved the\ntask to `done`.\
+      \ This appends durable review evidence to the task and does not\nreopen or otherwise\
+      \ mutate the task lifecycle stage.\n\nWhen a user explicitly asks an agent for\
+      \ a review, the agent should persist\nthe final review with `taskledger review\
+      \ record` before answering. A\nchat-only review is not durable task evidence.\
+      \ Post-completion review\nrecords are append-only and do not reopen the task.\n\
+      \nIf validation finds an implementation bug and the accepted plan is still\ncorrect,\
+      \ restart implementation instead of replanning:\n\n```bash\ntaskledger validate\
+      \ finish --result failed --summary \"Parser edge case still fails.\"\ntaskledger\
+      \ next-action\ntaskledger context --for implementation --format markdown\ntaskledger\
+      \ implement restart --summary \"Fix failed validation findings.\"\n```\n\nIf validation\
+      \ finds an implementation bug and the accepted plan is still\ncorrect, restart\
+      \ implementation instead of replanning:\n\n```bash\ntaskledger validate finish\
+      \ --result failed --summary \"Parser edge case still fails.\"\ntaskledger next-action\n\
+      taskledger context --for implementation --format markdown\ntaskledger implement\
+      \ restart --summary \"Fix failed validation findings.\"\n```"
     links:
       - source_id: py:module:taskledger/services/file_links.py
         source_path: taskledger/services/file_links.py
@@ -1003,8 +1106,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for linked file baselines and drift.
         tracked_hashes:
-          body_hash: f072c89b4d3b3f7f51c08143c2858eaf0206fd10de00b3f914012092068c290b
-          public_contract_hash: b7afb664d7e48f262fb0d2dda63d7e6dac915fa024a13fb2b4d4584e17a96216
+          body_hash: 0890f8c6ff537694130e33f89a13bc9cc4b157529f235edfecc6ac69d56a91b4
+          public_contract_hash: 792264900573aacaf6a8ec88fc1b84c319d622caa64fbf3135fc6973d33e49ea
   - section_id: md:section:docs/usage.md::machine-readable-output
     doc_path: docs/usage.md
     heading_path:
@@ -1012,22 +1115,22 @@ sections:
       - Machine-readable output
     heading_slug: machine-readable-output
     line_span:
-      - 616
-      - 652
-    section_hash: 6d0f2a2da2a8524b7623b1dc98fbd8754e7d22d3bc792e8aa3657f7f5e3676f1
+      - 655
+      - 691
+    section_hash: 2b11510cdcb08f4b5317eaf218a10610028dcd775172af02f730981afdaa73a9
     summary: Machine-readable output
     text:
-      "## Machine-readable output\n\n```bash\ntaskledger --json status --full\n\
-      taskledger --json task active\ntaskledger --json task show\ntaskledger --json\
-      \ task show task-0001\ntaskledger --json context --for validation --format json\n\
-      taskledger --json review list --task task-0001\n```\n\n```json\n{\n  \"ok\": true,\n\
-      \  \"command\": \"status\",\n  \"result\": {\n    \"kind\": \"taskledger_status\"\
-      ,\n    \"workspace_root\": \"/workspace\",\n    \"config_path\": \"/workspace/taskledger.toml\"\
-      ,\n    \"taskledger_dir\": \"/workspace/.taskledger\",\n    \"project_dir\": \"\
-      /workspace/.taskledger\",\n    \"counts\": {\n      \"tasks\": 1,\n      \"introductions\"\
-      : 0,\n      \"plans\": 1,\n      \"questions\": 1,\n      \"runs\": 2,\n     \
-      \ \"changes\": 1,\n      \"locks\": 0\n    },\n    \"active_task\": null,\n  \
-      \  \"healthy\": true\n  },\n  \"events\": []\n}\n```"
+      "## Machine-readable output\n\n```bash\ntaskledger --json info\ntaskledger\
+      \ --json task active\ntaskledger --json task show\ntaskledger --json task show\
+      \ task-0001\ntaskledger --json context --for validation --format json\ntaskledger\
+      \ --json review list --task task-0001\n```\n\n```json\n{\n  \"ok\": true,\n  \"\
+      command\": \"status\",\n  \"result\": {\n    \"kind\": \"taskledger_info\",\n\
+      \    \"workspace_root\": \"/workspace\",\n    \"config_path\": \"/workspace/.ledger/taskledger/config.toml\"\
+      ,\n    \"taskledger_dir\": \"/workspace/.ledger/taskledger\",\n    \"project_dir\"\
+      : \"/workspace/.ledger/taskledger\",\n    \"counts\": {\n      \"tasks\": 1,\n\
+      \      \"introductions\": 0,\n      \"plans\": 1,\n      \"questions\": 1,\n \
+      \     \"runs\": 2,\n      \"changes\": 1,\n      \"locks\": 0\n    },\n    \"\
+      active_task\": null,\n    \"healthy\": true\n  },\n  \"events\": []\n}\n```"
     links:
       - source_id: py:module:taskledger/cli_common.py
         source_path: taskledger/cli_common.py
@@ -1035,54 +1138,61 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for machine readable output.
         tracked_hashes:
-          body_hash: 1b3ff15c848b08101f955c94b0b1e17a2fdacd4e6c063f3f404da91e5274fce8
-          public_contract_hash: 43c00d80234c9f1cc23bd916f596230ff68085efcf0b1c82786b88f7611e4e72
-  - section_id: md:section:docs/usage.md::cloud-backed-storage
+          body_hash: 872f209ca3dbe74f1f2cca9545d754de11425327caebbe3012fda65fb947b700
+          public_contract_hash: d193b2653a0c5039b22c0337fa45815a2c96a05f99af8f9ac709acfc1907dde2
+  - section_id: md:section:docs/usage.md::resolved-storage
     doc_path: docs/usage.md
     heading_path:
       - Usage
-      - Cloud-backed storage
-    heading_slug: cloud-backed-storage
+      - Resolved storage
+    heading_slug: resolved-storage
     line_span:
-      - 653
-      - 664
-    section_hash: fa5b91f1d0f6110d535fcf0af4a9f04ddfde8018f7036c3e149891294381aea8
-    summary: Cloud-backed storage
-    text: "## Cloud-backed storage
+      - 692
+      - 706
+    section_hash: 1741f161b3e774da4bf463e49ad2f234ae98c5de653285405b3e7fc9699b18c7
+    summary: Resolved storage
+    text: "## Resolved storage
 
 
-      Use one storage root per source project:
+      Use the schema-3 Ledgercore mounts:
 
 
       ```bash
 
-      taskledger init --taskledger-dir /mnt/cloud/taskledger/project-a
+      taskledger init
+
+      taskledger storage where
+
+      taskledger storage path data
+
+      taskledger storage path indexes
+
+      taskledger storage set data user-data --scope local
+
+      # Use `taskledger migrate` for data relocation; `storage set` changes topology
+      only.
 
       ```
 
 
-      Do not point two unrelated repositories at the same `taskledger_dir`.
-
-      See {doc}`sync` for the recommended private-Git workflow when you want to use
-
-      the same Taskledger state across multiple PCs without committing `.taskledger/`."
+      Default data is external at `../ledger`; indexes are checkout-specific cache data."
     links:
       - source_id: py:module:taskledger/services/storage_locations.py
         source_path: taskledger/services/storage_locations.py
         coverage: architecture
         impact: behavior
-        reason: Tracks the owning implementation for cloud backed storage.
+        reason: Moved storage-location coverage to the current resolved-storage section.
         tracked_hashes:
-          body_hash: 8e66f108562ea21adca7beeb2e885c53de2799b75801f6e7e605fecae1cfe1a0
-          public_contract_hash: aa37ba65bfda915bc0dd00e83b743707169bddc415c9022715cc98502d45b55d
+          body_hash: 139e396f7b1916107725681d959662e8e3ddd5d5c5d21365c3521898803ed738
+          public_contract_hash: c2f60f0ec915d137f399be0aed1ec112a8e57807e899e78c8ff93465087d8c44
       - source_id: py:module:taskledger/storage/project_config.py
         source_path: taskledger/storage/project_config.py
         coverage: architecture
         impact: behavior
-        reason: Tracks the owning implementation for cloud backed storage.
+        reason: Moved project-config coverage to the current resolved-storage section.
         tracked_hashes:
-          body_hash: 9b1503b5d128e799424d66098e89c0bfd54c37ee1ac71ced0e9ba06b41e6af01
-          public_contract_hash: 3dd9a0323a7a9b90bfda7b204ebcea1f9347275a782873b3226f1121c54b96cc
+          body_hash: d9ba3db0e199dd53b8bd8d54e2bf1fe0e50089b377ce127e6b196693042e582e
+          public_contract_hash: 59a0b0cf13e7e4dc2d0f6f8b4017549ccdc4f5269d5b3ebaed4969e981b0ff93
   - section_id: md:section:docs/usage.md::integrity-and-recovery
     doc_path: docs/usage.md
     heading_path:
@@ -1090,8 +1200,8 @@ sections:
       - Integrity and recovery
     heading_slug: integrity-and-recovery
     line_span:
-      - 665
-      - 677
+      - 707
+      - 719
     section_hash: a0f7f14523b347353368cfd3452122544aef63781069d73c711c041fa3eab847
     summary: Integrity and recovery
     text: '## Integrity and recovery
@@ -1125,8 +1235,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for integrity and recovery.
         tracked_hashes:
-          body_hash: b861cc050359e92d3d42f20fc540e2a21005b7d1417a892d1e12e47f2473c344
-          public_contract_hash: eeee42ea5b9b4c8dd5d85efafbcce937a0ebc79838536bd6a6010b0b3399f2e5
+          body_hash: 5f415e058bf30bf2c5e36dce4e4adfc33f5d5aa0831ceb9f15981dc3955649e5
+          public_contract_hash: c5448e0ecf462e3745d06d26cbb8b358c50e7852fc27135671d617156dcf86ed
       - source_id: py:module:taskledger/services/lock_diagnostics.py
         source_path: taskledger/services/lock_diagnostics.py
         coverage: architecture
@@ -1141,7 +1251,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for integrity and recovery.
         tracked_hashes:
-          body_hash: 2a7d1aac3442b91b30a4f727c566daa5b1339f4d5d13a95a6a5263ade071e485
+          body_hash: ab5fd098f244764fb46dc1c5d9a80675bbed09b841036c2feaadbc2d4fa831b3
           public_contract_hash: 4ae985dd542a559252134a9d0dffb7a987c8694ac4c6b699bbf1daabdf35e169
   - section_id: md:section:docs/usage.md::export-and-snapshots
     doc_path: docs/usage.md
@@ -1150,9 +1260,9 @@ sections:
       - Export and snapshots
     heading_slug: export-and-snapshots
     line_span:
-      - 678
-      - 731
-    section_hash: d2d880fc04b81373593471ccb271dfbf01c360e2fece8e78d7b9cca68606744c
+      - 720
+      - 773
+    section_hash: 604e17d0848af313a65ca838e635cb2753adeebdac9f422b79674f2c0fd42a47
     summary: Export and snapshots
     text: '## Export and snapshots
 
@@ -1217,7 +1327,7 @@ sections:
       ```
 
 
-      `project_slug` is derived from `project_name` in `taskledger.toml`.
+      `project_slug` is derived from `project_name` in `.ledger/taskledger/config.toml`.
 
       If unset, taskledger falls back to the workspace directory name.
 
@@ -1256,24 +1366,24 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for export and snapshots.
         tracked_hashes:
-          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
-          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+          body_hash: 4bce0fedb7cd5b0dc8a1890756d90190a9709d82755295d3d6bec9a5626fea83
+          public_contract_hash: 8b057719406e2d1ae75d554d75465f16ad373c99374e3aa887bb6c94923fb59c
       - source_id: py:module:taskledger/services/task_export.py
         source_path: taskledger/services/task_export.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for export and snapshots.
         tracked_hashes:
-          body_hash: 22b1e096d326da2db8b1954799315c685b29a50f5c085f5b400eeabf170e0ff3
-          public_contract_hash: be661ce59aebbdf88411b3092c876156c81fd92cd66542a6a92a481a1e194c07
+          body_hash: 4b6cb5583105392159033158a2bbd61f74e420f4966111664e047326bb420fba
+          public_contract_hash: e3aa53b0b9595cf8e18498609788ef92b0fb71992f96420e208d8e5c399ae768
       - source_id: py:module:taskledger/services/workspace_snapshot.py
         source_path: taskledger/services/workspace_snapshot.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for export and snapshots.
         tracked_hashes:
-          body_hash: f072c89b4d3b3f7f51c08143c2858eaf0206fd10de00b3f914012092068c290b
-          public_contract_hash: b7afb664d7e48f262fb0d2dda63d7e6dac915fa024a13fb2b4d4584e17a96216
+          body_hash: 0890f8c6ff537694130e33f89a13bc9cc4b157529f235edfecc6ac69d56a91b4
+          public_contract_hash: 792264900573aacaf6a8ec88fc1b84c319d622caa64fbf3135fc6973d33e49ea
   - section_id: md:section:docs/usage.md::single-task-transfer-from-a-config-only-checkout
     doc_path: docs/usage.md
     heading_path:
@@ -1281,17 +1391,36 @@ sections:
       - Single-task transfer from a config-only checkout
     heading_slug: single-task-transfer-from-a-config-only-checkout
     line_span:
-      - 732
-      - 746
-    section_hash: 634a47e14aeac3900840949cf098e1b60a9cea36b95abd5e3fb2c03ec8f103e6
+      - 774
+      - 788
+    section_hash: dfbe821d1792f93724d8a2c16467ab745320c0a22fc36eae61a72408bff3ee4f
     summary: Single-task transfer from a config-only checkout
-    text:
-      "## Single-task transfer from a config-only checkout\n\n```bash\n  # fresh\
-      \ checkout on another PC\ntaskledger init\ntaskledger task create \"Fix import\
-      \ edge case\" --slug fix-import-edge-case --description \"...\"\n  # ... normal\
-      \ plan / implementation / validation lifecycle ...\ntaskledger export task-0040\n\
-      \n  # main dev repo\ntaskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz\n\
-      taskledger task list\ntaskledger task show task-0040\n```"
+    text: '## Single-task transfer from a config-only checkout
+
+
+      ```bash
+
+      # fresh checkout on another PC
+
+      taskledger init
+
+      taskledger task create "Fix import edge case" --slug fix-import-edge-case --description
+      "..."
+
+      # ... normal plan / implementation / validation lifecycle ...
+
+      taskledger export task-0040
+
+
+      # main dev repo
+
+      taskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz
+
+      taskledger task list
+
+      taskledger task show task-0040
+
+      ```'
     links:
       - source_id: py:module:taskledger/cli_archive.py
         source_path: taskledger/cli_archive.py
@@ -1301,8 +1430,8 @@ sections:
           Tracks the owning implementation for single task transfer from a config
           only checkout.
         tracked_hashes:
-          body_hash: 778d872bfdb3c1b99133b5cc320ff9e914fc8aa9e13f60df7963cc3acecaea98
-          public_contract_hash: c6d0642090ec9fd5395c86f3d691cbcc318af1343d74957dfbd36f8346598756
+          body_hash: 9ef921ea97a7ba93de915b77589fcab634136bd1706e6d0493d3cbfa662b4e2b
+          public_contract_hash: 62eba1684e3eea987b7148fb0731b78dbde66103e91b22b4bd663c51712b19ab
       - source_id: py:module:taskledger/exchange.py
         source_path: taskledger/exchange.py
         coverage: architecture
@@ -1311,8 +1440,8 @@ sections:
           Tracks the owning implementation for single task transfer from a config
           only checkout.
         tracked_hashes:
-          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
-          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+          body_hash: 4bce0fedb7cd5b0dc8a1890756d90190a9709d82755295d3d6bec9a5626fea83
+          public_contract_hash: 8b057719406e2d1ae75d554d75465f16ad373c99374e3aa887bb6c94923fb59c
   - section_id: md:section:docs/usage.md::task-centered-traceability
     doc_path: docs/usage.md
     heading_path:
@@ -1320,8 +1449,8 @@ sections:
       - Task-centered traceability
     heading_slug: task-centered-traceability
     line_span:
-      - 747
-      - 758
+      - 789
+      - 801
     section_hash: 38351c70e47624ccd0822d7eb243956f291f63694f1e49beacf19957240cf6a7
     summary: Task-centered traceability
     text: "## Task-centered traceability
@@ -1361,7 +1490,31 @@ sections:
         tracked_hashes:
           body_hash: a17dfa1f687e5363a49319c0b586296ec8fdadb65e7f3f0fcf9b442f720ffe72
           public_contract_hash: 64fd5109b1e88e236e5b4db7300b086a76a8749f0cb44e4eeb73123416c8f3c2
-last_fresh_scan_version: 6
-last_fresh_hash: 907ea5131a61cb52b3f1dfdff7185216a1f49be5879a98fe50d954d1473d80dc
-notes: Documentation links validated after final scan version 6.
-version: 259
+  - section_id: md:section:docs/usage.md::canonical-project-layout
+    doc_path: docs/usage.md
+    heading_path:
+      - Usage
+      - Canonical project layout
+    heading_slug: canonical-project-layout
+    line_span:
+      - 802
+      - 804
+    section_hash: 39e8da4d2ce5276857a557f47e00bb918303e5adc33f7798586400fe4101ee39
+    summary: Canonical project layout
+    text: "## Canonical project layout
+
+
+      Taskledger uses a schema-3 `.ledger/ledger.toml` manifest and `.ledger/taskledger/config.toml`.
+      The canonical mounts are durable `data` (external storage rooted at `../ledger`),
+      checkout-local `runtime` (user-data), diagnostic `logs` (user-data), and rebuildable
+      `indexes` (cache). A machine-local `.ledger/ledger.local.toml` may select `user-data`
+      for `data`. Use `taskledger storage where`, `taskledger storage path data|runtime|logs|indexes`,
+      `taskledger storage set`, and `taskledger storage clear-override` to inspect or
+      change mounts."
+    links: []
+last_fresh_scan_version: 8
+last_fresh_hash: b17c99cd89ab9e46c1f1928f6a398d1ea4b52014380bfbefcf44a6509ae2c971
+notes:
+  Re-baselined documentation after the schema-3 Documentledger migration and
+  scan source-index refresh; repository source content was unchanged.
+version: 282

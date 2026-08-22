@@ -1,0 +1,16 @@
+config_version = 2
+
+[ledger]
+code = "dl"
+
+[scan]
+source_roots = ["taskledger", "tests/test_service_boundaries.py"]
+doc_roots = ["docs"]
+source_extensions = [".py"]
+doc_extensions = [".md"]
+
+[validation]
+commands = ["pytest tests/test_docs_and_skill.py tests/test_command_example_linter.py", "sphinx-build -W -b html docs docs/_build/html"]
+
+[policy]
+require_doc_frontmatter = false

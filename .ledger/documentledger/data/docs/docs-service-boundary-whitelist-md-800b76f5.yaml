@@ -39,8 +39,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for service boundary whitelist.
         tracked_hashes:
-          body_hash: 73c84289d938430e648f3ad0633582b18e10be45e142f2bc457932b571f21e93
-          public_contract_hash: e6fbde978acaf581ef8f022106d8ce721723d31d2edabf9c3f58d76ae6df31ce
+          body_hash: 1540234abfcaa4dfb764128eb1c6fca701303baa706cfcb0c3efee974067c2d7
+          public_contract_hash: 491164667734db963f8966e8184b00aec3496a3582623a9a133ee296997492ef
   - section_id: md:section:docs/service_boundary_whitelist.md::module-line-budget-whitelist-2000-lines
     doc_path: docs/service_boundary_whitelist.md
     heading_path:
@@ -66,8 +66,8 @@ sections:
           Tracks the owning implementation for module line budget whitelist 2000
           lines.
         tracked_hashes:
-          body_hash: d1f811e004475405c34fd88d4f215b025aef419ba0fc7775e6cf224aa20258e3
-          public_contract_hash: d97b72f6a3644cece87ac96edef0dc23c2e62bada5ae4726502dcf95fee6e2e2
+          body_hash: c2be395a0efe4a25fc7b086561b6ba2187d68215a580a3f5ba679904e71e77a1
+          public_contract_hash: 88c209fcb0cbec00ba42c1a4592ca3bfc9c674d47aa2bcb33c147327b4cd1f64
       - source_id: py:module:tests/test_service_boundaries.py
         source_path: tests/test_service_boundaries.py
         coverage: architecture
@@ -76,8 +76,8 @@ sections:
           Tracks the owning implementation for module line budget whitelist 2000
           lines.
         tracked_hashes:
-          body_hash: 73c84289d938430e648f3ad0633582b18e10be45e142f2bc457932b571f21e93
-          public_contract_hash: e6fbde978acaf581ef8f022106d8ce721723d31d2edabf9c3f58d76ae6df31ce
+          body_hash: 1540234abfcaa4dfb764128eb1c6fca701303baa706cfcb0c3efee974067c2d7
+          public_contract_hash: 491164667734db963f8966e8184b00aec3496a3582623a9a133ee296997492ef
   - section_id: md:section:docs/service_boundary_whitelist.md::current-split-status
     doc_path: docs/service_boundary_whitelist.md
     heading_path:
@@ -102,31 +102,31 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for current split status.
         tracked_hashes:
-          body_hash: aac2b0a90f6d3ff215f95627604de880da28008e5824299a1328c598d3282cfb
-          public_contract_hash: c8eea6da233863fee959f7b373e3e1937ff4153a88dad55db92b2bcf658e4932
+          body_hash: 9f92732fd489976f87318ad88e5482f8e8afa1c1bf0e047926f5bd2050104f2b
+          public_contract_hash: 11bce2d1b38bd74016f608d58d88cd1ab82019e8751369bb572689943a5cdcdf
       - source_id: py:module:taskledger/services/planning_flow.py
         source_path: taskledger/services/planning_flow.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for current split status.
         tracked_hashes:
-          body_hash: 8f08d2e00e4da943d49e11fdf7e665c396f0295589c1d289fd0ff28b77bb30e8
-          public_contract_hash: c4b299b43313a9cf137cd93064db9968b38018f147555b50d6ac0d158cc8aa3a
+          body_hash: 3dbe71a2d8c4f850478fc09ae0f7c859d7cfc83e71d44677ab516af763fda359
+          public_contract_hash: 226b28c8574d2d3ab4c9f95e83c8b79a8e54b22862a9cac6e66594b6aa14c6c9
       - source_id: py:module:taskledger/services/tasks.py
         source_path: taskledger/services/tasks.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for current split status.
         tracked_hashes:
-          body_hash: d1f811e004475405c34fd88d4f215b025aef419ba0fc7775e6cf224aa20258e3
-          public_contract_hash: d97b72f6a3644cece87ac96edef0dc23c2e62bada5ae4726502dcf95fee6e2e2
+          body_hash: c2be395a0efe4a25fc7b086561b6ba2187d68215a580a3f5ba679904e71e77a1
+          public_contract_hash: 88c209fcb0cbec00ba42c1a4592ca3bfc9c674d47aa2bcb33c147327b4cd1f64
       - source_id: py:module:taskledger/services/validation_flow.py
         source_path: taskledger/services/validation_flow.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for current split status.
         tracked_hashes:
-          body_hash: 65732bac4a575ea235efc41c7364efed95d05a9356276e06c3b379ce814c19be
+          body_hash: 86b7de0f3f95a1aea02e967933e96a3e39c68bfeb91d7c11f9fc0c9e42183f88
           public_contract_hash: a5c8bea901396ea33fd3c7f86c59f13ba0a7c9c2b9ed28c40c81debf9b30fec1
   - section_id: md:section:docs/service_boundary_whitelist.md::function-line-budget-whitelist-250-lines
     doc_path: docs/service_boundary_whitelist.md
@@ -136,15 +136,21 @@ sections:
     heading_slug: function-line-budget-whitelist-250-lines
     line_span:
       - 32
-      - 43
-    section_hash: 6d225dd713f199590825205ef8483e97a4324004023efc674a5140ecc3bbaf46
+      - 53
+    section_hash: d3c823864c23446ef2f3d6b567cf7e0d6a60f2f2dc2fb796f254ca78206bb52d
     summary: Function line budget whitelist (>250 lines)
     text:
-      "## Function line budget whitelist (>250 lines)\n\n- `taskledger/services/doctor_checks/task_checks.py::scan_task_integrity`\n\
-      \n  - Current reason: Consolidated per-task integrity scan with change/lock\n\
-      \    validation; further splitting into focused inspectors is planned.\n\n- `taskledger/cli_sync.py::register_sync_commands`\n\
+      "## Function line budget whitelist (>250 lines)\n\n- `taskledger/services/doctor_checks/task_checks.py::_scan_task_integrity_phases`\n\
+      \n  - Current reason: Sub-phases of scan_task_integrity with per-task lock, run,\
+      \ and validation checks.\n\n- `taskledger/cli_sync.py::register_sync_commands`\n\
       \n  - Current reason: Sync command registration currently co-locates legacy\n\
-      \    sync, archive alias, git sync, and hook command wiring."
+      \    sync, archive alias, git sync, and hook command wiring.\n\n- `taskledger/storage/layout_migration.py::_apply_migration_phases`\n\
+      \n  - Current reason: Migration apply logic covers file moves, UUID resolution,\
+      \ and config rewriting.\n\n- `taskledger/storage/layout_migration.py::_inspect_migration_phases`\n\
+      \  - Current reason: Migration inspect logic covers candidate discovery, config\
+      \ analysis, and issue assembly.\n\n- `taskledger/cli_misc.py::register_handoff_v2_commands`\n\
+      \n  - Current reason: Handoff v2 command registration covers create, claim, release,\
+      \ retarget, review, show, list, close, and cancel command wiring."
     links:
       - source_id: py:module:taskledger/cli_sync.py
         source_path: taskledger/cli_sync.py
@@ -154,8 +160,8 @@ sections:
           Tracks the owning implementation for function line budget whitelist 250
           lines.
         tracked_hashes:
-          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
-          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+          body_hash: 9ada658b1fe0050f9f94e3d97261e22b58863e07ae732cd012c85bfaa451d874
+          public_contract_hash: 344071748193d5759f15b1c01e616de7a87127547f1bafbb2274f540eac0971f
       - source_id: py:module:taskledger/services/doctor_checks/task_checks.py
         source_path: taskledger/services/doctor_checks/task_checks.py
         coverage: architecture
@@ -164,8 +170,8 @@ sections:
           Tracks the owning implementation for function line budget whitelist 250
           lines.
         tracked_hashes:
-          body_hash: 829dd2e9d477725b0b6d8c7abba24cfc5953f9bb369c54845927a1205c4ee08d
-          public_contract_hash: be988e5e29f3b3129d891023159236981b9a9c36260718c8fa2035c5ef30ef45
+          body_hash: ee4e0505f6f347ea35efec5518fb7c9e37cbac1aacaaa956ac2abfc355a63b7a
+          public_contract_hash: ee4de883fe434ef9cf41bdf2ce2c4b5f30a4fc582104a94c3a536ab5d5827061
       - source_id: py:module:tests/test_service_boundaries.py
         source_path: tests/test_service_boundaries.py
         coverage: architecture
@@ -174,8 +180,8 @@ sections:
           Tracks the owning implementation for function line budget whitelist 250
           lines.
         tracked_hashes:
-          body_hash: 73c84289d938430e648f3ad0633582b18e10be45e142f2bc457932b571f21e93
-          public_contract_hash: e6fbde978acaf581ef8f022106d8ce721723d31d2edabf9c3f58d76ae6df31ce
+          body_hash: 1540234abfcaa4dfb764128eb1c6fca701303baa706cfcb0c3efee974067c2d7
+          public_contract_hash: 491164667734db963f8966e8184b00aec3496a3582623a9a133ee296997492ef
   - section_id: md:section:docs/service_boundary_whitelist.md::cli-services-import-whitelist
     doc_path: docs/service_boundary_whitelist.md
     heading_path:
@@ -183,9 +189,9 @@ sections:
       - CLI→services import whitelist
     heading_slug: cli-services-import-whitelist
     line_span:
-      - 44
-      - 103
-    section_hash: 69b82dad4accfade1595f994d1e4a67b1c584988680e6b8c4ae7e3e8e65ac032
+      - 54
+      - 116
+    section_hash: 67f98413f76b5966969704d3c483b5941793e4538a953b387c81aa781a996c23
     summary: CLI→services import whitelist
     text:
       "## CLI→services import whitelist\n\nCLI modules may import from `taskledger.services`\
@@ -221,7 +227,9 @@ sections:
       \ — Task report\n  rendering and options are service-owned.\n- `taskledger/cli_task.py:taskledger.services.task_export`\
       \ — Task export\n  service for compiled LLM-ready Markdown.\n- `taskledger/cli_task.py:taskledger.services.tasks`\
       \ — Task events read\n  model and lifecycle mutations.\n- `taskledger/cli_trace.py:taskledger.services.trace`\
-      \ — Trace CLI delegates\n  to the trace service."
+      \ — Trace CLI delegates\n  to the trace service.\n- `taskledger/cli_migrate.py:taskledger.services.storage_migration`\
+      \ — Migration CLI delegates to the storage migration service.\n\n- `taskledger/cli_runtime.py:taskledger.services.runtime_info`\
+      \ — Runtime CLI delegates provenance collection to the runtime service."
     links:
       - source_id: py:module:tests/test_service_boundaries.py
         source_path: tests/test_service_boundaries.py
@@ -229,8 +237,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for cli services import whitelist.
         tracked_hashes:
-          body_hash: 73c84289d938430e648f3ad0633582b18e10be45e142f2bc457932b571f21e93
-          public_contract_hash: e6fbde978acaf581ef8f022106d8ce721723d31d2edabf9c3f58d76ae6df31ce
+          body_hash: 1540234abfcaa4dfb764128eb1c6fca701303baa706cfcb0c3efee974067c2d7
+          public_contract_hash: 491164667734db963f8966e8184b00aec3496a3582623a9a133ee296997492ef
   - section_id: md:section:docs/service_boundary_whitelist.md::catch-all-exception-whitelist-except-exception
     doc_path: docs/service_boundary_whitelist.md
     heading_path:
@@ -238,26 +246,23 @@ sections:
       - Catch-all exception whitelist (`except Exception`)
     heading_slug: catch-all-exception-whitelist-except-exception
     line_span:
-      - 104
-      - 113
-    section_hash: 6c2c3b31260c977c0b2e68904ea121d30c63d9f89a20eded5f369c5d97ecdf02
+      - 117
+      - 137
+    section_hash: e7d1653b369e5984c6d1c6da2dbf3963a37f82d92bbd7b2189af78147e927917
     summary: Catch-all exception whitelist (`except Exception`)
-    text: "## Catch-all exception whitelist (`except Exception`)
-
-
-      Current allowed sites are listed with reasons in
-
-      `tests/test_service_boundaries.py` under `EXCEPT_EXCEPTION_WHITELIST`.
-
-
-      Policy intent:
-
-
-      - Allow catch-all handling only in doctor/repair and resilience wrappers.
-
-      - Block new catch-all sites unless explicitly reviewed and justified.
-
-      - Require whitelist edits to be intentional and reasoned."
+    text:
+      "## Catch-all exception whitelist (`except Exception`)\n\nCurrent allowed\
+      \ sites are listed with reasons in\n`tests/test_service_boundaries.py` under `EXCEPT_EXCEPTION_WHITELIST`.\
+      \ Each\ncatch-all key uses the stable form\n`path::qualified_function:except-N`,\
+      \ where `N` is the ordinal of the\ncatch-all handler within that function. It\
+      \ intentionally does not use source\nline numbers, so unrelated edits above an\
+      \ approved handler do not create\npolicy churn.\n\nThe reviewed resilience sites\
+      \ include storage validation, migration command\nand hook handling, and project-config\
+      \ parsing boundaries listed in the test\nconstants.\n\nPolicy intent:\n\n- Allow\
+      \ catch-all handling only in doctor/repair and resilience wrappers.\n- Block new\
+      \ catch-all sites unless explicitly reviewed and justified.\n- Require whitelist\
+      \ edits to be intentional and reasoned.\n- Fail when a new handler is added, an\
+      \ approved handler disappears, or a\n  function gains another catch-all handler."
     links:
       - source_id: py:module:tests/test_service_boundaries.py
         source_path: tests/test_service_boundaries.py
@@ -267,9 +272,11 @@ sections:
           Tracks the owning implementation for catch all exception whitelist except
           exception.
         tracked_hashes:
-          body_hash: 73c84289d938430e648f3ad0633582b18e10be45e142f2bc457932b571f21e93
-          public_contract_hash: e6fbde978acaf581ef8f022106d8ce721723d31d2edabf9c3f58d76ae6df31ce
-last_fresh_scan_version: 6
-last_fresh_hash: 776da0eaba645c1bc8055f5624876f2fc9e2e7ca7f969fbdaf4417dc899bdd10
-notes: Documentation links validated after final scan version 6.
-version: 259
+          body_hash: 1540234abfcaa4dfb764128eb1c6fca701303baa706cfcb0c3efee974067c2d7
+          public_contract_hash: 491164667734db963f8966e8184b00aec3496a3582623a9a133ee296997492ef
+last_fresh_scan_version: 8
+last_fresh_hash: 828d623c91da02a29676049f2213b9bf97a2e22db5aff6b3f7de2b5dc4943833
+notes:
+  Re-baselined documentation after the schema-3 Documentledger migration and
+  scan source-index refresh; repository source content was unchanged.
+version: 282

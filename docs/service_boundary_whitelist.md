@@ -48,6 +48,10 @@ smaller compatibility facade and move residual helpers into focused modules.
 
   - Current reason: Migration inspect logic covers candidate discovery, config analysis, and issue assembly.
 
+- `taskledger/cli_misc.py::register_handoff_v2_commands`
+
+  - Current reason: Handoff v2 command registration covers create, claim, release, retarget, review, show, list, close, and cancel command wiring.
+
 ## CLI→services import whitelist
 
 CLI modules may import from `taskledger.services` only when listed in

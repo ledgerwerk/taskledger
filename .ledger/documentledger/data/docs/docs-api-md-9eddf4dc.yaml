@@ -39,7 +39,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for api reference.
         tracked_hashes:
-          body_hash: 6b94a8907ea1d32446c28da3d8a0c3a4e0ec8d8e219aa8a5b2f66cf5b8bbf2ea
+          body_hash: adfd1f8039c170e4b143ae9e7a795d39fa599d7f4b79d19127d40d688f198d8e
           public_contract_hash: ad8f198fca92ff539fc726767663abc079195db88669431df6f2b3df2426d04d
   - section_id: md:section:docs/api.md::supported-modules
     doc_path: docs/api.md
@@ -87,7 +87,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for supported modules.
         tracked_hashes:
-          body_hash: 6b94a8907ea1d32446c28da3d8a0c3a4e0ec8d8e219aa8a5b2f66cf5b8bbf2ea
+          body_hash: adfd1f8039c170e4b143ae9e7a795d39fa599d7f4b79d19127d40d688f198d8e
           public_contract_hash: ad8f198fca92ff539fc726767663abc079195db88669431df6f2b3df2426d04d
   - section_id: md:section:docs/api.md::import-boundary
     doc_path: docs/api.md
@@ -121,7 +121,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for import boundary.
         tracked_hashes:
-          body_hash: 6b94a8907ea1d32446c28da3d8a0c3a4e0ec8d8e219aa8a5b2f66cf5b8bbf2ea
+          body_hash: adfd1f8039c170e4b143ae9e7a795d39fa599d7f4b79d19127d40d688f198d8e
           public_contract_hash: ad8f198fca92ff539fc726767663abc079195db88669431df6f2b3df2426d04d
   - section_id: md:section:docs/api.md::project-api
     doc_path: docs/api.md
@@ -163,16 +163,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for project api.
         tracked_hashes:
-          body_hash: 87d4b53721ddb6a7ebc5b51d1d97a98c7474c2e8bd3a98395a3d98932f03509c
-          public_contract_hash: 0d260a94d215e1cea50aa8588f94eb4445611a5e75f46f6e6cfabb2d53213187
+          body_hash: abc932f44a34fd4e8db8dc7a52a900571a697c0541503357c2968eacd9fd07c9
+          public_contract_hash: 4391fe16cd8f2dfa69fadfd4d640bcf75ca3f8e7956278c21855902a173d938f
       - source_id: py:module:taskledger/api/project.py
         source_path: taskledger/api/project.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for project api.
         tracked_hashes:
-          body_hash: 0517652b6bee074d95687b6d5b3b17ecf064cf710df438e411e5992961b8e0b9
-          public_contract_hash: 1fccc2b8a71fbc1c469b01f3e97cb0c53f1d7bf80d14e19af4d2042de86174d3
+          body_hash: 3dd9234864feedc667024150977b155e087b17455c5ce6986510f7a817ea900a
+          public_contract_hash: dedfffc698bac8a102a99c373f2e3b8c142fc2ca9bb7259568aa00e5ab9e8ae7
   - section_id: md:section:docs/api.md::task-api
     doc_path: docs/api.md
     heading_path:
@@ -275,7 +275,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for task api.
         tracked_hashes:
-          body_hash: aaca4e8c6474b727223b5db9b921c181e03cc17b5b9ef578b653dcc935c6fd45
+          body_hash: 29090118fe6844a8cc3551b05970e7c0ee5335220b204efce1274307fed152f6
           public_contract_hash: 578d4b5f07ccb3f1c892849e5b4101720399ea064410ccacfc35c11f53719075
   - section_id: md:section:docs/api.md::plan-api
     doc_path: docs/api.md
@@ -356,7 +356,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for plan api.
         tracked_hashes:
-          body_hash: 4896961a4a3cbfa276d78405edc22aa87d244e1651649f0e141b57990c529463
+          body_hash: 1a8c533fda47a92a2d782fda9776ddf9678b51847884f97f60c64d4ec5f42516
           public_contract_hash: 4b984034934eca9e70985a1fdeec0483b99462f632bac6b338e8ac1d0d0e2ea1
   - section_id: md:section:docs/api.md::question-api
     doc_path: docs/api.md
@@ -394,7 +394,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for question api.
         tracked_hashes:
-          body_hash: 9defb5b1c175b90507d718618a7ad99070d0a8220673d259eb8d6ccc4e1d71c0
+          body_hash: b80a6efb835b7c0bd8a5370a9b9ea13cc5d00a091c9b4d6a021186ce2716e58c
           public_contract_hash: 4792729db1b2b54c9b7d899e97eafba77b00fbedeb89c7ba68b9861842c59227
   - section_id: md:section:docs/api.md::run-api
     doc_path: docs/api.md
@@ -454,7 +454,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for run api.
         tracked_hashes:
-          body_hash: 9a87b35c2cc28913578f6d2a66529f7fc546f4eab2616bc29d69eac78838e72f
+          body_hash: 7f6be75914ef2d8fa2d017e48890009fc4314b41601128fb1aed6fcb6204f530
           public_contract_hash: ab33559c9a585d83775180f80c991fa58855bf0e643d8ac13d39a57a3c4e41e2
   - section_id: md:section:docs/api.md::review-api
     doc_path: docs/api.md
@@ -482,7 +482,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for review api.
         tracked_hashes:
-          body_hash: 39ad82a689b662ccd13c6206ea1e0308ab2acc59716fe925af0341d268e7d46b
+          body_hash: 6b48b8fcedc40ed9480705ac1d4d56bd549c5c461217931c8ed8b503ace18d57
           public_contract_hash: c7995eed3c1ca014745de0ed3156b9e354a48a7eddd6a68d5beb76d5cc52418a
   - section_id: md:section:docs/api.md::other-apis
     doc_path: docs/api.md
@@ -503,7 +503,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for other apis.
         tracked_hashes:
-          body_hash: 6b94a8907ea1d32446c28da3d8a0c3a4e0ec8d8e219aa8a5b2f66cf5b8bbf2ea
+          body_hash: adfd1f8039c170e4b143ae9e7a795d39fa599d7f4b79d19127d40d688f198d8e
           public_contract_hash: ad8f198fca92ff539fc726767663abc079195db88669431df6f2b3df2426d04d
   - section_id: md:section:docs/api.md::introduction-api
     doc_path: docs/api.md
@@ -534,7 +534,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for introduction api.
         tracked_hashes:
-          body_hash: 719baf37e8e9fab10159a55f31d0918d26f7c6a21b820b7529e07bbbf311afb2
+          body_hash: 06ff70adc2703f3afa8d550a992bac57c1da7a34d4054ecee7152b81ebcb58af
           public_contract_hash: b6244636ab4f3bb6274cddab6ca3180c102f839c338aa8e6a92c4e1d2966ce93
   - section_id: md:section:docs/api.md::lock-api
     doc_path: docs/api.md
@@ -565,7 +565,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for lock api.
         tracked_hashes:
-          body_hash: 11c912d71d8516bb5d60640fa368bc9fc13b0b919fb12d713f7624c81f272ae3
+          body_hash: e67b771d191fde625f933ae76a12e4ca59a994ae3a712d58235e0c8b14e7e9a7
           public_contract_hash: 502ef2479ead3007b70b18309b260e1550868aa24b06b9a3b301f0b90b992092
   - section_id: md:section:docs/api.md::handoff-api
     doc_path: docs/api.md
@@ -576,8 +576,8 @@ sections:
     heading_slug: handoff-api
     line_span:
       - 172
-      - 181
-    section_hash: aafbd4bcc6cac7c137b422659574fde25bbf228a2788331240701406953bc822
+      - 184
+    section_hash: 97de2231b9c1b26333a17dc62e2ddd33d4f686f1ef7a042159e86f3055749512
     summary: Handoff API
     text: "### Handoff API
 
@@ -594,7 +594,13 @@ sections:
 
       - `close_handoff_api`
 
-      - `cancel_handoff_api`"
+      - `cancel_handoff_api`
+
+      - `create_review_handoff`
+
+      - `release_handoff_api`
+
+      - `retarget_handoff_api`"
     links:
       - source_id: py:module:taskledger/api/handoff.py
         source_path: taskledger/api/handoff.py
@@ -602,8 +608,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for handoff api.
         tracked_hashes:
-          body_hash: e597168ae2877d3ef07ce8136119a4f39bc4483ac224949a0d64ea3eb094dc2e
-          public_contract_hash: 4ac8b25fed61d4cdc24b0fdd6ad7dc075687a060d692cfc21312cfa1896193bb
+          body_hash: b1240cef7497b2b76f9aa8101f69645c546a18be82e228c42877506b6ab63e45
+          public_contract_hash: 0674b1f737f0ee1ec55a82e4cc30fa839eb00c845badfeb1a530124674e0e6bf
   - section_id: md:section:docs/api.md::release-api
     doc_path: docs/api.md
     heading_path:
@@ -612,8 +618,8 @@ sections:
       - Release API
     heading_slug: release-api
     line_span:
-      - 182
-      - 187
+      - 185
+      - 190
     section_hash: 82e7e5cf5db6010a938ce454677d1091da378bc8050964c48ae3a2b5931a2b9d
     summary: Release API
     text: "### Release API
@@ -641,16 +647,32 @@ sections:
       - Storage API
     heading_slug: storage-api
     line_span:
-      - 188
-      - 195
-    section_hash: ad22ceb81af8e940731e1c5dddd7f86a8ac72071cca8a8ea27e6860eb2641fae
+      - 191
+      - 206
+    section_hash: e82ffe9bd75ddc933ff04ee53a31c38b88a0f2a9155efb49fc13dfe0c24f41fa
     summary: Storage API
     text: "### Storage API
 
 
       - `storage_where`
 
+      - `storage_path`
+
       - `storage_move`
+
+      - `storage_validate`
+
+      - `storage_set`
+
+      - `storage_clear_override`
+
+      - `storage_migration_inspect`
+
+      - `storage_migration_apply`
+
+      - `storage_migration_status`
+
+      - `storage_migration_recover`
 
       - `sync_preflight`
 
@@ -664,8 +686,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for storage api.
         tracked_hashes:
-          body_hash: 02ac713b13025b95bf0538880c0ece3a78bbe43fdafbbd883de45562976aab5f
-          public_contract_hash: 6c269b3fcb08216071b23355c28863461606dc3184616baf2169855fce486689
+          body_hash: 1e0a4260f4165e11813e1be092bbd7c10141f6cd351cfc12579b893b7af4163c
+          public_contract_hash: 6052772bf075443041431252f581a6089f28fd5b8dc4d029add12755057d64a7
   - section_id: md:section:docs/api.md::search-api
     doc_path: docs/api.md
     heading_path:
@@ -674,8 +696,8 @@ sections:
       - Search API
     heading_slug: search-api
     line_span:
-      - 196
-      - 202
+      - 207
+      - 213
     section_hash: 07f5db20d8555ce289ee11e067f2a917924a44a634ece9bf108b851c217dac09
     summary: Search API
     text: "### Search API
@@ -695,7 +717,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for search api.
         tracked_hashes:
-          body_hash: bbe2cbc17d66e643e29205260f7950ca72180ad1045aa3e455cd4049f90940f3
+          body_hash: f4ee294fb64c4d697a492e8bff99d5d58ea26b381ca72eb577018d70f5857799
           public_contract_hash: 9568bd89b4907aab84996e2a68c359b97a876b97a6f6e0a0a79aa0a7c69bae5e
   - section_id: md:section:docs/api.md::sync-api
     doc_path: docs/api.md
@@ -705,8 +727,8 @@ sections:
       - Sync API
     heading_slug: sync-api
     line_span:
-      - 203
-      - 216
+      - 214
+      - 228
     section_hash: 740e6a1e352f479f71af014d880e910d4db3f21ce1c6803258a1466d0067812e
     summary: Sync API
     text: "### Sync API
@@ -744,7 +766,27 @@ sections:
         tracked_hashes:
           body_hash: ac78193048ac4b8fdbddc5139939fedfb639047a12551eed806b99b4040a9206
           public_contract_hash: 5ad474cdbca765ba10692260f20a3453d61c4f8d22301197b5891b4a243c7c73
-last_fresh_scan_version: 6
-last_fresh_hash: a456022a754ef947444c76d1bfcfc08255e5c67136550f4bfe45f0e9a2f42cb6
-notes: Documentation links validated after final scan version 6.
-version: 257
+  - section_id: md:section:docs/api.md::canonical-layout-apis
+    doc_path: docs/api.md
+    heading_path:
+      - API reference
+      - Canonical layout APIs
+    heading_slug: canonical-layout-apis
+    line_span:
+      - 229
+      - 231
+    section_hash: 7e607bfa11bd3b11bd49f2dc52270c2fba2997cc5b0209d3f3cc31d78c793e50
+    summary: Canonical layout APIs
+    text: "## Canonical layout APIs
+
+
+      Project and storage APIs resolve identity from `.ledger/ledger.toml` and expose
+      named mount reports. Taskledger does not expose Ledgercore dataclasses as a public
+      API."
+    links: []
+last_fresh_scan_version: 8
+last_fresh_hash: 72e5fa33db8b9c465ab22e3633e314f8840d4030a03caa89d42ef18b9f5e43b7
+notes:
+  Re-baselined documentation after the schema-3 Documentledger migration and
+  scan source-index refresh; repository source content was unchanged.
+version: 282

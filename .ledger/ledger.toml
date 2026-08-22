@@ -19,3 +19,9 @@ storage = "cache"
 
 [ledgers.archledger.mounts.data]
 storage = "project"
+
+[ledgers.documentledger.mounts.data]
+storage = "project"
+
+[ledgers.documentledger.mounts.artifacts]
+storage = "cache"

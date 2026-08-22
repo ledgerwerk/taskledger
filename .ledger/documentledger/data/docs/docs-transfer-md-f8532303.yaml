@@ -29,16 +29,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for transfer archives.
         tracked_hashes:
-          body_hash: 778d872bfdb3c1b99133b5cc320ff9e914fc8aa9e13f60df7963cc3acecaea98
-          public_contract_hash: c6d0642090ec9fd5395c86f3d691cbcc318af1343d74957dfbd36f8346598756
+          body_hash: 9ef921ea97a7ba93de915b77589fcab634136bd1706e6d0493d3cbfa662b4e2b
+          public_contract_hash: 62eba1684e3eea987b7148fb0731b78dbde66103e91b22b4bd663c51712b19ab
       - source_id: py:module:taskledger/exchange.py
         source_path: taskledger/exchange.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for transfer archives.
         tracked_hashes:
-          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
-          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+          body_hash: 4bce0fedb7cd5b0dc8a1890756d90190a9709d82755295d3d6bec9a5626fea83
+          public_contract_hash: 8b057719406e2d1ae75d554d75465f16ad373c99374e3aa887bb6c94923fb59c
   - section_id: md:section:docs/transfer.md::what-transfer-archives-include
     doc_path: docs/transfer.md
     heading_path:
@@ -64,8 +64,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for what transfer archives include.
         tracked_hashes:
-          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
-          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+          body_hash: 4bce0fedb7cd5b0dc8a1890756d90190a9709d82755295d3d6bec9a5626fea83
+          public_contract_hash: 8b057719406e2d1ae75d554d75465f16ad373c99374e3aa887bb6c94923fb59c
   - section_id: md:section:docs/transfer.md::filename-policy
     doc_path: docs/transfer.md
     heading_path:
@@ -112,8 +112,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for filename policy.
         tracked_hashes:
-          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
-          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+          body_hash: 4bce0fedb7cd5b0dc8a1890756d90190a9709d82755295d3d6bec9a5626fea83
+          public_contract_hash: 8b057719406e2d1ae75d554d75465f16ad373c99374e3aa887bb6c94923fb59c
   - section_id: md:section:docs/transfer.md::single-task-transfer-from-a-config-only-checkout
     doc_path: docs/transfer.md
     heading_path:
@@ -123,27 +123,61 @@ sections:
     line_span:
       - 34
       - 60
-    section_hash: eed89878667e36bc7b6472df5717350aa5dfa901f5f6f676d0612ea5239770fc
+    section_hash: c90bd527e1e896ded464ccf66fd7e320bef3580a022c7872437985fb7a8a2833
     summary: Single-task transfer from a config-only checkout
-    text:
-      "## Single-task transfer from a config-only checkout\n\n```bash\n  # fresh\
-      \ checkout on another PC\ntaskledger init\ntaskledger task create \"Fix import\
-      \ edge case\" --slug fix-import-edge-case --description \"...\"\n  # ... normal\
-      \ plan/implement/validate workflow ...\ntaskledger export task-0040\n\n  # main\
-      \ dev repo\ntaskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz\n\
-      taskledger task list\ntaskledger task show task-0040\n```\n\nRules:\n\n- Keep\
-      \ `project_uuid` committed in `taskledger.toml` (or legacy `.taskledger.toml`\
-      \ if the project still uses it).\n- `.taskledger/` is local operational state\
-      \ and can be absent on another PC.\n- Run `taskledger init` after cloning to create\
-      \ local state.\n- `taskledger export --task TASK_REF` and `taskledger export TASK_REF`\
-      \ export task-scoped archives.\n- `taskledger sync export` and `taskledger sync\
-      \ import` are aliases for the same archive transfer primitives.\n- Task-scoped\
-      \ import is additive by default; if the task id already exists locally, import\
-      \ renumbers and reports an id map.\n- `--replace` is for full-state replacement,\
-      \ not the normal single-task workflow.\n- Import repairs `ledger_next_task_number`\
-      \ so future `task create` ids remain unique.\n- Use {doc}`sync` when you want\
-      \ to keep an external `taskledger_dir` in a private Git repository and sync full\
-      \ project state between PCs."
+    text: '## Single-task transfer from a config-only checkout
+
+
+      ```bash
+
+      # fresh checkout on another PC
+
+      taskledger init
+
+      taskledger task create "Fix import edge case" --slug fix-import-edge-case --description
+      "..."
+
+      # ... normal plan/implement/validate workflow ...
+
+      taskledger export task-0040
+
+
+      # main dev repo
+
+      taskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz
+
+      taskledger task list
+
+      taskledger task show task-0040
+
+      ```
+
+
+      Rules:
+
+
+      - Keep the project UUID in the schema-3 `.ledger/ledger.toml` manifest.
+
+      - Inspect resolved data and index mounts with `taskledger storage where`.
+
+      - Run `taskledger init` after cloning when the configured mounts are absent.
+
+      - `taskledger export --task TASK_REF` and `taskledger export TASK_REF` export
+      task-scoped archives.
+
+      - `taskledger sync export` and `taskledger sync import` are aliases for the same
+      archive transfer primitives.
+
+      - Task-scoped import is additive by default; if the task id already exists locally,
+      import renumbers and reports an id map.
+
+      - `--replace` is for full-state replacement, not the normal single-task workflow.
+
+      - Task IDs are allocated from the active ledger''s task and tombstone inventory;
+      imports do not restore a persisted counter.
+
+      - Use the explicit Taskledger Git sync commands when you want to synchronize the
+      UUID-scoped sibling data directory between PCs.'
     links:
       - source_id: py:module:taskledger/cli_archive.py
         source_path: taskledger/cli_archive.py
@@ -153,8 +187,8 @@ sections:
           Tracks the owning implementation for single task transfer from a config
           only checkout.
         tracked_hashes:
-          body_hash: 778d872bfdb3c1b99133b5cc320ff9e914fc8aa9e13f60df7963cc3acecaea98
-          public_contract_hash: c6d0642090ec9fd5395c86f3d691cbcc318af1343d74957dfbd36f8346598756
+          body_hash: 9ef921ea97a7ba93de915b77589fcab634136bd1706e6d0493d3cbfa662b4e2b
+          public_contract_hash: 62eba1684e3eea987b7148fb0731b78dbde66103e91b22b4bd663c51712b19ab
       - source_id: py:module:taskledger/exchange.py
         source_path: taskledger/exchange.py
         coverage: architecture
@@ -163,8 +197,8 @@ sections:
           Tracks the owning implementation for single task transfer from a config
           only checkout.
         tracked_hashes:
-          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
-          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+          body_hash: 4bce0fedb7cd5b0dc8a1890756d90190a9709d82755295d3d6bec9a5626fea83
+          public_contract_hash: 8b057719406e2d1ae75d554d75465f16ad373c99374e3aa887bb6c94923fb59c
   - section_id: md:section:docs/transfer.md::dry-run-import
     doc_path: docs/transfer.md
     heading_path:
@@ -198,16 +232,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for dry run import.
         tracked_hashes:
-          body_hash: 778d872bfdb3c1b99133b5cc320ff9e914fc8aa9e13f60df7963cc3acecaea98
-          public_contract_hash: c6d0642090ec9fd5395c86f3d691cbcc318af1343d74957dfbd36f8346598756
+          body_hash: 9ef921ea97a7ba93de915b77589fcab634136bd1706e6d0493d3cbfa662b4e2b
+          public_contract_hash: 62eba1684e3eea987b7148fb0731b78dbde66103e91b22b4bd663c51712b19ab
       - source_id: py:module:taskledger/exchange.py
         source_path: taskledger/exchange.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for dry run import.
         tracked_hashes:
-          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
-          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+          body_hash: 4bce0fedb7cd5b0dc8a1890756d90190a9709d82755295d3d6bec9a5626fea83
+          public_contract_hash: 8b057719406e2d1ae75d554d75465f16ad373c99374e3aa887bb6c94923fb59c
   - section_id: md:section:docs/transfer.md::lock-policy-and-next-action
     doc_path: docs/transfer.md
     heading_path:
@@ -216,7 +250,7 @@ sections:
     heading_slug: lock-policy-and-next-action
     line_span:
       - 71
-      - 78
+      - 79
     section_hash: a7706ca33ac7e5e18a98ccf9cbcee762aba70e9d571d8412eddf20db558f2191
     summary: Lock policy and next action
     text: '## Lock policy and next action
@@ -239,25 +273,45 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for lock policy and next action.
         tracked_hashes:
-          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
-          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+          body_hash: 4bce0fedb7cd5b0dc8a1890756d90190a9709d82755295d3d6bec9a5626fea83
+          public_contract_hash: 8b057719406e2d1ae75d554d75465f16ad373c99374e3aa887bb6c94923fb59c
       - source_id: py:module:taskledger/services/implementation_flow.py
         source_path: taskledger/services/implementation_flow.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for lock policy and next action.
         tracked_hashes:
-          body_hash: aac2b0a90f6d3ff215f95627604de880da28008e5824299a1328c598d3282cfb
-          public_contract_hash: c8eea6da233863fee959f7b373e3e1937ff4153a88dad55db92b2bcf658e4932
+          body_hash: 9f92732fd489976f87318ad88e5482f8e8afa1c1bf0e047926f5bd2050104f2b
+          public_contract_hash: 11bce2d1b38bd74016f608d58d88cd1ab82019e8751369bb572689943a5cdcdf
       - source_id: py:module:taskledger/services/next_action_payload.py
         source_path: taskledger/services/next_action_payload.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for lock policy and next action.
         tracked_hashes:
-          body_hash: a63b4bf64f5929b558a9c353caa77871b077c9193bde39571842a6e225a5d76b
-          public_contract_hash: 5dbb8d57ac6679f0ae5f8859ff225b087b14c7ebabf84789e670a522520b7858
-last_fresh_scan_version: 6
-last_fresh_hash: 585a2b0f703a497ecdeee4cb1ce1d76d720213b6739db2ebc2ccb134d549c439
-notes: Documentation links validated after final scan version 6.
-version: 258
+          body_hash: 9733e0ee48e3bc88fa42789196c39b8d0046fbd91c522fcb02ae52be8b5bb710
+          public_contract_hash: 9fb255dd50ea61d2c448b3762b86b297dc35c9b9793fc6d047f034bc5457cdae
+  - section_id: md:section:docs/transfer.md::canonical-identity
+    doc_path: docs/transfer.md
+    heading_path:
+      - Transfer archives
+      - Canonical identity
+    heading_slug: canonical-identity
+    line_span:
+      - 80
+      - 82
+    section_hash: 93af70ae2b585f518ac6f52e4e0e2c63cd888d268fe49b79615fb5f4bb8f1794
+    summary: Canonical identity
+    text: "## Canonical identity
+
+
+      Archive identity comes from the shared Ledger manifest. Mutable ledger state remains
+      in the canonical data mount. Physical mount paths are not part of the archive
+      record schema."
+    links: []
+last_fresh_scan_version: 8
+last_fresh_hash: 76213ba6b24bea580fb525e65a3c8881f314824428154c9c551853617e02a54d
+notes:
+  Re-baselined documentation after the schema-3 Documentledger migration and
+  scan source-index refresh; repository source content was unchanged.
+version: 282

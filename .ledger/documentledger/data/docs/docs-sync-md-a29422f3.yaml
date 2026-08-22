@@ -17,19 +17,17 @@ sections:
     heading_slug: sync-taskledger-state-across-pcs
     line_span:
       - 1
-      - 7
-    section_hash: c2e328aad7435a80a36dfb90598038d528891d6bb548f70c522defada428a3a5
+      - 6
+    section_hash: 2ca60ff1ac09d31736d8cfabed287f253beba27180dcc897de6c1cd9171bf960
     summary: Sync taskledger state across PCs
     text: "# Sync taskledger state across PCs
 
 
-      Taskledger already supports keeping durable task state outside the source
+      Taskledger stores durable state below the Ledgercore-resolved `data` mount. The
 
-      repository. The recommended workflow is to commit only `taskledger.toml` in
+      default mount is external storage at `../ledger`; local overrides may select
 
-      the source repo, point `taskledger_dir` at an external sibling directory, and
-
-      sync that external directory with a private Git repository."
+      `user-data`. Rebuildable indexes are always resolved as cache storage."
     links:
       - source_id: py:module:taskledger/cli_sync.py
         source_path: taskledger/cli_sync.py
@@ -37,97 +35,124 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for sync taskledger state across pcs.
         tracked_hashes:
-          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
-          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+          body_hash: 9ada658b1fe0050f9f94e3d97261e22b58863e07ae732cd012c85bfaa451d874
+          public_contract_hash: 344071748193d5759f15b1c01e616de7a87127547f1bafbb2274f540eac0971f
       - source_id: py:module:taskledger/services/git_sync.py
         source_path: taskledger/services/git_sync.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for sync taskledger state across pcs.
         tracked_hashes:
-          body_hash: 0709df69974e87c2ca01ab57e4ee075270b633efc0fbbce3e1ebd35070fedca8
-          public_contract_hash: 9c4a737eef5f74376cf2a89ca21d1d6da16974a474601a7f9f830f50b853081b
-  - section_id: md:section:docs/sync.md::external-state-directory
+          body_hash: 206261db2659511de86869f250ad080c995ca887e840c263e9c17124e6c9aae5
+          public_contract_hash: a4e9dbb49159cd0d37dc2217516fb5073ad6c6cf016d4633408fa221529c4ad5
+  - section_id: md:section:docs/sync.md::schema-3-project-state
     doc_path: docs/sync.md
     heading_path:
       - Sync taskledger state across PCs
-      - External state directory
-    heading_slug: external-state-directory
+      - Schema-3 project state
+    heading_slug: schema-3-project-state
     line_span:
-      - 8
-      - 23
-    section_hash: c7c0a9695b2f342b3d58e745305c6d9f0148e49a3b54fbef8092e758360d822d
-    summary: External state directory
-    text: '## External state directory
+      - 7
+      - 30
+    section_hash: a1d144c881b84b0f1e476efcd8f6af53612dfb35c62c2b8bed93bf382f16dd92
+    summary: Schema-3 project state
+    text: "## Schema-3 project state
 
 
-      Use `taskledger init --taskledger-dir` or edit `taskledger.toml` so the
-
-      workspace keeps only config while the durable state lives elsewhere:
+      The canonical layout is:
 
 
-      ```toml
+      ```text
 
-      config_version = 2
+      /home/me/src/project-a/.ledger/ledger.toml
 
-      taskledger_dir = "../taskledger-state/project-a"
+      /home/me/src/project-a/.ledger/taskledger/config.toml
 
-      project_uuid = "keep-existing-uuid"
+      /home/me/src/ledger/taskledger/<project-uuid>/data
 
-      project_name = "project-a"
-
-      ledger_ref = "main"
+      <user-cache>/taskledger/<project-uuid>/<checkout>/indexes
 
       ```
 
 
-      Relative paths are preferred because they keep the same sibling layout working
+      Initialize and inspect the resolved mounts explicitly:
 
-      across multiple PCs.'
+
+      ```bash
+
+      taskledger init
+
+      taskledger storage where
+
+      taskledger storage path data
+
+      taskledger storage path indexes
+
+      taskledger storage set data user-data --scope local
+
+      # Use `taskledger migrate` for data relocation; `storage set` changes topology
+      only.
+
+      ```
+
+
+      The project UUID and Ledgercore binding keep shared projects isolated."
     links:
       - source_id: py:module:taskledger/services/storage_locations.py
         source_path: taskledger/services/storage_locations.py
         coverage: architecture
         impact: behavior
-        reason: Tracks the owning implementation for external state directory.
+        reason: Moved storage-location coverage to the current schema-3 layout section.
         tracked_hashes:
-          body_hash: 8e66f108562ea21adca7beeb2e885c53de2799b75801f6e7e605fecae1cfe1a0
-          public_contract_hash: aa37ba65bfda915bc0dd00e83b743707169bddc415c9022715cc98502d45b55d
+          body_hash: 139e396f7b1916107725681d959662e8e3ddd5d5c5d21365c3521898803ed738
+          public_contract_hash: c2f60f0ec915d137f399be0aed1ec112a8e57807e899e78c8ff93465087d8c44
       - source_id: py:module:taskledger/storage/project_config.py
         source_path: taskledger/storage/project_config.py
         coverage: architecture
         impact: behavior
-        reason: Tracks the owning implementation for external state directory.
+        reason: Moved project-config coverage to the current schema-3 layout section.
         tracked_hashes:
-          body_hash: 9b1503b5d128e799424d66098e89c0bfd54c37ee1ac71ced0e9ba06b41e6af01
-          public_contract_hash: 3dd9a0323a7a9b90bfda7b204ebcea1f9347275a782873b3226f1121c54b96cc
-  - section_id: md:section:docs/sync.md::private-state-git-repo
+          body_hash: d9ba3db0e199dd53b8bd8d54e2bf1fe0e50089b377ce127e6b196693042e582e
+          public_contract_hash: 59a0b0cf13e7e4dc2d0f6f8b4017549ccdc4f5269d5b3ebaed4969e981b0ff93
+  - section_id: md:section:docs/sync.md::shared-state-git-repo
     doc_path: docs/sync.md
     heading_path:
       - Sync taskledger state across PCs
-      - Private state Git repo
-    heading_slug: private-state-git-repo
+      - Shared state Git repo
+    heading_slug: shared-state-git-repo
     line_span:
-      - 24
-      - 43
-    section_hash: b882f548c326ea3ed33d55acd9a96d522d77db383ebbed0028cd59937a07a5d3
-    summary: Private state Git repo
-    text:
-      "## Private state Git repo\n\nRecommended layout:\n\n```text\n/home/me/src/project-a/\
-      \                  # source repo\n/home/me/src/taskledger-state/           # private\
-      \ state repo\n/home/me/src/taskledger-state/project-a/\n  storage.yaml\n  ledgers/\n\
-      \    main/\n      tasks/\n      events/\n      releases/\n      indexes/\n```\n\
-      \nThe source repository keeps `taskledger.toml` and ignores `.taskledger/`.\n\
-      The private state repository stores the external `taskledger_dir` contents."
+      - 31
+      - 42
+    section_hash: e59407053aed5972ebe517cecb6cd16b6067e6038d0d43909326fc6442c92cb7
+    summary: Shared state Git repo
+    text: "## Shared state Git repo
+
+
+      The sibling store can be an explicit Git repository. Taskledger Git sync derives
+
+      the repository root and limits canonical operations to the resolved project path:
+
+
+      ```bash
+
+      taskledger sync git init
+
+      taskledger sync git status
+
+      taskledger sync git pull
+
+      taskledger sync git push
+
+      ```"
     links:
       - source_id: py:module:taskledger/services/git_sync.py
         source_path: taskledger/services/git_sync.py
         coverage: architecture
         impact: behavior
-        reason: Tracks the owning implementation for private state git repo.
+        reason: Moved Git-sync coverage to the current shared-state repository section.
         tracked_hashes:
-          body_hash: 0709df69974e87c2ca01ab57e4ee075270b633efc0fbbce3e1ebd35070fedca8
-          public_contract_hash: 9c4a737eef5f74376cf2a89ca21d1d6da16974a474601a7f9f830f50b853081b
+          body_hash: 206261db2659511de86869f250ad080c995ca887e840c263e9c17124e6c9aae5
+          public_contract_hash: a4e9dbb49159cd0d37dc2217516fb5073ad6c6cf016d4633408fa221529c4ad5
   - section_id: md:section:docs/sync.md::second-pc-bootstrap
     doc_path: docs/sync.md
     heading_path:
@@ -135,11 +160,28 @@ sections:
       - Second PC bootstrap
     heading_slug: second-pc-bootstrap
     line_span:
-      - 44
-      - 58
-    section_hash: 7e027c7a4f567eb9829289c0e1ddbaa94b7a9037a7e9dfbccc763fc1f9bd2a74
+      - 43
+      - 66
+    section_hash: 2885449c0197bca0bc00a1c5c230fe0b566c0ba540a6643e836df54b363ec244
     summary: Second PC bootstrap
     text: "## Second PC bootstrap
+
+
+      Indexes are checkout-local derived state and are not synchronized between PCs.
+
+      After opening a project on a new machine, deleting the local cache, or allowing
+
+      the cache to be evicted, read-only commands continue to use canonical records.
+
+      The first mutating command creates the local Ledgercore cache binding and
+
+      rebuilds the indexes automatically; no second `taskledger init` is required.
+
+      If a non-empty unbound cache is found, Taskledger preserves it as an
+
+      `indexes.quarantine-*` sibling before rebuilding. Use `taskledger repair index`
+
+      for explicit cache health repair.
 
 
       Clone both repositories as siblings:
@@ -156,7 +198,7 @@ sections:
 
       cd project-a
 
-      taskledger status --full
+      taskledger info
 
       taskledger doctor
 
@@ -170,16 +212,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for second pc bootstrap.
         tracked_hashes:
-          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
-          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+          body_hash: 9ada658b1fe0050f9f94e3d97261e22b58863e07ae732cd012c85bfaa451d874
+          public_contract_hash: 344071748193d5759f15b1c01e616de7a87127547f1bafbb2274f540eac0971f
       - source_id: py:module:taskledger/services/git_sync.py
         source_path: taskledger/services/git_sync.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for second pc bootstrap.
         tracked_hashes:
-          body_hash: 0709df69974e87c2ca01ab57e4ee075270b633efc0fbbce3e1ebd35070fedca8
-          public_contract_hash: 9c4a737eef5f74376cf2a89ca21d1d6da16974a474601a7f9f830f50b853081b
+          body_hash: 206261db2659511de86869f250ad080c995ca887e840c263e9c17124e6c9aae5
+          public_contract_hash: a4e9dbb49159cd0d37dc2217516fb5073ad6c6cf016d4633408fa221529c4ad5
   - section_id: md:section:docs/sync.md::daily-sync-protocol
     doc_path: docs/sync.md
     heading_path:
@@ -187,8 +229,8 @@ sections:
       - Daily sync protocol
     heading_slug: daily-sync-protocol
     line_span:
-      - 59
-      - 102
+      - 67
+      - 110
     section_hash: 1510f7ef0e175ee4023b60537bdf91395089669cf88df133f2d970b402feee63
     summary: Daily sync protocol
     text: '## Daily sync protocol
@@ -274,16 +316,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for daily sync protocol.
         tracked_hashes:
-          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
-          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+          body_hash: 9ada658b1fe0050f9f94e3d97261e22b58863e07ae732cd012c85bfaa451d874
+          public_contract_hash: 344071748193d5759f15b1c01e616de7a87127547f1bafbb2274f540eac0971f
       - source_id: py:module:taskledger/services/git_sync.py
         source_path: taskledger/services/git_sync.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for daily sync protocol.
         tracked_hashes:
-          body_hash: 0709df69974e87c2ca01ab57e4ee075270b633efc0fbbce3e1ebd35070fedca8
-          public_contract_hash: 9c4a737eef5f74376cf2a89ca21d1d6da16974a474601a7f9f830f50b853081b
+          body_hash: 206261db2659511de86869f250ad080c995ca887e840c263e9c17124e6c9aae5
+          public_contract_hash: a4e9dbb49159cd0d37dc2217516fb5073ad6c6cf016d4633408fa221529c4ad5
   - section_id: md:section:docs/sync.md::active-lock-rule
     doc_path: docs/sync.md
     heading_path:
@@ -291,8 +333,8 @@ sections:
       - Active lock rule
     heading_slug: active-lock-rule
     line_span:
-      - 103
-      - 115
+      - 111
+      - 123
     section_hash: 7dfd9473a15ecaaaf0e58ffc7ee9253b27bedca07ef4d634136d8d576e878c10
     summary: Active lock rule
     text: "## Active lock rule
@@ -330,8 +372,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for active lock rule.
         tracked_hashes:
-          body_hash: 230eca334d1c801adc00634143a94a8acadd9e2611e471492659ccb9be16174e
-          public_contract_hash: 4d2ad196a034cb157ccba9a525228b938ad902c20903c6b9981b19e0867660cc
+          body_hash: b243fddf91dc75a7b8dafde97a9290e1457f622c58258c6ce87ae29f18d63bf7
+          public_contract_hash: 435c150b7ea4fbd8317f7b3609a2be7e2c4bf8c1845a899a3f39ce4007694485
   - section_id: md:section:docs/sync.md::when-to-use-export-import-instead
     doc_path: docs/sync.md
     heading_path:
@@ -339,22 +381,54 @@ sections:
       - When to use export/import instead
     heading_slug: when-to-use-export-import-instead
     line_span:
-      - 116
-      - 141
-    section_hash: e6d790d7cd0f5695a96e75dd594b3ef885abf921b531a197557c141f978913aa
+      - 124
+      - 149
+    section_hash: e010feba33593432dd19efdd7fc2a07430e19c9225ee76e0e7fbe1cc7283a20d
     summary: When to use export/import instead
-    text:
-      "## When to use export/import instead\n\nArchive commands are still the transfer\
-      \ primitive and remain available at both\nthe root and under `sync`:\n\n```bash\n\
-      taskledger export task-0040\ntaskledger import ./taskledger-task-project-a-main-task-0040-...tar.gz\n\
-      taskledger sync export --output ./taskledger-transfer.tar.gz\ntaskledger sync\
-      \ import ./taskledger-transfer.tar.gz --dry-run\n```\n\nIf work must move mid-run,\
-      \ prefer task-scoped transfer archives instead of\nsyncing the full live state\
-      \ directory:\n\n```bash\ntaskledger export task-0040\n  # copy archive to the\
-      \ other PC\ntaskledger import ./taskledger-task-project-a-main-task-0040-...tar.gz\n\
-      taskledger next-action\ntaskledger implement resume --reason \"Continue imported\
-      \ implementation.\"\n```\n\nImported runtime locks are quarantined by default,\
-      \ which makes archive transfer\nsafer than syncing an active lock between machines."
+    text: '## When to use export/import instead
+
+
+      Archive commands are still the transfer primitive and remain available at both
+
+      the root and under `sync`:
+
+
+      ```bash
+
+      taskledger export task-0040
+
+      taskledger import ./taskledger-task-project-a-main-task-0040-...tar.gz
+
+      taskledger sync export --output ./taskledger-transfer.tar.gz
+
+      taskledger sync import ./taskledger-transfer.tar.gz --dry-run
+
+      ```
+
+
+      If work must move mid-run, prefer task-scoped transfer archives instead of
+
+      syncing the full live state directory:
+
+
+      ```bash
+
+      taskledger export task-0040
+
+      # copy archive to the other PC
+
+      taskledger import ./taskledger-task-project-a-main-task-0040-...tar.gz
+
+      taskledger next-action
+
+      taskledger implement resume --reason "Continue imported implementation."
+
+      ```
+
+
+      Imported runtime locks are quarantined by default, which makes archive transfer
+
+      safer than syncing an active lock between machines.'
     links:
       - source_id: py:module:taskledger/cli_sync.py
         source_path: taskledger/cli_sync.py
@@ -362,16 +436,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for when to use export import instead.
         tracked_hashes:
-          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
-          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
+          body_hash: 9ada658b1fe0050f9f94e3d97261e22b58863e07ae732cd012c85bfaa451d874
+          public_contract_hash: 344071748193d5759f15b1c01e616de7a87127547f1bafbb2274f540eac0971f
       - source_id: py:module:taskledger/exchange.py
         source_path: taskledger/exchange.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for when to use export import instead.
         tracked_hashes:
-          body_hash: ec15efde7ba9d4108699f7892f68a0943e37364b10dadfd450c5a063e4a0bca0
-          public_contract_hash: 799cd703410ea7bd712e2408d0975f73267ccf3609fcf7fd3a0282acb1cc8740
+          body_hash: 4bce0fedb7cd5b0dc8a1890756d90190a9709d82755295d3d6bec9a5626fea83
+          public_contract_hash: 8b057719406e2d1ae75d554d75465f16ad373c99374e3aa887bb6c94923fb59c
   - section_id: md:section:docs/sync.md::syncthing-rclone-caveats
     doc_path: docs/sync.md
     heading_path:
@@ -379,8 +453,8 @@ sections:
       - Syncthing/rclone caveats
     heading_slug: syncthing-rclone-caveats
     line_span:
-      - 142
-      - 157
+      - 150
+      - 165
     section_hash: 61a85458490c0b9340bb06ddaf87bbf1e0f7dd0cc3e4ff09aa1fa73936a87379
     summary: Syncthing/rclone caveats
     text: "## Syncthing/rclone caveats
@@ -415,16 +489,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for syncthing rclone caveats.
         tracked_hashes:
-          body_hash: 0709df69974e87c2ca01ab57e4ee075270b633efc0fbbce3e1ebd35070fedca8
-          public_contract_hash: 9c4a737eef5f74376cf2a89ca21d1d6da16974a474601a7f9f830f50b853081b
+          body_hash: 206261db2659511de86869f250ad080c995ca887e840c263e9c17124e6c9aae5
+          public_contract_hash: a4e9dbb49159cd0d37dc2217516fb5073ad6c6cf016d4633408fa221529c4ad5
       - source_id: py:module:taskledger/storage/locks.py
         source_path: taskledger/storage/locks.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for syncthing rclone caveats.
         tracked_hashes:
-          body_hash: 230eca334d1c801adc00634143a94a8acadd9e2611e471492659ccb9be16174e
-          public_contract_hash: 4d2ad196a034cb157ccba9a525228b938ad902c20903c6b9981b19e0867660cc
+          body_hash: b243fddf91dc75a7b8dafde97a9290e1457f622c58258c6ce87ae29f18d63bf7
+          public_contract_hash: 435c150b7ea4fbd8317f7b3609a2be7e2c4bf8c1845a899a3f39ce4007694485
   - section_id: md:section:docs/sync.md::task-centered-traceability
     doc_path: docs/sync.md
     heading_path:
@@ -432,8 +506,8 @@ sections:
       - Task-centered traceability
     heading_slug: task-centered-traceability
     line_span:
-      - 158
-      - 169
+      - 166
+      - 178
     section_hash: 38351c70e47624ccd0822d7eb243956f291f63694f1e49beacf19957240cf6a7
     summary: Task-centered traceability
     text: "## Task-centered traceability
@@ -465,7 +539,29 @@ sections:
         tracked_hashes:
           body_hash: a17dfa1f687e5363a49319c0b586296ec8fdadb65e7f3f0fcf9b442f720ffe72
           public_contract_hash: 64fd5109b1e88e236e5b4db7300b086a76a8749f0cb44e4eeb73123416c8f3c2
-last_fresh_scan_version: 6
-last_fresh_hash: fb199bb32ff5f910feff59103682cb197c94675d4dd8016182880e276937a201
-notes: Documentation links validated after final scan version 6.
-version: 257
+  - section_id: md:section:docs/sync.md::canonical-mounts
+    doc_path: docs/sync.md
+    heading_path:
+      - Sync taskledger state across PCs
+      - Canonical mounts
+    heading_slug: canonical-mounts
+    line_span:
+      - 179
+      - 181
+    section_hash: 24c66933cd2ef4ff81e9f49b9938c30f1e05bdde6d9bd99bbfd0bdbfe33f1e35
+    summary: Canonical mounts
+    text: "## Canonical mounts
+
+
+      Canonical state sync includes the durable `data` mount by default. `runtime`,
+      `logs`, and cache `indexes` are excluded from application-source sync; indexes
+      can be deleted and rebuilt from data. An explicit audit policy may include selected
+      logs. Workspace, user-data, and cache roots are resolved by Ledgercore and are
+      not changed by `taskledger storage move`."
+    links: []
+last_fresh_scan_version: 8
+last_fresh_hash: d1d2d9996f20f2b3271199253320e7c317385c466f7ac7eed1302cb8f097d795
+notes:
+  Re-baselined documentation after the schema-3 Documentledger migration and
+  scan source-index refresh; repository source content was unchanged.
+version: 282

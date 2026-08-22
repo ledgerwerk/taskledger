@@ -72,8 +72,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for full task cycle.
         tracked_hashes:
-          body_hash: 0550f08df72c1e62fcc46443bd468ea25ad77beef7b6390823ef239f8772a677
-          public_contract_hash: 78d63207cbc0d7927d88b0dcdde15e9ff17e5717c470812d3a0867535210d5a9
+          body_hash: 53c0bbae5b685271c4b3b99cb9171c16753abda8574b75798b84bd68934e0638
+          public_contract_hash: 87064567e7301379b50e68b2370b223a442d559c1be3ccbd704db3007a61a865
   - section_id: md:section:docs/full_task_cycle.md::1-initialize-the-ledger
     doc_path: docs/full_task_cycle.md
     heading_path:
@@ -82,8 +82,8 @@ sections:
     heading_slug: 1-initialize-the-ledger
     line_span:
       - 14
-      - 29
-    section_hash: 7a7744135a1cddacd0d6c72fdbae835462ed3a40297d459f54a9c5d4d059c9fb
+      - 27
+    section_hash: 0919ae722cfc30bcc65fd4f5a3cb06dcd227286e812030de03e2e369340c432d
     summary: 1. Initialize The Ledger
     text: "## 1. Initialize The Ledger
 
@@ -95,22 +95,18 @@ sections:
 
       taskledger init
 
-      taskledger init --taskledger-dir /mnt/cloud/taskledger/project-a
-
       taskledger doctor
 
-      taskledger status --full
+      taskledger info
 
       ```
 
 
-      `init` writes `taskledger.toml` in the workspace root and points it at the
+      `init` writes a schema-3 `.ledger/ledger.toml` registration and
 
-      default `.taskledger/` storage root unless `--taskledger-dir` chooses an
+      `.ledger/taskledger/config.toml`. Default data is external at `../ledger`;
 
-      external location. `doctor` checks integrity. `status --full` shows the
-
-      current task, counts, health, and resolved storage paths."
+      indexes are cache data. Use `taskledger storage where` to inspect paths."
     links:
       - source_id: py:module:taskledger/cli.py
         source_path: taskledger/cli.py
@@ -118,16 +114,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 1 initialize the ledger.
         tracked_hashes:
-          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
-          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+          body_hash: 03439fb945a2d44c44b4034da743b1ad95d7faf9b5e71d36c97c783656015706
+          public_contract_hash: ab6e7ca47495f432f183cabb3fe8db514012b03dd18f51e04f5be93639800a3e
       - source_id: py:module:taskledger/storage/init.py
         source_path: taskledger/storage/init.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for 1 initialize the ledger.
         tracked_hashes:
-          body_hash: b9aab943a83ec8d8dbc9192cdaa81999fe64376784c7ab71aacf4ab09f93a543
-          public_contract_hash: 1f3f75192e8510fea1f8a7f9a4841288aac5709599276280e133203d4eb0771f
+          body_hash: f9f8e95a643183820978ce85ac81e0bd93e996efc7b4d82c4cd56e64cb9cdf55
+          public_contract_hash: cbaec41acca85984593e661065ce6420774345331cdc91490c26cc8bdb544c7f
   - section_id: md:section:docs/full_task_cycle.md::2-create-and-activate-a-task
     doc_path: docs/full_task_cycle.md
     heading_path:
@@ -135,8 +131,8 @@ sections:
       - 2. Create And Activate A Task
     heading_slug: 2-create-and-activate-a-task
     line_span:
-      - 30
-      - 58
+      - 28
+      - 56
     section_hash: 0433fe468f6c5bbe0b425c227e3f629883195331ae8cf3814b1268db9c45d600
     summary: 2. Create And Activate A Task
     text: '## 2. Create And Activate A Task
@@ -206,8 +202,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 2 create and activate a task.
         tracked_hashes:
-          body_hash: 0550f08df72c1e62fcc46443bd468ea25ad77beef7b6390823ef239f8772a677
-          public_contract_hash: 78d63207cbc0d7927d88b0dcdde15e9ff17e5717c470812d3a0867535210d5a9
+          body_hash: 53c0bbae5b685271c4b3b99cb9171c16753abda8574b75798b84bd68934e0638
+          public_contract_hash: 87064567e7301379b50e68b2370b223a442d559c1be3ccbd704db3007a61a865
   - section_id: md:section:docs/full_task_cycle.md::3-start-planning
     doc_path: docs/full_task_cycle.md
     heading_path:
@@ -215,8 +211,8 @@ sections:
       - 3. Start Planning
     heading_slug: 3-start-planning
     line_span:
-      - 59
-      - 72
+      - 57
+      - 70
     section_hash: fb20dd5365aa34e247e3552ac623fbd4c7ee0282b8eaab4783f809c632da4d77
     summary: 3. Start Planning
     text: "## 3. Start Planning
@@ -248,16 +244,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 3 start planning.
         tracked_hashes:
-          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
-          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+          body_hash: b7371f1ffb6d0e13c0b85b89befe815dbdd83cd83f38bbc8f4ab3f6c79f58064
+          public_contract_hash: 881e0327a0a834879f3c9f44128039aec7b26c68a820335b6c9b2e07c2646d5b
       - source_id: py:module:taskledger/services/planning_flow.py
         source_path: taskledger/services/planning_flow.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for 3 start planning.
         tracked_hashes:
-          body_hash: 8f08d2e00e4da943d49e11fdf7e665c396f0295589c1d289fd0ff28b77bb30e8
-          public_contract_hash: c4b299b43313a9cf137cd93064db9968b38018f147555b50d6ac0d158cc8aa3a
+          body_hash: 3dbe71a2d8c4f850478fc09ae0f7c859d7cfc83e71d44677ab516af763fda359
+          public_contract_hash: 226b28c8574d2d3ab4c9f95e83c8b79a8e54b22862a9cac6e66594b6aa14c6c9
   - section_id: md:section:docs/full_task_cycle.md::4-ask-and-answer-questions
     doc_path: docs/full_task_cycle.md
     heading_path:
@@ -265,8 +261,8 @@ sections:
       - 4. Ask And Answer Questions
     heading_slug: 4-ask-and-answer-questions
     line_span:
-      - 73
-      - 90
+      - 71
+      - 88
     section_hash: 300a2f8f8ca136f57c476fb32a04d71d7ed8410ca6825ba620a5126ea5a3dca6
     summary: 4. Ask And Answer Questions
     text: '## 4. Ask And Answer Questions
@@ -309,7 +305,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 4 ask and answer questions.
         tracked_hashes:
-          body_hash: 9defb5b1c175b90507d718618a7ad99070d0a8220673d259eb8d6ccc4e1d71c0
+          body_hash: b80a6efb835b7c0bd8a5370a9b9ea13cc5d00a091c9b4d6a021186ce2716e58c
           public_contract_hash: 4792729db1b2b54c9b7d899e97eafba77b00fbedeb89c7ba68b9861842c59227
       - source_id: py:module:taskledger/cli_question.py
         source_path: taskledger/cli_question.py
@@ -326,9 +322,9 @@ sections:
       - 5. Propose A Plan
     heading_slug: 5-propose-a-plan
     line_span:
-      - 91
-      - 127
-    section_hash: 3901c20f8f4989cde0e7a5d24bed88b6508f5b2709fd83e73c2aa439fbe51b1f
+      - 89
+      - 132
+    section_hash: a9d3bd4945c09ff7161851e00ed5e2630a2b1e0c1e108f0c0a2f72bd57a63c50
     summary: 5. Propose A Plan
     text: '## 5. Propose A Plan
 
@@ -387,13 +383,30 @@ sections:
       ```
 
 
-      `plan command` records command exit code and output in planning diagnostics.
+      `plan command` records command exit code, stdout, stderr, and actual child cwd
+      in
 
-      With transcript logging enabled, the same output is also captured in the
+      planning diagnostics. It passes the inner argv without a shell and runs from the
+      CLI
 
-      ledger-level command transcript. Use it to build evidence into the plan before
+      invocation directory. Workspace discovery may use an ancestor for Taskledger state,
 
-      proposal.'
+      but it must not change the managed child''s cwd. With transcript logging enabled,
+      the
+
+      same output is also captured in the ledger-level command transcript. Use it to
+      build
+
+      evidence into the plan before proposal.
+
+
+      Managed planning commands use a usable inherited Python virtualenv when present,
+
+      then inspect `.venv` and `venv` beside the command cwd and at the workspace root.
+
+      This affects only child executable lookup, so the portable examples above retain
+
+      their exact argv, direct no-shell execution, and documented child cwd.'
     links:
       - source_id: py:module:taskledger/cli_plan.py
         source_path: taskledger/cli_plan.py
@@ -401,24 +414,24 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 5 propose a plan.
         tracked_hashes:
-          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
-          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+          body_hash: b7371f1ffb6d0e13c0b85b89befe815dbdd83cd83f38bbc8f4ab3f6c79f58064
+          public_contract_hash: 881e0327a0a834879f3c9f44128039aec7b26c68a820335b6c9b2e07c2646d5b
       - source_id: py:module:taskledger/services/plan_input.py
         source_path: taskledger/services/plan_input.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for 5 propose a plan.
         tracked_hashes:
-          body_hash: cfb5c7626bb9f2dd8689ffe05020dc44598958d225974c9612a5684e7d24a1b6
-          public_contract_hash: fe3029085c299c38e7bd193c37de014dadb079a5fafd0f501a45b8048dd81011
+          body_hash: 8ae489010b53d5be8218eb02864746a7cac16a36602647dd7cdcb840a85499db
+          public_contract_hash: 4b6170b73839478916bd1d4ba2bef400a834e2902036221b2c1b64fea3fb0cc4
       - source_id: py:module:taskledger/services/planning_flow.py
         source_path: taskledger/services/planning_flow.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for 5 propose a plan.
         tracked_hashes:
-          body_hash: 8f08d2e00e4da943d49e11fdf7e665c396f0295589c1d289fd0ff28b77bb30e8
-          public_contract_hash: c4b299b43313a9cf137cd93064db9968b38018f147555b50d6ac0d158cc8aa3a
+          body_hash: 3dbe71a2d8c4f850478fc09ae0f7c859d7cfc83e71d44677ab516af763fda359
+          public_contract_hash: 226b28c8574d2d3ab4c9f95e83c8b79a8e54b22862a9cac6e66594b6aa14c6c9
   - section_id: md:section:docs/full_task_cycle.md::6-materialize-todos-and-approve
     doc_path: docs/full_task_cycle.md
     heading_path:
@@ -426,8 +439,8 @@ sections:
       - 6. Materialize Todos And Approve
     heading_slug: 6-materialize-todos-and-approve
     line_span:
-      - 128
-      - 172
+      - 133
+      - 177
     section_hash: 21684b582f7b783213d44816338a24803947f58d6a99907263a50547f29ba144
     summary: 6. Materialize Todos And Approve
     text:
@@ -464,7 +477,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 6 materialize todos and approve.
         tracked_hashes:
-          body_hash: 95bb74ec2103ac111293d34868e00b8ca6fa22762ce28bc2e95216836d09ffb9
+          body_hash: 81c88911bfd8ee37aa5a96a2fcd7453a77bed9018af360e6ac364afed5e376bf
           public_contract_hash: c7e50af92b97d04d3afa7926ecd9266f9924577d94c4e8f0eda9d4f0891d1f96
   - section_id: md:section:docs/full_task_cycle.md::7-start-implementation
     doc_path: docs/full_task_cycle.md
@@ -473,9 +486,9 @@ sections:
       - 7. Start Implementation
     heading_slug: 7-start-implementation
     line_span:
-      - 173
-      - 196
-    section_hash: 973f0430e225946473af126dfce1354bcedbdf02282c115cf5be0734be5f1a47
+      - 178
+      - 208
+    section_hash: 7c87c014e20f85991a080e2abe43563d6f55b191f88ad8e06bb98566cabc9197
     summary: 7. Start Implementation
     text: '## 7. Start Implementation
 
@@ -518,11 +531,26 @@ sections:
 
       Use `implement command` when you want taskledger to record a command run as
 
-      part of implementation. With transcript logging enabled, it also records managed
+      part of implementation. It preserves the inner argv, runs from the CLI invocation
+
+      directory, and records the child cwd, exit code, stdout, and stderr. In human
+      mode,
+
+      captured child output is shown before the command summary. In JSON mode, streams
+      stay
+
+      inside the result envelope. With transcript logging enabled, it also records managed
 
       stdout/stderr in the task transcript. Use `implement deviation` when the
 
-      implementation differs from the approved plan.'
+      implementation differs from the approved plan.
+
+
+      Managed implementation commands use the same inherited-then-local virtualenv
+
+      precedence as `plan command`. Taskledger changes only the child environment, not
+
+      the recorded argv, parent environment, or direct subprocess semantics.'
     links:
       - source_id: py:module:taskledger/cli_implement.py
         source_path: taskledger/cli_implement.py
@@ -530,7 +558,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 7 start implementation.
         tracked_hashes:
-          body_hash: 3a6ab828b954b2e77ca156188b69bb45b1e64b6a7965e133f3c5f6cd4539d7d2
+          body_hash: ac1b6e09f7c85b628d2ee8e13b186f4e2496b8922de6f4953bacdcd70b59397c
           public_contract_hash: 6ce5b29c66cd8a29a8777869e94c76b24616034ea85966aee4a0fdac37467875
       - source_id: py:module:taskledger/services/implementation_flow.py
         source_path: taskledger/services/implementation_flow.py
@@ -538,8 +566,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 7 start implementation.
         tracked_hashes:
-          body_hash: aac2b0a90f6d3ff215f95627604de880da28008e5824299a1328c598d3282cfb
-          public_contract_hash: c8eea6da233863fee959f7b373e3e1937ff4153a88dad55db92b2bcf658e4932
+          body_hash: 9f92732fd489976f87318ad88e5482f8e8afa1c1bf0e047926f5bd2050104f2b
+          public_contract_hash: 11bce2d1b38bd74016f608d58d88cd1ab82019e8751369bb572689943a5cdcdf
   - section_id: md:section:docs/full_task_cycle.md::fresh-worker-implementation
     doc_path: docs/full_task_cycle.md
     heading_path:
@@ -548,8 +576,8 @@ sections:
       - Fresh-worker implementation
     heading_slug: fresh-worker-implementation
     line_span:
-      - 197
-      - 203
+      - 209
+      - 215
     section_hash: d4fd21c3b052edfedfaed20bc1dafd6b85237792ed08ad9f7f2c907a8a3f759c
     summary: Fresh-worker implementation
     text: "### Fresh-worker implementation
@@ -569,16 +597,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for fresh worker implementation.
         tracked_hashes:
-          body_hash: 1d11d6520901034d036df36b6465aeb7de92b518bfc5e805a5506a89fc21f506
-          public_contract_hash: e79ddac789a730c17db3c405610f7858263d46c2465d483e379afd6a67a63c89
+          body_hash: 61e4eef8993a2346f63b9f9b3ad86b87fadfd49ea87d916dafa5d06f0a5ecc43
+          public_contract_hash: 21480e65b00374962e02056e438b6d149f00e2d74fe7bdfb6b9a44194db19b60
       - source_id: py:module:taskledger/services/worker_context.py
         source_path: taskledger/services/worker_context.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for fresh worker implementation.
         tracked_hashes:
-          body_hash: 511035457103e07da7dd1ec3d48f8092e67ded0fb9579135008cb3e01ee501b6
-          public_contract_hash: 8415131fc69c2de5c57d94521b24b53ba719ced082723c08522516b45cc22d27
+          body_hash: 69275f908f1714f0b93ed3e29a418132fd98cc7c716a61be15c15a42f6a36465
+          public_contract_hash: 3615f41488b646aa3010b9d9a69c747c576cca4eda7f5d1c6d0bd9ee2a21bf4d
   - section_id: md:section:docs/full_task_cycle.md::8-complete-implementation-todos
     doc_path: docs/full_task_cycle.md
     heading_path:
@@ -586,27 +614,72 @@ sections:
       - 8. Complete Implementation Todos
     heading_slug: 8-complete-implementation-todos
     line_span:
-      - 204
-      - 238
-    section_hash: 558e391a787dfca64a51ac45800ff129194288177d54171810bfd2b6b205f477
+      - 216
+      - 250
+    section_hash: 9ac18319bbf7a00e67fd6902ce8d5bb630c7451c2afd3da44f6955fd6bc334bd
     summary: 8. Complete Implementation Todos
-    text:
-      "## 8. Complete Implementation Todos\n\nMark mandatory todos done with evidence:\n\
-      \nCompact same-session loop:\n\n```bash\ntaskledger --json next-action\ntaskledger\
-      \ --json todo next\ntaskledger todo show todo-0003\n  # implement only that todo\n\
-      pytest tests/test_parser.py -q\ntaskledger todo done todo-0003 --evidence \"pytest\
-      \ tests/test_parser.py -q\"\ntaskledger --json next-action\n```\n\nPrefer this\
-      \ loop over broad generated context during normal work. Use\n`validation_hint`\
-      \ before marking a todo done. Create a handoff or wider\ncontext only when the\
-      \ task needs a harness or session switch.\n\n```bash\ntaskledger todo next\ntaskledger\
-      \ todo done TODO_ID --evidence \"pytest tests/test_parser.py -q\" --artifact .taskledger-artifacts/parser-test-output.txt\n\
-      taskledger todo done TODO_ID --evidence \"Reviewed parser docs.\"\ntaskledger\
-      \ todo status\ntaskledger implement finish --summary \"Implemented parser delimiter\
-      \ rejection and tests.\"\n```\n\nTodo source is inferred from the active lock:\
-      \ todos added during implementation\nare recorded as `source=implementer`, during\
-      \ planning as `source=planner`,\nand outside an active stage as `source=user`.\n\
-      \n`implement finish` releases the implementation lock only when mandatory todos\n\
-      are complete."
+    text: '## 8. Complete Implementation Todos
+
+
+      Mark mandatory todos done with evidence:
+
+
+      Compact same-session loop:
+
+
+      ```bash
+
+      taskledger --json next-action
+
+      taskledger --json todo next
+
+      taskledger todo show todo-0003
+
+      # implement only that todo
+
+      pytest tests/test_parser.py -q
+
+      taskledger todo done todo-0003 --evidence "pytest tests/test_parser.py -q"
+
+      taskledger --json next-action
+
+      ```
+
+
+      Prefer this loop over broad generated context during normal work. Use
+
+      `validation_hint` before marking a todo done. Create a handoff or wider
+
+      context only when the task needs a harness or session switch.
+
+
+      ```bash
+
+      taskledger todo next
+
+      taskledger todo done TODO_ID --evidence "pytest tests/test_parser.py -q" --artifact
+      .taskledger-artifacts/parser-test-output.txt
+
+      taskledger todo done TODO_ID --evidence "Reviewed parser docs."
+
+      taskledger todo status
+
+      taskledger implement finish --summary "Implemented parser delimiter rejection
+      and tests."
+
+      ```
+
+
+      Todo source is inferred from the active lock: todos added during implementation
+
+      are recorded as `source=implementer`, during planning as `source=planner`,
+
+      and outside an active stage as `source=user`.
+
+
+      `implement finish` releases the implementation lock only when mandatory todos
+
+      are complete.'
     links:
       - source_id: py:module:taskledger/cli_implement.py
         source_path: taskledger/cli_implement.py
@@ -614,7 +687,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 8 complete implementation todos.
         tracked_hashes:
-          body_hash: 3a6ab828b954b2e77ca156188b69bb45b1e64b6a7965e133f3c5f6cd4539d7d2
+          body_hash: ac1b6e09f7c85b628d2ee8e13b186f4e2496b8922de6f4953bacdcd70b59397c
           public_contract_hash: 6ce5b29c66cd8a29a8777869e94c76b24616034ea85966aee4a0fdac37467875
       - source_id: py:module:taskledger/services/implementation_flow.py
         source_path: taskledger/services/implementation_flow.py
@@ -622,15 +695,15 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 8 complete implementation todos.
         tracked_hashes:
-          body_hash: aac2b0a90f6d3ff215f95627604de880da28008e5824299a1328c598d3282cfb
-          public_contract_hash: c8eea6da233863fee959f7b373e3e1937ff4153a88dad55db92b2bcf658e4932
+          body_hash: 9f92732fd489976f87318ad88e5482f8e8afa1c1bf0e047926f5bd2050104f2b
+          public_contract_hash: 11bce2d1b38bd74016f608d58d88cd1ab82019e8751369bb572689943a5cdcdf
       - source_id: py:module:taskledger/services/task_collections.py
         source_path: taskledger/services/task_collections.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for 8 complete implementation todos.
         tracked_hashes:
-          body_hash: e4307ef9120f7f9c1aba033c7006e107ae72f1a3b3edbf5b935922b3cf617509
+          body_hash: dc3ffa1c38ba30ffac58a196b7a1690bd40877702b4227c2eb655c67b6b33fb6
           public_contract_hash: 97ae38fd36e3410bf142fb4db9b878a4257c7e0f12b18ae3e95217f840ddb9f9
   - section_id: md:section:docs/full_task_cycle.md::9-validate-the-work
     doc_path: docs/full_task_cycle.md
@@ -639,8 +712,8 @@ sections:
       - 9. Validate The Work
     heading_slug: 9-validate-the-work
     line_span:
-      - 239
-      - 254
+      - 251
+      - 266
     section_hash: a9f7fe24bc132c836868d290b81e86b1e78692131e68cb72c28b6f497da7a560
     summary: 9. Validate The Work
     text: '## 9. Validate The Work
@@ -688,7 +761,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 9 validate the work.
         tracked_hashes:
-          body_hash: 65732bac4a575ea235efc41c7364efed95d05a9356276e06c3b379ce814c19be
+          body_hash: 86b7de0f3f95a1aea02e967933e96a3e39c68bfeb91d7c11f9fc0c9e42183f88
           public_contract_hash: a5c8bea901396ea33fd3c7f86c59f13ba0a7c9c2b9ed28c40c81debf9b30fec1
   - section_id: md:section:docs/full_task_cycle.md::if-validation-finds-a-bug
     doc_path: docs/full_task_cycle.md
@@ -698,8 +771,8 @@ sections:
       - If validation finds a bug
     heading_slug: if-validation-finds-a-bug
     line_span:
-      - 255
-      - 272
+      - 267
+      - 284
     section_hash: 2037aa90dd4ae76861e0555386900914d10044ea3ffced65c454d19622c90d26
     summary: If validation finds a bug
     text: '### If validation finds a bug
@@ -740,15 +813,15 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for if validation finds a bug.
         tracked_hashes:
-          body_hash: aac2b0a90f6d3ff215f95627604de880da28008e5824299a1328c598d3282cfb
-          public_contract_hash: c8eea6da233863fee959f7b373e3e1937ff4153a88dad55db92b2bcf658e4932
+          body_hash: 9f92732fd489976f87318ad88e5482f8e8afa1c1bf0e047926f5bd2050104f2b
+          public_contract_hash: 11bce2d1b38bd74016f608d58d88cd1ab82019e8751369bb572689943a5cdcdf
       - source_id: py:module:taskledger/services/validation_flow.py
         source_path: taskledger/services/validation_flow.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for if validation finds a bug.
         tracked_hashes:
-          body_hash: 65732bac4a575ea235efc41c7364efed95d05a9356276e06c3b379ce814c19be
+          body_hash: 86b7de0f3f95a1aea02e967933e96a3e39c68bfeb91d7c11f9fc0c9e42183f88
           public_contract_hash: a5c8bea901396ea33fd3c7f86c59f13ba0a7c9c2b9ed28c40c81debf9b30fec1
   - section_id: md:section:docs/full_task_cycle.md::fresh-worker-review
     doc_path: docs/full_task_cycle.md
@@ -758,8 +831,8 @@ sections:
       - Fresh-worker review
     heading_slug: fresh-worker-review
     line_span:
-      - 273
-      - 279
+      - 285
+      - 291
     section_hash: a7d9cd4cebea53d77829cd1b90dd18b1142d43ee26e9b75a5b88e1087e7cc341
     summary: Fresh-worker review
     text: "### Fresh-worker review
@@ -779,16 +852,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for fresh worker review.
         tracked_hashes:
-          body_hash: 263b1f77a1c2fa02272692c4392e77afd59ca7a7e4050b68f1959912e3678fd5
-          public_contract_hash: bbe1bafbc97948aae43c061f292156549456d25f197d4cc89eee4f6a11fc5fc7
+          body_hash: 7cc81a2d17b79d8cea0c31a963ac278f32264c79909fbef2ec646d0c00e4cc65
+          public_contract_hash: 7ce2d372c186f24a5990a7499e6040c6bde0e08266d96087908d6344ed57f792
       - source_id: py:module:taskledger/services/worker_context.py
         source_path: taskledger/services/worker_context.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for fresh worker review.
         tracked_hashes:
-          body_hash: 511035457103e07da7dd1ec3d48f8092e67ded0fb9579135008cb3e01ee501b6
-          public_contract_hash: 8415131fc69c2de5c57d94521b24b53ba719ced082723c08522516b45cc22d27
+          body_hash: 69275f908f1714f0b93ed3e29a418132fd98cc7c716a61be15c15a42f6a36465
+          public_contract_hash: 3615f41488b646aa3010b9d9a69c747c576cca4eda7f5d1c6d0bd9ee2a21bf4d
   - section_id: md:section:docs/full_task_cycle.md::10-close-the-task
     doc_path: docs/full_task_cycle.md
     heading_path:
@@ -796,9 +869,9 @@ sections:
       - 10. Close The Task
     heading_slug: 10-close-the-task
     line_span:
-      - 280
-      - 300
-    section_hash: 411d4371d6d096b184ddef8196cdd75963838c0bdc9228e064b3a8b87d79a266
+      - 292
+      - 312
+    section_hash: f55eb4e0022cbfb373909a08f2b47bd6b2aea85e1e64c293e8db941554248ccb
     summary: 10. Close The Task
     text: '## 10. Close The Task
 
@@ -824,7 +897,7 @@ sections:
 
       taskledger task show parser-fix
 
-      taskledger status --full
+      taskledger info
 
       taskledger doctor
 
@@ -845,15 +918,15 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 10 close the task.
         tracked_hashes:
-          body_hash: 0550f08df72c1e62fcc46443bd468ea25ad77beef7b6390823ef239f8772a677
-          public_contract_hash: 78d63207cbc0d7927d88b0dcdde15e9ff17e5717c470812d3a0867535210d5a9
+          body_hash: 53c0bbae5b685271c4b3b99cb9171c16753abda8574b75798b84bd68934e0638
+          public_contract_hash: 87064567e7301379b50e68b2370b223a442d559c1be3ccbd704db3007a61a865
       - source_id: py:module:taskledger/services/validation_flow.py
         source_path: taskledger/services/validation_flow.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for 10 close the task.
         tracked_hashes:
-          body_hash: 65732bac4a575ea235efc41c7364efed95d05a9356276e06c3b379ce814c19be
+          body_hash: 86b7de0f3f95a1aea02e967933e96a3e39c68bfeb91d7c11f9fc0c9e42183f88
           public_contract_hash: a5c8bea901396ea33fd3c7f86c59f13ba0a7c9c2b9ed28c40c81debf9b30fec1
   - section_id: md:section:docs/full_task_cycle.md::post-completion-follow-up-deltas
     doc_path: docs/full_task_cycle.md
@@ -863,8 +936,8 @@ sections:
       - Post-completion follow-up deltas
     heading_slug: post-completion-follow-up-deltas
     line_span:
-      - 301
-      - 315
+      - 313
+      - 327
     section_hash: 9ff7e27608e15cefdcf7f3cc1db467306db99d41bbaa3cad9e4e9fdd51f18b79
     summary: Post-completion follow-up deltas
     text: '### Post-completion follow-up deltas
@@ -907,8 +980,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for post completion follow up deltas.
         tracked_hashes:
-          body_hash: 0550f08df72c1e62fcc46443bd468ea25ad77beef7b6390823ef239f8772a677
-          public_contract_hash: 78d63207cbc0d7927d88b0dcdde15e9ff17e5717c470812d3a0867535210d5a9
+          body_hash: 53c0bbae5b685271c4b3b99cb9171c16753abda8574b75798b84bd68934e0638
+          public_contract_hash: 87064567e7301379b50e68b2370b223a442d559c1be3ccbd704db3007a61a865
   - section_id: md:section:docs/full_task_cycle.md::11-recovery-and-maintenance-commands
     doc_path: docs/full_task_cycle.md
     heading_path:
@@ -916,8 +989,8 @@ sections:
       - 11. Recovery And Maintenance Commands
     heading_slug: 11-recovery-and-maintenance-commands
     line_span:
-      - 316
-      - 342
+      - 328
+      - 354
     section_hash: 6a339b232cb35ef97e4f940ea59f76bd590335ee9c9d2674f5a9d436293af4c6
     summary: 11. Recovery And Maintenance Commands
     text: '## 11. Recovery And Maintenance Commands
@@ -977,8 +1050,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 11 recovery and maintenance commands.
         tracked_hashes:
-          body_hash: b861cc050359e92d3d42f20fc540e2a21005b7d1417a892d1e12e47f2473c344
-          public_contract_hash: eeee42ea5b9b4c8dd5d85efafbcce937a0ebc79838536bd6a6010b0b3399f2e5
+          body_hash: 5f415e058bf30bf2c5e36dce4e4adfc33f5d5aa0831ceb9f15981dc3955649e5
+          public_contract_hash: c5448e0ecf462e3745d06d26cbb8b358c50e7852fc27135671d617156dcf86ed
       - source_id: py:module:taskledger/services/lock_diagnostics.py
         source_path: taskledger/services/lock_diagnostics.py
         coverage: architecture
@@ -993,7 +1066,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for 11 recovery and maintenance commands.
         tracked_hashes:
-          body_hash: 2a7d1aac3442b91b30a4f727c566daa5b1339f4d5d13a95a6a5263ade071e485
+          body_hash: ab5fd098f244764fb46dc1c5d9a80675bbed09b841036c2feaadbc2d4fa831b3
           public_contract_hash: 4ae985dd542a559252134a9d0dffb7a987c8694ac4c6b699bbf1daabdf35e169
   - section_id: md:section:docs/full_task_cycle.md::task-centered-traceability
     doc_path: docs/full_task_cycle.md
@@ -1002,8 +1075,8 @@ sections:
       - Task-centered traceability
     heading_slug: task-centered-traceability
     line_span:
-      - 343
-      - 354
+      - 355
+      - 366
     section_hash: 38351c70e47624ccd0822d7eb243956f291f63694f1e49beacf19957240cf6a7
     summary: Task-centered traceability
     text: "## Task-centered traceability
@@ -1043,7 +1116,9 @@ sections:
         tracked_hashes:
           body_hash: a17dfa1f687e5363a49319c0b586296ec8fdadb65e7f3f0fcf9b442f720ffe72
           public_contract_hash: 64fd5109b1e88e236e5b4db7300b086a76a8749f0cb44e4eeb73123416c8f3c2
-last_fresh_scan_version: 6
-last_fresh_hash: 50b61d2c1006dae0107215d8d541e4223628d7a2c689a9339e491d0c67d99cf4
-notes: Documentation links validated after final scan version 6.
-version: 260
+last_fresh_scan_version: 8
+last_fresh_hash: ef76de2c7e29a65bcaf4c29fd3e20ed36cfaeb17820978dcf70d2916b3bbf2d4
+notes:
+  Re-baselined documentation after the schema-3 Documentledger migration and
+  scan source-index refresh; repository source content was unchanged.
+version: 282

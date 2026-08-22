@@ -43,7 +43,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for public surface.
         tracked_hashes:
-          body_hash: 6b94a8907ea1d32446c28da3d8a0c3a4e0ec8d8e219aa8a5b2f66cf5b8bbf2ea
+          body_hash: adfd1f8039c170e4b143ae9e7a795d39fa599d7f4b79d19127d40d688f198d8e
           public_contract_hash: ad8f198fca92ff539fc726767663abc079195db88669431df6f2b3df2426d04d
       - source_id: py:module:taskledger/cli.py
         source_path: taskledger/cli.py
@@ -51,16 +51,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for public surface.
         tracked_hashes:
-          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
-          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+          body_hash: 03439fb945a2d44c44b4034da743b1ad95d7faf9b5e71d36c97c783656015706
+          public_contract_hash: ab6e7ca47495f432f183cabb3fe8db514012b03dd18f51e04f5be93639800a3e
       - source_id: py:module:taskledger/command_inventory.py
         source_path: taskledger/command_inventory.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for public surface.
         tracked_hashes:
-          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
-          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+          body_hash: 17b2dac343c28626a1af86c26c8ddd25d954d81aaf415e5cc69ee555dab3fe3e
+          public_contract_hash: be479011be39cf235d4ec0a4c20b6d7706cd430b5a71ccd3b64277cf0bd2bcb4
   - section_id: md:section:docs/public_surface.md::supported-cli-entries
     doc_path: docs/public_surface.md
     heading_path:
@@ -87,16 +87,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for supported cli entries.
         tracked_hashes:
-          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
-          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+          body_hash: 03439fb945a2d44c44b4034da743b1ad95d7faf9b5e71d36c97c783656015706
+          public_contract_hash: ab6e7ca47495f432f183cabb3fe8db514012b03dd18f51e04f5be93639800a3e
       - source_id: py:module:taskledger/command_inventory.py
         source_path: taskledger/command_inventory.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for supported cli entries.
         tracked_hashes:
-          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
-          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+          body_hash: 17b2dac343c28626a1af86c26c8ddd25d954d81aaf415e5cc69ee555dab3fe3e
+          public_contract_hash: be479011be39cf235d4ec0a4c20b6d7706cd430b5a71ccd3b64277cf0bd2bcb4
   - section_id: md:section:docs/public_surface.md::core-agent-path
     doc_path: docs/public_surface.md
     heading_path:
@@ -150,8 +150,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for core agent path.
         tracked_hashes:
-          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
-          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+          body_hash: 17b2dac343c28626a1af86c26c8ddd25d954d81aaf415e5cc69ee555dab3fe3e
+          public_contract_hash: be479011be39cf235d4ec0a4c20b6d7706cd430b5a71ccd3b64277cf0bd2bcb4
   - section_id: md:section:docs/public_surface.md::top-level-entry-categories
     doc_path: docs/public_surface.md
     heading_path:
@@ -162,7 +162,7 @@ sections:
     line_span:
       - 33
       - 79
-    section_hash: 73c44e546ddcdc741748ca484077b8853c740a278bcb42876cbeae101d558f12
+    section_hash: 571cd493ec58bd266b504684448b3499b596fdb50558a6361d47c234fb347e7e
     summary: Top-level entry categories
     text: '### Top-level entry categories
 
@@ -229,9 +229,11 @@ sections:
 
       `release tag`, `release list`, and `release show`. Taskledger does not
 
-      manage changelog entries or `CHANGELOG.md`; use the separate `releaseledger`
+      manage changelog entries or [docs/changelog.md](changelog.md); use the separate
+      `releaseledger`
 
-      tool for changelog entries, changelog context, and `CHANGELOG.md` builds.
+      tool for changelog entries, changelog context, and [docs/changelog.md](changelog.md)
+      builds.
 
 
       `release *`, `storage move`, `sync git pull/push/sync`, sync hooks,
@@ -248,16 +250,16 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for top level entry categories.
         tracked_hashes:
-          body_hash: d4a945173602e3fc5eda0837131a7e62d9ce19c231fdd03c5860be91a550ac49
-          public_contract_hash: 7ea6d70e3ac117f49e325dd2bd4051cd295ba4e60a4ecd02d6470af8ee339c77
+          body_hash: 03439fb945a2d44c44b4034da743b1ad95d7faf9b5e71d36c97c783656015706
+          public_contract_hash: ab6e7ca47495f432f183cabb3fe8db514012b03dd18f51e04f5be93639800a3e
       - source_id: py:module:taskledger/command_inventory.py
         source_path: taskledger/command_inventory.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for top level entry categories.
         tracked_hashes:
-          body_hash: ba44586b586a4681860adeb5a8e37b6eb6d60502ebcafad9620cc745ed7be4da
-          public_contract_hash: 582f34f5392d3b28dfd7421305c9a0311fb7dd70a320271b5d1bb6868fe2987a
+          body_hash: 17b2dac343c28626a1af86c26c8ddd25d954d81aaf415e5cc69ee555dab3fe3e
+          public_contract_hash: be479011be39cf235d4ec0a4c20b6d7706cd430b5a71ccd3b64277cf0bd2bcb4
   - section_id: md:section:docs/public_surface.md::question-subcommands
     doc_path: docs/public_surface.md
     heading_path:
@@ -323,8 +325,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for plan subcommands.
         tracked_hashes:
-          body_hash: cb965c72613837238caa9c06c48ddc90c65f46be48cf9f16a8ae0284c547010a
-          public_contract_hash: e7e55243935d21a3e695c3661cc560101acee3ab8b10ef9cbeb558b8e04d5957
+          body_hash: b7371f1ffb6d0e13c0b85b89befe815dbdd83cd83f38bbc8f4ab3f6c79f58064
+          public_contract_hash: 881e0327a0a834879f3c9f44128039aec7b26c68a820335b6c9b2e07c2646d5b
   - section_id: md:section:docs/public_surface.md::task-reporting-and-transcripts
     doc_path: docs/public_surface.md
     heading_path:
@@ -377,7 +379,7 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for task reporting and transcripts.
         tracked_hashes:
-          body_hash: 3529d873f73caca5e0481238b6aecf0be13113e207eb7d20e9353e5b58587ca5
+          body_hash: a51d24f00f1eb0994eea7f6b80f1c2921580cc170f0b86bfd3998637901ed95d
           public_contract_hash: f2ed02c45378086fd7fa43c103fba21d6b976638858f3a705a32674e2d49c2dd
       - source_id: py:module:taskledger/services/task_reports.py
         source_path: taskledger/services/task_reports.py
@@ -385,8 +387,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for task reporting and transcripts.
         tracked_hashes:
-          body_hash: c17261bafe940c39aa7fe6b806a9387249f1ad93331046f91762b6036dc03532
-          public_contract_hash: 59b78b662256cd2ae913fd57b0c5d7f9a391ce017d938ede693645b44f4cae8c
+          body_hash: b16bc4bcb785cec338c1e8eb4e2084d590a362cf19641332b7994e68fdbebcf3
+          public_contract_hash: 2ce942ef805cc29033303af838155ead72c978e094dd573e731f6932d3ae8734
   - section_id: md:section:docs/public_surface.md::todo-subcommands
     doc_path: docs/public_surface.md
     heading_path:
@@ -412,15 +414,15 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for todo subcommands.
         tracked_hashes:
-          body_hash: 230c491193480a4f63a4f37dae7c4496e3f85cd0b7aef3ad55ff129c824e602d
-          public_contract_hash: c24c84f30a49469f5b5605df77e6c50ba91838c5ab34633fc3d8262ae9f5f3f3
+          body_hash: a1e694b981396c43299542cf9a6cbfe37d8c5c13e04bef3cf0479dbf18a61dd3
+          public_contract_hash: 3f32b2851a0b0eb06f49442e8d52a6e12dd4cc56b96b83e3e141b484207b029d
       - source_id: py:module:taskledger/services/task_collections.py
         source_path: taskledger/services/task_collections.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for todo subcommands.
         tracked_hashes:
-          body_hash: e4307ef9120f7f9c1aba033c7006e107ae72f1a3b3edbf5b935922b3cf617509
+          body_hash: dc3ffa1c38ba30ffac58a196b7a1690bd40877702b4227c2eb655c67b6b33fb6
           public_contract_hash: 97ae38fd36e3410bf142fb4db9b878a4257c7e0f12b18ae3e95217f840ddb9f9
   - section_id: md:section:docs/public_surface.md::file-subcommands
     doc_path: docs/public_surface.md
@@ -450,8 +452,8 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for file subcommands.
         tracked_hashes:
-          body_hash: 230c491193480a4f63a4f37dae7c4496e3f85cd0b7aef3ad55ff129c824e602d
-          public_contract_hash: c24c84f30a49469f5b5605df77e6c50ba91838c5ab34633fc3d8262ae9f5f3f3
+          body_hash: a1e694b981396c43299542cf9a6cbfe37d8c5c13e04bef3cf0479dbf18a61dd3
+          public_contract_hash: 3f32b2851a0b0eb06f49442e8d52a6e12dd4cc56b96b83e3e141b484207b029d
       - source_id: py:module:taskledger/services/file_links.py
         source_path: taskledger/services/file_links.py
         coverage: architecture
@@ -485,17 +487,90 @@ sections:
         impact: behavior
         reason: Tracks the owning implementation for storage and sync subcommands.
         tracked_hashes:
-          body_hash: 3349da69e06523ec3cb5203e7ad161ed685e2b4a81aa04b4d9452c2197894ae9
-          public_contract_hash: d0209653dd0b44b22715e884c42eadf9b3f48459f6f2ae47d1640e314520fb83
+          body_hash: e74bbb109429bd95876eeba1d5a59dd3c5b54d20ffc7aa02ddf505cef5c9a3c1
+          public_contract_hash: 739f42d040613350b8fb79844650d3950bbceaea48ccbce2eee2797a6ed372f9
       - source_id: py:module:taskledger/cli_sync.py
         source_path: taskledger/cli_sync.py
         coverage: architecture
         impact: behavior
         reason: Tracks the owning implementation for storage and sync subcommands.
         tracked_hashes:
-          body_hash: 649f9c35f045270e6d2c857f1da53e1b67919c09ef6e8549f360923c5b5ee318
-          public_contract_hash: 9c935acecc8d6e971ec55fc6a92a562aaa6b7ad57c55d9ec2d4c4f133174ae4b
-last_fresh_scan_version: 6
-last_fresh_hash: de402d61ed42ad66dbf79495a923276372ca70a9d3173f7694a962fa7a59d96b
-notes: Documentation links validated after final scan version 6.
-version: 258
+          body_hash: 9ada658b1fe0050f9f94e3d97261e22b58863e07ae732cd012c85bfaa451d874
+          public_contract_hash: 344071748193d5759f15b1c01e616de7a87127547f1bafbb2274f540eac0971f
+  - section_id: md:section:docs/public_surface.md::supported-python-api-modules
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - Supported Python API modules
+    heading_slug: supported-python-api-modules
+    line_span:
+      - 126
+      - 147
+    section_hash: a00ab9ca04039f67e67f186d429820ef37d950e2ecc626c0d77198dcc09657d9
+    summary: Supported Python API modules
+    text: "## Supported Python API modules
+
+
+      - `taskledger.api.project`
+
+      - `taskledger.api.tasks`
+
+      - `taskledger.api.plans`
+
+      - `taskledger.api.questions`
+
+      - `taskledger.api.task_runs`
+
+      - `taskledger.api.reviews`
+
+      - `taskledger.api.introductions`
+
+      - `taskledger.api.locks`
+
+      - `taskledger.api.handoff`
+
+      - `taskledger.api.releases`
+
+      - `taskledger.api.storage`
+
+      - `taskledger.api.sync`
+
+      - `taskledger.api.search`
+
+
+      `taskledger.api.task_runs` includes the public lifecycle helpers
+
+      `start_implementation`, `restart_implementation`, `resume_implementation`,
+
+      `start_validation`, and `finish_validation`. `taskledger.api.tasks` also
+
+      exposes `uncancel_task` for restoring truly cancelled tasks to a safe durable
+
+      stage."
+    links: []
+  - section_id: md:section:docs/public_surface.md::removed-legacy-surfaces
+    doc_path: docs/public_surface.md
+    heading_path:
+      - Public surface
+      - Removed legacy surfaces
+    heading_slug: removed-legacy-surfaces
+    line_span:
+      - 148
+      - 152
+    section_hash: 3f04364545352fbc80693bda3450258cf987c538c52a0016798e95f219b455d0
+    summary: Removed legacy surfaces
+    text: "## Removed legacy surfaces
+
+
+      The old item/memory/repo/run/workflow/context/compose execution surfaces are not
+
+      part of the public compatibility contract. The corresponding CLI groups and
+
+      Python API modules have been removed rather than migrated."
+    links: []
+last_fresh_scan_version: 8
+last_fresh_hash: 86cf213bc82e83f8c2b2dcec0644c7fcb51599af8d55ae6792cc24600526a7aa
+notes:
+  Re-baselined documentation after the schema-3 Documentledger migration and
+  scan source-index refresh; repository source content was unchanged.
+version: 282
