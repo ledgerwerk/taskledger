@@ -6,6 +6,7 @@ from typing import cast
 
 from taskledger.domain.models import (
     PlanRecord,
+    TaskHandoffRecord,
     TaskLock,
     TaskRecord,
     TaskRunRecord,
@@ -17,6 +18,7 @@ from taskledger.domain.states import (
     IMPLEMENTABLE_TASK_STAGES,
 )
 from taskledger.domain.task import is_archived_task
+from taskledger.services.actors import resolve_effective_identity
 from taskledger.services.next_action_logic import (
     _answered_question_next_item,
     _command,
@@ -54,6 +56,7 @@ from taskledger.services.worker_pipeline import determine_next_worker_step
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.project_config import load_worker_pipeline_config
 from taskledger.storage.task_store import (
+    list_handoffs,
     list_plans,
     list_questions,
     list_runs,
@@ -115,6 +118,43 @@ def next_action_for_task(
     progress: dict[str, object] = {}
     if is_archived_task(task):
         return _archived_next_action_payload(task)
+
+    review_handoff = _claimed_review_handoff_for_current_worker(workspace_root, task.id)
+    if review_handoff is not None:
+        handoff_id = review_handoff.handoff_id
+        run_id = review_handoff.focus_run_id or "latest implementation run"
+        review_item: dict[str, object] = {
+            "kind": "handoff",
+            "id": handoff_id,
+            "handoff_id": handoff_id,
+            "mode": "review",
+            "context_for": review_handoff.context_for or "reviewer",
+            "scope": review_handoff.scope,
+            "run_id": review_handoff.focus_run_id,
+            "todo_id": review_handoff.todo_id,
+        }
+        return _build_next_action_payload(
+            workspace_root,
+            task,
+            action="review-work",
+            reason=f"Review handoff {handoff_id} is claimed; implementation ownership remains with its current holder.",  # noqa: E501
+            next_item=review_item,
+            blockers=[],
+            progress={
+                "review_handoff": {
+                    "handoff_id": handoff_id,
+                    "run_id": review_handoff.focus_run_id,
+                }
+            },
+            active_stage=active_stage,
+            runs=runs,
+            lock_diagnostics_dict=lock_diagnostics_dict,
+            lock_warning=(
+                f"Implementation run {run_id} may remain locked by another harness; this does not block read-only review."  # noqa: E501
+                if lock is not None
+                else None
+            ),
+        )
     if active_stage == "planning":
         action, reason, next_item, blockers, progress = _planning_next_action(
             workspace_root, task
@@ -204,6 +244,36 @@ def next_action_for_task(
         lock_diagnostics_dict=lock_diagnostics_dict,
         lock_warning=lock_warning,
     )
+
+
+def _claimed_review_handoff_for_current_worker(
+    workspace_root: Path, task_id: str
+) -> TaskHandoffRecord | None:
+    actor, harness = resolve_effective_identity(workspace_root, cwd=workspace_root)
+    for handoff in reversed(list_handoffs(workspace_root, task_id)):
+        if handoff.status != "claimed" or handoff.mode != "review":
+            continue
+        if handoff.claimed_by is None or handoff.claimed_in_harness is None:
+            continue
+        if (handoff.claimed_by.actor_type, handoff.claimed_by.actor_name) != (
+            actor.actor_type,
+            actor.actor_name,
+        ):
+            continue
+        if (
+            handoff.claimed_by.session_id
+            and handoff.claimed_by.session_id != actor.session_id
+        ):
+            continue
+        if handoff.claimed_in_harness.name != harness.name:
+            continue
+        if (
+            handoff.claimed_in_harness.session_id
+            and handoff.claimed_in_harness.session_id != harness.session_id
+        ):
+            continue
+        return handoff
+    return None
 
 
 def _planning_next_action(

@@ -6,10 +6,16 @@ import getpass
 import os
 import socket
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from taskledger.domain.models import ActorRef, HarnessRef
+from taskledger.domain.models import (
+    ActiveActorState,
+    ActiveHarnessState,
+    ActorRef,
+    HarnessRef,
+)
 from taskledger.domain.states import (
     normalize_actor_role,
     normalize_actor_type,
@@ -60,6 +66,94 @@ def _resolve_pids(
     if harness_context:
         return None, command_pid, "unverifiable_harness"
     return command_pid, command_pid, "owner"
+
+
+@dataclass(frozen=True, slots=True)
+class DetectedHarness:
+    """Live harness identity detected from the current process environment."""
+
+    name: str
+    kind: Literal["agent_harness", "manual", "ci", "unknown"]
+    session_id: str | None = None
+
+
+def detect_live_harness() -> DetectedHarness | None:
+    """Detect a provider harness without consulting persisted project state."""
+    taskledger_harness = os.getenv("TASKLEDGER_HARNESS")
+    if taskledger_harness:
+        return DetectedHarness(
+            name=taskledger_harness,
+            kind="agent_harness",
+            session_id=os.getenv("TASKLEDGER_SESSION_ID"),
+        )
+    if os.getenv("OPENCODE_VERSION"):
+        return DetectedHarness(
+            "opencode", "agent_harness", os.getenv("TASKLEDGER_SESSION_ID")
+        )
+    if os.getenv("CODEX_VERSION"):
+        return DetectedHarness(
+            "codex", "agent_harness", os.getenv("TASKLEDGER_SESSION_ID")
+        )
+    if os.getenv("PI_VERSION"):
+        return DetectedHarness(
+            "pi",
+            "agent_harness",
+            os.getenv("PI_SESSION_ID") or os.getenv("TASKLEDGER_SESSION_ID"),
+        )
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        return DetectedHarness("github-actions", "ci", os.getenv("GITHUB_RUN_ID"))
+    return None
+
+
+def _stored_harness_compatible(
+    stored: HarnessRef | ActiveHarnessState, detected: DetectedHarness
+) -> bool:
+    if stored.name != detected.name:
+        return False
+    return not (
+        stored.session_id
+        and detected.session_id
+        and stored.session_id != detected.session_id
+    )
+
+
+def _stored_actor_compatible(
+    stored: ActorRef | ActiveActorState, detected: DetectedHarness
+) -> bool:
+    known_tools = {"codex", "opencode", "pi", "github-actions"}
+    stored_tool = stored.tool or (
+        stored.actor_name if stored.actor_name in known_tools else None
+    )
+    if stored_tool and stored_tool != detected.name:
+        return False
+    return not (
+        stored.session_id
+        and detected.session_id
+        and stored.session_id != detected.session_id
+    )
+
+
+def resolve_effective_identity(
+    workspace_root: Path,
+    *,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
+    cwd: Path | None = None,
+    role: str | None = None,
+) -> tuple[ActorRef, HarnessRef]:
+    """Resolve actor and harness together for a workspace-scoped mutation."""
+    resolved_harness = harness or resolve_harness(
+        session_id=actor.session_id if actor else None,
+        cwd=cwd or workspace_root,
+        workspace_root=workspace_root,
+    )
+    resolved_actor = actor or resolve_actor(
+        role=role,
+        session_id=resolved_harness.session_id,
+        harness_id=resolved_harness.harness_id,
+        workspace_root=workspace_root,
+    )
+    return resolved_actor, resolved_harness
 
 
 def resolve_actor(
@@ -130,11 +224,18 @@ def resolve_actor(
             pid_scope=pid_scope,
         )
 
-    # 3. Check stored state
+    # 3. Prefer a live provider identity over incompatible persisted state.
+    detected = detect_live_harness()
     if workspace_root is not None:
         stored = load_actor_state(workspace_root)
-        if stored is not None:
-            resolved_session_id = stored.session_id or session_id
+        if stored is not None and (
+            detected is None or _stored_actor_compatible(stored, detected)
+        ):
+            resolved_session_id = (
+                stored.session_id
+                or session_id
+                or (detected.session_id if detected else None)
+            )
             resolved_tool = stored.tool or tool
             pid, command_pid, pid_scope = _resolve_pids(
                 tool=resolved_tool,
@@ -192,7 +293,11 @@ def resolve_actor(
         )
 
     if os.getenv("PI_VERSION"):
-        resolved_session_id = session_id or os.getenv("TASKLEDGER_SESSION_ID")
+        resolved_session_id = (
+            session_id
+            or os.getenv("PI_SESSION_ID")
+            or os.getenv("TASKLEDGER_SESSION_ID")
+        )
         pid, command_pid, pid_scope = _resolve_pids(
             tool="pi",
             session_id=resolved_session_id,
@@ -308,27 +413,45 @@ def resolve_harness(
             working_directory=str(cwd) if cwd else None,
         )
 
-    # Check stored state
+    detected = detect_live_harness()
+
+    # Check stored state when it is compatible with the current live session.
     if workspace_root is not None:
         stored = load_harness_state(workspace_root)
-        if stored is not None:
+        if stored is not None and (
+            detected is None or _stored_harness_compatible(stored, detected)
+        ):
             harness_id = next_project_id("harness", [])
             return HarnessRef(
                 harness_id=harness_id,
                 name=stored.name,
                 kind=stored.kind,
-                session_id=stored.session_id or session_id,
+                session_id=stored.session_id
+                or session_id
+                or (detected.session_id if detected else None),
                 working_directory=str(cwd) if cwd else None,
             )
 
     # Auto-detect
+    if os.getenv("PI_VERSION"):
+        harness_id = next_project_id("harness", [])
+        return HarnessRef(
+            harness_id=harness_id,
+            name="pi",
+            kind="agent_harness",
+            session_id=session_id
+            or os.getenv("PI_SESSION_ID")
+            or os.getenv("TASKLEDGER_SESSION_ID"),
+            working_directory=str(cwd) if cwd else None,
+        )
+
     if os.getenv("OPENCODE_VERSION"):
         harness_id = next_project_id("harness", [])
         return HarnessRef(
             harness_id=harness_id,
             name="opencode",
             kind="agent_harness",
-            session_id=session_id,
+            session_id=session_id or os.getenv("TASKLEDGER_SESSION_ID"),
         )
 
     if os.getenv("CODEX_VERSION"):
@@ -337,7 +460,7 @@ def resolve_harness(
             harness_id=harness_id,
             name="codex",
             kind="agent_harness",
-            session_id=session_id,
+            session_id=session_id or os.getenv("TASKLEDGER_SESSION_ID"),
         )
 
     if os.getenv("GITHUB_ACTIONS") == "true":

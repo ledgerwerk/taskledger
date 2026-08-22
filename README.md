@@ -678,6 +678,27 @@ taskledger handoff close handoff-0001 --reason "Implementation started."
 advanced/compatibility read surfaces. Prefer `context --for ...` and
 `handoff show` for agent continuation.
 
+## Independent cross-harness review handoffs
+
+Use a review handoff when another harness should inspect an implementation without taking its lock:
+
+```bash
+taskledger handoff review --run run-0002 --kind code --intended-harness pi --summary "Independent review before implementation continues."
+taskledger handoff claim handoff-0004
+taskledger handoff show handoff-0004 --format markdown
+taskledger review record --handoff handoff-0004 --result pass --summary-file REVIEW.md
+taskledger handoff close handoff-0004 --reason "Review recorded."
+```
+
+Review handoffs are run-scoped and read-only with respect to implementation. The implementation lock remains with its owner; reviewers must not run `implement resume`, mark implementation todos done, or transfer/break that lock merely to review. If a reviewer is interrupted, the claiming session can release the handoff for another reviewer:
+
+```bash
+taskledger handoff release handoff-0004 --reason "Reviewer session interrupted."
+taskledger handoff retarget handoff-0004 --intended-harness codex --reason "Reviewer harness changed."
+```
+
+Persisted actor/harness identity is used by handoff boundaries. Pi sessions are auto-detected when `PI_VERSION`/`PI_SESSION_ID` are available, while incompatible stale stored harness state does not override a detectable live harness.
+
 ## Fresh-worker contexts
 
 Use focused contexts when handing one todo or one review run to a fresh worker:

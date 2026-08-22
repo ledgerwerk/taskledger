@@ -178,6 +178,9 @@ payload = plan_guidance(Path.cwd(), "task-0001")
 - `claim_handoff_api`
 - `close_handoff_api`
 - `cancel_handoff_api`
+- `create_review_handoff`
+- `release_handoff_api`
+- `retarget_handoff_api`
 
 ### Release API
 

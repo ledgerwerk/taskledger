@@ -267,10 +267,13 @@ class WorkspaceSnapshotExclusions:
 
     def excludes(self, path: str) -> bool:
         normalized = path.replace("\\", "/").strip("/")
-        return any(
-            normalized == prefix or normalized.startswith(prefix + "/")
-            for prefix in self.relative_prefixes
-        ) or normalized in self.relative_paths
+        return (
+            any(
+                normalized == prefix or normalized.startswith(prefix + "/")
+                for prefix in self.relative_prefixes
+            )
+            or normalized in self.relative_paths
+        )
 
     def classification(self, path: str) -> str:
         """Classify a path using the same policy as snapshot capture."""

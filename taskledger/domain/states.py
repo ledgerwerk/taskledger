@@ -112,6 +112,8 @@ EventName = Literal[
     "handoff.claimed",
     "handoff.closed",
     "handoff.cancelled",
+    "handoff.released",
+    "handoff.retargeted",
     "release.tagged",
     "run.paused",
     "run.resumed",

@@ -62,6 +62,18 @@ class TaskHandoffRecord:
     claimed_at: str | None = field(default=None)
     claimed_by: ActorRef | None = field(default=None)
     claimed_in_harness: HarnessRef | None = field(default=None)
+    released_at: str | None = field(default=None)
+    released_by: ActorRef | None = field(default=None)
+    released_in_harness: HarnessRef | None = field(default=None)
+    release_reason: str | None = field(default=None)
+    retargeted_at: str | None = field(default=None)
+    retargeted_by: ActorRef | None = field(default=None)
+    retargeted_in_harness: HarnessRef | None = field(default=None)
+    retarget_reason: str | None = field(default=None)
+    git_head: str | None = field(default=None)
+    git_branch: str | None = field(default=None)
+    git_status_short: str | None = field(default=None)
+    git_diff_hash: str | None = field(default=None)
     summary: str | None = field(default=None)
     next_action: str | None = field(default=None)
 
@@ -99,6 +111,24 @@ class TaskHandoffRecord:
             "claimed_in_harness": self.claimed_in_harness.to_dict()
             if self.claimed_in_harness
             else None,
+            "released_at": self.released_at,
+            "released_by": self.released_by.to_dict() if self.released_by else None,
+            "released_in_harness": self.released_in_harness.to_dict()
+            if self.released_in_harness
+            else None,
+            "release_reason": self.release_reason,
+            "retargeted_at": self.retargeted_at,
+            "retargeted_by": self.retargeted_by.to_dict()
+            if self.retargeted_by
+            else None,
+            "retargeted_in_harness": self.retargeted_in_harness.to_dict()
+            if self.retargeted_in_harness
+            else None,
+            "retarget_reason": self.retarget_reason,
+            "git_head": self.git_head,
+            "git_branch": self.git_branch,
+            "git_status_short": self.git_status_short,
+            "git_diff_hash": self.git_diff_hash,
             "summary": self.summary,
             "next_action": self.next_action,
             "context_body": self.context_body,
@@ -164,6 +194,28 @@ class TaskHandoffRecord:
             claimed_in_harness=HarnessRef.from_dict(data.get("claimed_in_harness"))
             if data.get("claimed_in_harness")
             else None,
+            released_at=_optional_string(data.get("released_at")),
+            released_by=ActorRef.from_dict(data.get("released_by"))
+            if data.get("released_by")
+            else None,
+            released_in_harness=HarnessRef.from_dict(data.get("released_in_harness"))
+            if data.get("released_in_harness")
+            else None,
+            release_reason=_optional_string(data.get("release_reason")),
+            retargeted_at=_optional_string(data.get("retargeted_at")),
+            retargeted_by=ActorRef.from_dict(data.get("retargeted_by"))
+            if data.get("retargeted_by")
+            else None,
+            retargeted_in_harness=HarnessRef.from_dict(
+                data.get("retargeted_in_harness")
+            )
+            if data.get("retargeted_in_harness")
+            else None,
+            retarget_reason=_optional_string(data.get("retarget_reason")),
+            git_head=_optional_string(data.get("git_head")),
+            git_branch=_optional_string(data.get("git_branch")),
+            git_status_short=_optional_string(data.get("git_status_short")),
+            git_diff_hash=_optional_string(data.get("git_diff_hash")),
             summary=_optional_string(data.get("summary")),
             next_action=_optional_string(data.get("next_action")),
             context_body=_optional_string(data.get("context_body")) or "",

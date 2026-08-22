@@ -42,7 +42,7 @@ todo next | todo show | todo done | todo status
 implement start | implement resume | implement change | implement scan-changes | implement finish
 validate start | validate status | validate check | validate finish
 review record
-handoff create | handoff show | handoff claim | handoff close
+handoff create | handoff review | handoff show | handoff claim | handoff release | handoff retarget | handoff close
 ```
 
 Treat release, storage movement, branch-ledger changes, repair/migration,
@@ -433,6 +433,26 @@ To receive work:
 3. Run `taskledger next-action`.
 4. Run `taskledger context --for implementation|validation --format markdown`.
 
+## Cross-harness review handoff protocol
+
+For an independent review of an implementation run, the producer creates a review handoff:
+
+```bash
+taskledger handoff review --run RUN_ID --kind code --intended-harness HARNESS
+# or: taskledger handoff create --mode review --for code-reviewer --run RUN_ID ...
+```
+
+The receiving harness claims and reads the durable review context, then records evidence through the handoff:
+
+```bash
+taskledger handoff claim HANDOFF_ID
+taskledger handoff show HANDOFF_ID --format markdown
+taskledger review record --handoff HANDOFF_ID --result pass|fail|blocked --summary-file REVIEW.md
+taskledger handoff close HANDOFF_ID --reason "Review recorded."
+```
+
+A review handoff is read-only with respect to implementation lifecycle. Do not run `implement resume`, acquire/transfer/break the implementation lock, or mark implementation todos done merely to perform review. The implementation owner should stop modifying the reviewed snapshot while review is in progress. If the reviewer is interrupted, use `taskledger handoff release HANDOFF_ID --reason "..."`; use `handoff retarget` only for an open handoff. Same-session claims are idempotent and claim/release history is retained.
+
 ## Never do these things
 
 - Do not finish implementation while `taskledger todo status` shows open, active, or blocked todos.
@@ -548,6 +568,9 @@ taskledger task uncancel --task TASK_REF --actor agent --allow-agent-uncancel --
 taskledger todo done todo-0001 --evidence "uv run pytest -q" --artifact tests/test_parser.py
 taskledger validate check --criterion ac-0001 --status pass --evidence "uv run pytest -q"
 taskledger handoff create --mode implementation --todo todo-0003 --intended-actor agent --intended-harness codex --summary "Ready for focused implementation."
+taskledger handoff review --run run-0002 --kind code --intended-harness pi
+taskledger review record --handoff handoff-0001 --result pass --summary-file ./REVIEW.md
+taskledger handoff release handoff-0001 --reason "Reviewer session interrupted."
 taskledger handoff create --mode validation --intended-actor agent --intended-harness codex --summary "Ready for validation."
 taskledger task dossier --format markdown
 taskledger task export task-0030 -o task-0030.llm.md

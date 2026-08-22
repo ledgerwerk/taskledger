@@ -8,23 +8,29 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from taskledger.api.handoff import create_handoff, create_review_handoff
 from taskledger.cli import app
-from taskledger.domain.models import CodeReviewRecord
+from taskledger.domain.models import ActorRef, CodeReviewRecord, HarnessRef
 from taskledger.errors import LaunchError
 from taskledger.services.code_review import (
     list_code_review_records,
     record_code_review,
     show_code_review,
 )
-from taskledger.services.tasks import archive_task, create_task
+from taskledger.services.handoff_lifecycle import claim_handoff
+from taskledger.services.navigation import next_action_for_task
+from taskledger.services.tasks import archive_task, create_task, start_implementation
 from taskledger.storage.task_store import (
     code_review_markdown_path,
     list_code_reviews,
     resolve_code_review,
+    resolve_lock,
+    resolve_task,
     resolve_v2_paths,
     save_code_review,
 )
 from tests.support.builders import (
+    create_approved_task,
     create_done_task,
     create_implemented_task,
     init_workspace,
@@ -312,3 +318,187 @@ def test_cli_review_record_summary_and_file_are_mutually_exclusive(
     assert result.exit_code != 0
     stderr = result.stderr or result.output
     assert "Use either --summary or --summary-file" in stderr
+
+
+def test_review_handoff_is_run_scoped_and_recording_derives_run(tmp_path: Path) -> None:
+    ws = init_workspace(tmp_path)
+    task_id = create_implemented_task(ws, allow_lint_errors=True)
+    task = resolve_task(ws, task_id)
+    handoff = create_review_handoff(
+        ws,
+        task_id,
+        run_id=task.latest_implementation_run,
+        kind="code",
+        intended_harness="pi",
+    )
+    assert handoff["mode"] == "review"
+    assert handoff["context_for"] == "code-reviewer"
+    assert handoff["scope"] == "run"
+    actor = ActorRef(
+        actor_type="agent",
+        actor_name="pi-reviewer",
+        role="reviewer",
+        session_id="pi-session",
+    )
+    harness = HarnessRef(
+        harness_id="h-pi", name="pi", kind="agent_harness", session_id="pi-session"
+    )
+    claim_handoff(ws, task_id, str(handoff["handoff_id"]), actor=actor, harness=harness)
+    review = record_code_review(
+        ws,
+        task_id,
+        result="fail",
+        body="Found a blocking issue.",
+        handoff_id=str(handoff["handoff_id"]),
+        actor=actor,
+        harness=harness,
+    )
+    assert review.handoff_id == handoff["handoff_id"]
+    assert review.implementation_run == task.latest_implementation_run
+    assert review.reviewer == actor
+    assert review.harness == harness
+
+
+def test_review_handoff_coexists_with_implementation_lock_and_navigation(
+    tmp_path: Path,
+) -> None:
+    ws = init_workspace(tmp_path)
+    task_id = create_approved_task(ws, allow_lint_errors=True)
+    start_implementation(ws, task_id)
+    task = resolve_task(ws, task_id)
+    handoff = create_review_handoff(
+        ws,
+        task_id,
+        run_id=task.latest_implementation_run,
+        kind="general",
+        intended_harness="pi",
+    )
+    actor = ActorRef(
+        actor_type="agent",
+        actor_name="pi-reviewer",
+        role="reviewer",
+        session_id="pi-session",
+    )
+    harness = HarnessRef(
+        harness_id="h-pi", name="pi", kind="agent_harness", session_id="pi-session"
+    )
+    claim_handoff(ws, task_id, str(handoff["handoff_id"]), actor=actor, harness=harness)
+    from taskledger.domain.models import ActiveActorState, ActiveHarnessState
+    from taskledger.storage.task_store import save_actor_state, save_harness_state
+
+    save_actor_state(
+        ws,
+        ActiveActorState(
+            actor_type="agent",
+            actor_name="pi-reviewer",
+            role="reviewer",
+            tool="pi",
+            session_id="pi-session",
+        ),
+    )
+    save_harness_state(
+        ws, ActiveHarnessState(name="pi", kind="agent_harness", session_id="pi-session")
+    )
+    next_payload = next_action_for_task(ws, resolve_task(ws, task_id))
+    assert next_payload["action"] == "review-work"
+    assert next_payload["next_item"]["handoff_id"] == handoff["handoff_id"]
+    lock = resolve_lock(ws, task_id)
+    assert lock is not None
+    assert lock.run_id == task.latest_implementation_run
+    review = record_code_review(
+        ws,
+        task_id,
+        result="pass",
+        body="Read-only review complete.",
+        handoff_id=str(handoff["handoff_id"]),
+        actor=actor,
+        harness=harness,
+    )
+    assert review.handoff_id == handoff["handoff_id"]
+    assert resolve_lock(ws, task_id) is not None
+
+
+def test_implementation_handoff_cannot_be_review_evidence(tmp_path: Path) -> None:
+    ws = init_workspace(tmp_path)
+    task_id = create_implemented_task(ws, allow_lint_errors=True)
+    task = resolve_task(ws, task_id)
+    handoff = create_handoff(
+        ws, task_id, mode="implementation", focus_run_id=task.latest_implementation_run
+    )
+    actor = ActorRef(
+        actor_type="agent", actor_name="reviewer", role="reviewer", session_id="s"
+    )
+    harness = HarnessRef(
+        harness_id="h", name="pi", kind="agent_harness", session_id="s"
+    )
+    claim_handoff(ws, task_id, str(handoff["handoff_id"]), actor=actor, harness=harness)
+    with pytest.raises(
+        LaunchError, match="cannot be used as independent review evidence"
+    ):
+        record_code_review(
+            ws,
+            task_id,
+            result="fail",
+            body="wrong mode",
+            handoff_id=str(handoff["handoff_id"]),
+            actor=actor,
+            harness=harness,
+        )
+
+
+def test_cli_review_handoff_convenience_exposes_run_scoped_review(
+    tmp_path: Path,
+) -> None:
+    ws = init_workspace(tmp_path)
+    task_id = create_implemented_task(ws, allow_lint_errors=True)
+    result = _invoke(
+        ws,
+        [
+            "handoff",
+            "review",
+            "--task",
+            task_id,
+            "--kind",
+            "code",
+            "--intended-harness",
+            "pi",
+        ],
+    )
+    assert "created review handoff" in result.stdout
+    assert f"run={resolve_task(ws, task_id).latest_implementation_run}" in result.stdout
+
+
+def test_review_handoff_records_snapshot_drift(tmp_path: Path) -> None:
+    _git_required()
+    ws = init_workspace(tmp_path)
+    task_id = create_implemented_task(ws, allow_lint_errors=True)
+    _run(["git", "init"], ws)
+    _run(["git", "config", "user.email", "test@example.com"], ws)
+    _run(["git", "config", "user.name", "Test User"], ws)
+    sample = ws / "sample.txt"
+    sample.write_text("before\n", encoding="utf-8")
+    _run(["git", "add", "sample.txt"], ws)
+    _run(["git", "commit", "-m", "base"], ws)
+    task = resolve_task(ws, task_id)
+    handoff = create_review_handoff(
+        ws, task_id, run_id=task.latest_implementation_run, kind="code"
+    )
+    actor = ActorRef(
+        actor_type="agent", actor_name="reviewer", role="reviewer", session_id="s"
+    )
+    harness = HarnessRef(
+        harness_id="h", name="pi", kind="agent_harness", session_id="s"
+    )
+    claim_handoff(ws, task_id, str(handoff["handoff_id"]), actor=actor, harness=harness)
+    sample.write_text("after\n", encoding="utf-8")
+    review = record_code_review(
+        ws,
+        task_id,
+        result="blocked",
+        body="Snapshot changed.",
+        from_git=True,
+        handoff_id=str(handoff["handoff_id"]),
+        actor=actor,
+        harness=harness,
+    )
+    assert review.snapshot_drift is True

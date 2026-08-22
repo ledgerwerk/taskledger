@@ -90,6 +90,7 @@ def register_review_commands(app: typer.Typer) -> None:
             "result": review.result,
             "source": review.source,
             "worker_step_id": review.worker_step_id,
+            "handoff_id": review.handoff_id,
             "git_commit": review.git_commit,
             "git_branch": review.git_branch,
             "changed_paths_count": changed_paths_count,
@@ -100,12 +101,22 @@ def register_review_commands(app: typer.Typer) -> None:
             warnings.append(
                 "Working tree source is clean; review recorded without changed paths."
             )
+        if review.snapshot_drift:
+            warnings.append(
+                "Review snapshot drift detected: the workspace changed after the handoff was created."  # noqa: E501
+            )
         emit_payload(
             ctx,
             payload,
             human=(
                 f"recorded code review {review.review_id}  "
                 f"result={review.result}  source={review.source}"
+                + (f"  handoff={review.handoff_id}" if review.handoff_id else "")
+                + (
+                    f'\nNext: taskledger handoff close {review.handoff_id} --reason "Review recorded as {review.review_id}."'  # noqa: E501
+                    if review.handoff_id
+                    else ""
+                )
             ),
             warnings=warnings or None,
         )

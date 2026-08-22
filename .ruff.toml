@@ -16,7 +16,8 @@ exclude = ["setup/*", "notebooks/*"]
 exclude = ["setup/*", "notebooks/*"]
 
 [lint.per-file-ignores]
-"__init__.py" = ["F401", "I001"]  # ignore unused and unsorted imports in __init__.py
+"__init__.py" = ["F401", "F403", "I001"]  # ignore re-export imports in package initializers
+"tests/conftest.py" = ["E402"]  # path bootstrap must precede test-support imports
 "__manifest__.py" = ["B018"]  # useless expression
 
 [lint.isort]

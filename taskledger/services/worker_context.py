@@ -117,6 +117,12 @@ def guardrails_for_context_for(context_for: str) -> list[str]:
             "Do not change validation state.",
             "Do not approve task completion.",
         ]
+    if context_for == "reviewer":
+        return [
+            "Review the focused implementation run and its recorded evidence.",
+            "Perform read-only analysis; implementation ownership and locks remain with the producer.",  # noqa: E501
+            "Record durable review evidence bound to this handoff and close or release it when finished.",  # noqa: E501
+        ]
     return ["Use this handoff as the source of truth for the next step."]
 
 
@@ -161,15 +167,21 @@ def worker_contract(context_for: str) -> tuple[list[str], list[str]]:
                 "give broad style advice unrelated to compliance",
             ],
         )
-    if context_for == "code-reviewer":
+    if context_for in {"code-reviewer", "reviewer"}:
         return (
             [
-                "judge maintainability, correctness risk, testing, and safety",
-                "cite concrete evidence for risky changes",
+                "review the focused implementation run and relevant recorded evidence",
+                "preserve accepted plan and task constraints",
+                "report blocking and non-blocking findings with concrete evidence",
+                "record durable review evidence bound to the handoff/run",
+                "close or release the handoff when finished or interrupted",
             ],
             [
-                "change validation state",
-                "approve task completion",
+                "resume implementation solely to perform review",
+                "take ownership of implementation todos",
+                "mutate implementation evidence or validation state",
+                "break or steal the implementation lock",
+                "silently broaden a run-scoped review into unrelated todos",
             ],
         )
     if context_for == "planner":

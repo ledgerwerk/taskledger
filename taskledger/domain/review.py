@@ -37,6 +37,7 @@ class CodeReviewRecord:
     harness: HarnessRef | None = None
     worker_step_id: str | None = None
     handoff_id: str | None = None
+    snapshot_drift: bool | None = None
 
     git_branch: str | None = None
     git_commit: str | None = None
@@ -69,6 +70,7 @@ class CodeReviewRecord:
             "harness": self.harness.to_dict() if self.harness is not None else None,
             "worker_step_id": self.worker_step_id,
             "handoff_id": self.handoff_id,
+            "snapshot_drift": self.snapshot_drift,
             "git_branch": self.git_branch,
             "git_commit": self.git_commit,
             "git_status_short": self.git_status_short,
@@ -88,6 +90,10 @@ class CodeReviewRecord:
         source = _optional_string(data.get("source")) or "manual"
         if source not in {"working_tree", "commit", "manual"}:
             raise LaunchError(f"Unsupported code review source: {source}")
+        raw_snapshot_drift = data.get("snapshot_drift")
+        snapshot_drift = (
+            raw_snapshot_drift if isinstance(raw_snapshot_drift, bool) else None
+        )
         return cls(
             review_id=_string_value(data, "review_id"),
             task_id=_string_value(data, "task_id"),
@@ -103,6 +109,7 @@ class CodeReviewRecord:
             else None,
             worker_step_id=_optional_string(data.get("worker_step_id")),
             handoff_id=_optional_string(data.get("handoff_id")),
+            snapshot_drift=snapshot_drift,
             git_branch=_optional_string(data.get("git_branch")),
             git_commit=_optional_string(data.get("git_commit")),
             git_status_short=_optional_string(data.get("git_status_short")),

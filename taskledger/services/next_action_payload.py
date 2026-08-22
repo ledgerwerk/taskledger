@@ -303,6 +303,7 @@ def _next_action_command(action: str) -> str | None:
         ),
         "repair-lock": "taskledger lock show",
         "repair-run-state": "taskledger doctor",
+        "review-work": "taskledger handoff show HANDOFF_ID --format markdown",
     }.get(action)
 
 
@@ -343,6 +344,8 @@ def _primary_command_for_next_item(
             return _implement_resume_command(item_id)
         if action == "repair-active-stage":
             return f"taskledger task show --task {item_id}"
+    if kind == "handoff" and isinstance(item_id, str):
+        return f"taskledger handoff show {item_id} --format markdown"
     if kind == "lock":
         task_id = next_item.get("task_id")
         if isinstance(task_id, str):
@@ -419,6 +422,20 @@ def _commands_for_next_item(
                 "context",
                 "Show answered questions",
                 "taskledger question answers",
+            ),
+        ]
+    if item_kind == "handoff" and isinstance(item_id, str):
+        return [
+            _command(
+                "inspect",
+                "Show review handoff",
+                f"taskledger handoff show {item_id} --format markdown",
+                primary=True,
+            ),
+            _command(
+                "record",
+                "Record review evidence",
+                f"taskledger review record --handoff {item_id} --result pass|fail|blocked ...",  # noqa: E501
             ),
         ]
     if item_kind == "todo" and isinstance(item_id, str):

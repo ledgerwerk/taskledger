@@ -10,8 +10,11 @@ from taskledger.api.handoff import (
     claim_handoff_api,
     close_handoff_api,
     create_handoff,
+    create_review_handoff,
     list_all_handoffs,
+    release_handoff_api,
     render_handoff,
+    retarget_handoff_api,
     show_handoff,
 )
 from taskledger.api.introductions import (
@@ -905,7 +908,7 @@ def register_lock_v2_commands(app: typer.Typer) -> None:
         )
 
 
-def register_handoff_v2_commands(app: typer.Typer) -> None:
+def register_handoff_v2_commands(app: typer.Typer) -> None:  # noqa: C901
     @app.command("create")
     def create_command(
         ctx: typer.Context,
@@ -947,6 +950,48 @@ def register_handoff_v2_commands(app: typer.Typer) -> None:
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
         emit_payload(ctx, payload, human=f"created handoff {payload['handoff_id']}")
 
+    @app.command("review")
+    def review_handoff_command(
+        ctx: typer.Context,
+        kind: Annotated[
+            str, typer.Option("--kind", help="Review kind: code, spec, or general.")
+        ] = "general",
+        focus_run_id: Annotated[str | None, typer.Option("--run")] = None,
+        intended_harness: Annotated[
+            str | None, typer.Option("--intended-harness")
+        ] = None,
+        intended_actor: Annotated[str, typer.Option("--intended-actor")] = "agent",
+        intended_actor_name: Annotated[
+            str | None, typer.Option("--intended-actor-name")
+        ] = None,
+        summary: Annotated[str | None, typer.Option("--summary")] = None,
+        task_ref: TaskOption = None,
+    ) -> None:
+        state = cli_state_from_context(ctx)
+        try:
+            task = resolve_cli_task(state.cwd, task_ref)
+            payload = create_review_handoff(
+                state.cwd,
+                task.id,
+                run_id=focus_run_id,
+                kind=kind,
+                intended_actor_type=intended_actor,
+                intended_actor_name=intended_actor_name,
+                intended_harness=intended_harness,
+                summary=summary,
+            )
+        except LaunchError as exc:
+            emit_error(ctx, exc)
+            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+        emit_payload(
+            ctx,
+            payload,
+            human=(
+                f"created review handoff {payload['handoff_id']} "
+                f"run={payload.get('focus_run_id')} context={payload.get('context_for')}"  # noqa: E501
+            ),
+        )
+
     @app.command("list")
     def list_handoff_command(
         ctx: typer.Context,
@@ -979,7 +1024,64 @@ def register_handoff_v2_commands(app: typer.Typer) -> None:
         except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-        emit_payload(ctx, payload, human=f"claimed handoff {payload['handoff_id']}")
+        claim_lines = [f"claimed handoff {payload['handoff_id']}"]
+        if payload.get("mode") == "review":
+            claim_lines.extend(
+                [
+                    f"context: {payload.get('context_for') or 'reviewer'}",
+                    f"implementation run: {payload.get('focus_run_id') or '(latest)'}",
+                    "This is read-only review work; the implementation lock does not need to be acquired or transferred.",  # noqa: E501
+                    f"Next: taskledger review record --handoff {payload['handoff_id']} --result pass|fail|blocked ...",  # noqa: E501
+                ]
+            )
+        emit_payload(ctx, payload, human="\n".join(claim_lines))
+
+    @app.command("release")
+    def release_command(
+        ctx: typer.Context,
+        handoff_id: Annotated[str, typer.Argument(help="Handoff id.")],
+        reason: Annotated[str, typer.Option("--reason")],
+        task_ref: TaskOption = None,
+    ) -> None:
+        state = cli_state_from_context(ctx)
+        try:
+            task = resolve_cli_task(state.cwd, task_ref)
+            payload = release_handoff_api(state.cwd, task.id, handoff_id, reason=reason)
+        except LaunchError as exc:
+            emit_error(ctx, exc)
+            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+        emit_payload(
+            ctx,
+            payload,
+            human=f"released handoff {payload['handoff_id']}; it is open for reclaim",
+        )
+
+    @app.command("retarget")
+    def retarget_command(
+        ctx: typer.Context,
+        handoff_id: Annotated[str, typer.Argument(help="Handoff id.")],
+        intended_harness: Annotated[str, typer.Option("--intended-harness")],
+        reason: Annotated[str, typer.Option("--reason")],
+        task_ref: TaskOption = None,
+    ) -> None:
+        state = cli_state_from_context(ctx)
+        try:
+            task = resolve_cli_task(state.cwd, task_ref)
+            payload = retarget_handoff_api(
+                state.cwd,
+                task.id,
+                handoff_id,
+                intended_harness=intended_harness,
+                reason=reason,
+            )
+        except LaunchError as exc:
+            emit_error(ctx, exc)
+            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+        emit_payload(
+            ctx,
+            payload,
+            human=f"retargeted handoff {payload['handoff_id']} to {payload['intended_harness']}",  # noqa: E501
+        )
 
     @app.command("close")
     def close_command(

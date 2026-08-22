@@ -621,3 +621,45 @@ class _env_vars:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
+
+def test_resolve_harness_detects_pi_session(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    with _env_vars({"PI_VERSION": "0.1", "PI_SESSION_ID": "pi-session"}):
+        harness = resolve_harness(workspace_root=tmp_path, cwd=tmp_path)
+    assert harness.name == "pi"
+    assert harness.kind == "agent_harness"
+    assert harness.session_id == "pi-session"
+
+
+def test_detected_codex_does_not_inherit_stale_pi_state(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    save_actor_state(
+        tmp_path,
+        ActiveActorState(
+            actor_type="agent", actor_name="pi-reviewer", tool="pi", session_id="pi-a"
+        ),
+    )
+    save_harness_state(
+        tmp_path,
+        ActiveHarnessState(name="pi", kind="agent_harness", session_id="pi-a"),
+    )
+    with _env_vars({"CODEX_VERSION": "1", "TASKLEDGER_SESSION_ID": "codex-b"}):
+        actor = resolve_actor(workspace_root=tmp_path)
+        harness = resolve_harness(workspace_root=tmp_path, cwd=tmp_path)
+    assert actor.actor_name == "codex"
+    assert actor.session_id == "codex-b"
+    assert harness.name == "codex"
+    assert harness.session_id == "codex-b"
+
+
+def test_stored_pi_state_is_used_when_no_live_harness(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    save_harness_state(
+        tmp_path,
+        ActiveHarnessState(name="pi", kind="agent_harness", session_id="pi-a"),
+    )
+    with _env_vars({"PI_VERSION": "", "CODEX_VERSION": "", "OPENCODE_VERSION": ""}):
+        harness = resolve_harness(workspace_root=tmp_path, cwd=tmp_path)
+    assert harness.name == "pi"
+    assert harness.session_id == "pi-a"

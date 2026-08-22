@@ -91,8 +91,11 @@ AGENT_GOLDEN_PATH_COMMANDS: tuple[str, ...] = (
     "validate finish",
     "review record",
     "handoff create",
+    "handoff review",
     "handoff show",
     "handoff claim",
+    "handoff release",
+    "handoff retarget",
     "handoff close",
 )
 
@@ -881,6 +884,14 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         ledger_effect=EFFECT_READ,
     ),
     # ── handoffs ──────────────────────────────────────────────────
+    "handoff review": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "ledger_mutation",
+        PRIMARY,
+        PHASE_REVIEW,
+        tier=TIER_CRITICAL,
+        ledger_effect=EFFECT_WRITE,
+    ),
     "handoff create": CommandSpec(
         STABLE_FOR_AGENTS,
         "ledger_mutation",
@@ -892,6 +903,20 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         STABLE_FOR_AGENTS,
         "ledger_mutation",
         PRIMARY,
+        PHASE_TRANSFER,
+        ledger_effect=EFFECT_WRITE,
+    ),
+    "handoff release": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "ledger_mutation",
+        PRIMARY,
+        PHASE_TRANSFER,
+        ledger_effect=EFFECT_WRITE,
+    ),
+    "handoff retarget": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "ledger_mutation",
+        SUPPORT,
         PHASE_TRANSFER,
         ledger_effect=EFFECT_WRITE,
     ),

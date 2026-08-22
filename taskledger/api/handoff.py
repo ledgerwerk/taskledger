@@ -24,6 +24,11 @@ from taskledger.storage.task_store import (
 )
 
 
+def _snapshot_string(metadata: dict[str, object], key: str) -> str | None:
+    value = metadata.get(key)
+    return value if isinstance(value, str) else None
+
+
 def create_handoff(
     workspace_root: Path,
     task_ref: str,
@@ -44,13 +49,13 @@ def create_handoff(
 ) -> dict[str, object]:
     """Create and save a handoff record."""
     from taskledger.ids import next_project_id
-    from taskledger.services.actors import resolve_actor, resolve_harness
+    from taskledger.services.actors import resolve_effective_identity
     from taskledger.timeutils import utc_now_iso
 
-    resolved_actor = actor or resolve_actor()
-    resolved_harness = harness or resolve_harness()
-
     task = resolve_task(workspace_root, task_ref)
+    resolved_actor, resolved_harness = resolve_effective_identity(
+        workspace_root, actor=actor, harness=harness, cwd=workspace_root
+    )
     if mode is None and worker_step_id is None:
         raise LaunchError("Handoff creation requires --mode or --worker.")
     payload = build_handoff_payload(
@@ -68,6 +73,14 @@ def create_handoff(
     from taskledger.storage.common import content_hash as lc_content_hash
 
     context_hash = f"sha256:{lc_content_hash(context_body)}"
+    snapshot_metadata: dict[str, object] = {}
+    if str(payload.get("mode")) == "review":
+        try:
+            from taskledger.services.code_review import _collect_working_tree_metadata
+
+            snapshot_metadata = _collect_working_tree_metadata(workspace_root)
+        except LaunchError:
+            snapshot_metadata = {}
     existing_handoffs = list_handoffs(workspace_root, task.id)
     existing_ids = [h.handoff_id for h in existing_handoffs]
     resolved_mode = cast(HandoffMode, str(payload["mode"]))
@@ -92,6 +105,7 @@ def create_handoff(
         context_hash=context_hash,
         generated_at=utc_now_iso(),
         status="open",
+        lock_policy="retain" if resolved_mode == "review" else "none",
         created_by=resolved_actor,
         created_from_harness=resolved_harness,
         intended_actor_type=(
@@ -100,8 +114,20 @@ def create_handoff(
         intended_actor_name=intended_actor_name,
         intended_harness=intended_harness,
         summary=summary,
-        next_action=next_action,
+        next_action=(
+            next_action
+            or (
+                f"Review implementation run {focus_run_id} using {resolved_context or 'reviewer'}. "  # noqa: E501
+                f"Record the review with --handoff {handoff_id} and close the handoff."
+                if resolved_mode == "review" and focus_run_id
+                else None
+            )
+        ),
         context_body=context_body,
+        git_head=_snapshot_string(snapshot_metadata, "git_head"),
+        git_branch=_snapshot_string(snapshot_metadata, "git_branch"),
+        git_status_short=_snapshot_string(snapshot_metadata, "git_status_short"),
+        git_diff_hash=_snapshot_string(snapshot_metadata, "git_diff_hash"),
     )
     path = save_handoff(workspace_root, handoff)
     result = handoff.to_dict()
@@ -248,12 +274,114 @@ def cancel_handoff_api(
     return handoff.to_dict()
 
 
+def release_handoff_api(
+    workspace_root: Path,
+    task_ref: str,
+    handoff_ref: str,
+    *,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
+    reason: str,
+) -> dict[str, object]:
+    from taskledger.services.handoff_lifecycle import release_handoff
+
+    task = resolve_task(workspace_root, task_ref)
+    return release_handoff(
+        workspace_root,
+        task.id,
+        handoff_ref,
+        actor=actor,
+        harness=harness,
+        reason=reason,
+    ).to_dict()
+
+
+def retarget_handoff_api(
+    workspace_root: Path,
+    task_ref: str,
+    handoff_ref: str,
+    *,
+    intended_harness: str,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
+    reason: str,
+) -> dict[str, object]:
+    from taskledger.services.handoff_lifecycle import retarget_handoff
+
+    task = resolve_task(workspace_root, task_ref)
+    return retarget_handoff(
+        workspace_root,
+        task.id,
+        handoff_ref,
+        intended_harness=intended_harness,
+        actor=actor,
+        harness=harness,
+        reason=reason,
+    ).to_dict()
+
+
+def create_review_handoff(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    run_id: str | None = None,
+    kind: str = "general",
+    intended_actor_type: str = "agent",
+    intended_actor_name: str | None = None,
+    intended_harness: str | None = None,
+    summary: str | None = None,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
+) -> dict[str, object]:
+    task = resolve_task(workspace_root, task_ref)
+    from taskledger.storage.task_store import list_runs
+
+    if run_id is None:
+        implementation_runs = [
+            r
+            for r in list_runs(workspace_root, task.id)
+            if r.run_type == "implementation"
+        ]
+        if len(implementation_runs) != 1:
+            if not implementation_runs:
+                raise LaunchError(
+                    "Review handoff requires an implementation run; none exists."
+                )
+            raise LaunchError(
+                "Review handoff requires --run when multiple implementation runs exist."
+            )
+        run_id = implementation_runs[0].run_id
+    context_for = {
+        "code": "code-reviewer",
+        "spec": "spec-reviewer",
+        "general": "reviewer",
+    }.get(kind)
+    if context_for is None:
+        raise LaunchError("Review kind must be code, spec, or general.")
+    return create_handoff(
+        workspace_root,
+        task.id,
+        mode="review",
+        context_for=context_for,
+        focus_run_id=run_id,
+        intended_actor_type=intended_actor_type,
+        intended_actor_name=intended_actor_name,
+        intended_harness=intended_harness,
+        summary=summary,
+        actor=actor,
+        harness=harness,
+    )
+
+
 __all__ = [
     "cancel_handoff_api",
+    "create_review_handoff",
     "claim_handoff_api",
     "close_handoff_api",
     "create_handoff",
     "list_all_handoffs",
     "render_handoff",
+    "release_handoff_api",
+    "retarget_handoff_api",
     "show_handoff",
 ]

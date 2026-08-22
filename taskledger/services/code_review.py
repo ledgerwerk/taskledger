@@ -64,11 +64,41 @@ def record_code_review(
             "Code review summary must not be empty.", EXIT_CODE_BAD_INPUT
         )
 
-    effective_run_id = run_id or task.latest_implementation_run
+    handoff = None
+    if handoff_id:
+        handoff = resolve_handoff(workspace_root, task.id, handoff_id)
+        if (
+            handoff.mode != "review"
+            or handoff.context_for not in ALLOWED_WORKER_REVIEW_CONTEXTS
+        ):
+            raise _tasks._cli_error(
+                f"{handoff.handoff_id} is an {handoff.mode} handoff (context_for={handoff.context_for or 'none'}). "  # noqa: E501
+                "It cannot be used as independent review evidence. Create a review handoff with "  # noqa: E501
+                "taskledger handoff create --mode review --for code-reviewer --run RUN_ID.",  # noqa: E501
+                EXIT_CODE_INVALID_TRANSITION,
+            )
+        if handoff.status != "claimed":
+            raise _tasks._cli_error(
+                f"Review handoff {handoff.handoff_id} must be claimed before recording review evidence.",  # noqa: E501
+                EXIT_CODE_INVALID_TRANSITION,
+            )
+        if worker_step_id is None:
+            worker_step_id = handoff.worker_step_id
+
+    effective_run_id = (
+        (handoff.focus_run_id if handoff is not None else None)
+        or run_id
+        or task.latest_implementation_run
+    )
     if effective_run_id is None:
         raise _tasks._cli_error(
             "Task does not have an implementation run to attach review evidence.",
             EXIT_CODE_MISSING,
+        )
+    if handoff is not None and run_id is not None and run_id != handoff.focus_run_id:
+        raise _tasks._cli_error(
+            f"Review handoff {handoff.handoff_id} is focused on {handoff.focus_run_id}, not {run_id}.",  # noqa: E501
+            EXIT_CODE_BAD_INPUT,
         )
     run = resolve_run(workspace_root, task.id, effective_run_id)
     if run.run_type != "implementation":
@@ -82,12 +112,15 @@ def record_code_review(
 
     if worker_step_id:
         _validate_worker_step(workspace_root, worker_step_id)
-    if handoff_id:
+    if handoff is not None:
         _validate_handoff(
             workspace_root,
             task_id=task.id,
-            handoff_id=handoff_id,
+            handoff_id=handoff.handoff_id,
             worker_step_id=worker_step_id,
+            actor=actor,
+            harness=harness,
+            effective_run_id=run.run_id,
         )
 
     git_metadata = _resolve_git_metadata(
@@ -95,6 +128,15 @@ def record_code_review(
         source=source,
         commit=commit,
     )
+    snapshot_drift = None
+    if handoff is not None and handoff.git_diff_hash:
+        try:
+            current_snapshot = _collect_working_tree_metadata(workspace_root)
+        except LaunchError:
+            current_snapshot = {}
+        current_hash = current_snapshot.get("git_diff_hash")
+        if isinstance(current_hash, str):
+            snapshot_drift = current_hash != handoff.git_diff_hash
 
     review = CodeReviewRecord(
         review_id=next_project_id(
@@ -112,6 +154,7 @@ def record_code_review(
         harness=harness if harness is not None else _tasks._default_harness(),
         worker_step_id=worker_step_id,
         handoff_id=handoff_id,
+        snapshot_drift=snapshot_drift,
         git_branch=_optional_string(git_metadata.get("git_branch")),
         git_commit=_optional_string(git_metadata.get("git_commit")),
         git_status_short=_optional_string(git_metadata.get("git_status_short")),
@@ -196,8 +239,53 @@ def _validate_handoff(
     task_id: str,
     handoff_id: str,
     worker_step_id: str | None,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
+    effective_run_id: str | None = None,
 ) -> None:
     handoff = resolve_handoff(workspace_root, task_id, handoff_id)
+    if (
+        handoff.mode != "review"
+        or handoff.context_for not in ALLOWED_WORKER_REVIEW_CONTEXTS
+    ):
+        raise _tasks._cli_error(
+            f"{handoff.handoff_id} is not a claimed review handoff; use --mode review.",
+            EXIT_CODE_INVALID_TRANSITION,
+        )
+    if handoff.status != "claimed":
+        raise _tasks._cli_error(
+            f"Review handoff {handoff.handoff_id} is {handoff.status}; claim it before recording review evidence.",  # noqa: E501
+            EXIT_CODE_INVALID_TRANSITION,
+        )
+    if (
+        handoff.focus_run_id
+        and effective_run_id
+        and handoff.focus_run_id != effective_run_id
+    ):
+        raise _tasks._cli_error(
+            f"Review handoff {handoff.handoff_id} is focused on {handoff.focus_run_id}, not {effective_run_id}.",  # noqa: E501
+            EXIT_CODE_BAD_INPUT,
+        )
+    if actor is not None and handoff.claimed_by is not None:
+        if (actor.actor_type, actor.actor_name, actor.session_id) != (
+            handoff.claimed_by.actor_type,
+            handoff.claimed_by.actor_name,
+            handoff.claimed_by.session_id,
+        ):
+            raise _tasks._cli_error(
+                f"Review handoff {handoff.handoff_id} is claimed by {handoff.claimed_by.actor_name} in session {handoff.claimed_by.session_id}; reviewer identity does not match.",  # noqa: E501
+                EXIT_CODE_BAD_INPUT,
+            )
+    if harness is not None and handoff.claimed_in_harness is not None:
+        if (harness.name, harness.session_id) != (
+            handoff.claimed_in_harness.name,
+            handoff.claimed_in_harness.session_id,
+        ):
+            raise _tasks._cli_error(
+                f"Review handoff {handoff.handoff_id} is claimed in harness {handoff.claimed_in_harness.name}/{handoff.claimed_in_harness.session_id}; reviewer harness does not match.",  # noqa: E501
+                EXIT_CODE_BAD_INPUT,
+            )
+
     if handoff.task_id != task_id:
         raise _tasks._cli_error(
             f"Handoff {handoff_id} belongs to {handoff.task_id}, not {task_id}.",
@@ -234,6 +322,7 @@ def _resolve_git_metadata(
 
 def _collect_working_tree_metadata(workspace_root: Path) -> dict[str, object]:
     _ensure_git_workspace(workspace_root)
+    head = _git_text(workspace_root, ("git", "rev-parse", "HEAD")).strip()
     branch = _git_text(workspace_root, ("git", "branch", "--show-current")).strip()
     status = _git_text(workspace_root, ("git", "status", "--short")).strip()
     diff_stat = _git_text(workspace_root, ("git", "diff", "--stat")).strip()
@@ -253,6 +342,7 @@ def _collect_working_tree_metadata(workspace_root: Path) -> dict[str, object]:
         (unstaged_binary + "\n---STAGED---\n" + staged_binary).encode("utf-8")
     ).hexdigest()
     return {
+        "git_head": head or None,
         "git_branch": branch or "(detached)",
         "git_status_short": status or None,
         "git_diff_stat": diff_stat or None,
