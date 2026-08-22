@@ -36,6 +36,22 @@ def _make_runner() -> CliRunner:
 runner = _make_runner()
 
 
+@pytest.fixture(autouse=True)
+def _clear_provider_harness_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep tests independent of the harness running the test process."""
+    for variable in (
+        "TASKLEDGER_HARNESS",
+        "TASKLEDGER_SESSION_ID",
+        "PI_VERSION",
+        "PI_SESSION_ID",
+        "CODEX_VERSION",
+        "OPENCODE_VERSION",
+        "GITHUB_ACTIONS",
+        "GITHUB_RUN_ID",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+
+
 def _init_project(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
     assert result.exit_code == 0
@@ -663,3 +679,12 @@ def test_stored_pi_state_is_used_when_no_live_harness(tmp_path: Path) -> None:
         harness = resolve_harness(workspace_root=tmp_path, cwd=tmp_path)
     assert harness.name == "pi"
     assert harness.session_id == "pi-a"
+
+
+def test_resolve_harness_detects_github_actions(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    with _env_vars({"GITHUB_ACTIONS": "true", "GITHUB_RUN_ID": "run-123"}):
+        harness = resolve_harness(workspace_root=tmp_path, cwd=tmp_path)
+    assert harness.name == "github-actions"
+    assert harness.kind == "ci"
+    assert harness.session_id == "run-123"
