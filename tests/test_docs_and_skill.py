@@ -529,3 +529,10 @@ def test_skill_documents_structured_approval_presentation_protocol() -> None:
     assert "If review output reports blockers, do not ask for approval." in skill
     assert "Bad approval prompt:" in skill
     assert "Good approval prompt:" in skill
+
+
+def test_skill_distinguishes_probe_failure_from_target_failure() -> None:
+    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
+    assert "probe/setup failure" in skill
+    assert "not automatically a failed acceptance criterion" in skill
+    assert "normalize" in skill

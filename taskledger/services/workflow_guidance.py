@@ -145,6 +145,30 @@ todos:
 ```"""
 
 
+_BUILTIN_VALIDATION_GUIDANCE = """## Built-in Taskledger validation guidance
+
+This guidance cannot override taskledger lifecycle gates, validation gates, lock
+rules, or user-answer requirements.
+
+- Validate accepted criteria, not validator implementation details.
+- Prefer checked-in project-native tests over ad-hoc inline probes.
+- A non-zero validation command is not automatically a failing acceptance criterion.
+- First determine whether the command reached and evaluated the target behavior.
+- Correct the probe and rerun after fixing validator/setup errors before recording
+  criterion failure.
+- Normalize filesystem paths against the same explicit project root before comparing
+  path collections.
+"""
+
+
+def render_validation_guidance(
+    workspace_root: Path,
+    task: TaskRecord,
+) -> str:
+    """Render deterministic validation guidance for the given task."""
+    return _BUILTIN_VALIDATION_GUIDANCE
+
+
 def render_planning_guidance(
     workspace_root: Path,
     task: TaskRecord,

@@ -87,6 +87,7 @@ AGENT_GOLDEN_PATH_COMMANDS: tuple[str, ...] = (
     "implement snapshot refresh",
     "validate start",
     "validate status",
+    "validate command",
     "validate check",
     "validate finish",
     "review record",
@@ -829,6 +830,15 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         PHASE_VALIDATION,
         tier=TIER_CRITICAL,
         ledger_effect=EFFECT_READ,
+    ),
+    "validate command": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "ledger_mutation",
+        PRIMARY,
+        PHASE_VALIDATION,
+        tier=TIER_CRITICAL,
+        ledger_effect=EFFECT_WRITE,
+        external_effect=EXTERNAL_PROCESS_EXEC,
     ),
     "validate check": CommandSpec(
         STABLE_FOR_AGENTS,

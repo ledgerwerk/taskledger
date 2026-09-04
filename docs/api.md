@@ -137,6 +137,7 @@ payload = plan_guidance(Path.cwd(), "task-0001")
 - `add_change`
 - `scan_changes`
 - `run_implementation_command`
+- `run_validation_command`
 - `finish_implementation`
 - `show_task_run`
 - `start_validation`

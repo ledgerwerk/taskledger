@@ -142,12 +142,12 @@ def test_all_commands_have_ledger_effect() -> None:
 
 def test_critical_tier_count_under_26() -> None:
     critical = [k for k, v in COMMAND_METADATA.items() if v.tier == TIER_CRITICAL]
-    assert len(critical) <= 27, f"Too many critical: {len(critical)}"
+    assert len(critical) <= 28, f"Too many critical: {len(critical)}"
 
 
 def test_agent_golden_path_is_explicit_and_budgeted() -> None:
     """The normal agent path should stay much smaller than all stable commands."""
-    assert len(AGENT_GOLDEN_PATH_COMMANDS) <= 44
+    assert len(AGENT_GOLDEN_PATH_COMMANDS) <= 45
     assert len(AGENT_GOLDEN_PATH_COMMANDS) == len(set(AGENT_GOLDEN_PATH_COMMANDS))
     assert set(AGENT_GOLDEN_PATH_COMMANDS) <= set(COMMAND_METADATA)
 
@@ -207,6 +207,12 @@ def test_process_exec_commands() -> None:
     ]
     assert "implement command" in process_cmds
     assert "plan command" in process_cmds
+    assert "validate command" in process_cmds
+    spec = COMMAND_METADATA["validate command"]
+    assert spec.phase == "validation"
+    assert spec.external_effect == EXTERNAL_PROCESS_EXEC
+    assert spec.ledger_effect == "write"
+    assert spec.audience == STABLE_FOR_AGENTS
 
 
 # specmason: req=REQ-0011 ac=AC-0114

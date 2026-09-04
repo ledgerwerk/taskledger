@@ -40,7 +40,7 @@ plan start -> plan guidance -> plan template -> plan check -> plan upsert -> pla
 question add | question add-many | question answer | question answer-many | question status | question answers
 todo next | todo show | todo done | todo status
 implement start | implement resume | implement change | implement scan-changes | implement finish
-validate start | validate status | validate check | validate finish
+validate start | validate status | validate command | validate check | validate finish
 review record
 handoff create | handoff review | handoff show | handoff claim | handoff release | handoff retarget | handoff close
 ```
@@ -356,12 +356,21 @@ linked-file drift checks.
 1. `taskledger context --for validation --format markdown`
 2. `taskledger validate start`
 3. Check `taskledger validate status` to see current validation state and blockers.
-4. Run verification checks outside taskledger.
+4. Run verification with `taskledger validate command -- ...` whenever practical.
 5. Record criterion results: `taskledger validate check --criterion ac-0001 --status pass|fail|warn|not_run --evidence "..."`
 6. Optionally waive criteria with user authority: `taskledger validate waive --criterion ac-0001 --reason "..."`.
 7. Check `taskledger validate status` again to confirm all mandatory gates pass.
 8. Finish with `taskledger validate finish --result passed|failed|blocked --summary "..."`.
    - For passed runs, prefer a concise done-work summary that can be reused by release-note tooling.
+
+### Validation command failure classification
+
+A non-zero validation command is not automatically a failed acceptance criterion. Before `validate check --status fail`, determine whether the command actually evaluated the target behavior.
+
+- **Target failure:** the check executed correctly and the accepted behavior failed. Record the criterion as `fail`.
+- **probe/setup failure:** the validator command is invalid or could not reach the target behavior, for example because of cwd, imports, quoting, fixtures, or relative/absolute path representation. Correct the probe and rerun. Do not mark the criterion failed solely because the probe was malformed.
+- If durable state is needed while repairing a probe, record the criterion as `not_run` with `--details` explaining the probe problem.
+- For path-set comparisons, normalize both sides against the same explicit project root before equality checks.
 
 ### Recovery Rules
 
@@ -396,7 +405,7 @@ taskledger validate check --criterion ac-0001 --status pass --evidence "pytest t
 - Log every meaningful implementation change with `taskledger implement change`.
 - Record deviations from the approved plan with `taskledger implement deviation`.
 - Mark todos done with evidence: `taskledger todo done <todo-id> --evidence "pytest -q"`.
-- When transcript logging is enabled in project config, run task-relevant commands through `taskledger plan command -- ...` or `taskledger implement command -- ...` so stdout/stderr becomes durable transcript evidence. The managed result and shell log include the actual child cwd.
+- When transcript logging is enabled in project config, run task-relevant commands through `taskledger plan command -- ...`, `taskledger implement command -- ...`, or `taskledger validate command -- ...` so stdout/stderr becomes durable transcript evidence. The managed result and shell log include the actual child cwd.
 - Do not paste secrets into command arguments, evidence strings, or expected command output when transcript logging is enabled.
 - Use `taskledger handoff create --mode implementation|validation --intended-actor agent --intended-harness codex` when switching actor or harness.
 - Use `taskledger handoff claim handoff-0001` before continuing work from a handoff.

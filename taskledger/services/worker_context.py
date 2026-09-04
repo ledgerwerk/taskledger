@@ -102,7 +102,15 @@ def guardrails_for_context_for(context_for: str) -> list[str]:
     if context_for == "validator":
         return [
             "Validate against the accepted plan and implementation log.",
-            "Record failed validation.",
+            (
+                "Record a criterion as failed only when the validation mechanism "
+                "successfully evaluated the target behavior and that behavior failed."
+            ),
+            (
+                "If a validator-authored probe, command, cwd, import, fixture, or path "
+                "normalization is wrong, correct the probe and rerun before assigning "
+                "a criterion result."
+            ),
             "Do not modify implementation.",
         ]
     if context_for == "spec-reviewer":
@@ -145,11 +153,19 @@ def worker_contract(context_for: str) -> tuple[list[str], list[str]]:
         return (
             [
                 "validate against the accepted plan and implementation record",
-                "record failed and blocked validation explicitly",
+                (
+                    "distinguish target-behavior failures from validator "
+                    "probe/setup failures before recording criterion status"
+                ),
+                "record genuine failed and blocked validation explicitly",
             ],
             [
                 "modify implementation code",
                 "approve missing evidence implicitly",
+                (
+                    "record a criterion failure solely because an ad-hoc "
+                    "validator probe or setup command was malformed"
+                ),
             ],
         )
     if context_for == "spec-reviewer":

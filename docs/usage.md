@@ -592,6 +592,8 @@ taskledger implement command -- ruff check --config=.ruff.toml .
 taskledger implement command --allow-failure -- python -c "raise SystemExit(7)"
 ```
 
+Use `taskledger validate command -- ...` for durable validation execution evidence. A non-zero command is not automatically a failed acceptance criterion. Classify whether the target behavior was evaluated before recording `fail`; repair malformed cwd, import, fixture, quoting, or path-normalization probes and rerun them first.
+
 When `[agent_logging].enabled = true` in `.ledger/taskledger/config.toml`, `taskledger`
 records CLI invocations and managed command outputs. Both managed wrappers execute
 the exact argv after `--` without a shell and from the CLI invocation directory, or
@@ -599,8 +601,8 @@ the explicit `--root` directory. Taskledger may discover an ancestor workspace f
 ledger state, but that does not change the child's cwd. Human mode displays captured
 stdout/stderr before the summary. JSON mode contains stdout/stderr and cwd only in
 the result object. Keep logging opt-in because stdout/stderr may contain sensitive
-data. Route task-relevant commands through `plan command` and `implement command`
-so their output is included in task transcripts and reports.
+data. Route task-relevant commands through `plan command`, `implement command`, and
+`validate command` so their output is included in task transcripts and reports.
 
 Managed commands use a usable inherited Python virtualenv first, then a valid
 `.venv` or `venv` in the command directory or workspace, preferring the command

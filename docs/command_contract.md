@@ -176,6 +176,9 @@ Rules:
 - Links are opaque. Taskledger does not parse or interpret linked files.
 - Validation evidence is recorded through generic `validate check`.
 
+- `validate command -- ...` records managed validation command evidence during an active validation run.
+- A non-zero validation command does not create a `ValidationCheck`; explicitly classify and record criteria with `validate check`.
+
 ## Archive import lock policy
 
 Archive imports support explicit lock handling:
@@ -448,6 +451,8 @@ shell. They execute the child from the CLI invocation directory, or the explicit
 `--root` directory, even when Taskledger discovers an ancestor workspace root for
 ledger state, artifacts, and logs.
 
+`validate command` uses the same managed execution behavior during an active validation run, but records command evidence only. It never automatically maps a non-zero child exit to a criterion result.
+
 Managed commands preserve the caller environment, but resolve child executable lookup
 deterministically. A usable inherited `VIRTUAL_ENV` takes precedence. Otherwise
 Taskledger checks `<command-cwd>/.venv`, `<command-cwd>/venv`, then the workspace
@@ -474,6 +479,8 @@ taskledger plan command -- pytest tests/ -q
 taskledger plan command --allow-failure -- pytest tests/ -q
 taskledger implement command -- ruff check --config=.ruff.toml .
 taskledger implement command --allow-failure -- python -c "raise SystemExit(7)"
+taskledger validate command -- pytest tests/ -q
+taskledger validate command --allow-failure -- python -c "raise SystemExit(7)"
 ```
 
 ## Transcript review modes

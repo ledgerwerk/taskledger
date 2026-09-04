@@ -212,3 +212,20 @@ def test_context_worker_requires_enabled_pipeline(tmp_path: Path) -> None:
     output = result.stdout
     stderr = getattr(result, "stderr", "")
     assert "No worker pipeline configured" in f"{output}{stderr}"
+
+
+def test_validator_context_distinguishes_target_and_probe_failures(
+    tmp_path: Path,
+) -> None:
+    _setup_task_with_accepted_plan(tmp_path)
+
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "context", "--for", "validator"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "target behavior" in result.stdout
+    assert "probe/setup" in result.stdout
+    assert "correct the probe and rerun" in result.stdout.lower()
+    assert "criterion failure" in result.stdout

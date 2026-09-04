@@ -41,6 +41,9 @@ from taskledger.services.worker_pipeline import (
 from taskledger.services.workflow_guidance import (
     render_planning_guidance as _render_planning_guidance,
 )
+from taskledger.services.workflow_guidance import (
+    render_validation_guidance as _render_validation_guidance,
+)
 from taskledger.storage.locks import lock_is_expired, lock_status, read_lock
 from taskledger.storage.task_store import (
     list_changes,
@@ -410,6 +413,7 @@ def render_markdown_handoff(payload: dict[str, object]) -> str:
         _append_validation_history(lines, payload["validation_history"])
         _append_required_commands(lines, payload.get("accepted_plan"))
         _append_required_output(lines, context_for)
+        _append_workflow_guidance(lines, payload.get("workflow_guidance"))
     elif context_for == "spec-reviewer":
         _append_acceptance_criteria(lines, payload.get("accepted_plan"))
         _append_focused_run(lines, payload.get("focus"))
@@ -1133,6 +1137,8 @@ def _guidance_for_context(
     """Load workflow guidance for the given context role, if applicable."""
     if context_for in {"planner", "planning"}:
         return _render_planning_guidance(workspace_root, task)
+    if context_for in {"validator", "validation"}:
+        return _render_validation_guidance(workspace_root, task)
     return ""
 
 

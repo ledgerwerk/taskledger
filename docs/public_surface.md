@@ -26,7 +26,7 @@ the normal planning/approval path for agents.
 - `question add`, `question add-many`, `question answer`, `question answer-many`, `question status`, `question answers`
 - `todo next`, `todo show`, `todo done`, `todo status`
 - `implement start`, `implement resume`, `implement change`, `implement scan-changes`, `implement finish`
-- `validate start`, `validate status`, `validate check`, `validate finish`
+- `validate start`, `validate status`, `validate command`, `validate check`, `validate finish`
 - `review record`
 - `handoff create`, `handoff show`, `handoff claim`, `handoff close`
 

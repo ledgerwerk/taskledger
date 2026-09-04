@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import getpass
+import shlex
 from dataclasses import replace
 from pathlib import Path
 from typing import Literal, cast
@@ -24,6 +25,7 @@ from taskledger.domain.states import (
     normalize_validation_result,
 )
 from taskledger.errors import LaunchError
+from taskledger.services import command_runner
 from taskledger.services import tasks as _tasks
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
@@ -161,6 +163,78 @@ def _require_running_validation_with_decision(
         )
     )
     return task, run
+
+
+def run_validation_command(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    argv: tuple[str, ...],
+    command_cwd: Path | None = None,
+) -> dict[str, object]:
+    """Run and durably record a command during an active validation run."""
+    from taskledger.services.agent_logging import record_managed_shell_command
+
+    if not argv:
+        raise _tasks._cli_error(
+            "validate command requires a command to run.", EXIT_CODE_BAD_INPUT
+        )
+    task, run = _require_running_validation_with_decision(workspace_root, task_ref)
+    execution_cwd = (command_cwd or workspace_root).expanduser().resolve()
+    completed = command_runner.run_managed_command(
+        argv,
+        cwd=execution_cwd,
+        workspace_root=workspace_root,
+    )
+    record_managed_shell_command(
+        workspace_root,
+        task_id=task.id,
+        run_id=run.run_id,
+        run_type="validation",
+        argv=argv,
+        exit_code=completed.returncode,
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+        command_cwd=execution_cwd,
+    )
+    output = _tasks._command_output(argv, completed.stdout, completed.stderr)
+    artifact_ref: str | None = None
+    if len(output) > 4000 or output.count("\n") > 50:
+        artifact_ref = _tasks._write_command_artifact(
+            workspace_root, task.id, run.run_id, output
+        )
+    summary = _tasks._command_summary(argv, completed.returncode, artifact_ref)
+    updated_run = replace(
+        run,
+        worklog=(*run.worklog, summary),
+        artifact_refs=(*run.artifact_refs, *((artifact_ref,) if artifact_ref else ())),
+    )
+    save_run(workspace_root, updated_run)
+    save_task(
+        workspace_root,
+        replace(task, updated_at=utc_now_iso()),
+    )
+    _tasks._append_event(
+        workspace_root,
+        task.id,
+        "validation.command",
+        {
+            "run_id": run.run_id,
+            "command": shlex.join(argv),
+            "exit_code": completed.returncode,
+            "artifact_ref": artifact_ref,
+        },
+    )
+    return {
+        "kind": "validation_command",
+        "task_id": task.id,
+        "run_id": run.run_id,
+        "exit_code": completed.returncode,
+        "cwd": str(execution_cwd),
+        "artifact_path": artifact_ref,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
 
 
 def add_validation_check(

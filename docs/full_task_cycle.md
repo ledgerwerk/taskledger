@@ -264,6 +264,8 @@ taskledger validate show
 taskledger validate finish --result passed --summary "Parser fix validated with regression tests."
 ```
 
+Use `taskledger validate command -- ...` to preserve validation command cwd, output, exit status, and transcript evidence. A non-zero command is not automatically a failed acceptance criterion. If the command is a malformed probe or setup failure, correct it and rerun before recording criterion status. Only record `fail` after the target behavior was evaluated and failed.
+
 ### If validation finds a bug
 
 ```bash

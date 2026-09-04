@@ -126,3 +126,14 @@ def test_builtin_planning_guidance_includes_approval_ready_body_structure() -> N
     assert "## Tests" in result
     assert "## Assumptions" in result
     assert "## Out of Scope" in result
+
+
+def test_builtin_validation_guidance_distinguishes_probe_failures() -> None:
+    from taskledger.services.workflow_guidance import render_validation_guidance
+
+    guidance = render_validation_guidance(Path("."), object())  # type: ignore[arg-type]
+    assert "non-zero" in guidance
+    assert "not automatically" in guidance
+    assert "target behavior" in guidance
+    assert "probe" in guidance
+    assert "same explicit project root" in guidance

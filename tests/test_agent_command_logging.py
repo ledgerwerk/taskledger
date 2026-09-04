@@ -769,3 +769,46 @@ def test_duplicate_log_id_warning_in_raw_mode(tmp_path: Path) -> None:
     assert "## Raw Command Transcript" in transcript.stdout
     assert "### Duplicate Log IDs" in transcript.stdout
     assert "- dup-raw-001" in transcript.stdout
+
+
+def test_validation_wrapper_and_managed_command_are_one_transcript_row() -> None:
+    from taskledger.services.agent_transcripts import _logical_rows
+
+    wrapper = AgentCommandLogRecord(
+        log_id="validation-wrapper",
+        ledger_ref="main",
+        started_at="2026-05-03T10:00:00+00:00",
+        finished_at="2026-05-03T10:00:01+00:00",
+        duration_ms=1000,
+        command_kind="taskledger_cli",
+        argv=("taskledger", "validate", "command", "--", "python", "-c", "print(1)"),
+        command_line="taskledger validate command -- python -c 'print(1)'",
+        cwd="/workspace",
+        exit_code=0,
+        status="succeeded",
+        task_id="task-0001",
+        run_id="run-0001",
+        run_type="validation",
+    )
+    managed = AgentCommandLogRecord(
+        log_id="validation-managed",
+        ledger_ref="main",
+        started_at="2026-05-03T10:00:02+00:00",
+        finished_at="2026-05-03T10:00:03+00:00",
+        duration_ms=1000,
+        command_kind="managed_shell",
+        argv=("python", "-c", "print(1)"),
+        command_line="python -c 'print(1)'",
+        cwd="/workspace",
+        exit_code=0,
+        status="succeeded",
+        task_id="task-0001",
+        run_id="run-0001",
+        run_type="validation",
+        managed_command_exit_code=0,
+    )
+
+    rows = _logical_rows([wrapper, managed])
+    assert len(rows) == 1
+    assert rows[0]["display_command"] == "python -c 'print(1)'"
+    assert rows[0]["result"] == "passed"

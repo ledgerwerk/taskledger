@@ -7,6 +7,7 @@ import typer
 from taskledger.api.task_runs import (
     add_validation_check,
     finish_validation,
+    run_validation_command,
     show_task_run,
     start_validation,
     validation_status,
@@ -126,7 +127,55 @@ def _render_validation_status(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def validation_command_command(
+    ctx: typer.Context,
+    allow_failure: Annotated[bool, typer.Option("--allow-failure")] = False,
+    task_ref: TaskOption = None,
+) -> None:
+    state = cli_state_from_context(ctx)
+    argv = tuple(ctx.args)
+    try:
+        task = resolve_cli_task(state.cwd, task_ref)
+        payload = run_validation_command(
+            state.cwd,
+            task.id,
+            argv=argv,
+            command_cwd=state.managed_command_cwd,
+        )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    from taskledger.cli_common import emit_managed_command_streams
+
+    emit_managed_command_streams(ctx, payload)
+    emit_payload(
+        ctx,
+        payload,
+        human=f"ran validation command exit={payload['exit_code']}",
+    )
+    raw_exit_code = payload.get("exit_code", 0)
+    if isinstance(raw_exit_code, int):
+        exit_code = raw_exit_code
+    elif isinstance(raw_exit_code, str) and raw_exit_code.isdigit():
+        exit_code = int(raw_exit_code)
+    else:
+        exit_code = 0
+    if exit_code != 0 and not allow_failure:
+        from taskledger.services.agent_logging import note_error
+
+        note_error("validation command failed", exit_code=exit_code)
+        raise typer.Exit(code=exit_code)
+
+
 def register_validate_v2_commands(app: typer.Typer) -> None:
+    app.command(
+        "command",
+        context_settings={
+            "allow_extra_args": True,
+            "ignore_unknown_options": True,
+        },
+    )(validation_command_command)
+
     @app.command("start")
     def start_command(
         ctx: typer.Context,

@@ -465,6 +465,7 @@ def _is_wrapper_command(record: object) -> bool:
     return (
         " implement command --" in record.command_line
         or " plan command --" in record.command_line
+        or " validate command --" in record.command_line
     )
 
 

@@ -68,6 +68,9 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     "taskledger/cli_implement.py:taskledger.services.agent_logging": (
         "Implement command wrapper records managed-shell command failures."
     ),
+    "taskledger/cli_validate.py:taskledger.services.agent_logging": (
+        "Validation command wrapper records managed-shell command failures."
+    ),
     "taskledger/cli_misc.py:taskledger.services.doctor": (
         "Doctor commands still consume doctor service inspectors directly."
     ),
@@ -580,6 +583,7 @@ def test_tasks_validation_entrypoints_delegate_to_validation_flow() -> None:
     for function_name in (
         "start_validation",
         "validation_status",
+        "run_validation_command",
         "add_validation_check",
         "waive_criterion",
         "finish_validation",

@@ -1231,6 +1231,25 @@ def run_implementation_command(
     )
 
 
+def run_validation_command(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    argv: tuple[str, ...],
+    command_cwd: Path | None = None,
+) -> dict[str, object]:
+    from taskledger.services.validation_flow import (
+        run_validation_command as _run_validation_command,
+    )
+
+    return _run_validation_command(
+        workspace_root,
+        task_ref,
+        argv=argv,
+        command_cwd=command_cwd,
+    )
+
+
 def _build_todo_gate_report(
     workspace_root: Path, task: TaskRecord
 ) -> dict[str, object]:
