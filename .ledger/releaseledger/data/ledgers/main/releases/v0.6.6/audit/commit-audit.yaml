@@ -1,0 +1,87 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.6.6
+git_base_ref: v0.6.5
+git_base_sha: 412b465c3900d28b9f0cc8eb2ef78f10bb8340b3
+git_head_ref: HEAD
+git_head_sha: 307d68a1cbbcc1639bd18affdeefb69064af3a6e
+git_range: 412b465c3900d28b9f0cc8eb2ef78f10bb8340b3..307d68a1cbbcc1639bd18affdeefb69064af3a6e
+commit_count: 1
+rows:
+  - sha: 307d68a1cbbcc1639bd18affdeefb69064af3a6e
+    source_ref: git:307d68a1cbbcc1639bd18affdeefb69064af3a6e
+    short_sha: 307d68a
+    changed_paths:
+      - API.md
+      - README.md
+      - docs/api.md
+      - docs/command_contract.md
+      - docs/full_task_cycle.md
+      - docs/public_surface.md
+      - docs/service_boundary_whitelist.md
+      - docs/usage.md
+      - skills/taskledger/SKILL.md
+      - taskledger/api/task_runs.py
+      - taskledger/cli_validate.py
+      - taskledger/command_inventory.py
+      - taskledger/services/agent_transcripts.py
+      - taskledger/services/handoff.py
+      - taskledger/services/tasks.py
+      - taskledger/services/validation_flow.py
+      - taskledger/services/worker_context.py
+      - taskledger/services/workflow_guidance.py
+      - tests/test_agent_command_logging.py
+      - tests/test_command_inventory.py
+      - tests/test_docs_and_skill.py
+      - tests/test_service_boundaries.py
+      - tests/test_validation_command.py
+      - tests/test_worker_pipeline_context.py
+      - tests/test_workflow_guidance.py
+    stats:
+      files_changed: 0
+      insertions: 475
+      deletions: 11
+    inspected: true
+    inspected_paths:
+      - API.md
+      - README.md
+      - docs/api.md
+      - docs/command_contract.md
+      - docs/full_task_cycle.md
+      - docs/public_surface.md
+      - docs/service_boundary_whitelist.md
+      - docs/usage.md
+      - skills/taskledger/SKILL.md
+      - taskledger/api/task_runs.py
+      - taskledger/cli_validate.py
+      - taskledger/command_inventory.py
+      - taskledger/services/agent_transcripts.py
+      - taskledger/services/handoff.py
+      - taskledger/services/tasks.py
+      - taskledger/services/validation_flow.py
+      - taskledger/services/worker_context.py
+      - taskledger/services/workflow_guidance.py
+      - tests/test_agent_command_logging.py
+      - tests/test_command_inventory.py
+      - tests/test_docs_and_skill.py
+      - tests/test_service_boundaries.py
+      - tests/test_validation_command.py
+      - tests/test_worker_pipeline_context.py
+      - tests/test_workflow_guidance.py
+    observed_behavior:
+      Adds validate command to the CLI and public task-run API; during
+      an active validation run it executes managed argv, records cwd, exit status, stdout,
+      stderr, transcript, and large-output artifacts, while leaving criterion status
+      classification explicit. Adds validator guidance and documentation distinguishing
+      probe/setup failures from target-behavior failures, with focused regression coverage.
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject: "feat: improved validation command features"
+    target_entry_id: entry-0001
+    notes:
+      Reviewed implementation, API, documentation, command inventory, and focused
+      tests.
