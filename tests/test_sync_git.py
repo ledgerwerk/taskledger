@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 from taskledger.cli import app
 from taskledger.services.git_utils import run_git
+from taskledger.storage.task_store import resolve_v2_paths
 
 pytestmark = [
     pytest.mark.cli,
@@ -572,3 +573,38 @@ def test_run_git_preserves_non_taskledger_hook_behavior(tmp_path: Path) -> None:
     run_git(repo, "checkout", "other")
 
     assert marker.exists()
+
+
+def test_sync_git_push_rejects_oversized_artifact_before_commit(
+    tmp_path: Path,
+) -> None:
+    workspace, sync_repo = _init_sync_workspace(tmp_path)
+    artifact = (
+        resolve_v2_paths(workspace).tasks_dir
+        / "task-0001"
+        / "artifacts"
+        / "run-0001-command-0001.log"
+    )
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(b"x" * 20_000_001)
+    before = _git(sync_repo, "rev-parse", "HEAD").stdout.strip()
+
+    result = runner.invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "sync",
+            "git",
+            "push",
+            "--repo",
+            str(sync_repo),
+            "--project-path",
+            "project-a",
+        ],
+    )
+    assert result.exit_code != 0
+    output = _output(result)
+    assert "oversized artifact" in output
+    assert "doctor" in output
+    assert _git(sync_repo, "rev-parse", "HEAD").stdout.strip() == before

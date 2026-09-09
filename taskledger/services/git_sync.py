@@ -12,6 +12,7 @@ from typing import cast
 from taskledger.errors import LaunchError
 from taskledger.ids import slugify_project_ref
 from taskledger.services.doctor import inspect_v2_project
+from taskledger.services.doctor_checks.artifact_checks import find_oversized_artifacts
 from taskledger.services.git_utils import (
     git_root as _git_root,
 )
@@ -442,6 +443,32 @@ def git_sync_import_local(
     }
 
 
+def _assert_artifacts_within_policy(workspace_root: Path) -> None:
+    context = load_project_context(workspace_root)
+    violations = find_oversized_artifacts(
+        context.paths, max_bytes=context.config.artifact_max_bytes
+    )
+    if not violations:
+        return
+    lines = [
+        f"Cannot sync: Taskledger storage contains {len(violations)} "
+        + "oversized artifact(s)."
+    ]
+    for violation in violations:
+        lines.append(f"- {violation['path']}: {violation['size_bytes']} bytes")
+    lines.extend(
+        [
+            f"Limit: {context.config.artifact_max_bytes} bytes.",
+            (
+                "Run `taskledger doctor` for details. Existing Git commits containing "
+                + "these blobs may also need to be rewritten before the remote "
+                + "accepts the push."
+            ),
+        ]
+    )
+    raise LaunchError("\n".join(lines))
+
+
 def _git_sync_commit_with_config(
     workspace_root: Path,
     config: GitSyncConfig,
@@ -454,6 +481,7 @@ def _git_sync_commit_with_config(
 ) -> dict[str, object]:
     """Commit using an already-resolved config (no public selector parsing)."""
     locator = load_project_locator(workspace_root)
+    _assert_artifacts_within_policy(workspace_root)
     storage_path = _storage_path(config)
     if locator.taskledger_dir.resolve() != storage_path.resolve():
         raise LaunchError(

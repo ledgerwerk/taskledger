@@ -749,3 +749,22 @@ def test_validate_event_logging_rejects_unknown_keys() -> None:
             {"event_logging": {"unknown": True}},
             Path("taskledger.toml"),
         )
+
+
+def test_artifact_max_bytes_defaults_and_can_be_lowered() -> None:
+    assert merge_project_config({}).artifact_max_bytes == 20_000_000
+    assert merge_project_config({"artifact_max_bytes": 1024}).artifact_max_bytes == 1024
+
+
+@pytest.mark.parametrize("value", [0, -1, True, None, 20_000_001])
+def test_artifact_max_bytes_rejects_invalid_values(value: object) -> None:
+    from taskledger.storage.project_config import _validate_project_config_overrides
+
+    with pytest.raises(LaunchError):
+        _validate_project_config_overrides(
+            {"artifact_max_bytes": value}, Path("taskledger.toml")
+        )
+
+
+def test_default_taskledger_toml_documents_artifact_limit() -> None:
+    assert "# artifact_max_bytes = 20000000" in render_default_taskledger_toml()

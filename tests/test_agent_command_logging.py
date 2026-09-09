@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 from taskledger.cli import app
 from taskledger.domain.models import AgentCommandLogRecord
 from taskledger.errors import LaunchError
+from taskledger.services.agent_logging import _truncate_artifact
 from taskledger.services.command_runner import CommandResult
 from taskledger.storage.agent_logs import (
     append_agent_command_log,
@@ -812,3 +813,14 @@ def test_validation_wrapper_and_managed_command_are_one_transcript_row() -> None
     assert len(rows) == 1
     assert rows[0]["display_command"] == "python -c 'print(1)'"
     assert rows[0]["result"] == "passed"
+
+
+def test_agent_artifact_truncation_uses_shared_utf8_safe_head_tail_policy() -> None:
+    content = "HEAD\n" + ("middle\n" * 1000) + "TAIL"
+    result = _truncate_artifact(content, 256)
+    encoded = result.encode("utf-8")
+    assert len(encoded) <= 256
+    assert encoded.decode("utf-8") == result
+    assert "HEAD" in result
+    assert "TAIL" in result
+    assert "artifact truncated" in result

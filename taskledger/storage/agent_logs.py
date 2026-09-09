@@ -5,6 +5,10 @@ from pathlib import Path
 
 from taskledger.domain.models import AgentCommandLogRecord
 from taskledger.errors import LaunchError
+from taskledger.storage.artifact_policy import (
+    ABSOLUTE_MAX_ARTIFACT_BYTES,
+    bound_text_to_bytes,
+)
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.task_store import V2Paths, require_v2_layout, resolve_v2_paths
 
@@ -137,7 +141,8 @@ def write_agent_command_artifact(
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     safe_suffix = suffix.replace("/", "-").replace("\\", "-")
     artifact_path = artifacts_dir / f"{log_id}.{safe_suffix}"
-    atomic_write_text(artifact_path, content)
+    bounded = bound_text_to_bytes(content, max_bytes=ABSOLUTE_MAX_ARTIFACT_BYTES)
+    atomic_write_text(artifact_path, bounded.text)
     try:
         return str(artifact_path.relative_to(paths.project_dir))
     except ValueError:

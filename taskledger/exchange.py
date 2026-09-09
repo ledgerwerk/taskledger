@@ -42,11 +42,13 @@ from taskledger.storage.agent_logs import (
     append_agent_command_log,
     load_agent_command_logs,
 )
+from taskledger.storage.artifact_policy import ABSOLUTE_MAX_ARTIFACT_BYTES
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.events import append_event, load_events
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.locks import write_lock
 from taskledger.storage.paths import load_project_locator
+from taskledger.storage.project_context import load_project_context
 from taskledger.storage.project_identity import (
     assert_same_project_uuid,
     load_project_uuid,
@@ -765,7 +767,7 @@ ARTIFACTS_PREFIX = "artifacts/"
 MAX_ARCHIVE_MEMBERS = 4096
 MAX_MANIFEST_BYTES = 256_000
 MAX_PAYLOAD_BYTES = 50_000_000
-MAX_ARTIFACT_MEMBER_BYTES = 20_000_000
+MAX_ARTIFACT_MEMBER_BYTES = ABSOLUTE_MAX_ARTIFACT_BYTES
 MAX_TOTAL_ARTIFACT_BYTES = 100_000_000
 
 
@@ -781,6 +783,7 @@ def write_project_archive(
     """Export current-ledger state into a gzip-compressed tar archive."""
     paths = require_v2_layout(workspace_root)
     locator = load_project_locator(workspace_root)
+    artifact_limit = load_project_context(workspace_root).config.artifact_max_bytes
     project_uuid = load_project_uuid(locator.config_path)
     if project_uuid is None:
         raise LaunchError("Project manifest does not define a project UUID.")
@@ -846,6 +849,7 @@ def write_project_archive(
         _collect_artifact_members(
             paths,
             selected_task_ids=selected_task_ids if selection.scope == "tasks" else None,
+            max_bytes=artifact_limit,
         )
         if include_run_artifacts
         else []
@@ -881,7 +885,11 @@ def write_project_archive(
     }
 
 
-def read_project_archive(source_path: Path) -> dict[str, object]:
+def read_project_archive(
+    source_path: Path,
+    *,
+    max_artifact_bytes: int | None = None,
+) -> dict[str, object]:
     """Read and validate a taskledger archive in-memory.
 
     Never extracts tar members to disk. Returns dict with keys
@@ -892,7 +900,9 @@ def read_project_archive(source_path: Path) -> dict[str, object]:
 
     with tarfile.open(source_path, "r:gz") as tar:
         members = {m.name: m for m in tar.getmembers()}
-        artifact_members = _validate_archive_members(members)
+        artifact_members = _validate_archive_members(
+            members, max_artifact_bytes=max_artifact_bytes
+        )
 
         manifest_member = members[MANIFEST_MEMBER]
         payload_member = members[PAYLOAD_MEMBER]
@@ -962,7 +972,8 @@ def import_project_archive(
 ) -> dict[str, object]:
     """Import a taskledger archive into the current project."""
     normalized_lock_policy = normalize_import_lock_policy(lock_policy)
-    archive = read_project_archive(source_path)
+    artifact_limit = load_project_context(workspace_root).config.artifact_max_bytes
+    archive = read_project_archive(source_path, max_artifact_bytes=artifact_limit)
     payload = cast(dict[str, object], archive["payload"])
     manifest = cast(dict[str, object], archive["manifest"])
     artifact_members = cast(list[str], archive.get("artifact_members", []))
@@ -1216,7 +1227,15 @@ def _add_json_member(
 
 
 def _add_file_member(tar: tarfile.TarFile, name: str, source_path: Path) -> None:
-    data = source_path.read_bytes()
+    size_bytes = source_path.stat().st_size
+    if size_bytes > MAX_ARTIFACT_MEMBER_BYTES:
+        raise LaunchError(
+            "Cannot export oversized Taskledger artifact: "
+            f"{source_path} ({size_bytes} bytes > {MAX_ARTIFACT_MEMBER_BYTES}). "
+            "Run `taskledger doctor` and repair the artifact before exporting."
+        )
+    with source_path.open("rb") as source:
+        data = source.read()
     info = tarfile.TarInfo(name)
     info.size = len(data)
     info.mtime = 0
@@ -1243,10 +1262,18 @@ def _default_task_archive_path(
     return Path(filename)
 
 
+def _relative_artifact_path(paths: V2Paths, source_path: Path) -> str:
+    try:
+        return source_path.relative_to(paths.project_dir).as_posix()
+    except ValueError:
+        return "logs/" + source_path.relative_to(paths.events_dir.parent).as_posix()
+
+
 def _collect_artifact_members(
     paths: V2Paths,
     *,
     selected_task_ids: set[str] | None = None,
+    max_bytes: int = MAX_ARTIFACT_MEMBER_BYTES,
 ) -> list[tuple[str, Path]]:
     artifact_roots = [paths.tasks_dir.glob("task-*/artifacts/**/*")]
     if selected_task_ids is None:
@@ -1258,6 +1285,15 @@ def _collect_artifact_members(
         for source_path in iterator:
             if not source_path.is_file():
                 continue
+            size_bytes = source_path.stat().st_size
+            if size_bytes > max_bytes:
+                relative_path = _relative_artifact_path(paths, source_path)
+                raise LaunchError(
+                    "Cannot export oversized Taskledger artifact: "
+                    f"{relative_path}\n{size_bytes} bytes > "
+                    f"artifact_max_bytes={max_bytes}. "
+                    "Run `taskledger doctor` and repair the artifact before exporting."
+                )
             if selected_task_ids is not None:
                 match = re.search(
                     r"/tasks/(task-\d+)/artifacts/", source_path.as_posix()
@@ -1322,7 +1358,11 @@ def _extract_artifact_members(
     return extracted
 
 
-def _validate_archive_members(members: dict[str, tarfile.TarInfo]) -> list[str]:
+def _validate_archive_members(
+    members: dict[str, tarfile.TarInfo],
+    *,
+    max_artifact_bytes: int | None = None,
+) -> list[str]:
     if MANIFEST_MEMBER not in members:
         raise LaunchError(f"Archive missing {MANIFEST_MEMBER}")
     if PAYLOAD_MEMBER not in members:
@@ -1357,10 +1397,19 @@ def _validate_archive_members(members: dict[str, tarfile.TarInfo]) -> list[str]:
             raise LaunchError(f"Unexpected archive member: {name!r}")
         if not info.isfile():
             raise LaunchError(f"Archive member {name!r} is not a regular file")
-        if info.size > MAX_ARTIFACT_MEMBER_BYTES:
+        artifact_limit = MAX_ARTIFACT_MEMBER_BYTES
+        if max_artifact_bytes is not None:
+            artifact_limit = min(artifact_limit, max_artifact_bytes)
+        if info.size > artifact_limit:
+            if artifact_limit < MAX_ARTIFACT_MEMBER_BYTES:
+                raise LaunchError(
+                    "Archive artifact member is too large for this Taskledger project: "
+                    f"{name!r}\n{info.size} bytes > "
+                    f"configured artifact_max_bytes={artifact_limit}."
+                )
             raise LaunchError(
                 "Archive artifact member is too large: "
-                f"{name!r} ({info.size} > {MAX_ARTIFACT_MEMBER_BYTES} bytes)"
+                f"{name!r} ({info.size} > {artifact_limit} bytes)"
             )
         total_artifact_bytes += info.size
         if total_artifact_bytes > MAX_TOTAL_ARTIFACT_BYTES:

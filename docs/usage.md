@@ -762,6 +762,9 @@ Export include flags are content-affecting:
 - `--no-include-bodies` removes record body fields from the exported payload.
 - `--include-run-artifacts` embeds artifact files under `artifacts/` in the archive.
 
+## Artifact file-size policy
+
+Taskledger-owned artifact files are limited to 20,000,000 bytes by default and may only be lowered with `artifact_max_bytes`. Oversized command evidence retains its head and tail and includes a deterministic truncation marker; it does not change command execution or exit-code behavior. Import/export, doctor, and Taskledger-managed Git push enforce the same policy. Existing Git history is not rewritten and Git LFS is not used.
 Cross-machine imports preserve durable task/run records but quarantine imported
 runtime locks by default. For an imported in-progress implementation, run:
 

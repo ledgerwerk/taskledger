@@ -451,6 +451,7 @@ shell. They execute the child from the CLI invocation directory, or the explicit
 `--root` directory, even when Taskledger discovers an ancestor workspace root for
 ledger state, artifacts, and logs.
 
+Managed command artifacts are bounded by the project `artifact_max_bytes` setting, defaulting to the 20,000,000-byte hard ceiling. Oversized persisted evidence is marked and retains both its beginning and end; only the durable artifact is truncated, not the child command's exit code or CLI stdout/stderr contract.
 `validate command` uses the same managed execution behavior during an active validation run, but records command evidence only. It never automatically maps a non-zero child exit to a criterion result.
 
 Managed commands preserve the caller environment, but resolve child executable lookup

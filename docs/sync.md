@@ -81,6 +81,10 @@ report project-local vs outside-project dirty paths. `sync git push` commits
 repository-wide changes by design to match the standard Git workflow. Use
 `sync git cd` for advanced manual inspection or conflict resolution.
 
+## Artifact preflight
+
+`taskledger sync git push` checks Taskledger-owned artifact files before staging or committing. It refuses any existing file over the configured `artifact_max_bytes` limit and reports the paths, sizes, limit, and `taskledger doctor` remediation. Plain `git push` remains outside Taskledger's control, and Taskledger does not rewrite history or use Git LFS.
+
 For manual conflict resolution or debugging:
 
 ```bash

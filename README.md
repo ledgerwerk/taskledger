@@ -784,6 +784,12 @@ Import safety still relies on `project_uuid`, not the name/slug.
 - `--no-include-bodies` strips record body text (`body` / `context_body`) from exported payloads.
 - `--include-run-artifacts` embeds task and agent-log artifact files under `artifacts/` in the archive.
 
+## Artifact file-size policy
+
+Taskledger-owned artifact files are bounded to prevent command output from creating very large ledger blobs. The default and hard ceiling is 20,000,000 bytes per artifact; configure a lower `artifact_max_bytes` value when needed. Oversized command evidence keeps a UTF-8-safe head and tail with an explicit truncation marker, while command execution and exit-code semantics remain unchanged.
+
+Archive import/export applies the same policy, and `taskledger doctor` reports legacy oversized artifacts without reading their contents. `taskledger sync git push` performs a preflight before committing or pushing. Taskledger does not use Git LFS or rewrite Git history; repair existing blobs separately.
+
 Cross-machine imports preserve durable task/run data, but imported runtime locks
 are quarantined by default. After importing an in-progress implementation,
 run:

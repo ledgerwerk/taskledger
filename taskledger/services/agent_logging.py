@@ -8,7 +8,7 @@ import sys
 import time
 from collections.abc import Callable
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TextIO
 
@@ -22,6 +22,10 @@ from taskledger.storage.agent_logs import (
     append_agent_command_log,
     load_agent_command_logs,
     write_agent_command_artifact,
+)
+from taskledger.storage.artifact_policy import (
+    ABSOLUTE_MAX_ARTIFACT_BYTES,
+    bound_text_to_bytes,
 )
 from taskledger.storage.project_config import (
     AgentLoggingConfig,
@@ -525,7 +529,13 @@ def _load_agent_logging_config(workspace_root: Path) -> AgentLoggingConfig:
 
     paths = resolve_project_paths(workspace_root)
     overrides = load_project_config_overrides(paths)
-    return merge_project_config(overrides).agent_logging
+    project_config = merge_project_config(overrides)
+    agent_config = project_config.agent_logging
+    feature_limit = agent_config.max_artifact_bytes
+    effective_limit = project_config.artifact_max_bytes
+    if feature_limit is not None:
+        effective_limit = min(effective_limit, feature_limit)
+    return replace(agent_config, max_artifact_bytes=effective_limit)
 
 
 def _next_log_id(workspace_root: Path, timestamp: str) -> str:
@@ -557,13 +567,8 @@ def _json_text(payload: object) -> str:
 
 
 def _truncate_artifact(content: str, max_bytes: int | None) -> str:
-    if max_bytes is None:
-        return content
-    encoded = content.encode("utf-8")
-    if len(encoded) <= max_bytes:
-        return content
-    truncated = encoded[:max_bytes]
-    return truncated.decode("utf-8", errors="ignore")
+    limit = ABSOLUTE_MAX_ARTIFACT_BYTES if max_bytes is None else max_bytes
+    return bound_text_to_bytes(content, max_bytes=limit).text
 
 
 def _combined_output(stdout: str, stderr: str) -> str:

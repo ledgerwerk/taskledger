@@ -1989,3 +1989,17 @@ def test_import_archive_rejects_oversized_artifact_payload(tmp_path: Path) -> No
 
     with pytest.raises(LaunchError, match="artifact member is too large"):
         read_project_archive(archive_path)
+
+
+def test_import_archive_respects_lower_destination_artifact_limit(
+    tmp_path: Path,
+) -> None:
+    archive_path = tmp_path / "lower-limit-artifact.tar.gz"
+    data = _archive_with_extra_member(
+        member_name="artifacts/tasks/task-0001/artifacts/output.log",
+        member_size=16,
+    )
+    _write_archive(archive_path, data)
+
+    with pytest.raises(LaunchError, match="configured artifact_max_bytes=10"):
+        read_project_archive(archive_path, max_artifact_bytes=10)

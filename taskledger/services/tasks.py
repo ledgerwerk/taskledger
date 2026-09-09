@@ -7,7 +7,7 @@ import shlex
 import socket
 import subprocess
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypedDict, cast
@@ -87,6 +87,7 @@ from taskledger.services.task_queries import (
 from taskledger.services.validation import (
     build_validation_gate_report as _build_validation_gate_report_impl,
 )
+from taskledger.storage.artifact_policy import BoundedText, bound_text_to_bytes
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.locks import (
@@ -2276,14 +2277,29 @@ def _command_output(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class ArtifactWriteResult:
+    ref: str
+    original_bytes: int
+    stored_bytes: int
+    limit_bytes: int
+    truncated: bool
+
+
 def _command_summary(
     argv: tuple[str, ...],
     exit_code: int,
     artifact_ref: str | None,
+    artifact: ArtifactWriteResult | None = None,
 ) -> str:
     summary = f"Ran {shlex.join(argv)} (exit {exit_code})"
     if artifact_ref is not None:
         summary += f" output: @{artifact_ref}"
+    if artifact is not None and artifact.truncated:
+        summary += (
+            f" [artifact truncated: {artifact.original_bytes} -> "
+            f"{artifact.stored_bytes} bytes]"
+        )
     return summary
 
 
@@ -2292,14 +2308,24 @@ def _write_command_artifact(
     task_id: str,
     run_id: str,
     output: str,
-) -> str:
+) -> ArtifactWriteResult:
+    from taskledger.storage.project_context import load_project_context
+
     paths = resolve_v2_paths(workspace_root)
+    limit = load_project_context(workspace_root).config.artifact_max_bytes
+    bounded: BoundedText = bound_text_to_bytes(output, max_bytes=limit)
     artifact_dir = task_artifacts_dir(paths, task_id)
     artifact_dir.mkdir(parents=True, exist_ok=True)
     index = len(list(artifact_dir.glob(f"{run_id}-command-*.log"))) + 1
     artifact_path = artifact_dir / f"{run_id}-command-{index:04d}.log"
-    atomic_write_text(artifact_path, output)
-    return str(artifact_path.relative_to(paths.project_dir))
+    atomic_write_text(artifact_path, bounded.text)
+    return ArtifactWriteResult(
+        ref=str(artifact_path.relative_to(paths.project_dir)),
+        original_bytes=bounded.original_bytes,
+        stored_bytes=bounded.stored_bytes,
+        limit_bytes=bounded.limit_bytes,
+        truncated=bounded.truncated,
+    )
 
 
 def _parse_plan_front_matter(body: str) -> tuple[dict[str, object], str]:

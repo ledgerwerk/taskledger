@@ -742,3 +742,34 @@ def test_doctor_no_warning_for_canonical_task_dir(tmp_path: Path) -> None:
     save_task(tmp_path, task)
     result = inspect_v2_project(tmp_path)
     assert not any("slug" in w for w in result["warnings"])
+
+
+def test_doctor_reports_oversized_artifact_without_reading_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = ensure_v2_layout(tmp_path)
+    save_task(tmp_path, _task())
+    artifact = paths.tasks_dir / "task-0001" / "artifacts" / "run-0001-command-0001.log"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(b"x" * 11)
+    (tmp_path / "taskledger.toml").write_text(
+        "artifact_max_bytes = 10\n", encoding="utf-8"
+    )
+
+    original_read_bytes = Path.read_bytes
+
+    def fail_read_bytes(self: Path) -> bytes:
+        if self == artifact:
+            raise AssertionError("doctor must not read artifact contents")
+        return original_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", fail_read_bytes)
+    result = inspect_v2_project(tmp_path)
+    assert result["healthy"] is False
+    assert any(
+        item.get("code") == "ARTIFACT_FILE_TOO_LARGE"
+        and item.get("size_bytes") == 11
+        and item.get("limit_bytes") == 10
+        for item in result["diagnostics"]
+        if isinstance(item, dict)
+    )

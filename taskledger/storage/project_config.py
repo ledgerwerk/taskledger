@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from ledgercore.refs import normalize_ref_token
 
 from taskledger.errors import LaunchError
+from taskledger.storage.artifact_policy import (
+    ABSOLUTE_MAX_ARTIFACT_BYTES,
+    validate_artifact_limit,
+)
 from taskledger.storage.project_identity import normalize_project_name
 from taskledger.storage.toml_edit import (
     is_toml_key_line as _is_toml_key_line,
@@ -59,6 +63,7 @@ WORKFLOW_CONFIG_KEYS = frozenset(
         "agent_logging",
         "event_logging",
         "worker_pipeline",
+        "artifact_max_bytes",
     }
 )
 SYNC_CONFIG_KEYS = frozenset({"sync"})
@@ -97,6 +102,7 @@ DEFAULT_PROJECT_SOURCE_MAX_CHARS = 12000
 DEFAULT_PROJECT_TOTAL_SOURCE_MAX_CHARS = 48000
 DEFAULT_PROJECT_SOURCE_HEAD_LINES = 200
 DEFAULT_PROJECT_SOURCE_TAIL_LINES = 50
+DEFAULT_ARTIFACT_MAX_BYTES = ABSOLUTE_MAX_ARTIFACT_BYTES
 ARTIFACT_MEMORY_REF_FIELDS = (
     "analysis_memory_ref",
     "state_memory_ref",
@@ -241,6 +247,7 @@ class ProjectConfig:
     agent_logging: AgentLoggingConfig = AgentLoggingConfig()
     event_logging: EventLoggingConfig = EventLoggingConfig()
     worker_pipeline: WorkerPipelineConfig | None = None
+    artifact_max_bytes: int = DEFAULT_ARTIFACT_MAX_BYTES
     sync_git: GitSyncProjectConfig = GitSyncProjectConfig()
 
 
@@ -305,6 +312,10 @@ def render_default_taskledger_toml(
         '# default_memory_update_mode = "replace"\n'
         '# default_file_render_mode = "content"\n'
         "# default_save_run_reports = true\n"
+        "# Maximum bytes stored in any Taskledger-owned artifact file.\n"
+        "# Projects may lower this value but cannot raise the "
+        "20,000,000-byte hard ceiling.\n"
+        f"# artifact_max_bytes = {DEFAULT_ARTIFACT_MAX_BYTES}\n"
         f"# default_source_max_chars = {DEFAULT_PROJECT_SOURCE_MAX_CHARS}\n"
         f"# default_total_source_max_chars"
         f" = {DEFAULT_PROJECT_TOTAL_SOURCE_MAX_CHARS}\n"
@@ -798,6 +809,7 @@ def merge_project_config(
 ) -> ProjectConfig:
     if base is None:
         base = _DEFAULT_CONFIG
+    artifact_max_bytes = overrides.get("artifact_max_bytes", base.artifact_max_bytes)
     default_memory_update_mode = overrides.get(
         "default_memory_update_mode", base.default_memory_update_mode
     )
@@ -848,6 +860,10 @@ def merge_project_config(
         )
     if not isinstance(default_save_run_reports, bool):
         raise LaunchError("Project config default_save_run_reports must be a boolean.")
+    artifact_max_bytes = validate_artifact_limit(
+        artifact_max_bytes, source="Project config artifact_max_bytes"
+    )
+
     for value, label in (
         (default_source_max_chars, "default_source_max_chars"),
         (default_total_source_max_chars, "default_total_source_max_chars"),
@@ -906,6 +922,7 @@ def merge_project_config(
         default_context_order=tuple(default_context_order),
         workflow_schema=workflow_schema,
         project_context=project_context,
+        artifact_max_bytes=artifact_max_bytes,
         artifact_rules=artifact_rules,
         default_artifact_order=tuple(default_artifact_order),
         prompt_profile=prompt_profile,
@@ -916,7 +933,9 @@ def merge_project_config(
     )
 
 
-def _validate_project_config_overrides(data: dict[str, object], path: Path) -> None:
+def _validate_project_config_overrides(  # noqa: C901
+    data: dict[str, object], path: Path
+) -> None:
     for key in data:
         if key not in SUPPORTED_PROJECT_CONFIG_KEYS:
             raise LaunchError(f"Unsupported project config key '{key}' in {path}")
@@ -966,6 +985,12 @@ def _validate_project_config_overrides(data: dict[str, object], path: Path) -> N
         name_stripped = name.strip()
         if not name_stripped or any(ch in name_stripped for ch in ("\n", "\r", "\t")):
             raise LaunchError(f"Project config key 'ledger.name' is invalid in {path}")
+    if "artifact_max_bytes" in data:
+        validate_artifact_limit(
+            data["artifact_max_bytes"],
+            source=f"Project config key 'artifact_max_bytes' in {path}",
+        )
+
     artifact_rules = data.get("artifact_rules")
     if artifact_rules is not None:
         if not isinstance(artifact_rules, dict):
@@ -1366,7 +1391,9 @@ def _validate_agent_logging(raw: object, path: Path) -> None:
 
     max_artifact_bytes = raw.get("max_artifact_bytes")
     if max_artifact_bytes is not None and (
-        not isinstance(max_artifact_bytes, int) or max_artifact_bytes <= 0
+        isinstance(max_artifact_bytes, bool)
+        or not isinstance(max_artifact_bytes, int)
+        or max_artifact_bytes <= 0
     ):
         raise LaunchError(
             f"agent_logging.max_artifact_bytes must be a positive integer in {path}"

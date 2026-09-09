@@ -50,12 +50,20 @@ class DoctorScanContext:
     run_by_key: Mapping[tuple[str, str], TaskRunRecord]
     active_state: ActiveTaskState | None
 
+    artifact_limit_bytes: int
+
 
 def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
     """Build the immutable scan context once at the start of a doctor invocation."""
     resolved_paths = resolve_project_paths(workspace_root)
     locator = load_project_locator(workspace_root)
     paths = resolve_v2_paths(workspace_root)
+
+    from taskledger.storage.artifact_policy import ABSOLUTE_MAX_ARTIFACT_BYTES
+    from taskledger.storage.project_config import (
+        load_project_config_document,
+        merge_project_config,
+    )
 
     tasks = tuple(list_tasks(workspace_root))
     task_by_id: dict[str, TaskRecord] = {task.id: task for task in tasks}
@@ -74,6 +82,12 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         active_state = load_active_task_state(workspace_root)
     except Exception:  # noqa: BLE001
         active_state = None
+    try:
+        artifact_limit_bytes = merge_project_config(
+            load_project_config_document(resolved_paths.config_path)
+        ).artifact_max_bytes
+    except Exception:  # noqa: BLE001
+        artifact_limit_bytes = ABSOLUTE_MAX_ARTIFACT_BYTES
 
     return DoctorScanContext(
         workspace_root=workspace_root,
@@ -86,6 +100,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         runs_by_task=runs_by_task,
         run_by_key=run_by_key,
         active_state=active_state,
+        artifact_limit_bytes=artifact_limit_bytes,
     )
 
 
@@ -141,6 +156,16 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
         run_lock_mismatches=run_lock_mismatches,
         diagnostics=diagnostics,
     )
+
+    from taskledger.services.doctor_checks.artifact_checks import (
+        find_oversized_artifacts,
+    )
+
+    for diagnostic in find_oversized_artifacts(
+        ctx.paths, max_bytes=ctx.artifact_limit_bytes
+    ):
+        diagnostics.append(diagnostic)
+        errors.append(str(diagnostic["message"]))
 
     for lock in ctx.locks:
         lock_task = ctx.task_by_id.get(lock.task_id)

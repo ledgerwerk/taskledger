@@ -464,14 +464,15 @@ def run_implementation_command(
         command_cwd=execution_cwd,
     )
     output = _tasks._command_output(argv, completed.stdout, completed.stderr)
-    artifact_ref: str | None = None
+    artifact_result = None
     if len(output) > 4000 or output.count("\n") > 50:
-        artifact_ref = _tasks._write_command_artifact(
+        artifact_result = _tasks._write_command_artifact(
             workspace_root,
             task.id,
             run.run_id,
             output,
         )
+    artifact_ref = artifact_result.ref if artifact_result is not None else None
     from taskledger.services.check_tracking import (
         add_check,
         classify_check_command,
@@ -483,7 +484,9 @@ def run_implementation_command(
         argv=argv,
         command=shlex.join(argv),
         exit_code=completed.returncode,
-        summary=_tasks._command_summary(argv, completed.returncode, artifact_ref),
+        summary=_tasks._command_summary(
+            argv, completed.returncode, artifact_ref, artifact_result
+        ),
         category=classify_check_command(argv),
         artifact_refs=((artifact_ref,) if artifact_ref else ()),
     )
@@ -495,6 +498,16 @@ def run_implementation_command(
         "exit_code": completed.returncode,
         "cwd": str(execution_cwd),
         "artifact_path": artifact_ref,
+        "artifact_truncated": artifact_result.truncated if artifact_result else False,
+        "artifact_original_bytes": artifact_result.original_bytes
+        if artifact_result
+        else None,
+        "artifact_stored_bytes": artifact_result.stored_bytes
+        if artifact_result
+        else None,
+        "artifact_limit_bytes": artifact_result.limit_bytes
+        if artifact_result
+        else None,
         "stdout": completed.stdout,
         "stderr": completed.stderr,
     }

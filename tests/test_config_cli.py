@@ -310,3 +310,25 @@ def test_config_set_handles_inline_section_comments(tmp_path: Path) -> None:
         )
         == 1
     )
+
+
+def test_config_describes_artifact_limit(tmp_path: Path) -> None:
+    _init_project(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "config",
+            "describe",
+            "artifact_max_bytes",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = _json(result)
+    result_data = payload["result"]
+    assert isinstance(result_data, dict)
+    assert result_data["value_type"] == "integer"
+    assert result_data["default_value"] == 20_000_000
+    assert "hard ceiling" in result_data["description"]

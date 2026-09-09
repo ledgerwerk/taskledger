@@ -147,3 +147,48 @@ def test_validate_command_stores_large_output_artifact(tmp_path: Path) -> None:
     artifact_path = command["artifact_path"]
     assert isinstance(artifact_path, str)
     assert (resolve_v2_paths(tmp_path).project_dir / artifact_path).exists()
+
+
+def test_validate_command_bounds_configured_artifact(tmp_path: Path) -> None:
+    _prepare_implemented(tmp_path)
+    config = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "config",
+            "set",
+            "artifact_max_bytes",
+            "2048",
+        ],
+    )
+    assert config.exit_code == 0, config.stdout
+    _start_validation(tmp_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "--cwd",
+            str(tmp_path),
+            "validate",
+            "command",
+            "--",
+            sys.executable,
+            "-c",
+            "print('HEAD'); print('m' * 5000); print('TAIL')",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    command = _json(result)["result"]
+    assert isinstance(command, dict)
+    artifact_ref = command["artifact_path"]
+    assert isinstance(artifact_ref, str)
+    artifact = resolve_v2_paths(tmp_path).project_dir / artifact_ref
+    assert artifact.stat().st_size <= 2048
+    text = artifact.read_text(encoding="utf-8")
+    assert "HEAD" in text
+    assert "TAIL" in text
+    assert "artifact truncated" in text
+    assert command["artifact_truncated"] is True
+    assert command["exit_code"] == 0

@@ -117,6 +117,13 @@ _CONFIG_KEY_HELP: tuple[ConfigKeyHelp, ...] = (
         default_value=_DEFAULT_CONFIG.default_save_run_reports,
     ),
     ConfigKeyHelp(
+        "artifact_max_bytes",
+        "Maximum stored size of a Taskledger-owned artifact file; may only lower "
+        "the hard ceiling.",
+        "integer",
+        default_value=_DEFAULT_CONFIG.artifact_max_bytes,
+    ),
+    ConfigKeyHelp(
         "default_source_max_chars",
         "Per-source character budget for context composition.",
         "integer|null",
@@ -601,6 +608,11 @@ def config_set(workspace_root: Path, *, key: str, value_text: str) -> dict[str, 
                 target[segment] = table()
             target = target[segment]
         target[segments[-1]] = value
+        from taskledger.storage.project_config import _validate_project_config_overrides
+
+        _validate_project_config_overrides(
+            tomllib.loads(dumps(document)), context.config_path
+        )
         atomic_write_text(context.config_path, dumps(document))
         after = config_get(workspace_root, key=key)["value"]
     else:

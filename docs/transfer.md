@@ -13,6 +13,12 @@ machines and harnesses.
   \- `project.ledger_ref` (exported ledger)
 - Optional run artifacts under `artifacts/` when `--include-run-artifacts` is set.
 
+## Artifact file-size policy
+
+Taskledger-owned artifact files default to a 20,000,000-byte hard ceiling. Projects may lower this with `artifact_max_bytes`, but cannot configure an unlimited or larger value. Oversized command output is stored as a UTF-8-safe head/tail excerpt with an explicit byte-count marker; the managed command's output and exit code are unchanged.
+
+Import/export enforce the same limit. Run `taskledger doctor` to find existing oversized files; `taskledger sync git push` refuses them before creating a commit. This does not rewrite existing Git history or use Git LFS.
+
 ## Filename policy
 
 When no output path is passed to `taskledger export`, taskledger writes into
