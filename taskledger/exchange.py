@@ -972,7 +972,9 @@ def import_project_archive(
 ) -> dict[str, object]:
     """Import a taskledger archive into the current project."""
     normalized_lock_policy = normalize_import_lock_policy(lock_policy)
-    artifact_limit = load_project_context(workspace_root).config.artifact_max_bytes
+    artifact_limit = load_project_context(
+        workspace_root, require_initialized=False
+    ).config.artifact_max_bytes
     archive = read_project_archive(source_path, max_artifact_bytes=artifact_limit)
     payload = cast(dict[str, object], archive["payload"])
     manifest = cast(dict[str, object], archive["manifest"])

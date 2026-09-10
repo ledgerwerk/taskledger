@@ -244,8 +244,9 @@ def test_config_set_rejects_invalid_values_with_json_error(tmp_path: Path) -> No
             "prompt_profiles.planning.max_required_questions",
         ],
     )
-    # config get now also validates values
-    assert get_result.exit_code == 1, get_result.stdout
+    # Rejected writes are atomic; the previously valid value remains readable.
+    assert get_result.exit_code == 0, get_result.stdout
+    assert _json(get_result)["result"]["value"] == 3
 
 
 # specmason: req=REQ-0014 ac=AC-0128

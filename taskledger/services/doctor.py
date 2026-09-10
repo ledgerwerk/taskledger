@@ -12,6 +12,7 @@ from taskledger.domain.models import (
     TaskRunRecord,
 )
 from taskledger.domain.states import TASKLEDGER_STORAGE_LAYOUT_VERSION
+from taskledger.errors import LaunchError
 from taskledger.storage.events import load_events
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.migrations import inspect_records_for_migration
@@ -86,7 +87,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         artifact_limit_bytes = merge_project_config(
             load_project_config_document(resolved_paths.config_path)
         ).artifact_max_bytes
-    except Exception:  # noqa: BLE001
+    except LaunchError:
         artifact_limit_bytes = ABSOLUTE_MAX_ARTIFACT_BYTES
 
     return DoctorScanContext(
