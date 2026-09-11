@@ -1476,6 +1476,7 @@ def add_validation_check(
     status: str,
     details: str | None = None,
     evidence: tuple[str, ...] = (),
+    implementation_check_refs: tuple[str, ...] = (),
 ) -> TaskRunRecord:
     from taskledger.services.validation_flow import (
         add_validation_check as _add_validation_check,
@@ -1489,6 +1490,7 @@ def add_validation_check(
         status=status,
         details=details,
         evidence=evidence,
+        implementation_check_refs=implementation_check_refs,
     )
 
 

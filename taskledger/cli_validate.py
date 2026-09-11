@@ -248,6 +248,7 @@ def register_validate_v2_commands(app: typer.Typer) -> None:
         details: str | None,
         evidence: list[str] | None,
         task_ref: str | None,
+        implementation_check_refs: list[str] | None,
     ) -> None:
         state = cli_state_from_context(ctx)
         try:
@@ -260,6 +261,7 @@ def register_validate_v2_commands(app: typer.Typer) -> None:
                 status=status,
                 details=details,
                 evidence=tuple(evidence or ()),
+                implementation_check_refs=tuple(implementation_check_refs or ()),
             )
         except LaunchError as exc:
             emit_error(ctx, exc)
@@ -272,6 +274,13 @@ def register_validate_v2_commands(app: typer.Typer) -> None:
         criterion: Annotated[str, typer.Option("--criterion")],
         status: Annotated[str, typer.Option("--status")] = "pass",
         evidence: Annotated[list[str] | None, typer.Option("--evidence")] = None,
+        implementation_check_refs: Annotated[
+            list[str] | None,
+            typer.Option(
+                "--from-implementation-check",
+                help="Explicitly adopt reusable implementation check evidence.",
+            ),
+        ] = None,
         name: Annotated[str | None, typer.Option("--name")] = None,
         details: Annotated[str | None, typer.Option("--details")] = None,
         task_ref: TaskOption = None,
@@ -284,6 +293,7 @@ def register_validate_v2_commands(app: typer.Typer) -> None:
             details=details,
             evidence=evidence,
             task_ref=task_ref,
+            implementation_check_refs=implementation_check_refs,
         )
 
     @app.command("finish")

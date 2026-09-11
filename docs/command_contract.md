@@ -178,6 +178,8 @@ Rules:
 
 - `validate command -- ...` records managed validation command evidence during an active validation run.
 - A non-zero validation command does not create a `ValidationCheck`; explicitly classify and record criteria with `validate check`.
+- A passing implementation command may be adopted explicitly as validation evidence with `validate check --from-implementation-check CHECK_ID` only when Taskledger reports an exact final/current workspace snapshot match.
+- This is evidence reuse, not a generic command cache. Rerun validation when fresh execution or external runtime state matters.
 
 ## Archive import lock policy
 

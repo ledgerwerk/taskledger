@@ -386,6 +386,7 @@ class ValidationCheck:
     status: ValidationCheckStatus = "pass"
     details: str | None = None
     evidence: tuple[str, ...] = ()
+    implementation_check_refs: tuple[str, ...] = ()
     waiver: CriterionWaiver | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -397,6 +398,7 @@ class ValidationCheck:
             "details": self.details,
             "evidence": list(self.evidence),
             "waiver": self.waiver.to_dict() if self.waiver is not None else None,
+            "implementation_check_refs": list(self.implementation_check_refs),
         }
         return payload
 
@@ -423,6 +425,9 @@ class ValidationCheck:
             status=status,
             details=_optional_string(data.get("details")),
             evidence=_string_tuple(data.get("evidence")),
+            implementation_check_refs=_string_tuple(
+                data.get("implementation_check_refs")
+            ),
             waiver=CriterionWaiver.from_dict(data.get("waiver")),
         )
 

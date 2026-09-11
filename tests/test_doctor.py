@@ -21,6 +21,7 @@ from taskledger.domain.models import (
     TaskTodo,
     TodoCollection,
 )
+from taskledger.domain.sidecars import ValidationCheck
 from taskledger.services.doctor import (
     inspect_v2_indexes,
     inspect_v2_locks,
@@ -536,6 +537,35 @@ def test_inspect_validation_run_references_missing_impl(tmp_path: Path) -> None:
     )
     result = inspect_v2_project(tmp_path)
     assert any("references missing" in e for e in result["errors"])
+
+
+def test_inspect_validation_check_references_missing_implementation_check(
+    tmp_path: Path,
+) -> None:
+    task = _task()
+    save_task(tmp_path, task)
+    save_run(
+        tmp_path,
+        TaskRunRecord(
+            run_id="run-val-1",
+            task_id=task.id,
+            run_type="validation",
+            status="running",
+            checks=(
+                ValidationCheck(
+                    name="ac-0001",
+                    id="check-0001",
+                    criterion_id="ac-0001",
+                    implementation_check_refs=("check-9999",),
+                ),
+            ),
+        ),
+    )
+    result = inspect_v2_project(tmp_path)
+    assert any(
+        "references missing implementation check check-9999" in error
+        for error in result["errors"]
+    )
 
 
 # specmason: req=REQ-0017 ac=AC-0203

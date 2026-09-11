@@ -38,6 +38,12 @@ def add_check(
         "other",
     ] = "other",
     artifact_refs: tuple[str, ...] = (),
+    cwd: str | None = None,
+    workspace_git_commit: str | None = None,
+    workspace_content_hash: str | None = None,
+    workspace_paths_hash: str | None = None,
+    workspace_entry_count: int | None = None,
+    workspace_snapshot_format: str | None = None,
 ) -> ImplementationCheckRecord:
     task = resolve_task(workspace_root, task_ref)
     _tasks._ensure_not_archived(task, operation="record checks on")
@@ -74,6 +80,12 @@ def add_check(
         status=status,
         category=category,
         summary=(summary or "").strip() or None,
+        cwd=cwd,
+        workspace_git_commit=workspace_git_commit,
+        workspace_content_hash=workspace_content_hash,
+        workspace_paths_hash=workspace_paths_hash,
+        workspace_entry_count=workspace_entry_count,
+        workspace_snapshot_format=workspace_snapshot_format,
     )
     save_check(workspace_root, check)
     save_run(

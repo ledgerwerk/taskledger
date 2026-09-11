@@ -357,6 +357,7 @@ linked-file drift checks.
 2. `taskledger validate start`
 3. Check `taskledger validate status` to see current validation state and blockers.
 4. Run verification with `taskledger validate command -- ...` whenever practical.
+   - If a passing implementation check is reported reusable for the exact current snapshot, a validator may cite it explicitly with `--from-implementation-check CHECK_ID` instead of rerunning that command.
 5. Record criterion results: `taskledger validate check --criterion ac-0001 --status pass|fail|warn|not_run --evidence "..."`
 6. Optionally waive criteria with user authority: `taskledger validate waive --criterion ac-0001 --reason "..."`.
 7. Check `taskledger validate status` again to confirm all mandatory gates pass.
@@ -397,6 +398,7 @@ not interpret those references.
 taskledger link add --url specs/behavior/features/checkout/payment.feature --label "behavior spec"
 taskledger file link specs/behavior/features/checkout/payment.feature --kind doc --label "behavior spec"
 taskledger validate check --criterion ac-0001 --status pass --evidence "pytest tests/test_checkout_payment.py::test_payment_flow"
+taskledger validate check --criterion ac-0001 --status pass --from-implementation-check check-0002 --details "Reused exact-snapshot implementation evidence"
 ```
 
 ## Required logging

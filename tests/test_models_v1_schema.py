@@ -39,6 +39,7 @@ def test_persisted_models_round_trip_with_schema_metadata() -> None:
         criterion_id="ac-0001",
         status="pass",
         evidence=("pytest -q",),
+        implementation_check_refs=("check-0002",),
     )
 
     records = [

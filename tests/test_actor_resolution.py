@@ -68,6 +68,7 @@ class TestResolveActorHarnessContext:
     ) -> None:
         monkeypatch.setenv("PI_VERSION", "1")
         monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session-1")
+        monkeypatch.delenv("PI_SESSION_ID", raising=False)
 
         actor = resolve_actor()
 

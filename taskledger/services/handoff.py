@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from taskledger.domain.check import ImplementationCheckRecord
 from taskledger.domain.models import (
     CodeChangeRecord,
     TaskRecord,
@@ -21,6 +22,10 @@ from taskledger.domain.states import (
     normalize_handoff_mode,
 )
 from taskledger.errors import LaunchError
+from taskledger.services.check_reuse import (
+    plan_command_matches_check,
+    reusable_implementation_checks,
+)
 from taskledger.services.worker_context import (
     append_worker_contract as _append_worker_contract,
 )
@@ -256,6 +261,21 @@ def build_handoff_payload(
     latest_impl = _latest_run(runs, "implementation")
     latest_validation = _latest_run(runs, "validation")
     lock = read_lock(task_lock_path(resolve_v2_paths(workspace_root), task.id))
+    check_reuse_by_id: dict[str, dict[str, object]] = {}
+    if request.context_for in {"validator", "full"} and latest_validation is not None:
+        check_reuse_by_id = {
+            item.check_id: item.to_dict()
+            for item in reusable_implementation_checks(
+                workspace_root, task, latest_validation
+            )
+        }
+    check_payload: list[dict[str, object]] = []
+    for check in checks:
+        payload = check.to_dict()
+        reuse = check_reuse_by_id.get(check.check_id)
+        if reuse is not None:
+            payload["reuse"] = reuse
+        check_payload.append(payload)
     active_stage = (
         None
         if lock is None or lock_is_expired(lock)
@@ -301,6 +321,7 @@ def build_handoff_payload(
         "mode": request.mode,
         "context_for": request.context_for,
         "scope": request.scope,
+        "workspace_root": str(workspace_root),
         "context_format": request.format_name,
         "focus": focus,
         "task": {**task.to_dict(), "active_stage": active_stage},
@@ -327,10 +348,11 @@ def build_handoff_payload(
         "lock": lock.to_dict() if lock is not None else None,
         "lock_status": lock_status(lock),
         "changes": [change.to_dict() for change in changes],
-        "checks": [check.to_dict() for check in checks],
+        "checks": check_payload,
         "focused_changes": focus["focused_changes"],
         "validation_history": validation_history,
         "validation_status": validation_status_report,
+        "implementation_check_reuse": list(check_reuse_by_id.values()),
         "parent_task": relationships["parent_task"],
         "follow_up_tasks": relationships["follow_up_tasks"],
         "review_contract": (
@@ -411,7 +433,12 @@ def render_markdown_handoff(payload: dict[str, object]) -> str:
         _append_checks_log(lines, payload.get("checks"), payload["changes"])
         _append_validation_status(lines, payload.get("validation_status"))
         _append_validation_history(lines, payload["validation_history"])
-        _append_required_commands(lines, payload.get("accepted_plan"))
+        _append_required_commands(
+            lines,
+            payload.get("accepted_plan"),
+            payload.get("checks"),
+            workspace_root=Path(str(payload["workspace_root"])),
+        )
         _append_required_output(lines, context_for)
         _append_workflow_guidance(lines, payload.get("workflow_guidance"))
     elif context_for == "spec-reviewer":
@@ -441,7 +468,12 @@ def render_markdown_handoff(payload: dict[str, object]) -> str:
         _append_checks_log(lines, payload.get("checks"), payload["changes"])
         _append_validation_status(lines, payload.get("validation_status"))
         _append_validation_history(lines, payload["validation_history"])
-        _append_required_commands(lines, payload.get("accepted_plan"))
+        _append_required_commands(
+            lines,
+            payload.get("accepted_plan"),
+            payload.get("checks"),
+            workspace_root=Path(str(payload["workspace_root"])),
+        )
         _append_required_output(lines, context_for)
     else:
         _append_guardrails(lines, payload["guardrails"])
@@ -803,25 +835,37 @@ def _append_change_log(
 
 
 def _append_checks_log(lines: list[str], checks: object, changes: object) -> None:
-    all_checks: list[dict] = []
+    all_checks: list[dict[str, object]] = []
     if isinstance(checks, list):
-        for ck in checks:
-            if isinstance(ck, dict):
-                all_checks.append(ck)
-    # Legacy command changes displayed as checks
+        for check in checks:
+            if isinstance(check, dict):
+                all_checks.append(check)
     if isinstance(changes, list):
-        for ch in changes:
-            if isinstance(ch, dict) and ch.get("kind") == "command":
-                all_checks.append(ch)
+        for change in changes:
+            if isinstance(change, dict) and change.get("kind") == "command":
+                all_checks.append(change)
     if not all_checks:
         return
-    lines.extend(["## Checks", ""])
-    for ck in all_checks:
-        cid = ck.get("check_id") or ck.get("change_id", "?")
-        cmd = ck.get("command", "?")
-        exit_code = ck.get("exit_code")
-        exit_str = f" (exit {exit_code})" if exit_code is not None else ""
-        lines.append(f"- {cid}: `{cmd}`{exit_str}")
+    has_reuse = any("reuse" in check for check in all_checks)
+    heading = "## Implementation Checks" if has_reuse else "## Checks"
+    lines.extend([heading, ""])
+    for check in all_checks:
+        check_id = check.get("check_id") or check.get("change_id", "?")
+        command = check.get("command", "?")
+        exit_code = check.get("exit_code")
+        exit_text = f" (exit {exit_code})" if exit_code is not None else ""
+        reuse = check.get("reuse")
+        if isinstance(reuse, dict):
+            if reuse.get("eligible") is True:
+                label = "reusable"
+            elif reuse.get("reason_code") == "missing_check_snapshot":
+                label = "unknown provenance"
+            else:
+                label = "stale"
+            lines.append(f"- {check_id} [{label}]: `{command}`{exit_text}")
+            lines.append(f"  - {reuse.get('message', '')}")
+        else:
+            lines.append(f"- {check_id}: `{command}`{exit_text}")
     lines.append("")
 
 
@@ -878,7 +922,12 @@ def _append_validation_status(lines: list[str], status_report: object) -> None:
         lines.append("")
 
 
-def _append_required_commands(lines: list[str], accepted_plan: object) -> None:
+def _append_required_commands(
+    lines: list[str],
+    accepted_plan: object,
+    checks: object = None,
+    workspace_root: Path | None = None,
+) -> None:
     lines.extend(["## Required Commands", ""])
     if not isinstance(accepted_plan, dict):
         lines.append("- none")
@@ -887,7 +936,29 @@ def _append_required_commands(lines: list[str], accepted_plan: object) -> None:
     commands = accepted_plan.get("test_commands")
     if isinstance(commands, list) and commands:
         for item in commands:
+            reusable_id = None
+            if (
+                isinstance(item, str)
+                and workspace_root is not None
+                and isinstance(checks, list)
+            ):
+                for check_data in checks:
+                    if not isinstance(check_data, dict):
+                        continue
+                    reuse = check_data.get("reuse")
+                    if not isinstance(reuse, dict) or reuse.get("eligible") is not True:
+                        continue
+                    try:
+                        check = ImplementationCheckRecord.from_dict(check_data)
+                    except LaunchError:
+                        continue
+                    if plan_command_matches_check(workspace_root, item, check):
+                        reusable_id = check.check_id
+                        break
             lines.append(f"- {item}")
+            if reusable_id is not None:
+                lines.append(f"  - reusable implementation evidence: {reusable_id}")
+                lines.append("  - rerun only if fresh execution is required")
     else:
         lines.append("- none")
     lines.append("")

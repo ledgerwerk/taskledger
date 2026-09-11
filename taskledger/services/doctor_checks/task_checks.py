@@ -40,6 +40,7 @@ def _scan_task_integrity_phases(  # noqa: C901
     from taskledger.storage.task_store import (
         change_markdown_path,
         list_changes,
+        list_checks,
         list_handoffs_with_errors,
         list_plans,
         load_requirements,
@@ -291,6 +292,9 @@ def _scan_task_integrity_phases(  # noqa: C901
                 )
 
         # Validation run checks
+        implementation_check_ids = {
+            check.check_id for check in list_checks(workspace_root, task.id)
+        }
         for run in task_runs[task.id]:
             if run.run_type == "validation" and run.based_on_implementation_run:
                 linked = run_map.get((task.id, run.based_on_implementation_run))
@@ -354,6 +358,17 @@ def _scan_task_integrity_phases(  # noqa: C901
                             ),
                         ],
                     )
+            for validation_check in run.checks:
+                for (
+                    implementation_check_id
+                ) in validation_check.implementation_check_refs:
+                    if implementation_check_id not in implementation_check_ids:
+                        errors.append(
+                            f"Validation check {validation_check.id} in "
+                            f"task {task.id} "
+                            f"references missing implementation check "
+                            f"{implementation_check_id}."
+                        )
 
 
 def scan_task_integrity(

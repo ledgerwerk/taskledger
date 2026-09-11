@@ -30,6 +30,12 @@ class ImplementationCheckRecord:
     command: str
     argv: tuple[str, ...] = ()
     exit_code: int | None = None
+    cwd: str | None = None
+    workspace_git_commit: str | None = None
+    workspace_content_hash: str | None = None
+    workspace_paths_hash: str | None = None
+    workspace_entry_count: int | None = None
+    workspace_snapshot_format: str | None = None
     status: Literal["passed", "failed", "unknown"] = "unknown"
     category: Literal[
         "test", "lint", "format", "typecheck", "build", "security", "other"
@@ -54,6 +60,12 @@ class ImplementationCheckRecord:
             "command": self.command,
             "argv": list(self.argv),
             "exit_code": self.exit_code,
+            "cwd": self.cwd,
+            "workspace_git_commit": self.workspace_git_commit,
+            "workspace_content_hash": self.workspace_content_hash,
+            "workspace_paths_hash": self.workspace_paths_hash,
+            "workspace_entry_count": self.workspace_entry_count,
+            "workspace_snapshot_format": self.workspace_snapshot_format,
             "status": self.status,
             "category": self.category,
             "summary": self.summary,
@@ -86,6 +98,14 @@ class ImplementationCheckRecord:
             timestamp=_optional_string(data.get("timestamp")) or utc_now_iso(),
             command=_string_value(data, "command"),
             argv=_string_tuple(data.get("argv")),
+            cwd=_optional_string(data.get("cwd")),
+            workspace_git_commit=_optional_string(data.get("workspace_git_commit")),
+            workspace_content_hash=_optional_string(data.get("workspace_content_hash")),
+            workspace_paths_hash=_optional_string(data.get("workspace_paths_hash")),
+            workspace_entry_count=_optional_int(data.get("workspace_entry_count")),
+            workspace_snapshot_format=_optional_string(
+                data.get("workspace_snapshot_format")
+            ),
             exit_code=_optional_int(data.get("exit_code")),
             status=cast(Literal["passed", "failed", "unknown"], status),
             category=cast(

@@ -24,6 +24,12 @@ class TestImplementationCheckRecordRoundTrip:
             timestamp="2025-01-01T00:00:00Z",
             command="python -m pytest -q",
             argv=("python", "-m", "pytest", "-q"),
+            cwd="/workspace",
+            workspace_git_commit="abc123",
+            workspace_content_hash="sha256:content",
+            workspace_paths_hash="sha256:paths",
+            workspace_entry_count=3,
+            workspace_snapshot_format="worktree-content:v1",
             exit_code=0,
             status="passed",
             category="test",
@@ -32,6 +38,26 @@ class TestImplementationCheckRecordRoundTrip:
         data = record.to_dict()
         restored = ImplementationCheckRecord.from_dict(data)
         assert restored == record
+
+    def test_legacy_record_without_snapshot_provenance_loads(self) -> None:
+        record = ImplementationCheckRecord.from_dict(
+            {
+                "schema_version": 1,
+                "object_type": "implementation_check",
+                "file_version": "v2",
+                "check_id": "check-0001",
+                "task_id": "task-0001",
+                "implementation_run": "run-0001",
+                "timestamp": "2025-01-01T00:00:00Z",
+                "command": "python -m pytest",
+            }
+        )
+        assert record.cwd is None
+        assert record.workspace_git_commit is None
+        assert record.workspace_content_hash is None
+        assert record.workspace_paths_hash is None
+        assert record.workspace_entry_count is None
+        assert record.workspace_snapshot_format is None
 
     # specmason: req=REQ-0026 ac=AC-0322
     def test_from_dict_rejects_wrong_object_type(self) -> None:

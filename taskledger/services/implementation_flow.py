@@ -452,6 +452,12 @@ def run_implementation_command(
         cwd=execution_cwd,
         workspace_root=workspace_root,
     )
+    from taskledger.services.workspace_snapshot import (
+        SNAPSHOT_FORMAT,
+        capture_workspace_content_snapshot,
+    )
+
+    command_snapshot = capture_workspace_content_snapshot(workspace_root)
     record_managed_shell_command(
         workspace_root,
         task_id=task.id,
@@ -488,6 +494,12 @@ def run_implementation_command(
             argv, completed.returncode, artifact_ref, artifact_result
         ),
         category=classify_check_command(argv),
+        cwd=str(execution_cwd),
+        workspace_git_commit=command_snapshot.git_commit,
+        workspace_content_hash=command_snapshot.content_hash,
+        workspace_paths_hash=command_snapshot.paths_hash,
+        workspace_entry_count=command_snapshot.entry_count,
+        workspace_snapshot_format=SNAPSHOT_FORMAT,
         artifact_refs=((artifact_ref,) if artifact_ref else ()),
     )
     return {

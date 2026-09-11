@@ -158,6 +158,14 @@ rules, or user-answer requirements.
   criterion failure.
 - Normalize filesystem paths against the same explicit project root before comparing
   path collections.
+- Before rerunning an expensive validation command, inspect reusable passing
+  implementation evidence.
+- Reuse is allowed only when Taskledger confirms the check matches the exact final
+  implementation snapshot and the current workspace.
+- Record reused evidence explicitly with `validate check --from-implementation-check
+  CHECK_ID`.
+- Rerun when fresh or independent execution is required, provenance is missing,
+  or evidence is stale.
 """
 
 

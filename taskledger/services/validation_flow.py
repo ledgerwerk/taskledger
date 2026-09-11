@@ -27,6 +27,7 @@ from taskledger.domain.states import (
 from taskledger.errors import LaunchError
 from taskledger.services import command_runner
 from taskledger.services import tasks as _tasks
+from taskledger.services.check_reuse import evaluate_implementation_check_reuse
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     resolve_plan,
@@ -140,6 +141,17 @@ def validation_status(
 
             evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
             report["implementation_snapshot"] = evaluation.to_dict()
+    from taskledger.services.check_reuse import reusable_implementation_checks
+
+    if run is None and task.latest_validation_run is not None:
+        from taskledger.storage.task_store import resolve_run
+
+        run = resolve_run(workspace_root, task.id, task.latest_validation_run)
+    if run is not None and run.run_type == "validation":
+        report["implementation_check_reuse"] = [
+            evaluation.to_dict()
+            for evaluation in reusable_implementation_checks(workspace_root, task, run)
+        ]
     return {"kind": "validation_status", "result": report}
 
 
@@ -259,6 +271,7 @@ def add_validation_check(
     status: str,
     details: str | None = None,
     evidence: tuple[str, ...] = (),
+    implementation_check_refs: tuple[str, ...] = (),
 ) -> TaskRunRecord:
     task, run = _require_running_validation_with_decision(workspace_root, task_ref)
     normalized_status = normalize_validation_check_status(status)
@@ -288,13 +301,52 @@ def add_validation_check(
             resolved_criterion,
         )
 
+    normalized_implementation_check_refs = tuple(
+        item.strip() for item in implementation_check_refs if item.strip()
+    )
+    if normalized_implementation_check_refs:
+        from taskledger.services.workspace_snapshot import (
+            capture_workspace_content_snapshot,
+        )
+        from taskledger.storage.task_store import resolve_check
+
+        current_state = capture_workspace_content_snapshot(workspace_root)
+        for implementation_check_id in normalized_implementation_check_refs:
+            implementation_check = resolve_check(
+                workspace_root, task.id, implementation_check_id
+            )
+            evaluation = evaluate_implementation_check_reuse(
+                workspace_root,
+                task,
+                run,
+                implementation_check,
+                current_state=current_state,
+            )
+            if not evaluation.eligible:
+                raise LaunchError(
+                    f"Cannot reuse implementation check {implementation_check_id}: "
+                    f"{evaluation.message}",
+                    details=evaluation.to_dict(),
+                    code="IMPLEMENTATION_CHECK_NOT_REUSABLE",
+                    exit_code=EXIT_CODE_BAD_INPUT,
+                )
+    resolved_evidence = tuple(item.strip() for item in evidence if item.strip())
+    if normalized_implementation_check_refs:
+        resolved_evidence = (
+            *resolved_evidence,
+            *(
+                f"implementation check {item}: exact snapshot reuse"
+                for item in normalized_implementation_check_refs
+            ),
+        )
     check = ValidationCheck(
         name=(name or resolved_criterion or check_id).strip(),
         id=check_id,
         criterion_id=resolved_criterion,
         status=normalized_status,
         details=details.strip() if details else None,
-        evidence=tuple(item.strip() for item in evidence if item.strip()),
+        evidence=resolved_evidence,
+        implementation_check_refs=normalized_implementation_check_refs,
     )
     updated = replace(run, checks=(*run.checks, check))
     save_run(workspace_root, updated)
@@ -307,6 +359,7 @@ def add_validation_check(
             "check_id": check.id,
             "criterion_id": check.criterion_id,
             "status": check.status,
+            "implementation_check_refs": list(check.implementation_check_refs),
             "evidence": " | ".join(check.evidence),
             "details": check.details,
         },
