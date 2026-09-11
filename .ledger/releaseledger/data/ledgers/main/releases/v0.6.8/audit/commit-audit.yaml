@@ -11,66 +11,69 @@ git_head_sha: b5677429bc9b8209d918456cfb6a30fd11ce4970
 git_range: fa5b2b7720d3f05530e32e8389b7286e6fb186b1..b5677429bc9b8209d918456cfb6a30fd11ce4970
 commit_count: 1
 rows:
-- sha: b5677429bc9b8209d918456cfb6a30fd11ce4970
-  source_ref: git:b5677429bc9b8209d918456cfb6a30fd11ce4970
-  short_sha: b567742
-  changed_paths:
-  - docs/command_contract.md
-  - docs/full_task_cycle.md
-  - skills/taskledger/SKILL.md
-  - taskledger/cli_validate.py
-  - taskledger/domain/check.py
-  - taskledger/domain/sidecars.py
-  - taskledger/services/check_reuse.py
-  - taskledger/services/check_tracking.py
-  - taskledger/services/doctor_checks/task_checks.py
-  - taskledger/services/handoff.py
-  - taskledger/services/implementation_flow.py
-  - taskledger/services/tasks.py
-  - taskledger/services/validation_flow.py
-  - taskledger/services/workflow_guidance.py
-  - tests/test_actor_resolution.py
-  - tests/test_check_reuse.py
-  - tests/test_check_reuse_context.py
-  - tests/test_doctor.py
-  - tests/test_implementation_checks.py
-  - tests/test_models_v1_schema.py
-  stats:
-    files_changed: 0
-    insertions: 841
-    deletions: 20
-  inspected: true
-  inspected_paths:
-  - docs/command_contract.md
-  - docs/full_task_cycle.md
-  - skills/taskledger/SKILL.md
-  - taskledger/cli_validate.py
-  - taskledger/domain/check.py
-  - taskledger/domain/sidecars.py
-  - taskledger/services/check_reuse.py
-  - taskledger/services/check_tracking.py
-  - taskledger/services/doctor_checks/task_checks.py
-  - taskledger/services/handoff.py
-  - taskledger/services/implementation_flow.py
-  - taskledger/services/tasks.py
-  - taskledger/services/validation_flow.py
-  - taskledger/services/workflow_guidance.py
-  - tests/test_actor_resolution.py
-  - tests/test_check_reuse.py
-  - tests/test_check_reuse_context.py
-  - tests/test_doctor.py
-  - tests/test_implementation_checks.py
-  - tests/test_models_v1_schema.py
-  observed_behavior: Passing implementation command checks now record workspace snapshot
-    provenance, and validators can explicitly reuse those checks only when the implementation
-    and current workspace snapshots match exactly. Validation records the reused check
-    reference, while handoff context identifies reusable, stale, and unknown provenance
-    checks.
-  public_impact: public
-  decision: accepted
-  stale: false
-  evidence_subject: 'feat: improved implementation check handling to reduce amount
-    of tests needed for verification'
-  target_entry_key: implementation-check-evidence-reuse
-  notes: Reviewed the implementation, validation, handoff, CLI, documentation, and
-    focused regression tests in this commit.
+  - sha: b5677429bc9b8209d918456cfb6a30fd11ce4970
+    source_ref: git:b5677429bc9b8209d918456cfb6a30fd11ce4970
+    short_sha: b567742
+    changed_paths:
+      - docs/command_contract.md
+      - docs/full_task_cycle.md
+      - skills/taskledger/SKILL.md
+      - taskledger/cli_validate.py
+      - taskledger/domain/check.py
+      - taskledger/domain/sidecars.py
+      - taskledger/services/check_reuse.py
+      - taskledger/services/check_tracking.py
+      - taskledger/services/doctor_checks/task_checks.py
+      - taskledger/services/handoff.py
+      - taskledger/services/implementation_flow.py
+      - taskledger/services/tasks.py
+      - taskledger/services/validation_flow.py
+      - taskledger/services/workflow_guidance.py
+      - tests/test_actor_resolution.py
+      - tests/test_check_reuse.py
+      - tests/test_check_reuse_context.py
+      - tests/test_doctor.py
+      - tests/test_implementation_checks.py
+      - tests/test_models_v1_schema.py
+    stats:
+      files_changed: 0
+      insertions: 841
+      deletions: 20
+    inspected: true
+    inspected_paths:
+      - docs/command_contract.md
+      - docs/full_task_cycle.md
+      - skills/taskledger/SKILL.md
+      - taskledger/cli_validate.py
+      - taskledger/domain/check.py
+      - taskledger/domain/sidecars.py
+      - taskledger/services/check_reuse.py
+      - taskledger/services/check_tracking.py
+      - taskledger/services/doctor_checks/task_checks.py
+      - taskledger/services/handoff.py
+      - taskledger/services/implementation_flow.py
+      - taskledger/services/tasks.py
+      - taskledger/services/validation_flow.py
+      - taskledger/services/workflow_guidance.py
+      - tests/test_actor_resolution.py
+      - tests/test_check_reuse.py
+      - tests/test_check_reuse_context.py
+      - tests/test_doctor.py
+      - tests/test_implementation_checks.py
+      - tests/test_models_v1_schema.py
+    observed_behavior:
+      Passing implementation command checks now record workspace snapshot
+      provenance, and validators can explicitly reuse those checks only when the implementation
+      and current workspace snapshots match exactly. Validation records the reused check
+      reference, while handoff context identifies reusable, stale, and unknown provenance
+      checks.
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject:
+      "feat: improved implementation check handling to reduce amount
+      of tests needed for verification"
+    target_entry_key: implementation-check-evidence-reuse
+    notes:
+      Reviewed the implementation, validation, handoff, CLI, documentation, and
+      focused regression tests in this commit.

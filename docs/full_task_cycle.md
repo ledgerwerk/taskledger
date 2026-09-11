@@ -266,9 +266,11 @@ taskledger validate finish --result passed --summary "Parser fix validated with 
 
 Use `taskledger validate command -- ...` to preserve validation command cwd, output, exit status, and transcript evidence. A non-zero command is not automatically a failed acceptance criterion. If the command is a malformed probe or setup failure, correct it and rerun before recording criterion status. Only record `fail` after the target behavior was evaluated and failed.
 When implementation checks have exact tested-state provenance, validation context and status may identify them as reusable. Record that decision explicitly, for example:
+
 ```bash
 taskledger validate check --criterion ac-0001 --status pass --from-implementation-check check-0002 --details "Reused passing implementation evidence on the exact current snapshot."
 ```
+
 `validate command` always executes its child command normally; it does not silently reuse implementation results.
 
 ### If validation finds a bug
