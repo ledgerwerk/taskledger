@@ -81,6 +81,8 @@ Current sanctioned imports:
   Implement command wrapper records managed-shell command failures.
 - `taskledger/cli_validate.py:taskledger.services.agent_logging` — Validation
   command wrapper records managed-shell command failures.
+- `taskledger/cli_misc.py:taskledger.services.actors` — Todo updates resolve
+  current identity to persist completion actor and harness metadata.
 - `taskledger/cli_misc.py:taskledger.services.doctor` — Doctor commands
   still consume doctor service inspectors directly.
 - `taskledger/cli_pipeline.py:taskledger.services.handoff` — Pipeline

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -198,3 +199,24 @@ class TestResolveActorHarnessContext:
 
         assert actor.pid is None
         assert actor.pid_scope == "unverifiable_harness"
+
+    def test_stored_generic_actor_retains_detected_harness_tool(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from taskledger.domain.actor import ActorRef
+        from taskledger.services import actors
+
+        monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
+        monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session-1")
+        monkeypatch.setattr(
+            actors,
+            "load_actor_state",
+            lambda _: ActorRef(actor_name="taskledger"),
+        )
+        monkeypatch.setattr(actors, "load_harness_state", lambda _: None)
+
+        actor = resolve_actor(workspace_root=Path("."))
+
+        assert actor.actor_name == "taskledger"
+        assert actor.tool == "pi"
+        assert actor.session_id == "pi-session-1"

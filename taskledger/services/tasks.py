@@ -94,6 +94,7 @@ from taskledger.storage.locks import (
     lock_is_expired,
     read_lock,
     remove_lock,
+    update_lock,
     write_lock,
 )
 from taskledger.storage.project_config import load_worker_pipeline_config
@@ -1560,16 +1561,40 @@ def list_locks(*args, **kwargs):  # type: ignore[no-untyped-def]
     return _impl(*args, **kwargs)
 
 
-def next_action(workspace_root: Path, task_ref: str) -> dict[str, object]:
+def next_action(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    current_actor: ActorRef | None = None,
+    current_harness: HarnessRef | None = None,
+) -> dict[str, object]:
     from taskledger.services.navigation import next_action as navigation_next_action
 
-    return navigation_next_action(workspace_root, task_ref)
+    return navigation_next_action(
+        workspace_root,
+        task_ref,
+        current_actor=current_actor,
+        current_harness=current_harness,
+    )
 
 
-def can_perform(workspace_root: Path, task_ref: str, action: str) -> dict[str, object]:
+def can_perform(
+    workspace_root: Path,
+    task_ref: str,
+    action: str,
+    *,
+    current_actor: ActorRef | None = None,
+    current_harness: HarnessRef | None = None,
+) -> dict[str, object]:
     from taskledger.services.navigation import can_perform as navigation_can_perform
 
-    return navigation_can_perform(workspace_root, task_ref, action)
+    return navigation_can_perform(
+        workspace_root,
+        task_ref,
+        action,
+        current_actor=current_actor,
+        current_harness=current_harness,
+    )
 
 
 def task_dossier(
@@ -1959,6 +1984,74 @@ def _require_running_run(
 
 def _current_lock(workspace_root: Path, task_id: str) -> TaskLock | None:
     return read_lock(task_lock_path(resolve_v2_paths(workspace_root), task_id))
+
+
+def renew_lock_lease(
+    workspace_root: Path,
+    expected_lock: TaskLock,
+    *,
+    current_actor: ActorRef,
+    current_harness: HarnessRef | None,
+    now: datetime | None = None,
+) -> TaskLock:
+    from taskledger.services.lock_diagnostics import (
+        lock_owned_by_current_execution,
+    )
+
+    lock_path = task_lock_path(resolve_v2_paths(workspace_root), expected_lock.task_id)
+    current_lock = read_lock(lock_path)
+    if current_lock is None or current_lock.lock_id != expected_lock.lock_id:
+        raise _cli_error(
+            f"Implementation lock for task {expected_lock.task_id} "
+            "changed before lease renewal.",
+            EXIT_CODE_LOCK_CONFLICT,
+        )
+    if (
+        current_lock.stage != "implementing"
+        or current_lock.run_id != expected_lock.run_id
+    ):
+        raise _cli_error(
+            f"Implementation lock for task {expected_lock.task_id} "
+            "no longer matches its active run.",
+            EXIT_CODE_LOCK_CONFLICT,
+        )
+    if lock_is_expired(current_lock):
+        raise _stale_lock_error(expected_lock.task_id, current_lock)
+    if not lock_owned_by_current_execution(
+        current_lock,
+        current_actor=current_actor,
+        current_harness=current_harness,
+    ):
+        raise _cli_error(
+            f"Current execution does not own implementation lock "
+            f"{current_lock.lock_id}.",
+            EXIT_CODE_LOCK_CONFLICT,
+        )
+
+    task = resolve_task(workspace_root, current_lock.task_id)
+    run = _require_run(workspace_root, task, current_lock.run_id)
+    if (
+        task.status_stage != "implementing"
+        or task.latest_implementation_run != current_lock.run_id
+        or run.run_type != "implementation"
+        or run.status != "running"
+    ):
+        raise _cli_error(
+            f"Implementation lock {current_lock.lock_id} no longer matches "
+            "an active implementation run.",
+            EXIT_CODE_LOCK_CONFLICT,
+        )
+
+    renewed_at = now or datetime.now(timezone.utc)
+    renewed_lock = replace(
+        current_lock,
+        last_heartbeat_at=renewed_at.isoformat(),
+        expires_at=(
+            renewed_at + timedelta(seconds=current_lock.lease_seconds)
+        ).isoformat(),
+    )
+    update_lock(lock_path, renewed_lock)
+    return renewed_lock
 
 
 def _lock_for_mutation(workspace_root: Path, task_id: str) -> TaskLock | None:

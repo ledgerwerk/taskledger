@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from taskledger.domain.actor import ActorRef
+from taskledger.domain.actor import ActorRef, HarnessRef
 from taskledger.domain.lock import TaskLock
 from taskledger.services.lock_diagnostics import (
+    CLASSIFICATION_ACTIVE_CURRENT_EXECUTION,
     CLASSIFICATION_ACTIVE_DEAD_LOCAL_PROCESS,
     CLASSIFICATION_ACTIVE_NO_PID,
     CLASSIFICATION_ACTIVE_OTHER_ACTOR,
@@ -487,7 +489,7 @@ class TestHarnessSessionDiagnostics:
     # specmason: req=REQ-0030 ac=AC-0354
     def test_harness_session_same_actor_classification(self) -> None:
         from taskledger.services.lock_diagnostics import (
-            CLASSIFICATION_ACTIVE_SAME_ACTOR,
+            CLASSIFICATION_ACTIVE_CURRENT_EXECUTION,
         )
 
         lock = _lock(
@@ -515,5 +517,271 @@ class TestHarnessSessionDiagnostics:
             pid_checker=lambda pid: PID_CHECK_DEAD,
         )
 
-        assert diag.classification == CLASSIFICATION_ACTIVE_SAME_ACTOR
+        assert diag.classification == CLASSIFICATION_ACTIVE_CURRENT_EXECUTION
         assert diag.remediation == ()
+
+
+class TestCurrentExecutionOwnership:
+    def test_matching_harness_session_proves_ownership_without_owner_pid(self) -> None:
+        from taskledger.domain.actor import HarnessRef
+        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
+
+        lock = _lock(
+            holder=_holder(
+                actor_type="agent",
+                actor_name="taskledger",
+                tool="pi",
+                session_id="pi-session-1",
+                pid=None,
+                pid_scope="unverifiable_harness",
+            )
+        )
+        from dataclasses import replace
+
+        lock = replace(
+            lock,
+            harness=HarnessRef(
+                harness_id="h-001",
+                name="pi",
+                kind="agent_harness",
+                session_id="pi-session-1",
+            ),
+        )
+        current = ActorRef(
+            actor_type="agent",
+            actor_name="taskledger",
+            tool="pi",
+            session_id="pi-session-1",
+        )
+
+        assert lock_owned_by_current_execution(
+            lock,
+            current_actor=current,
+            current_harness=HarnessRef(
+                harness_id="h-002",
+                name="pi",
+                kind="agent_harness",
+                session_id="pi-session-1",
+            ),
+            current_host=HOST_LOCAL,
+        )
+
+    def test_different_harness_sessions_do_not_prove_ownership(self) -> None:
+        from taskledger.domain.actor import HarnessRef
+        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
+
+        lock = _lock(
+            holder=_holder(
+                actor_type="agent",
+                actor_name="taskledger",
+                tool="pi",
+                session_id="pi-session-1",
+                pid=None,
+                pid_scope="unverifiable_harness",
+            )
+        )
+        current = ActorRef(
+            actor_type="agent",
+            actor_name="taskledger",
+            tool="pi",
+            session_id="pi-session-2",
+        )
+
+        assert not lock_owned_by_current_execution(
+            lock,
+            current_actor=current,
+            current_harness=HarnessRef(
+                harness_id="h-002",
+                name="pi",
+                kind="agent_harness",
+                session_id="pi-session-2",
+            ),
+            current_host=HOST_LOCAL,
+        )
+
+    def test_actor_name_alone_does_not_prove_ownership(self) -> None:
+        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
+
+        lock = _lock(
+            holder=_holder(
+                actor_type="agent",
+                actor_name="taskledger",
+                tool="pi",
+                session_id=None,
+                pid=None,
+                pid_scope="unverifiable_harness",
+            )
+        )
+
+        assert not lock_owned_by_current_execution(
+            lock,
+            current_actor=ActorRef(
+                actor_type="agent",
+                actor_name="taskledger",
+                tool="pi",
+            ),
+            current_host=HOST_LOCAL,
+        )
+
+    def test_same_stable_owner_pid_proves_ownership_on_same_host(self) -> None:
+        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
+
+        lock = _lock(
+            holder=_holder(
+                actor_type="agent",
+                actor_name="pi",
+                tool="pi",
+                host=HOST_LOCAL,
+                pid=512425,
+                pid_scope="owner",
+            )
+        )
+
+        assert lock_owned_by_current_execution(
+            lock,
+            current_actor=ActorRef(
+                actor_type="agent",
+                actor_name="pi",
+                tool="pi",
+                host=HOST_LOCAL,
+                pid=512425,
+                pid_scope="owner",
+            ),
+            current_host=HOST_LOCAL,
+        )
+
+    def test_command_pid_does_not_prove_ownership(self) -> None:
+        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
+
+        lock = _lock(
+            holder=_holder(
+                actor_type="agent",
+                actor_name="pi",
+                tool="pi",
+                pid=None,
+                command_pid=512425,
+                pid_scope="command",
+            )
+        )
+
+        assert not lock_owned_by_current_execution(
+            lock,
+            current_actor=ActorRef(
+                actor_type="agent",
+                actor_name="pi",
+                tool="pi",
+                pid=None,
+                command_pid=512425,
+                pid_scope="command",
+            ),
+            current_host=HOST_LOCAL,
+        )
+
+    def test_diagnose_current_session_classifies_current_execution(self) -> None:
+        lock = replace(
+            _lock(
+                holder=_holder(
+                    actor_type="agent",
+                    actor_name="taskledger",
+                    tool="pi",
+                    session_id="pi-session-1",
+                    pid=None,
+                    pid_scope="unverifiable_harness",
+                )
+            ),
+            harness=HarnessRef(
+                harness_id="h-001",
+                name="pi",
+                kind="agent_harness",
+                session_id="pi-session-1",
+            ),
+        )
+
+        diag = diagnose_lock(
+            lock,
+            current_actor=ActorRef(
+                actor_type="agent",
+                actor_name="taskledger",
+                tool="pi",
+                session_id="pi-session-1",
+            ),
+            current_harness=HarnessRef(
+                harness_id="h-002",
+                name="pi",
+                kind="agent_harness",
+                session_id="pi-session-1",
+            ),
+            now=NOW,
+            current_host=HOST_LOCAL,
+        )
+
+        assert diag.classification == CLASSIFICATION_ACTIVE_CURRENT_EXECUTION
+        assert diag.remediation == ()
+
+    def test_different_session_with_same_actor_is_not_current_execution(self) -> None:
+        lock = replace(
+            _lock(
+                holder=_holder(
+                    actor_type="agent",
+                    actor_name="taskledger",
+                    tool="pi",
+                    session_id="pi-session-1",
+                    pid=None,
+                    pid_scope="unverifiable_harness",
+                )
+            ),
+            harness=HarnessRef(
+                harness_id="h-001",
+                name="pi",
+                kind="agent_harness",
+                session_id="pi-session-1",
+            ),
+        )
+
+        diag = diagnose_lock(
+            lock,
+            current_actor=ActorRef(
+                actor_type="agent",
+                actor_name="taskledger",
+                tool="pi",
+                session_id="pi-session-2",
+            ),
+            current_harness=HarnessRef(
+                harness_id="h-002",
+                name="pi",
+                kind="agent_harness",
+                session_id="pi-session-2",
+            ),
+            now=NOW,
+            current_host=HOST_LOCAL,
+        )
+
+        assert diag.classification == CLASSIFICATION_ACTIVE_SAME_ACTOR
+        assert not diag.remediation
+
+    def test_same_owner_pid_on_remote_host_does_not_prove_ownership(self) -> None:
+        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
+
+        lock = _lock(
+            holder=_holder(
+                actor_type="agent",
+                actor_name="pi",
+                tool="pi",
+                host=HOST_REMOTE,
+                pid=512425,
+                pid_scope="owner",
+            )
+        )
+
+        assert not lock_owned_by_current_execution(
+            lock,
+            current_actor=ActorRef(
+                actor_type="agent",
+                actor_name="pi",
+                tool="pi",
+                host=HOST_LOCAL,
+                pid=512425,
+                pid_scope="owner",
+            ),
+            current_host=HOST_LOCAL,
+        )

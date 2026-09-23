@@ -236,7 +236,7 @@ def resolve_actor(
                 or session_id
                 or (detected.session_id if detected else None)
             )
-            resolved_tool = stored.tool or tool
+            resolved_tool = stored.tool or tool or (detected.name if detected else None)
             pid, command_pid, pid_scope = _resolve_pids(
                 tool=resolved_tool,
                 session_id=resolved_session_id,

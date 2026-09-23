@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from taskledger.domain.actor import ActorRef
+from taskledger.domain.actor import ActorRef, HarnessRef
 from taskledger.domain.states import EXIT_CODE_MISSING
 from taskledger.errors import LaunchError
 from taskledger.services.task_events import (
@@ -26,6 +26,7 @@ def show_lock(
     task_ref: str,
     *,
     current_actor: ActorRef | None = None,
+    current_harness: HarnessRef | None = None,
 ) -> dict[str, object]:
     from taskledger.services.lock_diagnostics import diagnose_lock
     from taskledger.services.storage_locations import _is_within
@@ -38,6 +39,7 @@ def show_lock(
         lock,
         task_id=task.id,
         current_actor=current_actor,
+        current_harness=current_harness,
     )
     try:
         lock_file_rel = lock_path.relative_to(paths.project_dir).as_posix()

@@ -78,6 +78,10 @@ the sibling marker and does not repair target metadata.
 7. Inspect `taskledger lock show` before active work.
 8. Use `taskledger can implement` or `taskledger can validate` before those stages.
    - Use `taskledger can implement-resume` when `next-action` recommends resuming an existing implementation run.
+   - Words such as “continue” or “resume work” do not imply the `implement resume`
+     command. Always consult `next-action` first.
+   - If lock diagnostics report `active_current_execution`, keep the lock and
+     continue the todo loop. Do not resume or repair it.
 9. If a durable handoff exists, claim it with `taskledger handoff claim handoff-0001` before continuing and close it after the intended next action starts.
 10. After `taskledger import ... --replace`, assume imported locks are non-portable by default. Run `taskledger next-action`; if it reports `implement-resume`, use `taskledger implement resume --reason "Continue imported implementation."`.
 
@@ -325,8 +329,10 @@ Rules for agents:
 1. Prefer `next-action` and `todo next` over generated context during normal work.
 2. Use `validation_hint` before marking a todo done.
 3. Mark a todo done only after evidence exists.
-4. Record concise evidence.
-5. Do not create handoffs or context bundles unless the user explicitly asked to switch harness or session.
+4. `todo done` renews the implementation lease only when this execution proves
+   ownership. Read-only commands and other sessions do not renew it.
+5. Record concise evidence.
+6. Do not create handoffs or context bundles unless the user explicitly asked to switch harness or session.
 
 ## Which read command to use
 
@@ -479,10 +485,17 @@ Lock recovery decision tree:
 
 1. Run `taskledger lock show --task TASK` or `taskledger next-action`.
 2. If there is no lock, follow `next-action`.
-3. If `classification` is `expired` and it is an implementation lock for a running run: run `taskledger implement resume --repair-expired-lock --task TASK --reason "..."`.
-4. If `classification` is `active_dead_local_process`: run `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`, then `taskledger implement resume --task TASK --reason "..."`.
-5. If `classification` is `active_live_local_process` or `active_other_actor`: do not repair; use a handoff or wait for the holder to release.
-6. If `classification` is `active_unverifiable_remote_or_unknown_process`: do not infer staleness from local process checks; inspect handoffs or ask the user before repairing.
+3. If `classification` is `active_current_execution`, keep the lock and continue
+   the todo loop. Do not run `implement resume` or repair the lock.
+4. If `classification` is `expired` and it is an implementation lock for a
+   running run, run `taskledger implement resume --repair-expired-lock --task TASK --reason "..."`.
+5. If `classification` is `active_dead_local_process`, run
+   `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`, then `taskledger implement resume --task TASK --reason "..."`.
+6. If `classification` is `active_live_local_process` or `active_other_actor`,
+   do not repair; use a handoff or wait for the holder to release.
+7. If `classification` is `active_unverifiable_remote_or_unknown_process`, do
+   not infer staleness from local process checks; inspect handoffs or ask the
+   user before repairing.
 
 `--repair-expired-lock` is not a general stale-lock takeover flag. It only handles locks whose `expires_at` is in the past. For non-expired active locks, use the classification returned by `lock show` or `next-action`.
 

@@ -422,6 +422,9 @@ The following commands produce compact output:
 
 - `todo add`: emits `todo_added` result with new todo, progress, and next command.
 - `todo done` / `todo undone`: emits `todo_update` result with todo id, status, progress, and next command.
+  Successful `todo done` renews the active implementation lease only when the
+  current execution proves ownership. Read-only commands and other sessions do
+  not renew it.
 - `implement finish`: emits `task_lifecycle` result with task id, run id, status, and next command.
 
 Human mode shows a one-line summary:
@@ -721,20 +724,28 @@ a clear error.
 Lock diagnostics are exposed through three surfaces:
 
 - `taskledger lock show --task TASK` returns a `diagnostics` object and
-  a structured human block. The `classification` field names the lock
-  state: `none`, `expired`, `active_dead_local_process`,
+  a structured human block. The `classification` field names the lock state:
+  `none`, `expired`, `active_dead_local_process`,
   `active_live_local_process`, `active_unverifiable_remote_or_unknown_process`,
-  `active_no_pid`, `active_same_actor`, or `active_other_actor`.
+  `active_no_pid`, `active_current_execution`, `active_harness_session`,
+  `active_same_actor`, or `active_other_actor`.
+  `active_current_execution` requires matching strong execution evidence, such
+  as a shared harness session ID or a stable same-host owner PID; actor-name
+  equality alone is not ownership proof.
 - `taskledger --json next-action` returns `lock_status` whenever a lock
   exists, and sets `action=repair-lock` with a diagnostics blocker when the
   active implementation lock has a dead local holder PID.
 - `taskledger implement resume --repair-expired-lock` returns a
-  `LOCK_CONFLICT` error (exit code 4) with diagnostics and remediation
-  commands when the existing lock is non-expired.
-
-`--repair-expired-lock` is not a general stale-lock takeover flag. It only
-applies to locks whose `expires_at` is in the past. For non-expired active
-locks, follow the classification returned by `lock show` or `next-action`.
+  `LOCK_CONFLICT` error (exit code 4) with diagnostics when a non-expired
+  lock belongs to another or unknown execution. If the selected run is already
+  active and `classification` is `active_current_execution`, resume succeeds
+  as a no-op with `changed=false`, preserving the existing lock and run IDs
+  without a repair or release event.
+  For ordinary continuation, inspect `next-action` and continue the todo loop;
+  do not use `implement resume` or lock repair while this execution owns the lock.
+  `--repair-expired-lock` is not a general stale-lock takeover flag. It only
+  applies to locks whose `expires_at` is in the past. For non-expired active
+  locks, follow the classification returned by `lock show` or `next-action`.
 
 For non-expired active locks classified as `active_dead_local_process`, the
 canonical recovery sequence is:

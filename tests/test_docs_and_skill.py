@@ -536,3 +536,17 @@ def test_skill_distinguishes_probe_failure_from_target_failure() -> None:
     assert "probe/setup failure" in skill
     assert "not automatically a failed acceptance criterion" in skill
     assert "normalize" in skill
+
+
+def test_current_execution_lock_guidance_is_documented() -> None:
+    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
+    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    contract = (ROOT / "docs" / "command_contract.md").read_text(encoding="utf-8")
+
+    for text in (skill, usage, contract):
+        assert "active_current_execution" in text
+        assert "todo loop" in text
+    assert "do not imply `implement resume`" in usage
+    assert "changed=false" in contract
+    assert "Successful `todo done` renews the active implementation lease" in contract
+    assert "Read-only commands and other sessions do not renew it." in skill

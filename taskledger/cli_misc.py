@@ -57,6 +57,7 @@ from taskledger.cli_common import (
     resolve_cli_task,
 )
 from taskledger.errors import LaunchError
+from taskledger.services.actors import resolve_effective_identity
 from taskledger.services.doctor import (
     inspect_v2_indexes,
     inspect_v2_locks,
@@ -814,7 +815,15 @@ def register_lock_v2_commands(app: typer.Typer) -> None:
         state = cli_state_from_context(ctx)
         try:
             task = resolve_cli_task(state.cwd, task_ref)
-            payload = show_lock(state.cwd, task.id)
+            current_actor, current_harness = resolve_effective_identity(
+                state.cwd, cwd=state.cwd
+            )
+            payload = show_lock(
+                state.cwd,
+                task.id,
+                current_actor=current_actor,
+                current_harness=current_harness,
+            )
         except LaunchError as exc:
             emit_error(ctx, exc)
             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
@@ -1187,7 +1196,15 @@ def emit_next_action_command(
     state = cli_state_from_context(ctx)
     try:
         task = resolve_cli_task(state.cwd, task_ref)
-        payload = next_action(state.cwd, task.id)
+        current_actor, current_harness = resolve_effective_identity(
+            state.cwd, cwd=state.cwd
+        )
+        payload = next_action(
+            state.cwd,
+            task.id,
+            current_actor=current_actor,
+            current_harness=current_harness,
+        )
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
@@ -1302,7 +1319,16 @@ def emit_can_command(ctx: typer.Context, task_ref: str | None, action: str) -> N
     state = cli_state_from_context(ctx)
     try:
         task = resolve_cli_task(state.cwd, task_ref)
-        payload = can_perform(state.cwd, task.id, action)
+        current_actor, current_harness = resolve_effective_identity(
+            state.cwd, cwd=state.cwd
+        )
+        payload = can_perform(
+            state.cwd,
+            task.id,
+            action,
+            current_actor=current_actor,
+            current_harness=current_harness,
+        )
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
@@ -1462,6 +1488,9 @@ def _emit_todo_update(
     state = cli_state_from_context(ctx)
     try:
         task = resolve_cli_task(state.cwd, task_ref)
+        current_actor, current_harness = resolve_effective_identity(
+            state.cwd, cwd=state.cwd
+        )
         task = set_todo_done(
             state.cwd,
             task.id,
@@ -1470,6 +1499,8 @@ def _emit_todo_update(
             evidence=evidence,
             artifacts=artifacts,
             changes=changes,
+            actor=current_actor,
+            harness=current_harness,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)

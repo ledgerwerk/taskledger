@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from taskledger.domain.actor import ActorRef
+from taskledger.domain.actor import ActorRef, HarnessRef
 from taskledger.domain.lock import TaskLock
 from taskledger.storage.locks import lock_is_expired
 
@@ -35,6 +35,7 @@ CLASSIFICATION_ACTIVE_UNVERIFIABLE_REMOTE_OR_UNKNOWN_PROCESS = (
 )
 CLASSIFICATION_ACTIVE_NO_PID = "active_no_pid"
 CLASSIFICATION_ACTIVE_SAME_ACTOR = "active_same_actor"
+CLASSIFICATION_ACTIVE_CURRENT_EXECUTION = "active_current_execution"
 CLASSIFICATION_ACTIVE_HARNESS_SESSION = "active_harness_session"
 CLASSIFICATION_ACTIVE_OTHER_ACTOR = "active_other_actor"
 
@@ -123,6 +124,72 @@ def _actor_matches(holder: ActorRef, current_actor: ActorRef | None) -> bool:
     if holder.actor_type != current_actor.actor_type:
         return False
     return holder.actor_name == current_actor.actor_name
+
+
+def _actor_identity_matches(holder: ActorRef, current_actor: ActorRef) -> bool:
+    if holder.actor_id or current_actor.actor_id:
+        return bool(holder.actor_id and holder.actor_id == current_actor.actor_id)
+    return (
+        holder.actor_type == current_actor.actor_type
+        and holder.actor_name == current_actor.actor_name
+    )
+
+
+def lock_owned_by_current_execution(
+    lock: TaskLock,
+    *,
+    current_actor: ActorRef,
+    current_harness: HarnessRef | None = None,
+    current_host: str | None = None,
+) -> bool:
+    """Return whether strong identity evidence ties the lock to this execution."""
+    holder = lock.holder
+    holder_harness_name = (
+        lock.harness.name
+        if lock.harness is not None
+        else (
+            holder.tool
+            or (holder.actor_name if holder.actor_name in KNOWN_HARNESS_TOOLS else None)
+        )
+    )
+    current_harness_name = (
+        current_harness.name if current_harness is not None else current_actor.tool
+    )
+    holder_session_id = (
+        lock.harness.session_id if lock.harness is not None else None
+    ) or holder.session_id
+    current_session_id = (
+        current_harness.session_id if current_harness is not None else None
+    ) or current_actor.session_id
+
+    if (
+        holder_harness_name
+        and current_harness_name
+        and holder_harness_name.casefold() == current_harness_name.casefold()
+        and holder_session_id
+        and current_session_id
+        and holder_session_id == current_session_id
+    ):
+        return True
+
+    if (
+        holder.session_id
+        and current_actor.session_id
+        and holder.session_id == current_actor.session_id
+        and _actor_identity_matches(holder, current_actor)
+    ):
+        return True
+
+    host = current_host or current_host_name()
+    return (
+        holder.pid_scope == "owner"
+        and current_actor.pid_scope == "owner"
+        and holder.pid is not None
+        and holder.pid == current_actor.pid
+        and _host_matches(holder.host, host)
+        and _host_matches(current_actor.host, host)
+        and _actor_identity_matches(holder, current_actor)
+    )
 
 
 def _seconds_until_expiry(lock: TaskLock, now: datetime) -> int | None:
@@ -279,6 +346,7 @@ def diagnose_lock(
     *,
     task_id: str | None = None,
     current_actor: ActorRef | None = None,
+    current_harness: HarnessRef | None = None,
     now: datetime | None = None,
     pid_checker: PidCheck | None = None,
     current_host: str | None = None,
@@ -292,8 +360,12 @@ def diagnose_lock(
     task_id:
         Task id to embed in remediation commands. Defaults to ``lock.task_id``.
     current_actor:
-        The actor the caller is currently representing. Used to detect the
-        same-actor case. ``None`` means unknown.
+        The actor the caller is currently representing. Matching logical actor
+        identity alone does not prove current-execution ownership. ``None`` means
+        unknown.
+    current_harness:
+        The harness the caller is currently representing. Matching provider and
+        non-empty session IDs establish current-execution ownership.
     now:
         Reference time for expiry checks. Defaults to ``datetime.now(utc)``.
     pid_checker:
@@ -338,8 +410,32 @@ def diagnose_lock(
             remediation=remediation,
         )
 
-    same_actor = _actor_matches(holder, current_actor)
+    current_execution = current_actor is not None and lock_owned_by_current_execution(
+        lock,
+        current_actor=current_actor,
+        current_harness=current_harness,
+        current_host=host,
+    )
+    if current_execution:
+        return LockDiagnostics(
+            active=True,
+            expired=False,
+            classification=CLASSIFICATION_ACTIVE_CURRENT_EXECUTION,
+            holder=holder_dict,
+            holder_pid=pid,
+            holder_host=holder_host,
+            current_host=host,
+            holder_pid_check=PID_CHECK_NA,
+            seconds_until_expiry=seconds,
+            expiry_label=expiry_label,
+            summary=(
+                f"Active {lock.stage} lock is owned by the current execution; "
+                "continue with the existing lock."
+            ),
+            remediation=(),
+        )
 
+    same_actor = _actor_matches(holder, current_actor)
     if pid is None:
         pid_scope = getattr(holder, "pid_scope", None)
         has_harness_session = bool(
@@ -351,9 +447,9 @@ def diagnose_lock(
         if same_actor:
             classification = CLASSIFICATION_ACTIVE_SAME_ACTOR
             summary = (
-                f"Active {lock.stage} lock is held by the current actor "
-                f"({holder.actor_type}:{holder.actor_name}); no holder PID "
-                "was recorded."
+                f"Active {lock.stage} lock has the same logical actor identity "
+                f"({holder.actor_type}:{holder.actor_name}), but this execution "
+                "is unverified; no holder PID was recorded."
             )
             remediation = ()
         elif has_harness_session:
@@ -406,9 +502,9 @@ def diagnose_lock(
         if same_actor:
             classification = CLASSIFICATION_ACTIVE_SAME_ACTOR
             summary = (
-                f"Active {lock.stage} lock is held by the current actor "
-                f"({holder.actor_type}:{holder.actor_name}); holder PID "
-                "is a command subprocess, not used for liveness probing."
+                f"Active {lock.stage} lock has the same logical actor identity "
+                f"({holder.actor_type}:{holder.actor_name}), but this execution "
+                "is unverified; its PID is a command subprocess."
             )
             remediation = ()
         else:
@@ -453,9 +549,9 @@ def diagnose_lock(
         elif same_actor:
             classification = CLASSIFICATION_ACTIVE_SAME_ACTOR
             summary = (
-                f"Active {lock.stage} lock is held by the current actor "
-                f"({holder.actor_type}:{holder.actor_name}); holder PID {pid} "
-                "is alive on this host."
+                f"Active {lock.stage} lock has the same logical actor identity "
+                f"({holder.actor_type}:{holder.actor_name}), but this execution "
+                f"is unverified; holder PID {pid} is alive on this host."
             )
             remediation = ()
             pid_status_out = pid_status

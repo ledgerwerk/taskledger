@@ -372,6 +372,10 @@ If `next-action` reports an orphaned implementation state or an active lock
 recovery situation, inspect the task and lock first, then choose the recovery
 path that matches the lock state:
 
+Natural-language requests to “continue” or “resume work” do not imply `implement resume`.
+Run `next-action` first. If the lock is classified as `active_current_execution`,
+keep it and continue the todo loop; do not reacquire or repair it.
+
 ```bash
 taskledger task show
 taskledger task show task-0001
@@ -384,23 +388,21 @@ Lock recovery decision tree:
 1. Run `taskledger lock show --task TASK`. `lock show` reports a
    `classification` field that names the lock state.
 2. If there is no lock, run `taskledger next-action`.
-3. If `classification` is `expired` and the lock is an implementation lock
-   for a running implementation run:
-   run
+3. If `classification` is `active_current_execution`, keep the lock and continue
+   the todo loop. Do not run `implement resume` or repair the lock.
+4. If `classification` is `expired` and the lock is an implementation lock
+   for a running implementation run, run
    `taskledger implement resume --repair-expired-lock --task TASK --reason "..."`.
-4. If `classification` is `active_dead_local_process`:
-   run
+5. If `classification` is `active_dead_local_process`, run
    `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`,
    then `taskledger implement resume --task TASK --reason "..."`.
-5. If `classification` is `active_live_local_process` or
-   `active_other_actor`:
+6. If `classification` is `active_live_local_process` or `active_other_actor`,
    do not repair; use a handoff or wait for the holder to release.
-6. If `classification` is `active_unverifiable_remote_or_unknown_process`:
+7. If `classification` is `active_unverifiable_remote_or_unknown_process`,
    do not infer staleness from local process checks; inspect handoffs or ask
    the user before repairing.
-7. `next-action` itself returns `action=repair-lock` with diagnostics and
-   the recommended command sequence when the active implementation lock has
-   a dead local holder PID.
+8. `next-action` itself returns `action=repair-lock` with diagnostics and the
+   recommended command sequence when the active implementation lock has a dead local holder PID.
 
 `--repair-expired-lock` is not a general stale-lock takeover flag. It only
 handles locks whose `expires_at` is in the past. For non-expired active
@@ -426,6 +428,10 @@ pytest tests/...
 taskledger todo done todo-0003 --evidence "pytest tests/... passed"
 taskledger --json next-action
 ```
+
+Completing a todo renews the active implementation lease only when the current
+execution proves that it owns the lock. Read-only commands and other sessions do
+not renew the lease.
 
 Rules for agents:
 

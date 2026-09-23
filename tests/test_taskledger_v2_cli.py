@@ -1274,8 +1274,29 @@ def test_implement_resume_rejects_non_implementation_run(tmp_path: Path) -> None
 
 
 # specmason: req=REQ-0064 ac=AC-0696
-def test_implement_resume_rejects_existing_lock(tmp_path: Path) -> None:
-    _prepare_resumable_implementation_task(tmp_path)
+def test_implement_resume_same_current_session_is_noop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    task_id, run_id = _prepare_resumable_implementation_task(tmp_path)
+    session_id = "pi-session-resume-noop"
+    _set_lock_harness_session(tmp_path, task_id, session_id)
+    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
+    monkeypatch.setenv("TASKLEDGER_SESSION_ID", session_id)
+    for name in (
+        "TASKLEDGER_ACTOR_TYPE",
+        "TASKLEDGER_ACTOR_NAME",
+        "TASKLEDGER_ACTOR_ROLE",
+        "TASKLEDGER_OWNER_PID",
+        "TASKLEDGER_HARNESS_PID",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    paths = resolve_v2_paths(tmp_path)
+    lock_path = task_lock_path(paths, task_id)
+    lock_id = yaml.safe_load(lock_path.read_text())["lock_id"]
+    events_before = {
+        path.name: path.read_bytes() for path in paths.events_dir.glob("*.ndjson")
+    }
 
     result = runner.invoke(
         app,
@@ -1288,11 +1309,176 @@ def test_implement_resume_rejects_existing_lock(tmp_path: Path) -> None:
             "--task",
             "resume-task",
             "--reason",
-            "Continue implementation after a stale lock break.",
+            "Continue implementation.",
         ],
     )
+
+    assert result.exit_code == 0, result.stdout
+    payload = _json(result)["result"]
+    assert payload["changed"] is False
+    assert payload["already_active"] is True
+    assert payload["run_id"] == run_id
+    assert payload["lock"]["lock_id"] == lock_id
+    assert payload["next_command"] == f"taskledger next-action --task {task_id}"
+
+    human_result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "implement",
+            "resume",
+            "--task",
+            "resume-task",
+            "--reason",
+            "Continue implementation.",
+        ],
+    )
+    assert human_result.exit_code == 0, human_result.stdout
+    assert "already active in this execution" in human_result.stdout
+    assert "No resume or lock repair is required." in human_result.stdout
+    assert f"taskledger todo next --task {task_id}" in human_result.stdout
+
+    events_after = {
+        path.name: path.read_bytes() for path in paths.events_dir.glob("*.ndjson")
+    }
+    assert events_after == events_before
+
+
+def test_implement_resume_conflicts_with_different_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
+    _set_lock_harness_session(tmp_path, task_id, "pi-session-owner")
+    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
+    monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session-other")
+    for name in (
+        "TASKLEDGER_ACTOR_TYPE",
+        "TASKLEDGER_ACTOR_NAME",
+        "TASKLEDGER_ACTOR_ROLE",
+        "TASKLEDGER_OWNER_PID",
+        "TASKLEDGER_HARNESS_PID",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "implement",
+            "resume",
+            "--task",
+            "resume-task",
+            "--reason",
+            "Continue implementation.",
+        ],
+    )
+
     assert result.exit_code != 0
-    assert "Implementation resume requires no active lock." in result.stdout
+    error = _json_error(result)["error"]
+    assert error["details"]["diagnostics"]["classification"] == "active_same_actor"
+    assert "already_active" not in error["details"]
+    assert "this execution is unverified" in error["message"]
+
+
+@pytest.mark.parametrize(
+    ("lock_field", "value"),
+    [("run_id", "run-9999"), ("stage", "planning")],
+)
+def test_implement_resume_requires_matching_lock_run_and_stage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    lock_field: str,
+    value: str,
+) -> None:
+    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
+    session_id = "pi-session-mismatched-lock"
+    _set_lock_harness_session(tmp_path, task_id, session_id)
+    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
+    monkeypatch.setenv("TASKLEDGER_SESSION_ID", session_id)
+    for name in (
+        "TASKLEDGER_ACTOR_TYPE",
+        "TASKLEDGER_ACTOR_NAME",
+        "TASKLEDGER_ACTOR_ROLE",
+        "TASKLEDGER_OWNER_PID",
+        "TASKLEDGER_HARNESS_PID",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task_id)
+    lock_data = yaml.safe_load(lock_path.read_text())
+    lock_data[lock_field] = value
+    lock_path.write_text(yaml.safe_dump(lock_data, sort_keys=False))
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "implement",
+            "resume",
+            "--task",
+            "resume-task",
+            "--reason",
+            "Continue implementation.",
+        ],
+    )
+
+    assert result.exit_code != 0
+    error = _json_error(result)["error"]
+    assert error["details"]["diagnostics"]["classification"] == (
+        "active_current_execution"
+    )
+
+
+def test_can_implement_resume_reports_current_session_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
+    session_id = "pi-session-can-resume"
+    _set_lock_harness_session(tmp_path, task_id, session_id)
+    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
+    monkeypatch.setenv("TASKLEDGER_SESSION_ID", session_id)
+    for name in (
+        "TASKLEDGER_ACTOR_TYPE",
+        "TASKLEDGER_ACTOR_NAME",
+        "TASKLEDGER_ACTOR_ROLE",
+        "TASKLEDGER_OWNER_PID",
+        "TASKLEDGER_HARNESS_PID",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "can",
+            "implement-resume",
+            "--task",
+            task_id,
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    payload = _json(result)["result"]
+    assert payload["ok"] is False
+    assert "already active in this session" in payload["reason"]
+    assert payload["blocking"][0]["command_hint"] == (
+        f"taskledger todo next --task {task_id}"
+    )
+
+
+def test_implement_resume_help_distinguishes_reacquire_from_continue() -> None:
+    result = runner.invoke(app, ["implement", "resume", "--help"])
+
+    assert result.exit_code == 0, result.stdout
+    assert "Reacquire an implementation lock" in result.stdout
+    assert "normal continuation" in result.stdout
 
 
 # specmason: req=REQ-0064 ac=AC-0695
@@ -2181,6 +2367,31 @@ def _overwrite_holder_pid(
     lock_path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 
+def _set_lock_harness_session(tmp_path: Path, task_id: str, session_id: str) -> None:
+    from taskledger.domain.actor import HarnessRef
+
+    paths = resolve_v2_paths(tmp_path)
+    lock_path = task_lock_path(paths, task_id)
+    data = yaml.safe_load(lock_path.read_text())
+    data["holder"].update(
+        {
+            "actor_type": "agent",
+            "actor_name": "taskledger",
+            "tool": "pi",
+            "session_id": session_id,
+            "pid": None,
+            "pid_scope": "unverifiable_harness",
+        }
+    )
+    data["harness"] = HarnessRef(
+        harness_id="h-session-test",
+        name="pi",
+        kind="agent_harness",
+        session_id=session_id,
+    ).to_dict()
+    lock_path.write_text(yaml.safe_dump(data, sort_keys=False))
+
+
 # specmason: req=REQ-0064 ac=AC-0703
 def test_lock_show_human_reports_dead_holder_pid_and_next_commands(
     tmp_path: Path,
@@ -2231,6 +2442,33 @@ def test_lock_show_json_payload_includes_diagnostics_and_storage_fields(
     assert "storage_root" in result_data
     assert "inside_workspace" in result_data
     assert isinstance(result_data["lock_file"], str)
+
+
+def test_lock_show_uses_current_harness_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
+    _set_lock_harness_session(tmp_path, task_id, "pi-session-lock-show")
+    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
+    monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session-lock-show")
+    for name in (
+        "TASKLEDGER_ACTOR_TYPE",
+        "TASKLEDGER_ACTOR_NAME",
+        "TASKLEDGER_ACTOR_ROLE",
+        "TASKLEDGER_OWNER_PID",
+        "TASKLEDGER_HARNESS_PID",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "--json", "lock", "show", "--task", task_id],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    diagnostics = _json(result)["result"]["diagnostics"]
+    assert diagnostics["classification"] == "active_current_execution"
+    assert diagnostics["remediation"] == []
 
 
 # specmason: req=REQ-0064 ac=AC-0701
@@ -2300,6 +2538,34 @@ def test_next_action_dead_pid_lock_routes_to_repair_lock(
     blocker_diag = lock_blockers[0].get("diagnostics", {})
     assert blocker_diag.get("classification") == "active_dead_local_process"
     assert "is no longer running" in lock_blockers[0].get("message", "")
+
+
+def test_next_action_uses_current_harness_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
+    _set_lock_harness_session(tmp_path, task_id, "pi-session-next-action")
+    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
+    monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session-next-action")
+    for name in (
+        "TASKLEDGER_ACTOR_TYPE",
+        "TASKLEDGER_ACTOR_NAME",
+        "TASKLEDGER_ACTOR_ROLE",
+        "TASKLEDGER_OWNER_PID",
+        "TASKLEDGER_HARNESS_PID",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "--json", "next-action", "--task", task_id],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    payload = _json(result)["result"]
+    assert payload["action"] == "todo-work"
+    assert payload["lock_status"]["classification"] == "active_current_execution"
+    assert not payload.get("lock_warning")
 
 
 # specmason: req=REQ-0064 ac=AC-0707

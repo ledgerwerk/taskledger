@@ -74,6 +74,9 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     "taskledger/cli_misc.py:taskledger.services.doctor": (
         "Doctor commands still consume doctor service inspectors directly."
     ),
+    "taskledger/cli_misc.py:taskledger.services.actors": (
+        "Todo updates resolve identity for todo completion metadata.",
+    ),
     "taskledger/cli_pipeline.py:taskledger.services.handoff": (
         "Pipeline context rendering currently reuses the handoff service payloads."
     ),

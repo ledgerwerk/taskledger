@@ -474,15 +474,28 @@ def set_todo_done(
     )
     _tasks._ensure_not_archived(task, operation="update todo on")
     normalized_todo_id = _tasks._normalize_local_id(workspace_root, todo_id, "todo")
-    _tasks._enforce_decision(
-        todo_toggle_decision(
-            task,
-            _tasks._lock_for_mutation(workspace_root, task.id),
-            actor_role="user",
-        )
-    )
-    now = utc_now_iso()
+    lock = _tasks._lock_for_mutation(workspace_root, task.id)
     resolved_actor = actor or _tasks._default_actor()
+    _tasks._enforce_decision(todo_toggle_decision(task, lock, actor_role="user"))
+    renew_implementation_lock = False
+    if done and lock is not None and lock.stage == "implementing":
+        from taskledger.services.lock_diagnostics import (
+            lock_owned_by_current_execution,
+        )
+
+        run = _tasks._optional_run(workspace_root, task, lock.run_id)
+        renew_implementation_lock = (
+            lock.task_id == task.id
+            and task.status_stage == "implementing"
+            and task.latest_implementation_run == lock.run_id
+            and run is not None
+            and run.run_type == "implementation"
+            and run.status == "running"
+            and lock_owned_by_current_execution(
+                lock, current_actor=resolved_actor, current_harness=harness
+            )
+        )
+    now = utc_now_iso()
     todos = [
         replace(
             todo,
@@ -523,6 +536,13 @@ def set_todo_done(
             "changes": list(changes),
         },
     )
+    if renew_implementation_lock and lock is not None:
+        _tasks.renew_lock_lease(
+            workspace_root,
+            lock,
+            current_actor=resolved_actor,
+            current_harness=harness,
+        )
     return updated
 
 

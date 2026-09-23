@@ -177,6 +177,7 @@ def resume_command(
         typer.Option("--session-id", help="Session identifier."),
     ] = None,
 ) -> None:
+    """Reacquire a lost implementation lock, not continue an active run."""
     state = cli_state_from_context(ctx)
     try:
         task = resolve_cli_task(state.cwd, task_ref)
@@ -200,11 +201,23 @@ def resume_command(
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-    emit_payload(
-        ctx,
-        payload,
-        human=f"resumed implementation {payload['run_id']}",
-    )
+    if payload.get("already_active"):
+        lock_payload = payload.get("lock")
+        lock_id = (
+            lock_payload.get("lock_id", "unknown")
+            if isinstance(lock_payload, dict)
+            else "unknown"
+        )
+        human = (
+            f"implementation run {payload['run_id']} is already active "
+            f"in this execution and owns lock {lock_id}. "
+            "No resume or lock repair is required.\nContinue with:\n"
+            f"  taskledger next-action --task {task.id}\n"
+            f"  taskledger todo next --task {task.id}"
+        )
+    else:
+        human = f"resumed implementation {payload['run_id']}"
+    emit_payload(ctx, payload, human=human)
 
 
 def log_command(
@@ -553,7 +566,14 @@ def register_implement_v2_commands(app: typer.Typer) -> None:
     }
     app.command("start")(start_command)
     app.command("restart")(restart_command)
-    app.command("resume")(resume_command)
+    app.command(
+        "resume",
+        help=(
+            "Reacquire an implementation lock for an existing running run after "
+            "it was lost or expired. For normal continuation while the current "
+            "run still owns an active lock, use next-action and todo next."
+        ),
+    )(resume_command)
     app.command("log")(log_command)
     app.command("change")(change_command)
     app.command("scan-changes")(scan_changes_command)

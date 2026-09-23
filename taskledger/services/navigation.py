@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import cast
 
 from taskledger.domain.models import (
+    ActorRef,
+    HarnessRef,
     PlanRecord,
     TaskHandoffRecord,
     TaskLock,
@@ -96,9 +98,17 @@ def next_action_for_task(
     workspace_root: Path,
     task: TaskRecord,
     *,
+    current_actor: ActorRef | None = None,
+    current_harness: HarnessRef | None = None,
     lock: TaskLock | None = None,
     runs: list[TaskRunRecord] | None = None,
 ) -> dict[str, object]:
+    current_actor, current_harness = resolve_effective_identity(
+        workspace_root,
+        actor=current_actor,
+        harness=current_harness,
+        cwd=workspace_root,
+    )
     if lock is None:
         lock = _current_lock(workspace_root, task.id)
     if runs is None:
@@ -109,7 +119,12 @@ def next_action_for_task(
         lock=lock,
         runs=runs,
     )
-    lock_diagnostics_dict = _compute_lock_diagnostics_for_payload(lock, task.id)
+    lock_diagnostics_dict = _compute_lock_diagnostics_for_payload(
+        lock,
+        task.id,
+        current_actor=current_actor,
+        current_harness=current_harness,
+    )
     lock_warning = _lock_warning_for_action(lock, lock_diagnostics_dict)
     action: str
     reason: str
@@ -479,9 +494,20 @@ def _build_next_action_payload(
     return _finalize_next_action_payload(payload)
 
 
-def next_action(workspace_root: Path, task_ref: str) -> dict[str, object]:
+def next_action(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    current_actor: ActorRef | None = None,
+    current_harness: HarnessRef | None = None,
+) -> dict[str, object]:
     task = resolve_task(workspace_root, task_ref)
-    return next_action_for_task(workspace_root, task)
+    return next_action_for_task(
+        workspace_root,
+        task,
+        current_actor=current_actor,
+        current_harness=current_harness,
+    )
 
 
 def _orphaned_active_stage_action(
@@ -823,19 +849,33 @@ def _archived_blocker(task: TaskRecord) -> dict[str, object]:
     }
 
 
-def can_perform(workspace_root: Path, task_ref: str, action: str) -> dict[str, object]:
+def _archived_task_capability(task: TaskRecord, action: str) -> dict[str, object]:
+    return {
+        "kind": "task_capability",
+        "task_id": task.id,
+        "action": action,
+        "ok": False,
+        "reason": "Task is archived and read-only.",
+        "active_stage": None,
+        "blocking": [_archived_blocker(task)],
+    }
+
+
+def can_perform(
+    workspace_root: Path,
+    task_ref: str,
+    action: str,
+    *,
+    current_actor: ActorRef | None = None,
+    current_harness: HarnessRef | None = None,
+) -> dict[str, object]:
     task = resolve_task(workspace_root, task_ref)
     if is_archived_task(task):
-        return {
-            "kind": "task_capability",
-            "task_id": task.id,
-            "action": action,
-            "ok": False,
-            "reason": "Task is archived and read-only.",
-            "active_stage": None,
-            "blocking": [_archived_blocker(task)],
-        }
+        return _archived_task_capability(task, action)
     lock = _current_lock(workspace_root, task.id)
+    current_actor, current_harness = resolve_effective_identity(
+        workspace_root, actor=current_actor, harness=current_harness, cwd=workspace_root
+    )
     active_stage = _task_active_stage(workspace_root, task, lock=lock)
     ok = False
     reason = ""
@@ -926,6 +966,8 @@ def can_perform(workspace_root: Path, task_ref: str, action: str) -> dict[str, o
             lock=lock,
             active_stage=active_stage,
             workspace_root=workspace_root,
+            current_actor=current_actor,
+            current_harness=current_harness,
         )
         blocking.extend(resume_blockers)
     elif action == "implement-restart":
@@ -1086,13 +1128,22 @@ def _latest_plan_or_none(workspace_root: Path, task_id: str) -> PlanRecord | Non
 
 
 def _compute_lock_diagnostics_for_payload(
-    lock: TaskLock | None, task_id: str
+    lock: TaskLock | None,
+    task_id: str,
+    *,
+    current_actor: ActorRef,
+    current_harness: HarnessRef,
 ) -> dict[str, object] | None:
     if lock is None:
         return None
     from taskledger.services.lock_diagnostics import diagnose_lock
 
-    return diagnose_lock(lock, task_id=task_id).to_dict()
+    return diagnose_lock(
+        lock,
+        task_id=task_id,
+        current_actor=current_actor,
+        current_harness=current_harness,
+    ).to_dict()
 
 
 def _lock_warning_for_action(
@@ -1110,7 +1161,7 @@ def _lock_warning_for_action(
     if classification in {
         "active_dead_local_process",
         "expired",
-        "active_same_actor",
+        "active_current_execution",
     }:
         return None
     holder = lock.holder
@@ -1209,6 +1260,8 @@ def _check_resume_can_perform(
     lock: TaskLock | None,
     active_stage: str | None,
     workspace_root: Path,
+    current_actor: ActorRef,
+    current_harness: HarnessRef,
 ) -> tuple[bool, str, list[dict[str, object]]]:
     blocking: list[dict[str, object]] = []
     implementation_run = _optional_run(
@@ -1217,6 +1270,45 @@ def _check_resume_can_perform(
         task.latest_implementation_run,
     )
     dependency_blockers = _dependency_blockers(workspace_root, task)
+    if (
+        action == "implement-resume"
+        and lock is not None
+        and lock.stage == "implementing"
+        and not lock_is_expired(lock)
+        and implementation_run is not None
+        and implementation_run.run_type == "implementation"
+        and implementation_run.status == "running"
+        and lock.run_id == implementation_run.run_id
+        and active_stage == "implementation"
+        and task.status_stage in {"approved", "implementing"}
+        and task.accepted_plan_version is not None
+    ):
+        from taskledger.services.lock_diagnostics import (
+            lock_owned_by_current_execution,
+        )
+
+        if lock_owned_by_current_execution(
+            lock,
+            current_actor=current_actor,
+            current_harness=current_harness,
+        ):
+            return (
+                False,
+                (
+                    "Implementation is already active in this session; "
+                    "continue with todo next."
+                ),
+                [
+                    {
+                        "kind": "lock",
+                        "message": (
+                            "This execution already owns the active implementation "
+                            "lock; no reacquisition is needed."
+                        ),
+                        "command_hint": f"taskledger todo next --task {task.id}",
+                    }
+                ],
+            )
     if action == "expired-lock-resume":
         ok = (
             task.status_stage in {"approved", "implementing"}

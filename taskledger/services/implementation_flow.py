@@ -24,21 +24,30 @@ from taskledger.timeutils import utc_now_iso
 
 
 def _active_lock_blocks_resume_error(
-    task_id: str, lock: TaskLock
+    task_id: str,
+    lock: TaskLock,
+    *,
+    current_actor: ActorRef | None,
+    current_harness: HarnessRef | None,
 ) -> _tasks.LaunchError:
     """Build a diagnostics-aware LaunchError for resume vs non-expired active lock."""
     from taskledger.domain.lock import TaskLock
     from taskledger.services.lock_diagnostics import diagnose_lock
 
     assert isinstance(lock, TaskLock)
-    diagnostics = diagnose_lock(lock, task_id=task_id)
+    diagnostics = diagnose_lock(
+        lock,
+        task_id=task_id,
+        current_actor=current_actor,
+        current_harness=current_harness,
+    )
     holder = lock.holder
     pid_part = f" pid={holder.pid}" if holder.pid else ""
     message = (
-        "Implementation resume requires no active lock. "
+        "Implementation resume cannot reacquire a non-expired active lock. "
         f"Task {task_id} has a non-expired {lock.stage} lock for "
         f"{lock.run_id} held by {holder.actor_type}:{holder.actor_name}"
-        f"{pid_part}. "
+        f"{pid_part}. {diagnostics.summary} "
         "--repair-expired-lock only applies after the lock expires."
     )
     remediation = list(diagnostics.remediation) or [
@@ -269,6 +278,15 @@ def resume_implementation(
             "Implementation resume requires a running implementation run.",
             _tasks.EXIT_CODE_INVALID_TRANSITION,
         )
+    from taskledger.services.actors import resolve_effective_identity
+
+    resolved_actor, resolved_harness = resolve_effective_identity(
+        workspace_root,
+        actor=actor,
+        harness=harness,
+        cwd=workspace_root,
+        role="implementer",
+    )
     existing_lock = _tasks._current_lock(workspace_root, task.id)
     if existing_lock is not None:
         if repair_expired_lock and _tasks.lock_is_expired(existing_lock):
@@ -289,9 +307,37 @@ def resume_implementation(
         elif _tasks.lock_is_expired(existing_lock):
             raise _tasks._stale_lock_error(task.id, existing_lock)
         else:
-            raise _active_lock_blocks_resume_error(task.id, existing_lock)
+            from taskledger.services.lock_diagnostics import (
+                lock_owned_by_current_execution,
+            )
+
+            if (
+                existing_lock.stage == "implementing"
+                and existing_lock.run_id == run.run_id
+                and lock_owned_by_current_execution(
+                    existing_lock,
+                    current_actor=resolved_actor,
+                    current_harness=resolved_harness,
+                )
+            ):
+                payload = _tasks._lifecycle_payload(
+                    "implement resume",
+                    task,
+                    warnings=[],
+                    changed=False,
+                    run=run,
+                    lock=existing_lock,
+                )
+                payload["already_active"] = True
+                payload["next_command"] = f"taskledger next-action --task {task.id}"
+                return payload
+            raise _active_lock_blocks_resume_error(
+                task.id,
+                existing_lock,
+                current_actor=resolved_actor,
+                current_harness=resolved_harness,
+            )
     _tasks._ensure_dependencies_done(workspace_root, task)
-    resolved_actor = actor or _tasks._default_actor()
     lock = _tasks._acquire_lock(
         workspace_root,
         task=task,
@@ -299,7 +345,7 @@ def resume_implementation(
         run=run,
         reason=resume_reason,
         actor=resolved_actor,
-        harness=harness,
+        harness=resolved_harness,
     )
     updated = replace(
         task,
