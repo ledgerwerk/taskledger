@@ -1,0 +1,84 @@
+schema: releaseledger.entry-batch.v1
+operation: create
+schema_version: 1
+object_type: release_entry_batch
+release_version: v0.6.9
+git_base_ref: 4f9cd16f017a428dcc33eefa0deb74e1f32c8eff
+git_base_sha: 4f9cd16f017a428dcc33eefa0deb74e1f32c8eff
+git_head_ref: 7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+git_head_sha: 7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+include_merges: nontrivial
+entries:
+  - kind: added
+    summary:
+      Added active_current_execution lock classification based on harness session
+      or host-process identity, not actor name
+    status: accepted
+    source_refs:
+      - git:b3fdec92ed65c2808f2707eceeffa7aa1b35a446
+    paths:
+      - taskledger/services/lock_diagnostics.py
+    sources:
+      - git:b3fdec92ed65c2808f2707eceeffa7aa1b35a446
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: changed
+    summary:
+      Changed implement resume to no-op with unchanged lock and run IDs when the
+      current execution owns the active run
+    status: accepted
+    source_refs: []
+    paths:
+      - taskledger/services/implementation_flow.py
+      - taskledger/cli_implement.py
+    sources:
+      - git:b3fdec92ed65c2808f2707eceeffa7aa1b35a446
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: added
+    summary:
+      Added implementation lease renewal on successful work-item completion when
+      the current execution proves lock ownership
+    status: accepted
+    source_refs: []
+    paths:
+      - taskledger/services/tasks.py
+    sources:
+      - git:b3fdec92ed65c2808f2707eceeffa7aa1b35a446
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: changed
+    summary: Changed the packaging dependency upper bound to admit packaging 26
+    status: accepted
+    source_refs:
+      - git:7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+    paths:
+      - pyproject.toml
+    sources:
+      - git:7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: internal
+    summary:
+      Changed the implement-resume lock-conflict regression test to pin explicit
+      actor identity
+    status: accepted
+    internal: true
+    source_refs:
+      - git:13d80f61841b49181f3af945af3967b509688f2d
+    paths:
+      - tests/test_taskledger_v2_cli.py
+    sources:
+      - git:13d80f61841b49181f3af945af3967b509688f2d
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"

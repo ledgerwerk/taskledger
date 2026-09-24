@@ -1,0 +1,120 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.6.9
+git_base_ref: v0.6.8
+git_base_sha: 4f9cd16f017a428dcc33eefa0deb74e1f32c8eff
+git_head_ref: HEAD
+git_head_sha: 7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+git_range: 4f9cd16f017a428dcc33eefa0deb74e1f32c8eff..7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+commit_count: 3
+rows:
+  - sha: b3fdec92ed65c2808f2707eceeffa7aa1b35a446
+    source_ref: git:b3fdec92ed65c2808f2707eceeffa7aa1b35a446
+    short_sha: b3fdec9
+    changed_paths:
+      - docs/command_contract.md
+      - docs/service_boundary_whitelist.md
+      - docs/usage.md
+      - skills/taskledger/SKILL.md
+      - taskledger/cli_implement.py
+      - taskledger/cli_misc.py
+      - taskledger/services/actors.py
+      - taskledger/services/implementation_flow.py
+      - taskledger/services/lock_diagnostics.py
+      - taskledger/services/navigation.py
+      - taskledger/services/run_store.py
+      - taskledger/services/task_collections.py
+      - taskledger/services/tasks.py
+      - tests/test_actor_resolution.py
+      - tests/test_docs_and_skill.py
+      - tests/test_lock_diagnostics.py
+      - tests/test_lock_lease_renewal.py
+      - tests/test_service_boundaries.py
+      - tests/test_taskledger_v2_cli.py
+    stats:
+      files_changed: 19
+      insertions: 1389
+      deletions: 91
+    inspected: true
+    inspected_paths:
+      - docs/command_contract.md
+      - docs/usage.md
+      - skills/taskledger/SKILL.md
+      - taskledger/cli_implement.py
+      - taskledger/cli_misc.py
+      - taskledger/services/implementation_flow.py
+      - taskledger/services/lock_diagnostics.py
+      - taskledger/services/navigation.py
+      - taskledger/services/tasks.py
+      - tests/test_lock_diagnostics.py
+      - tests/test_lock_lease_renewal.py
+      - tests/test_taskledger_v2_cli.py
+    observed_behavior:
+      Lock ownership classification now requires strong execution identity
+      (shared harness session ID, stable same-host owner PID, or matching actor identity)
+      and exposes the active_current_execution and active_harness_session classifications.
+      implement resume reacquires only lost or expired locks and returns an already_active
+      no-op payload with changed=false when the current execution owns the active run,
+      while foreign or unknown non-expired holds still raise LOCK_CONFLICT with diagnostics.
+      Successful todo done renews the active implementation lease only when the current
+      execution proves ownership; read-only commands and other sessions never renew
+      it.
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject: "feat: better lock resume"
+    target_entry_id: entry-0001
+    notes:
+      Covered by three behavior-specific entries. git:b3fdec92ed65c2808f2707eceeffa7aa1b35a446
+      coverage owner is the lock-ownership classification entry; the resume no-op and
+      lease renewal entries carry the same sha as supporting sources.
+  - sha: 13d80f61841b49181f3af945af3967b509688f2d
+    source_ref: git:13d80f61841b49181f3af945af3967b509688f2d
+    short_sha: 13d80f6
+    changed_paths:
+      - tests/test_taskledger_v2_cli.py
+    stats:
+      files_changed: 1
+      insertions: 2
+      deletions: 0
+    inspected: true
+    inspected_paths:
+      - tests/test_taskledger_v2_cli.py
+    observed_behavior:
+      The implement-resume lock-conflict regression test pins explicit
+      TASKLEDGER_ACTOR_TYPE and TASKLEDGER_ACTOR_NAME environment variables so the conflicting-session
+      scenario runs against a fixed actor identity. Test-only change with no product
+      behavior change.
+    public_impact: none
+    decision: internal
+    stale: false
+    evidence_subject: "fix: pytest"
+    target_entry_id: entry-0005
+    notes:
+      Test-only commit accounted by this audit row and an internal entry; excluded
+      from public changelog output.
+  - sha: 7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+    source_ref: git:7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+    short_sha: 7f50cf8
+    changed_paths:
+      - pyproject.toml
+    stats:
+      files_changed: 1
+      insertions: 1
+      deletions: 1
+    inspected: true
+    inspected_paths:
+      - pyproject.toml
+    observed_behavior:
+      pyproject dependency metadata widens the packaging requirement
+      from packaging>=23,<26 to packaging>=23,<27, so packaging 26 releases satisfy
+      the install constraint.
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject: "chore: package version"
+    target_entry_id: entry-0004
+    notes: Packaging metadata change covered by one entry.

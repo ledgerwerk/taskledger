@@ -1,0 +1,2057 @@
+ docs/command_contract.md                   |  29 ++-
+ docs/service_boundary_whitelist.md         |   2 +
+ docs/usage.md                              |  28 +--
+ skills/taskledger/SKILL.md                 |  25 ++-
+ taskledger/cli_implement.py                |  32 +++-
+ taskledger/cli_misc.py                     |  37 +++-
+ taskledger/services/actors.py              |   2 +-
+ taskledger/services/implementation_flow.py |  60 +++++-
+ taskledger/services/lock_diagnostics.py    | 122 ++++++++++--
+ taskledger/services/navigation.py          | 124 ++++++++++--
+ taskledger/services/run_store.py           |   4 +-
+ taskledger/services/task_collections.py    |  34 +++-
+ taskledger/services/tasks.py               | 101 +++++++++-
+ tests/test_actor_resolution.py             |  22 +++
+ tests/test_docs_and_skill.py               |  14 ++
+ tests/test_lock_diagnostics.py             | 274 ++++++++++++++++++++++++++-
+ tests/test_lock_lease_renewal.py           | 293 +++++++++++++++++++++++++++++
+ tests/test_service_boundaries.py           |   3 +
+ tests/test_taskledger_v2_cli.py            | 274 ++++++++++++++++++++++++++-
+ 19 files changed, 1389 insertions(+), 91 deletions(-)
+
+diff --git a/docs/command_contract.md b/docs/command_contract.md
+index 9021efd..717e646 100644
+--- a/docs/command_contract.md
++++ b/docs/command_contract.md
+@@ -422,6 +422,9 @@ The following commands produce compact output:
+
+ - `todo add`: emits `todo_added` result with new todo, progress, and next command.
+ - `todo done` / `todo undone`: emits `todo_update` result with todo id, status, progress, and next command.
++  Successful `todo done` renews the active implementation lease only when the
++  current execution proves ownership. Read-only commands and other sessions do
++  not renew it.
+ - `implement finish`: emits `task_lifecycle` result with task id, run id, status, and next command.
+
+ Human mode shows a one-line summary:
+@@ -721,20 +724,28 @@ a clear error.
+ Lock diagnostics are exposed through three surfaces:
+
+ - `taskledger lock show --task TASK` returns a `diagnostics` object and
+-  a structured human block. The `classification` field names the lock
+-  state: `none`, `expired`, `active_dead_local_process`,
++  a structured human block. The `classification` field names the lock state:
++  `none`, `expired`, `active_dead_local_process`,
+   `active_live_local_process`, `active_unverifiable_remote_or_unknown_process`,
+-  `active_no_pid`, `active_same_actor`, or `active_other_actor`.
++  `active_no_pid`, `active_current_execution`, `active_harness_session`,
++  `active_same_actor`, or `active_other_actor`.
++  `active_current_execution` requires matching strong execution evidence, such
++  as a shared harness session ID or a stable same-host owner PID; actor-name
++  equality alone is not ownership proof.
+ - `taskledger --json next-action` returns `lock_status` whenever a lock
+   exists, and sets `action=repair-lock` with a diagnostics blocker when the
+   active implementation lock has a dead local holder PID.
+ - `taskledger implement resume --repair-expired-lock` returns a
+-  `LOCK_CONFLICT` error (exit code 4) with diagnostics and remediation
+-  commands when the existing lock is non-expired.
+-
+-`--repair-expired-lock` is not a general stale-lock takeover flag. It only
+-applies to locks whose `expires_at` is in the past. For non-expired active
+-locks, follow the classification returned by `lock show` or `next-action`.
++  `LOCK_CONFLICT` error (exit code 4) with diagnostics when a non-expired
++  lock belongs to another or unknown execution. If the selected run is already
++  active and `classification` is `active_current_execution`, resume succeeds
++  as a no-op with `changed=false`, preserving the existing lock and run IDs
++  without a repair or release event.
++  For ordinary continuation, inspect `next-action` and continue the todo loop;
++  do not use `implement resume` or lock repair while this execution owns the lock.
++  `--repair-expired-lock` is not a general stale-lock takeover flag. It only
++  applies to locks whose `expires_at` is in the past. For non-expired active
++  locks, follow the classification returned by `lock show` or `next-action`.
+
+ For non-expired active locks classified as `active_dead_local_process`, the
+ canonical recovery sequence is:
+diff --git a/docs/service_boundary_whitelist.md b/docs/service_boundary_whitelist.md
+index 866a534..8b96e05 100644
+--- a/docs/service_boundary_whitelist.md
++++ b/docs/service_boundary_whitelist.md
+@@ -81,6 +81,8 @@ Current sanctioned imports:
+   Implement command wrapper records managed-shell command failures.
+ - `taskledger/cli_validate.py:taskledger.services.agent_logging` — Validation
+   command wrapper records managed-shell command failures.
++- `taskledger/cli_misc.py:taskledger.services.actors` — Todo updates resolve
++  current identity to persist completion actor and harness metadata.
+ - `taskledger/cli_misc.py:taskledger.services.doctor` — Doctor commands
+   still consume doctor service inspectors directly.
+ - `taskledger/cli_pipeline.py:taskledger.services.handoff` — Pipeline
+diff --git a/docs/usage.md b/docs/usage.md
+index e22db7e..7e6023b 100644
+--- a/docs/usage.md
++++ b/docs/usage.md
+@@ -372,6 +372,10 @@ If `next-action` reports an orphaned implementation state or an active lock
+ recovery situation, inspect the task and lock first, then choose the recovery
+ path that matches the lock state:
+
++Natural-language requests to “continue” or “resume work” do not imply `implement resume`.
++Run `next-action` first. If the lock is classified as `active_current_execution`,
++keep it and continue the todo loop; do not reacquire or repair it.
++
+ ```bash
+ taskledger task show
+ taskledger task show task-0001
+@@ -384,23 +388,21 @@ Lock recovery decision tree:
+ 1. Run `taskledger lock show --task TASK`. `lock show` reports a
+    `classification` field that names the lock state.
+ 2. If there is no lock, run `taskledger next-action`.
+-3. If `classification` is `expired` and the lock is an implementation lock
+-   for a running implementation run:
+-   run
++3. If `classification` is `active_current_execution`, keep the lock and continue
++   the todo loop. Do not run `implement resume` or repair the lock.
++4. If `classification` is `expired` and the lock is an implementation lock
++   for a running implementation run, run
+    `taskledger implement resume --repair-expired-lock --task TASK --reason "..."`.
+-4. If `classification` is `active_dead_local_process`:
+-   run
++5. If `classification` is `active_dead_local_process`, run
+    `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`,
+    then `taskledger implement resume --task TASK --reason "..."`.
+-5. If `classification` is `active_live_local_process` or
+-   `active_other_actor`:
++6. If `classification` is `active_live_local_process` or `active_other_actor`,
+    do not repair; use a handoff or wait for the holder to release.
+-6. If `classification` is `active_unverifiable_remote_or_unknown_process`:
++7. If `classification` is `active_unverifiable_remote_or_unknown_process`,
+    do not infer staleness from local process checks; inspect handoffs or ask
+    the user before repairing.
+-7. `next-action` itself returns `action=repair-lock` with diagnostics and
+-   the recommended command sequence when the active implementation lock has
+-   a dead local holder PID.
++8. `next-action` itself returns `action=repair-lock` with diagnostics and the
++   recommended command sequence when the active implementation lock has a dead local holder PID.
+
+ `--repair-expired-lock` is not a general stale-lock takeover flag. It only
+ handles locks whose `expires_at` is in the past. For non-expired active
+@@ -427,6 +429,10 @@ taskledger todo done todo-0003 --evidence "pytest tests/... passed"
+ taskledger --json next-action
+ ```
+
++Completing a todo renews the active implementation lease only when the current
++execution proves that it owns the lock. Read-only commands and other sessions do
++not renew the lease.
++
+ Rules for agents:
+
+ - Install the `taskledger` skill in the coding harness before relying on agent-driven workflows.
+diff --git a/skills/taskledger/SKILL.md b/skills/taskledger/SKILL.md
+index 5a06028..286b6b2 100644
+--- a/skills/taskledger/SKILL.md
++++ b/skills/taskledger/SKILL.md
+@@ -78,6 +78,10 @@ the sibling marker and does not repair target metadata.
+ 7. Inspect `taskledger lock show` before active work.
+ 8. Use `taskledger can implement` or `taskledger can validate` before those stages.
+    - Use `taskledger can implement-resume` when `next-action` recommends resuming an existing implementation run.
++   - Words such as “continue” or “resume work” do not imply the `implement resume`
++     command. Always consult `next-action` first.
++   - If lock diagnostics report `active_current_execution`, keep the lock and
++     continue the todo loop. Do not resume or repair it.
+ 9. If a durable handoff exists, claim it with `taskledger handoff claim handoff-0001` before continuing and close it after the intended next action starts.
+ 10. After `taskledger import ... --replace`, assume imported locks are non-portable by default. Run `taskledger next-action`; if it reports `implement-resume`, use `taskledger implement resume --reason "Continue imported implementation."`.
+
+@@ -325,8 +329,10 @@ Rules for agents:
+ 1. Prefer `next-action` and `todo next` over generated context during normal work.
+ 2. Use `validation_hint` before marking a todo done.
+ 3. Mark a todo done only after evidence exists.
+-4. Record concise evidence.
+-5. Do not create handoffs or context bundles unless the user explicitly asked to switch harness or session.
++4. `todo done` renews the implementation lease only when this execution proves
++   ownership. Read-only commands and other sessions do not renew it.
++5. Record concise evidence.
++6. Do not create handoffs or context bundles unless the user explicitly asked to switch harness or session.
+
+ ## Which read command to use
+
+@@ -479,10 +485,17 @@ Lock recovery decision tree:
+
+ 1. Run `taskledger lock show --task TASK` or `taskledger next-action`.
+ 2. If there is no lock, follow `next-action`.
+-3. If `classification` is `expired` and it is an implementation lock for a running run: run `taskledger implement resume --repair-expired-lock --task TASK --reason "..."`.
+-4. If `classification` is `active_dead_local_process`: run `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`, then `taskledger implement resume --task TASK --reason "..."`.
+-5. If `classification` is `active_live_local_process` or `active_other_actor`: do not repair; use a handoff or wait for the holder to release.
+-6. If `classification` is `active_unverifiable_remote_or_unknown_process`: do not infer staleness from local process checks; inspect handoffs or ask the user before repairing.
++3. If `classification` is `active_current_execution`, keep the lock and continue
++   the todo loop. Do not run `implement resume` or repair the lock.
++4. If `classification` is `expired` and it is an implementation lock for a
++   running run, run `taskledger implement resume --repair-expired-lock --task TASK --reason "..."`.
++5. If `classification` is `active_dead_local_process`, run
++   `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`, then `taskledger implement resume --task TASK --reason "..."`.
++6. If `classification` is `active_live_local_process` or `active_other_actor`,
++   do not repair; use a handoff or wait for the holder to release.
++7. If `classification` is `active_unverifiable_remote_or_unknown_process`, do
++   not infer staleness from local process checks; inspect handoffs or ask the
++   user before repairing.
+
+ `--repair-expired-lock` is not a general stale-lock takeover flag. It only handles locks whose `expires_at` is in the past. For non-expired active locks, use the classification returned by `lock show` or `next-action`.
+
+diff --git a/taskledger/cli_implement.py b/taskledger/cli_implement.py
+index bf3c320..aa875e3 100644
+--- a/taskledger/cli_implement.py
++++ b/taskledger/cli_implement.py
+@@ -177,6 +177,7 @@ def resume_command(
+         typer.Option("--session-id", help="Session identifier."),
+     ] = None,
+ ) -> None:
++    """Reacquire a lost implementation lock, not continue an active run."""
+     state = cli_state_from_context(ctx)
+     try:
+         task = resolve_cli_task(state.cwd, task_ref)
+@@ -200,11 +201,23 @@ def resume_command(
+     except LaunchError as exc:
+         emit_error(ctx, exc)
+         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+-    emit_payload(
+-        ctx,
+-        payload,
+-        human=f"resumed implementation {payload['run_id']}",
+-    )
++    if payload.get("already_active"):
++        lock_payload = payload.get("lock")
++        lock_id = (
++            lock_payload.get("lock_id", "unknown")
++            if isinstance(lock_payload, dict)
++            else "unknown"
++        )
++        human = (
++            f"implementation run {payload['run_id']} is already active "
++            f"in this execution and owns lock {lock_id}. "
++            "No resume or lock repair is required.\nContinue with:\n"
++            f"  taskledger next-action --task {task.id}\n"
++            f"  taskledger todo next --task {task.id}"
++        )
++    else:
++        human = f"resumed implementation {payload['run_id']}"
++    emit_payload(ctx, payload, human=human)
+
+
+ def log_command(
+@@ -553,7 +566,14 @@ def register_implement_v2_commands(app: typer.Typer) -> None:
+     }
+     app.command("start")(start_command)
+     app.command("restart")(restart_command)
+-    app.command("resume")(resume_command)
++    app.command(
++        "resume",
++        help=(
++            "Reacquire an implementation lock for an existing running run after "
++            "it was lost or expired. For normal continuation while the current "
++            "run still owns an active lock, use next-action and todo next."
++        ),
++    )(resume_command)
+     app.command("log")(log_command)
+     app.command("change")(change_command)
+     app.command("scan-changes")(scan_changes_command)
+diff --git a/taskledger/cli_misc.py b/taskledger/cli_misc.py
+index dec3fda..3524d44 100644
+--- a/taskledger/cli_misc.py
++++ b/taskledger/cli_misc.py
+@@ -57,6 +57,7 @@ from taskledger.cli_common import (
+     resolve_cli_task,
+ )
+ from taskledger.errors import LaunchError
++from taskledger.services.actors import resolve_effective_identity
+ from taskledger.services.doctor import (
+     inspect_v2_indexes,
+     inspect_v2_locks,
+@@ -814,7 +815,15 @@ def register_lock_v2_commands(app: typer.Typer) -> None:
+         state = cli_state_from_context(ctx)
+         try:
+             task = resolve_cli_task(state.cwd, task_ref)
+-            payload = show_lock(state.cwd, task.id)
++            current_actor, current_harness = resolve_effective_identity(
++                state.cwd, cwd=state.cwd
++            )
++            payload = show_lock(
++                state.cwd,
++                task.id,
++                current_actor=current_actor,
++                current_harness=current_harness,
++            )
+         except LaunchError as exc:
+             emit_error(ctx, exc)
+             raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+@@ -1187,7 +1196,15 @@ def emit_next_action_command(
+     state = cli_state_from_context(ctx)
+     try:
+         task = resolve_cli_task(state.cwd, task_ref)
+-        payload = next_action(state.cwd, task.id)
++        current_actor, current_harness = resolve_effective_identity(
++            state.cwd, cwd=state.cwd
++        )
++        payload = next_action(
++            state.cwd,
++            task.id,
++            current_actor=current_actor,
++            current_harness=current_harness,
++        )
+     except LaunchError as exc:
+         emit_error(ctx, exc)
+         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+@@ -1302,7 +1319,16 @@ def emit_can_command(ctx: typer.Context, task_ref: str | None, action: str) -> N
+     state = cli_state_from_context(ctx)
+     try:
+         task = resolve_cli_task(state.cwd, task_ref)
+-        payload = can_perform(state.cwd, task.id, action)
++        current_actor, current_harness = resolve_effective_identity(
++            state.cwd, cwd=state.cwd
++        )
++        payload = can_perform(
++            state.cwd,
++            task.id,
++            action,
++            current_actor=current_actor,
++            current_harness=current_harness,
++        )
+     except LaunchError as exc:
+         emit_error(ctx, exc)
+         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+@@ -1462,6 +1488,9 @@ def _emit_todo_update(
+     state = cli_state_from_context(ctx)
+     try:
+         task = resolve_cli_task(state.cwd, task_ref)
++        current_actor, current_harness = resolve_effective_identity(
++            state.cwd, cwd=state.cwd
++        )
+         task = set_todo_done(
+             state.cwd,
+             task.id,
+@@ -1470,6 +1499,8 @@ def _emit_todo_update(
+             evidence=evidence,
+             artifacts=artifacts,
+             changes=changes,
++            actor=current_actor,
++            harness=current_harness,
+         )
+     except LaunchError as exc:
+         emit_error(ctx, exc)
+diff --git a/taskledger/services/actors.py b/taskledger/services/actors.py
+index c2ebe89..3236fbb 100644
+--- a/taskledger/services/actors.py
++++ b/taskledger/services/actors.py
+@@ -236,7 +236,7 @@ def resolve_actor(
+                 or session_id
+                 or (detected.session_id if detected else None)
+             )
+-            resolved_tool = stored.tool or tool
++            resolved_tool = stored.tool or tool or (detected.name if detected else None)
+             pid, command_pid, pid_scope = _resolve_pids(
+                 tool=resolved_tool,
+                 session_id=resolved_session_id,
+diff --git a/taskledger/services/implementation_flow.py b/taskledger/services/implementation_flow.py
+index 987e1e7..34a6b7d 100644
+--- a/taskledger/services/implementation_flow.py
++++ b/taskledger/services/implementation_flow.py
+@@ -24,21 +24,30 @@ from taskledger.timeutils import utc_now_iso
+
+
+ def _active_lock_blocks_resume_error(
+-    task_id: str, lock: TaskLock
++    task_id: str,
++    lock: TaskLock,
++    *,
++    current_actor: ActorRef | None,
++    current_harness: HarnessRef | None,
+ ) -> _tasks.LaunchError:
+     """Build a diagnostics-aware LaunchError for resume vs non-expired active lock."""
+     from taskledger.domain.lock import TaskLock
+     from taskledger.services.lock_diagnostics import diagnose_lock
+
+     assert isinstance(lock, TaskLock)
+-    diagnostics = diagnose_lock(lock, task_id=task_id)
++    diagnostics = diagnose_lock(
++        lock,
++        task_id=task_id,
++        current_actor=current_actor,
++        current_harness=current_harness,
++    )
+     holder = lock.holder
+     pid_part = f" pid={holder.pid}" if holder.pid else ""
+     message = (
+-        "Implementation resume requires no active lock. "
++        "Implementation resume cannot reacquire a non-expired active lock. "
+         f"Task {task_id} has a non-expired {lock.stage} lock for "
+         f"{lock.run_id} held by {holder.actor_type}:{holder.actor_name}"
+-        f"{pid_part}. "
++        f"{pid_part}. {diagnostics.summary} "
+         "--repair-expired-lock only applies after the lock expires."
+     )
+     remediation = list(diagnostics.remediation) or [
+@@ -269,6 +278,15 @@ def resume_implementation(
+             "Implementation resume requires a running implementation run.",
+             _tasks.EXIT_CODE_INVALID_TRANSITION,
+         )
++    from taskledger.services.actors import resolve_effective_identity
++
++    resolved_actor, resolved_harness = resolve_effective_identity(
++        workspace_root,
++        actor=actor,
++        harness=harness,
++        cwd=workspace_root,
++        role="implementer",
++    )
+     existing_lock = _tasks._current_lock(workspace_root, task.id)
+     if existing_lock is not None:
+         if repair_expired_lock and _tasks.lock_is_expired(existing_lock):
+@@ -289,9 +307,37 @@ def resume_implementation(
+         elif _tasks.lock_is_expired(existing_lock):
+             raise _tasks._stale_lock_error(task.id, existing_lock)
+         else:
+-            raise _active_lock_blocks_resume_error(task.id, existing_lock)
++            from taskledger.services.lock_diagnostics import (
++                lock_owned_by_current_execution,
++            )
++
++            if (
++                existing_lock.stage == "implementing"
++                and existing_lock.run_id == run.run_id
++                and lock_owned_by_current_execution(
++                    existing_lock,
++                    current_actor=resolved_actor,
++                    current_harness=resolved_harness,
++                )
++            ):
++                payload = _tasks._lifecycle_payload(
++                    "implement resume",
++                    task,
++                    warnings=[],
++                    changed=False,
++                    run=run,
++                    lock=existing_lock,
++                )
++                payload["already_active"] = True
++                payload["next_command"] = f"taskledger next-action --task {task.id}"
++                return payload
++            raise _active_lock_blocks_resume_error(
++                task.id,
++                existing_lock,
++                current_actor=resolved_actor,
++                current_harness=resolved_harness,
++            )
+     _tasks._ensure_dependencies_done(workspace_root, task)
+-    resolved_actor = actor or _tasks._default_actor()
+     lock = _tasks._acquire_lock(
+         workspace_root,
+         task=task,
+@@ -299,7 +345,7 @@ def resume_implementation(
+         run=run,
+         reason=resume_reason,
+         actor=resolved_actor,
+-        harness=harness,
++        harness=resolved_harness,
+     )
+     updated = replace(
+         task,
+diff --git a/taskledger/services/lock_diagnostics.py b/taskledger/services/lock_diagnostics.py
+index fbf0149..55fcb59 100644
+--- a/taskledger/services/lock_diagnostics.py
++++ b/taskledger/services/lock_diagnostics.py
+@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field
+ from datetime import datetime, timezone
+ from typing import Any
+
+-from taskledger.domain.actor import ActorRef
++from taskledger.domain.actor import ActorRef, HarnessRef
+ from taskledger.domain.lock import TaskLock
+ from taskledger.storage.locks import lock_is_expired
+
+@@ -35,6 +35,7 @@ CLASSIFICATION_ACTIVE_UNVERIFIABLE_REMOTE_OR_UNKNOWN_PROCESS = (
+ )
+ CLASSIFICATION_ACTIVE_NO_PID = "active_no_pid"
+ CLASSIFICATION_ACTIVE_SAME_ACTOR = "active_same_actor"
++CLASSIFICATION_ACTIVE_CURRENT_EXECUTION = "active_current_execution"
+ CLASSIFICATION_ACTIVE_HARNESS_SESSION = "active_harness_session"
+ CLASSIFICATION_ACTIVE_OTHER_ACTOR = "active_other_actor"
+
+@@ -125,6 +126,72 @@ def _actor_matches(holder: ActorRef, current_actor: ActorRef | None) -> bool:
+     return holder.actor_name == current_actor.actor_name
+
+
++def _actor_identity_matches(holder: ActorRef, current_actor: ActorRef) -> bool:
++    if holder.actor_id or current_actor.actor_id:
++        return bool(holder.actor_id and holder.actor_id == current_actor.actor_id)
++    return (
++        holder.actor_type == current_actor.actor_type
++        and holder.actor_name == current_actor.actor_name
++    )
++
++
++def lock_owned_by_current_execution(
++    lock: TaskLock,
++    *,
++    current_actor: ActorRef,
++    current_harness: HarnessRef | None = None,
++    current_host: str | None = None,
++) -> bool:
++    """Return whether strong identity evidence ties the lock to this execution."""
++    holder = lock.holder
++    holder_harness_name = (
++        lock.harness.name
++        if lock.harness is not None
++        else (
++            holder.tool
++            or (holder.actor_name if holder.actor_name in KNOWN_HARNESS_TOOLS else None)
++        )
++    )
++    current_harness_name = (
++        current_harness.name if current_harness is not None else current_actor.tool
++    )
++    holder_session_id = (
++        lock.harness.session_id if lock.harness is not None else None
++    ) or holder.session_id
++    current_session_id = (
++        current_harness.session_id if current_harness is not None else None
++    ) or current_actor.session_id
++
++    if (
++        holder_harness_name
++        and current_harness_name
++        and holder_harness_name.casefold() == current_harness_name.casefold()
++        and holder_session_id
++        and current_session_id
++        and holder_session_id == current_session_id
++    ):
++        return True
++
++    if (
++        holder.session_id
++        and current_actor.session_id
++        and holder.session_id == current_actor.session_id
++        and _actor_identity_matches(holder, current_actor)
++    ):
++        return True
++
++    host = current_host or current_host_name()
++    return (
++        holder.pid_scope == "owner"
++        and current_actor.pid_scope == "owner"
++        and holder.pid is not None
++        and holder.pid == current_actor.pid
++        and _host_matches(holder.host, host)
++        and _host_matches(current_actor.host, host)
++        and _actor_identity_matches(holder, current_actor)
++    )
++
++
+ def _seconds_until_expiry(lock: TaskLock, now: datetime) -> int | None:
+     if not lock.expires_at:
+         return None
+@@ -279,6 +346,7 @@ def diagnose_lock(
+     *,
+     task_id: str | None = None,
+     current_actor: ActorRef | None = None,
++    current_harness: HarnessRef | None = None,
+     now: datetime | None = None,
+     pid_checker: PidCheck | None = None,
+     current_host: str | None = None,
+@@ -292,8 +360,12 @@ def diagnose_lock(
+     task_id:
+         Task id to embed in remediation commands. Defaults to ``lock.task_id``.
+     current_actor:
+-        The actor the caller is currently representing. Used to detect the
+-        same-actor case. ``None`` means unknown.
++        The actor the caller is currently representing. Matching logical actor
++        identity alone does not prove current-execution ownership. ``None`` means
++        unknown.
++    current_harness:
++        The harness the caller is currently representing. Matching provider and
++        non-empty session IDs establish current-execution ownership.
+     now:
+         Reference time for expiry checks. Defaults to ``datetime.now(utc)``.
+     pid_checker:
+@@ -338,8 +410,32 @@ def diagnose_lock(
+             remediation=remediation,
+         )
+
+-    same_actor = _actor_matches(holder, current_actor)
++    current_execution = current_actor is not None and lock_owned_by_current_execution(
++        lock,
++        current_actor=current_actor,
++        current_harness=current_harness,
++        current_host=host,
++    )
++    if current_execution:
++        return LockDiagnostics(
++            active=True,
++            expired=False,
++            classification=CLASSIFICATION_ACTIVE_CURRENT_EXECUTION,
++            holder=holder_dict,
++            holder_pid=pid,
++            holder_host=holder_host,
++            current_host=host,
++            holder_pid_check=PID_CHECK_NA,
++            seconds_until_expiry=seconds,
++            expiry_label=expiry_label,
++            summary=(
++                f"Active {lock.stage} lock is owned by the current execution; "
++                "continue with the existing lock."
++            ),
++            remediation=(),
++        )
+
++    same_actor = _actor_matches(holder, current_actor)
+     if pid is None:
+         pid_scope = getattr(holder, "pid_scope", None)
+         has_harness_session = bool(
+@@ -351,9 +447,9 @@ def diagnose_lock(
+         if same_actor:
+             classification = CLASSIFICATION_ACTIVE_SAME_ACTOR
+             summary = (
+-                f"Active {lock.stage} lock is held by the current actor "
+-                f"({holder.actor_type}:{holder.actor_name}); no holder PID "
+-                "was recorded."
++                f"Active {lock.stage} lock has the same logical actor identity "
++                f"({holder.actor_type}:{holder.actor_name}), but this execution "
++                "is unverified; no holder PID was recorded."
+             )
+             remediation = ()
+         elif has_harness_session:
+@@ -406,9 +502,9 @@ def diagnose_lock(
+         if same_actor:
+             classification = CLASSIFICATION_ACTIVE_SAME_ACTOR
+             summary = (
+-                f"Active {lock.stage} lock is held by the current actor "
+-                f"({holder.actor_type}:{holder.actor_name}); holder PID "
+-                "is a command subprocess, not used for liveness probing."
++                f"Active {lock.stage} lock has the same logical actor identity "
++                f"({holder.actor_type}:{holder.actor_name}), but this execution "
++                "is unverified; its PID is a command subprocess."
+             )
+             remediation = ()
+         else:
+@@ -453,9 +549,9 @@ def diagnose_lock(
+         elif same_actor:
+             classification = CLASSIFICATION_ACTIVE_SAME_ACTOR
+             summary = (
+-                f"Active {lock.stage} lock is held by the current actor "
+-                f"({holder.actor_type}:{holder.actor_name}); holder PID {pid} "
+-                "is alive on this host."
++                f"Active {lock.stage} lock has the same logical actor identity "
++                f"({holder.actor_type}:{holder.actor_name}), but this execution "
++                f"is unverified; holder PID {pid} is alive on this host."
+             )
+             remediation = ()
+             pid_status_out = pid_status
+diff --git a/taskledger/services/navigation.py b/taskledger/services/navigation.py
+index 0225bb9..a4d2c9b 100644
+--- a/taskledger/services/navigation.py
++++ b/taskledger/services/navigation.py
+@@ -5,6 +5,8 @@ from pathlib import Path
+ from typing import cast
+
+ from taskledger.domain.models import (
++    ActorRef,
++    HarnessRef,
+     PlanRecord,
+     TaskHandoffRecord,
+     TaskLock,
+@@ -96,9 +98,17 @@ def next_action_for_task(
+     workspace_root: Path,
+     task: TaskRecord,
+     *,
++    current_actor: ActorRef | None = None,
++    current_harness: HarnessRef | None = None,
+     lock: TaskLock | None = None,
+     runs: list[TaskRunRecord] | None = None,
+ ) -> dict[str, object]:
++    current_actor, current_harness = resolve_effective_identity(
++        workspace_root,
++        actor=current_actor,
++        harness=current_harness,
++        cwd=workspace_root,
++    )
+     if lock is None:
+         lock = _current_lock(workspace_root, task.id)
+     if runs is None:
+@@ -109,7 +119,12 @@ def next_action_for_task(
+         lock=lock,
+         runs=runs,
+     )
+-    lock_diagnostics_dict = _compute_lock_diagnostics_for_payload(lock, task.id)
++    lock_diagnostics_dict = _compute_lock_diagnostics_for_payload(
++        lock,
++        task.id,
++        current_actor=current_actor,
++        current_harness=current_harness,
++    )
+     lock_warning = _lock_warning_for_action(lock, lock_diagnostics_dict)
+     action: str
+     reason: str
+@@ -479,9 +494,20 @@ def _build_next_action_payload(
+     return _finalize_next_action_payload(payload)
+
+
+-def next_action(workspace_root: Path, task_ref: str) -> dict[str, object]:
++def next_action(
++    workspace_root: Path,
++    task_ref: str,
++    *,
++    current_actor: ActorRef | None = None,
++    current_harness: HarnessRef | None = None,
++) -> dict[str, object]:
+     task = resolve_task(workspace_root, task_ref)
+-    return next_action_for_task(workspace_root, task)
++    return next_action_for_task(
++        workspace_root,
++        task,
++        current_actor=current_actor,
++        current_harness=current_harness,
++    )
+
+
+ def _orphaned_active_stage_action(
+@@ -823,19 +849,33 @@ def _archived_blocker(task: TaskRecord) -> dict[str, object]:
+     }
+
+
+-def can_perform(workspace_root: Path, task_ref: str, action: str) -> dict[str, object]:
++def _archived_task_capability(task: TaskRecord, action: str) -> dict[str, object]:
++    return {
++        "kind": "task_capability",
++        "task_id": task.id,
++        "action": action,
++        "ok": False,
++        "reason": "Task is archived and read-only.",
++        "active_stage": None,
++        "blocking": [_archived_blocker(task)],
++    }
++
++
++def can_perform(
++    workspace_root: Path,
++    task_ref: str,
++    action: str,
++    *,
++    current_actor: ActorRef | None = None,
++    current_harness: HarnessRef | None = None,
++) -> dict[str, object]:
+     task = resolve_task(workspace_root, task_ref)
+     if is_archived_task(task):
+-        return {
+-            "kind": "task_capability",
+-            "task_id": task.id,
+-            "action": action,
+-            "ok": False,
+-            "reason": "Task is archived and read-only.",
+-            "active_stage": None,
+-            "blocking": [_archived_blocker(task)],
+-        }
++        return _archived_task_capability(task, action)
+     lock = _current_lock(workspace_root, task.id)
++    current_actor, current_harness = resolve_effective_identity(
++        workspace_root, actor=current_actor, harness=current_harness, cwd=workspace_root
++    )
+     active_stage = _task_active_stage(workspace_root, task, lock=lock)
+     ok = False
+     reason = ""
+@@ -926,6 +966,8 @@ def can_perform(workspace_root: Path, task_ref: str, action: str) -> dict[str, o
+             lock=lock,
+             active_stage=active_stage,
+             workspace_root=workspace_root,
++            current_actor=current_actor,
++            current_harness=current_harness,
+         )
+         blocking.extend(resume_blockers)
+     elif action == "implement-restart":
+@@ -1086,13 +1128,22 @@ def _latest_plan_or_none(workspace_root: Path, task_id: str) -> PlanRecord | Non
+
+
+ def _compute_lock_diagnostics_for_payload(
+-    lock: TaskLock | None, task_id: str
++    lock: TaskLock | None,
++    task_id: str,
++    *,
++    current_actor: ActorRef,
++    current_harness: HarnessRef,
+ ) -> dict[str, object] | None:
+     if lock is None:
+         return None
+     from taskledger.services.lock_diagnostics import diagnose_lock
+
+-    return diagnose_lock(lock, task_id=task_id).to_dict()
++    return diagnose_lock(
++        lock,
++        task_id=task_id,
++        current_actor=current_actor,
++        current_harness=current_harness,
++    ).to_dict()
+
+
+ def _lock_warning_for_action(
+@@ -1110,7 +1161,7 @@ def _lock_warning_for_action(
+     if classification in {
+         "active_dead_local_process",
+         "expired",
+-        "active_same_actor",
++        "active_current_execution",
+     }:
+         return None
+     holder = lock.holder
+@@ -1209,6 +1260,8 @@ def _check_resume_can_perform(
+     lock: TaskLock | None,
+     active_stage: str | None,
+     workspace_root: Path,
++    current_actor: ActorRef,
++    current_harness: HarnessRef,
+ ) -> tuple[bool, str, list[dict[str, object]]]:
+     blocking: list[dict[str, object]] = []
+     implementation_run = _optional_run(
+@@ -1217,6 +1270,45 @@ def _check_resume_can_perform(
+         task.latest_implementation_run,
+     )
+     dependency_blockers = _dependency_blockers(workspace_root, task)
++    if (
++        action == "implement-resume"
++        and lock is not None
++        and lock.stage == "implementing"
++        and not lock_is_expired(lock)
++        and implementation_run is not None
++        and implementation_run.run_type == "implementation"
++        and implementation_run.status == "running"
++        and lock.run_id == implementation_run.run_id
++        and active_stage == "implementation"
++        and task.status_stage in {"approved", "implementing"}
++        and task.accepted_plan_version is not None
++    ):
++        from taskledger.services.lock_diagnostics import (
++            lock_owned_by_current_execution,
++        )
++
++        if lock_owned_by_current_execution(
++            lock,
++            current_actor=current_actor,
++            current_harness=current_harness,
++        ):
++            return (
++                False,
++                (
++                    "Implementation is already active in this session; "
++                    "continue with todo next."
++                ),
++                [
++                    {
++                        "kind": "lock",
++                        "message": (
++                            "This execution already owns the active implementation "
++                            "lock; no reacquisition is needed."
++                        ),
++                        "command_hint": f"taskledger todo next --task {task.id}",
++                    }
++                ],
++            )
+     if action == "expired-lock-resume":
+         ok = (
+             task.status_stage in {"approved", "implementing"}
+diff --git a/taskledger/services/run_store.py b/taskledger/services/run_store.py
+index ca63340..0b88a39 100644
+--- a/taskledger/services/run_store.py
++++ b/taskledger/services/run_store.py
+@@ -3,7 +3,7 @@ from __future__ import annotations
+ from dataclasses import replace
+ from pathlib import Path
+
+-from taskledger.domain.actor import ActorRef
++from taskledger.domain.actor import ActorRef, HarnessRef
+ from taskledger.domain.states import EXIT_CODE_MISSING
+ from taskledger.errors import LaunchError
+ from taskledger.services.task_events import (
+@@ -26,6 +26,7 @@ def show_lock(
+     task_ref: str,
+     *,
+     current_actor: ActorRef | None = None,
++    current_harness: HarnessRef | None = None,
+ ) -> dict[str, object]:
+     from taskledger.services.lock_diagnostics import diagnose_lock
+     from taskledger.services.storage_locations import _is_within
+@@ -38,6 +39,7 @@ def show_lock(
+         lock,
+         task_id=task.id,
+         current_actor=current_actor,
++        current_harness=current_harness,
+     )
+     try:
+         lock_file_rel = lock_path.relative_to(paths.project_dir).as_posix()
+diff --git a/taskledger/services/task_collections.py b/taskledger/services/task_collections.py
+index 52a869f..95c3e45 100644
+--- a/taskledger/services/task_collections.py
++++ b/taskledger/services/task_collections.py
+@@ -474,15 +474,28 @@ def set_todo_done(
+     )
+     _tasks._ensure_not_archived(task, operation="update todo on")
+     normalized_todo_id = _tasks._normalize_local_id(workspace_root, todo_id, "todo")
+-    _tasks._enforce_decision(
+-        todo_toggle_decision(
+-            task,
+-            _tasks._lock_for_mutation(workspace_root, task.id),
+-            actor_role="user",
++    lock = _tasks._lock_for_mutation(workspace_root, task.id)
++    resolved_actor = actor or _tasks._default_actor()
++    _tasks._enforce_decision(todo_toggle_decision(task, lock, actor_role="user"))
++    renew_implementation_lock = False
++    if done and lock is not None and lock.stage == "implementing":
++        from taskledger.services.lock_diagnostics import (
++            lock_owned_by_current_execution,
++        )
++
++        run = _tasks._optional_run(workspace_root, task, lock.run_id)
++        renew_implementation_lock = (
++            lock.task_id == task.id
++            and task.status_stage == "implementing"
++            and task.latest_implementation_run == lock.run_id
++            and run is not None
++            and run.run_type == "implementation"
++            and run.status == "running"
++            and lock_owned_by_current_execution(
++                lock, current_actor=resolved_actor, current_harness=harness
++            )
+         )
+-    )
+     now = utc_now_iso()
+-    resolved_actor = actor or _tasks._default_actor()
+     todos = [
+         replace(
+             todo,
+@@ -523,6 +536,13 @@ def set_todo_done(
+             "changes": list(changes),
+         },
+     )
++    if renew_implementation_lock and lock is not None:
++        _tasks.renew_lock_lease(
++            workspace_root,
++            lock,
++            current_actor=resolved_actor,
++            current_harness=harness,
++        )
+     return updated
+
+
+diff --git a/taskledger/services/tasks.py b/taskledger/services/tasks.py
+index fd59067..de48f00 100644
+--- a/taskledger/services/tasks.py
++++ b/taskledger/services/tasks.py
+@@ -94,6 +94,7 @@ from taskledger.storage.locks import (
+     lock_is_expired,
+     read_lock,
+     remove_lock,
++    update_lock,
+     write_lock,
+ )
+ from taskledger.storage.project_config import load_worker_pipeline_config
+@@ -1560,16 +1561,40 @@ def list_locks(*args, **kwargs):  # type: ignore[no-untyped-def]
+     return _impl(*args, **kwargs)
+
+
+-def next_action(workspace_root: Path, task_ref: str) -> dict[str, object]:
++def next_action(
++    workspace_root: Path,
++    task_ref: str,
++    *,
++    current_actor: ActorRef | None = None,
++    current_harness: HarnessRef | None = None,
++) -> dict[str, object]:
+     from taskledger.services.navigation import next_action as navigation_next_action
+
+-    return navigation_next_action(workspace_root, task_ref)
++    return navigation_next_action(
++        workspace_root,
++        task_ref,
++        current_actor=current_actor,
++        current_harness=current_harness,
++    )
+
+
+-def can_perform(workspace_root: Path, task_ref: str, action: str) -> dict[str, object]:
++def can_perform(
++    workspace_root: Path,
++    task_ref: str,
++    action: str,
++    *,
++    current_actor: ActorRef | None = None,
++    current_harness: HarnessRef | None = None,
++) -> dict[str, object]:
+     from taskledger.services.navigation import can_perform as navigation_can_perform
+
+-    return navigation_can_perform(workspace_root, task_ref, action)
++    return navigation_can_perform(
++        workspace_root,
++        task_ref,
++        action,
++        current_actor=current_actor,
++        current_harness=current_harness,
++    )
+
+
+ def task_dossier(
+@@ -1961,6 +1986,74 @@ def _current_lock(workspace_root: Path, task_id: str) -> TaskLock | None:
+     return read_lock(task_lock_path(resolve_v2_paths(workspace_root), task_id))
+
+
++def renew_lock_lease(
++    workspace_root: Path,
++    expected_lock: TaskLock,
++    *,
++    current_actor: ActorRef,
++    current_harness: HarnessRef | None,
++    now: datetime | None = None,
++) -> TaskLock:
++    from taskledger.services.lock_diagnostics import (
++        lock_owned_by_current_execution,
++    )
++
++    lock_path = task_lock_path(resolve_v2_paths(workspace_root), expected_lock.task_id)
++    current_lock = read_lock(lock_path)
++    if current_lock is None or current_lock.lock_id != expected_lock.lock_id:
++        raise _cli_error(
++            f"Implementation lock for task {expected_lock.task_id} "
++            "changed before lease renewal.",
++            EXIT_CODE_LOCK_CONFLICT,
++        )
++    if (
++        current_lock.stage != "implementing"
++        or current_lock.run_id != expected_lock.run_id
++    ):
++        raise _cli_error(
++            f"Implementation lock for task {expected_lock.task_id} "
++            "no longer matches its active run.",
++            EXIT_CODE_LOCK_CONFLICT,
++        )
++    if lock_is_expired(current_lock):
++        raise _stale_lock_error(expected_lock.task_id, current_lock)
++    if not lock_owned_by_current_execution(
++        current_lock,
++        current_actor=current_actor,
++        current_harness=current_harness,
++    ):
++        raise _cli_error(
++            f"Current execution does not own implementation lock "
++            f"{current_lock.lock_id}.",
++            EXIT_CODE_LOCK_CONFLICT,
++        )
++
++    task = resolve_task(workspace_root, current_lock.task_id)
++    run = _require_run(workspace_root, task, current_lock.run_id)
++    if (
++        task.status_stage != "implementing"
++        or task.latest_implementation_run != current_lock.run_id
++        or run.run_type != "implementation"
++        or run.status != "running"
++    ):
++        raise _cli_error(
++            f"Implementation lock {current_lock.lock_id} no longer matches "
++            "an active implementation run.",
++            EXIT_CODE_LOCK_CONFLICT,
++        )
++
++    renewed_at = now or datetime.now(timezone.utc)
++    renewed_lock = replace(
++        current_lock,
++        last_heartbeat_at=renewed_at.isoformat(),
++        expires_at=(
++            renewed_at + timedelta(seconds=current_lock.lease_seconds)
++        ).isoformat(),
++    )
++    update_lock(lock_path, renewed_lock)
++    return renewed_lock
++
++
+ def _lock_for_mutation(workspace_root: Path, task_id: str) -> TaskLock | None:
+     lock = _current_lock(workspace_root, task_id)
+     if lock is not None and lock_is_expired(lock):
+diff --git a/tests/test_actor_resolution.py b/tests/test_actor_resolution.py
+index 432962a..46e34c9 100644
+--- a/tests/test_actor_resolution.py
++++ b/tests/test_actor_resolution.py
+@@ -3,6 +3,7 @@
+ from __future__ import annotations
+
+ import os
++from pathlib import Path
+
+ import pytest
+
+@@ -198,3 +199,24 @@ class TestResolveActorHarnessContext:
+
+         assert actor.pid is None
+         assert actor.pid_scope == "unverifiable_harness"
++
++    def test_stored_generic_actor_retains_detected_harness_tool(
++        self, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        from taskledger.domain.actor import ActorRef
++        from taskledger.services import actors
++
++        monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
++        monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session-1")
++        monkeypatch.setattr(
++            actors,
++            "load_actor_state",
++            lambda _: ActorRef(actor_name="taskledger"),
++        )
++        monkeypatch.setattr(actors, "load_harness_state", lambda _: None)
++
++        actor = resolve_actor(workspace_root=Path("."))
++
++        assert actor.actor_name == "taskledger"
++        assert actor.tool == "pi"
++        assert actor.session_id == "pi-session-1"
+diff --git a/tests/test_docs_and_skill.py b/tests/test_docs_and_skill.py
+index 5dcf448..02696e8 100644
+--- a/tests/test_docs_and_skill.py
++++ b/tests/test_docs_and_skill.py
+@@ -536,3 +536,17 @@ def test_skill_distinguishes_probe_failure_from_target_failure() -> None:
+     assert "probe/setup failure" in skill
+     assert "not automatically a failed acceptance criterion" in skill
+     assert "normalize" in skill
++
++
++def test_current_execution_lock_guidance_is_documented() -> None:
++    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
++    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
++    contract = (ROOT / "docs" / "command_contract.md").read_text(encoding="utf-8")
++
++    for text in (skill, usage, contract):
++        assert "active_current_execution" in text
++        assert "todo loop" in text
++    assert "do not imply `implement resume`" in usage
++    assert "changed=false" in contract
++    assert "Successful `todo done` renews the active implementation lease" in contract
++    assert "Read-only commands and other sessions do not renew it." in skill
+diff --git a/tests/test_lock_diagnostics.py b/tests/test_lock_diagnostics.py
+index 57525b0..0c2e296 100644
+--- a/tests/test_lock_diagnostics.py
++++ b/tests/test_lock_diagnostics.py
+@@ -1,12 +1,14 @@
+ from __future__ import annotations
+
++from dataclasses import replace
+ from datetime import datetime, timedelta, timezone
+
+ import pytest
+
+-from taskledger.domain.actor import ActorRef
++from taskledger.domain.actor import ActorRef, HarnessRef
+ from taskledger.domain.lock import TaskLock
+ from taskledger.services.lock_diagnostics import (
++    CLASSIFICATION_ACTIVE_CURRENT_EXECUTION,
+     CLASSIFICATION_ACTIVE_DEAD_LOCAL_PROCESS,
+     CLASSIFICATION_ACTIVE_NO_PID,
+     CLASSIFICATION_ACTIVE_OTHER_ACTOR,
+@@ -487,7 +489,7 @@ class TestHarnessSessionDiagnostics:
+     # specmason: req=REQ-0030 ac=AC-0354
+     def test_harness_session_same_actor_classification(self) -> None:
+         from taskledger.services.lock_diagnostics import (
+-            CLASSIFICATION_ACTIVE_SAME_ACTOR,
++            CLASSIFICATION_ACTIVE_CURRENT_EXECUTION,
+         )
+
+         lock = _lock(
+@@ -515,5 +517,271 @@ class TestHarnessSessionDiagnostics:
+             pid_checker=lambda pid: PID_CHECK_DEAD,
+         )
+
+-        assert diag.classification == CLASSIFICATION_ACTIVE_SAME_ACTOR
++        assert diag.classification == CLASSIFICATION_ACTIVE_CURRENT_EXECUTION
+         assert diag.remediation == ()
++
++
++class TestCurrentExecutionOwnership:
++    def test_matching_harness_session_proves_ownership_without_owner_pid(self) -> None:
++        from taskledger.domain.actor import HarnessRef
++        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
++
++        lock = _lock(
++            holder=_holder(
++                actor_type="agent",
++                actor_name="taskledger",
++                tool="pi",
++                session_id="pi-session-1",
++                pid=None,
++                pid_scope="unverifiable_harness",
++            )
++        )
++        from dataclasses import replace
++
++        lock = replace(
++            lock,
++            harness=HarnessRef(
++                harness_id="h-001",
++                name="pi",
++                kind="agent_harness",
++                session_id="pi-session-1",
++            ),
++        )
++        current = ActorRef(
++            actor_type="agent",
++            actor_name="taskledger",
++            tool="pi",
++            session_id="pi-session-1",
++        )
++
++        assert lock_owned_by_current_execution(
++            lock,
++            current_actor=current,
++            current_harness=HarnessRef(
++                harness_id="h-002",
++                name="pi",
++                kind="agent_harness",
++                session_id="pi-session-1",
++            ),
++            current_host=HOST_LOCAL,
++        )
++
++    def test_different_harness_sessions_do_not_prove_ownership(self) -> None:
++        from taskledger.domain.actor import HarnessRef
++        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
++
++        lock = _lock(
++            holder=_holder(
++                actor_type="agent",
++                actor_name="taskledger",
++                tool="pi",
++                session_id="pi-session-1",
++                pid=None,
++                pid_scope="unverifiable_harness",
++            )
++        )
++        current = ActorRef(
++            actor_type="agent",
++            actor_name="taskledger",
++            tool="pi",
++            session_id="pi-session-2",
++        )
++
++        assert not lock_owned_by_current_execution(
++            lock,
++            current_actor=current,
++            current_harness=HarnessRef(
++                harness_id="h-002",
++                name="pi",
++                kind="agent_harness",
++                session_id="pi-session-2",
++            ),
++            current_host=HOST_LOCAL,
++        )
++
++    def test_actor_name_alone_does_not_prove_ownership(self) -> None:
++        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
++
++        lock = _lock(
++            holder=_holder(
++                actor_type="agent",
++                actor_name="taskledger",
++                tool="pi",
++                session_id=None,
++                pid=None,
++                pid_scope="unverifiable_harness",
++            )
++        )
++
++        assert not lock_owned_by_current_execution(
++            lock,
++            current_actor=ActorRef(
++                actor_type="agent",
++                actor_name="taskledger",
++                tool="pi",
++            ),
++            current_host=HOST_LOCAL,
++        )
++
++    def test_same_stable_owner_pid_proves_ownership_on_same_host(self) -> None:
++        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
++
++        lock = _lock(
++            holder=_holder(
++                actor_type="agent",
++                actor_name="pi",
++                tool="pi",
++                host=HOST_LOCAL,
++                pid=512425,
++                pid_scope="owner",
++            )
++        )
++
++        assert lock_owned_by_current_execution(
++            lock,
++            current_actor=ActorRef(
++                actor_type="agent",
++                actor_name="pi",
++                tool="pi",
++                host=HOST_LOCAL,
++                pid=512425,
++                pid_scope="owner",
++            ),
++            current_host=HOST_LOCAL,
++        )
++
++    def test_command_pid_does_not_prove_ownership(self) -> None:
++        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
++
++        lock = _lock(
++            holder=_holder(
++                actor_type="agent",
++                actor_name="pi",
++                tool="pi",
++                pid=None,
++                command_pid=512425,
++                pid_scope="command",
++            )
++        )
++
++        assert not lock_owned_by_current_execution(
++            lock,
++            current_actor=ActorRef(
++                actor_type="agent",
++                actor_name="pi",
++                tool="pi",
++                pid=None,
++                command_pid=512425,
++                pid_scope="command",
++            ),
++            current_host=HOST_LOCAL,
++        )
++
++    def test_diagnose_current_session_classifies_current_execution(self) -> None:
++        lock = replace(
++            _lock(
++                holder=_holder(
++                    actor_type="agent",
++                    actor_name="taskledger",
++                    tool="pi",
++                    session_id="pi-session-1",
++                    pid=None,
++                    pid_scope="unverifiable_harness",
++                )
++            ),
++            harness=HarnessRef(
++                harness_id="h-001",
++                name="pi",
++                kind="agent_harness",
++                session_id="pi-session-1",
++            ),
++        )
++
++        diag = diagnose_lock(
++            lock,
++            current_actor=ActorRef(
++                actor_type="agent",
++                actor_name="taskledger",
++                tool="pi",
++                session_id="pi-session-1",
++            ),
++            current_harness=HarnessRef(
++                harness_id="h-002",
++                name="pi",
++                kind="agent_harness",
++                session_id="pi-session-1",
++            ),
++            now=NOW,
++            current_host=HOST_LOCAL,
++        )
++
++        assert diag.classification == CLASSIFICATION_ACTIVE_CURRENT_EXECUTION
++        assert diag.remediation == ()
++
++    def test_different_session_with_same_actor_is_not_current_execution(self) -> None:
++        lock = replace(
++            _lock(
++                holder=_holder(
++                    actor_type="agent",
++                    actor_name="taskledger",
++                    tool="pi",
++                    session_id="pi-session-1",
++                    pid=None,
++                    pid_scope="unverifiable_harness",
++                )
++            ),
++            harness=HarnessRef(
++                harness_id="h-001",
++                name="pi",
++                kind="agent_harness",
++                session_id="pi-session-1",
++            ),
++        )
++
++        diag = diagnose_lock(
++            lock,
++            current_actor=ActorRef(
++                actor_type="agent",
++                actor_name="taskledger",
++                tool="pi",
++                session_id="pi-session-2",
++            ),
++            current_harness=HarnessRef(
++                harness_id="h-002",
++                name="pi",
++                kind="agent_harness",
++                session_id="pi-session-2",
++            ),
++            now=NOW,
++            current_host=HOST_LOCAL,
++        )
++
++        assert diag.classification == CLASSIFICATION_ACTIVE_SAME_ACTOR
++        assert not diag.remediation
++
++    def test_same_owner_pid_on_remote_host_does_not_prove_ownership(self) -> None:
++        from taskledger.services.lock_diagnostics import lock_owned_by_current_execution
++
++        lock = _lock(
++            holder=_holder(
++                actor_type="agent",
++                actor_name="pi",
++                tool="pi",
++                host=HOST_REMOTE,
++                pid=512425,
++                pid_scope="owner",
++            )
++        )
++
++        assert not lock_owned_by_current_execution(
++            lock,
++            current_actor=ActorRef(
++                actor_type="agent",
++                actor_name="pi",
++                tool="pi",
++                host=HOST_LOCAL,
++                pid=512425,
++                pid_scope="owner",
++            ),
++            current_host=HOST_LOCAL,
++        )
+diff --git a/tests/test_lock_lease_renewal.py b/tests/test_lock_lease_renewal.py
+new file mode 100644
+index 0000000..6d9803e
+--- /dev/null
++++ b/tests/test_lock_lease_renewal.py
+@@ -0,0 +1,293 @@
++from __future__ import annotations
++
++from dataclasses import replace
++from datetime import datetime, timedelta, timezone
++from pathlib import Path
++
++import pytest
++from typer.testing import CliRunner
++
++from taskledger.cli import app
++from taskledger.domain.models import ActorRef, HarnessRef
++from taskledger.errors import LaunchError
++from taskledger.services import tasks as task_services
++from taskledger.services.implementation_flow import finish_implementation
++from taskledger.services.run_store import show_lock
++from taskledger.services.task_collections import (
++    add_todo,
++    set_todo_done,
++    show_todo,
++)
++from taskledger.services.tasks import (
++    activate_task,
++    create_task,
++    start_implementation,
++    start_planning,
++    start_validation,
++)
++from taskledger.storage.locks import read_lock, update_lock
++from taskledger.storage.task_store import (
++    load_todos,
++    resolve_v2_paths,
++    task_lock_path,
++)
++from tests.support.builders import create_approved_task, init_workspace
++
++ACTOR = ActorRef(
++    actor_type="agent",
++    actor_name="taskledger",
++    tool="pi",
++    session_id="session-a",
++    role="implementer",
++)
++HARNESS = HarnessRef(
++    harness_id="pi",
++    name="Pi",
++    kind="agent_harness",
++    session_id="session-a",
++)
++
++
++def _start_implementation(tmp_path: Path) -> tuple[str, Path]:
++    init_workspace(tmp_path)
++    task_id = create_approved_task(
++        tmp_path,
++        title="Lease renewal",
++        slug="lease-renewal",
++    )
++    start_implementation(tmp_path, task_id, actor=ACTOR, harness=HARNESS)
++    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task_id)
++    return task_id, lock_path
++
++
++def _read_lock(lock_path: Path):
++    lock = read_lock(lock_path)
++    assert lock is not None
++    return lock
++
++
++@pytest.mark.parametrize("lease_seconds", [7200, 9000])
++def test_todo_done_renews_owned_implementation_lease(
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++    lease_seconds: int,
++) -> None:
++    task_id, lock_path = _start_implementation(tmp_path)
++    lock = _read_lock(lock_path)
++    acquired_at = datetime.now(timezone.utc) - timedelta(hours=1)
++    completed_at = acquired_at + timedelta(hours=1)
++    lock = replace(
++        lock,
++        created_at=acquired_at.isoformat(),
++        expires_at=(acquired_at + timedelta(seconds=lease_seconds)).isoformat(),
++        lease_seconds=lease_seconds,
++        last_heartbeat_at=acquired_at.isoformat(),
++    )
++    update_lock(lock_path, lock)
++
++    class FrozenDateTime(datetime):
++        @classmethod
++        def now(cls, tz: timezone | None = None) -> FrozenDateTime:
++            return cls.fromtimestamp(completed_at.timestamp(), tz=tz)
++
++    monkeypatch.setattr(task_services, "datetime", FrozenDateTime)
++    set_todo_done(
++        tmp_path,
++        task_id,
++        "todo-0001",
++        done=True,
++        actor=ACTOR,
++        harness=HARNESS,
++    )
++
++    renewed = _read_lock(lock_path)
++    assert renewed.created_at == lock.created_at
++    assert renewed.lock_id == lock.lock_id
++    assert renewed.run_id == lock.run_id
++    assert renewed.lease_seconds == lease_seconds
++    assert renewed.last_heartbeat_at == completed_at.isoformat()
++    assert (
++        renewed.expires_at
++        == (completed_at + timedelta(seconds=lease_seconds)).isoformat()
++    )
++
++
++def test_todo_done_from_another_session_does_not_renew_lock(tmp_path: Path) -> None:
++    task_id, lock_path = _start_implementation(tmp_path)
++    lock = _read_lock(lock_path)
++    other_actor = replace(ACTOR, session_id="session-b")
++    other_harness = replace(HARNESS, session_id="session-b")
++
++    set_todo_done(
++        tmp_path,
++        task_id,
++        "todo-0001",
++        done=True,
++        actor=other_actor,
++        harness=other_harness,
++    )
++
++    assert _read_lock(lock_path) == lock
++
++
++def test_read_only_todo_and_lock_show_do_not_renew(tmp_path: Path) -> None:
++    task_id, lock_path = _start_implementation(tmp_path)
++    lock = _read_lock(lock_path)
++
++    show_todo(tmp_path, task_id, "todo-0001")
++    show_lock(
++        tmp_path,
++        task_id,
++        current_actor=ACTOR,
++        current_harness=HARNESS,
++    )
++
++    assert _read_lock(lock_path) == lock
++
++
++def test_todo_completion_without_a_lock_still_succeeds(tmp_path: Path) -> None:
++    init_workspace(tmp_path)
++    task_id = create_approved_task(
++        tmp_path,
++        title="No active lock",
++        slug="no-active-lock",
++    )
++    user = ActorRef(actor_type="user", actor_name="tester")
++
++    set_todo_done(tmp_path, task_id, "todo-0001", done=True, actor=user)
++
++    assert load_todos(tmp_path, task_id).todos[0].done
++
++
++def test_planning_lock_is_not_renewed_by_todo_completion(tmp_path: Path) -> None:
++    init_workspace(tmp_path)
++    task = create_task(
++        tmp_path,
++        title="Planning lock",
++        slug="planning-lock",
++        description="Verify non-implementation lock behavior.",
++    )
++    activate_task(tmp_path, task.id, reason="test setup")
++    add_todo(tmp_path, task.id, text="Planning todo")
++    start_planning(tmp_path, task.id)
++    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task.id)
++    lock = _read_lock(lock_path)
++
++    set_todo_done(
++        tmp_path,
++        task.id,
++        "todo-0001",
++        done=True,
++        actor=ActorRef(actor_type="user", actor_name="tester"),
++    )
++
++    assert _read_lock(lock_path) == lock
++
++
++def test_expired_implementation_lock_is_not_resurrected(tmp_path: Path) -> None:
++    task_id, lock_path = _start_implementation(tmp_path)
++    lock = _read_lock(lock_path)
++    expired_lock = replace(
++        lock,
++        expires_at=(datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
++    )
++    update_lock(lock_path, expired_lock)
++
++    with pytest.raises(LaunchError):
++        set_todo_done(
++            tmp_path,
++            task_id,
++            "todo-0001",
++            done=True,
++            actor=ACTOR,
++            harness=HARNESS,
++        )
++
++    assert _read_lock(lock_path) == expired_lock
++    assert not load_todos(tmp_path, task_id).todos[0].done
++
++
++def test_replaced_lock_is_not_overwritten_when_renewal_fails(
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    task_id, lock_path = _start_implementation(tmp_path)
++    lock = _read_lock(lock_path)
++    replaced_lock = replace(lock, lock_id="replacement-lock")
++    renew_lock_lease = task_services.renew_lock_lease
++
++    def replace_then_renew(*args, **kwargs):
++        update_lock(lock_path, replaced_lock)
++        return renew_lock_lease(*args, **kwargs)
++
++    monkeypatch.setattr(task_services, "renew_lock_lease", replace_then_renew)
++    with pytest.raises(LaunchError, match="changed before lease renewal"):
++        set_todo_done(
++            tmp_path,
++            task_id,
++            "todo-0001",
++            done=True,
++            actor=ACTOR,
++            harness=HARNESS,
++        )
++
++    assert _read_lock(lock_path) == replaced_lock
++    assert load_todos(tmp_path, task_id).todos[0].done
++
++
++def test_todo_cli_passes_resolved_actor_and_harness(
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    from taskledger import cli_misc
++
++    _start_implementation(tmp_path)
++    resolved: dict[str, object] = {}
++    original_set_todo_done = cli_misc.set_todo_done
++
++    def capture_identity(*args, **kwargs):
++        resolved.update(kwargs)
++        return original_set_todo_done(*args, **kwargs)
++
++    monkeypatch.setattr(
++        cli_misc,
++        "resolve_effective_identity",
++        lambda _root, *, cwd: (ACTOR, HARNESS),
++    )
++    monkeypatch.setattr(cli_misc, "set_todo_done", capture_identity)
++    runner = CliRunner()
++    result = runner.invoke(
++        app,
++        ["--cwd", str(tmp_path), "todo", "done", "todo-0001"],
++    )
++
++    assert result.exit_code == 0, result.stdout
++    assert resolved["actor"] == ACTOR
++    assert resolved["harness"] == HARNESS
++
++
++def test_validation_lock_is_not_renewed_by_todo_completion(tmp_path: Path) -> None:
++    task_id, lock_path = _start_implementation(tmp_path)
++    set_todo_done(
++        tmp_path,
++        task_id,
++        "todo-0001",
++        done=True,
++        actor=ACTOR,
++        harness=HARNESS,
++    )
++    finish_implementation(tmp_path, task_id, summary="Implementation complete.")
++    start_validation(tmp_path, task_id, actor=ACTOR, harness=HARNESS)
++    lock = _read_lock(lock_path)
++
++    with pytest.raises(LaunchError):
++        set_todo_done(
++            tmp_path,
++            task_id,
++            "todo-0001",
++            done=True,
++            actor=ACTOR,
++            harness=HARNESS,
++        )
++
++    assert _read_lock(lock_path) == lock
+diff --git a/tests/test_service_boundaries.py b/tests/test_service_boundaries.py
+index 9f1fa7b..e01ddb3 100644
+--- a/tests/test_service_boundaries.py
++++ b/tests/test_service_boundaries.py
+@@ -74,6 +74,9 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
+     "taskledger/cli_misc.py:taskledger.services.doctor": (
+         "Doctor commands still consume doctor service inspectors directly."
+     ),
++    "taskledger/cli_misc.py:taskledger.services.actors": (
++        "Todo updates resolve identity for todo completion metadata.",
++    ),
+     "taskledger/cli_pipeline.py:taskledger.services.handoff": (
+         "Pipeline context rendering currently reuses the handoff service payloads."
+     ),
+diff --git a/tests/test_taskledger_v2_cli.py b/tests/test_taskledger_v2_cli.py
+index 6d16980..262a38b 100644
+--- a/tests/test_taskledger_v2_cli.py
++++ b/tests/test_taskledger_v2_cli.py
+@@ -1274,8 +1274,29 @@ def test_implement_resume_rejects_non_implementation_run(tmp_path: Path) -> None
+
+
+ # specmason: req=REQ-0064 ac=AC-0696
+-def test_implement_resume_rejects_existing_lock(tmp_path: Path) -> None:
+-    _prepare_resumable_implementation_task(tmp_path)
++def test_implement_resume_same_current_session_is_noop(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    task_id, run_id = _prepare_resumable_implementation_task(tmp_path)
++    session_id = "pi-session-resume-noop"
++    _set_lock_harness_session(tmp_path, task_id, session_id)
++    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
++    monkeypatch.setenv("TASKLEDGER_SESSION_ID", session_id)
++    for name in (
++        "TASKLEDGER_ACTOR_TYPE",
++        "TASKLEDGER_ACTOR_NAME",
++        "TASKLEDGER_ACTOR_ROLE",
++        "TASKLEDGER_OWNER_PID",
++        "TASKLEDGER_HARNESS_PID",
++    ):
++        monkeypatch.delenv(name, raising=False)
++
++    paths = resolve_v2_paths(tmp_path)
++    lock_path = task_lock_path(paths, task_id)
++    lock_id = yaml.safe_load(lock_path.read_text())["lock_id"]
++    events_before = {
++        path.name: path.read_bytes() for path in paths.events_dir.glob("*.ndjson")
++    }
+
+     result = runner.invoke(
+         app,
+@@ -1288,11 +1309,176 @@ def test_implement_resume_rejects_existing_lock(tmp_path: Path) -> None:
+             "--task",
+             "resume-task",
+             "--reason",
+-            "Continue implementation after a stale lock break.",
++            "Continue implementation.",
++        ],
++    )
++
++    assert result.exit_code == 0, result.stdout
++    payload = _json(result)["result"]
++    assert payload["changed"] is False
++    assert payload["already_active"] is True
++    assert payload["run_id"] == run_id
++    assert payload["lock"]["lock_id"] == lock_id
++    assert payload["next_command"] == f"taskledger next-action --task {task_id}"
++
++    human_result = runner.invoke(
++        app,
++        [
++            "--cwd",
++            str(tmp_path),
++            "implement",
++            "resume",
++            "--task",
++            "resume-task",
++            "--reason",
++            "Continue implementation.",
+         ],
+     )
++    assert human_result.exit_code == 0, human_result.stdout
++    assert "already active in this execution" in human_result.stdout
++    assert "No resume or lock repair is required." in human_result.stdout
++    assert f"taskledger todo next --task {task_id}" in human_result.stdout
++
++    events_after = {
++        path.name: path.read_bytes() for path in paths.events_dir.glob("*.ndjson")
++    }
++    assert events_after == events_before
++
++
++def test_implement_resume_conflicts_with_different_session(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
++    _set_lock_harness_session(tmp_path, task_id, "pi-session-owner")
++    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
++    monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session-other")
++    for name in (
++        "TASKLEDGER_ACTOR_TYPE",
++        "TASKLEDGER_ACTOR_NAME",
++        "TASKLEDGER_ACTOR_ROLE",
++        "TASKLEDGER_OWNER_PID",
++        "TASKLEDGER_HARNESS_PID",
++    ):
++        monkeypatch.delenv(name, raising=False)
++
++    result = runner.invoke(
++        app,
++        [
++            "--cwd",
++            str(tmp_path),
++            "--json",
++            "implement",
++            "resume",
++            "--task",
++            "resume-task",
++            "--reason",
++            "Continue implementation.",
++        ],
++    )
++
+     assert result.exit_code != 0
+-    assert "Implementation resume requires no active lock." in result.stdout
++    error = _json_error(result)["error"]
++    assert error["details"]["diagnostics"]["classification"] == "active_same_actor"
++    assert "already_active" not in error["details"]
++    assert "this execution is unverified" in error["message"]
++
++
++@pytest.mark.parametrize(
++    ("lock_field", "value"),
++    [("run_id", "run-9999"), ("stage", "planning")],
++)
++def test_implement_resume_requires_matching_lock_run_and_stage(
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++    lock_field: str,
++    value: str,
++) -> None:
++    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
++    session_id = "pi-session-mismatched-lock"
++    _set_lock_harness_session(tmp_path, task_id, session_id)
++    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
++    monkeypatch.setenv("TASKLEDGER_SESSION_ID", session_id)
++    for name in (
++        "TASKLEDGER_ACTOR_TYPE",
++        "TASKLEDGER_ACTOR_NAME",
++        "TASKLEDGER_ACTOR_ROLE",
++        "TASKLEDGER_OWNER_PID",
++        "TASKLEDGER_HARNESS_PID",
++    ):
++        monkeypatch.delenv(name, raising=False)
++
++    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task_id)
++    lock_data = yaml.safe_load(lock_path.read_text())
++    lock_data[lock_field] = value
++    lock_path.write_text(yaml.safe_dump(lock_data, sort_keys=False))
++
++    result = runner.invoke(
++        app,
++        [
++            "--cwd",
++            str(tmp_path),
++            "--json",
++            "implement",
++            "resume",
++            "--task",
++            "resume-task",
++            "--reason",
++            "Continue implementation.",
++        ],
++    )
++
++    assert result.exit_code != 0
++    error = _json_error(result)["error"]
++    assert error["details"]["diagnostics"]["classification"] == (
++        "active_current_execution"
++    )
++
++
++def test_can_implement_resume_reports_current_session_lock(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
++    session_id = "pi-session-can-resume"
++    _set_lock_harness_session(tmp_path, task_id, session_id)
++    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
++    monkeypatch.setenv("TASKLEDGER_SESSION_ID", session_id)
++    for name in (
++        "TASKLEDGER_ACTOR_TYPE",
++        "TASKLEDGER_ACTOR_NAME",
++        "TASKLEDGER_ACTOR_ROLE",
++        "TASKLEDGER_OWNER_PID",
++        "TASKLEDGER_HARNESS_PID",
++    ):
++        monkeypatch.delenv(name, raising=False)
++
++    result = runner.invoke(
++        app,
++        [
++            "--cwd",
++            str(tmp_path),
++            "--json",
++            "can",
++            "implement-resume",
++            "--task",
++            task_id,
++        ],
++    )
++
++    assert result.exit_code == 0, result.stdout
++    payload = _json(result)["result"]
++    assert payload["ok"] is False
++    assert "already active in this session" in payload["reason"]
++    assert payload["blocking"][0]["command_hint"] == (
++        f"taskledger todo next --task {task_id}"
++    )
++
++
++def test_implement_resume_help_distinguishes_reacquire_from_continue() -> None:
++    result = runner.invoke(app, ["implement", "resume", "--help"])
++
++    assert result.exit_code == 0, result.stdout
++    assert "Reacquire an implementation lock" in result.stdout
++    assert "normal continuation" in result.stdout
+
+
+ # specmason: req=REQ-0064 ac=AC-0695
+@@ -2181,6 +2367,31 @@ def _overwrite_holder_pid(
+     lock_path.write_text(yaml.safe_dump(data, sort_keys=False))
+
+
++def _set_lock_harness_session(tmp_path: Path, task_id: str, session_id: str) -> None:
++    from taskledger.domain.actor import HarnessRef
++
++    paths = resolve_v2_paths(tmp_path)
++    lock_path = task_lock_path(paths, task_id)
++    data = yaml.safe_load(lock_path.read_text())
++    data["holder"].update(
++        {
++            "actor_type": "agent",
++            "actor_name": "taskledger",
++            "tool": "pi",
++            "session_id": session_id,
++            "pid": None,
++            "pid_scope": "unverifiable_harness",
++        }
++    )
++    data["harness"] = HarnessRef(
++        harness_id="h-session-test",
++        name="pi",
++        kind="agent_harness",
++        session_id=session_id,
++    ).to_dict()
++    lock_path.write_text(yaml.safe_dump(data, sort_keys=False))
++
++
+ # specmason: req=REQ-0064 ac=AC-0703
+ def test_lock_show_human_reports_dead_holder_pid_and_next_commands(
+     tmp_path: Path,
+@@ -2233,6 +2444,33 @@ def test_lock_show_json_payload_includes_diagnostics_and_storage_fields(
+     assert isinstance(result_data["lock_file"], str)
+
+
++def test_lock_show_uses_current_harness_session(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
++    _set_lock_harness_session(tmp_path, task_id, "pi-session-lock-show")
++    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
++    monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session-lock-show")
++    for name in (
++        "TASKLEDGER_ACTOR_TYPE",
++        "TASKLEDGER_ACTOR_NAME",
++        "TASKLEDGER_ACTOR_ROLE",
++        "TASKLEDGER_OWNER_PID",
++        "TASKLEDGER_HARNESS_PID",
++    ):
++        monkeypatch.delenv(name, raising=False)
++
++    result = runner.invoke(
++        app,
++        ["--cwd", str(tmp_path), "--json", "lock", "show", "--task", task_id],
++    )
++
++    assert result.exit_code == 0, result.stdout
++    diagnostics = _json(result)["result"]["diagnostics"]
++    assert diagnostics["classification"] == "active_current_execution"
++    assert diagnostics["remediation"] == []
++
++
+ # specmason: req=REQ-0064 ac=AC-0701
+ def test_implement_resume_with_active_dead_pid_lock_explains_repair_not_expired_resume(
+     tmp_path: Path,
+@@ -2302,6 +2540,34 @@ def test_next_action_dead_pid_lock_routes_to_repair_lock(
+     assert "is no longer running" in lock_blockers[0].get("message", "")
+
+
++def test_next_action_uses_current_harness_session(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    task_id, _ = _prepare_resumable_implementation_task(tmp_path)
++    _set_lock_harness_session(tmp_path, task_id, "pi-session-next-action")
++    monkeypatch.setenv("TASKLEDGER_HARNESS", "pi")
++    monkeypatch.setenv("TASKLEDGER_SESSION_ID", "pi-session-next-action")
++    for name in (
++        "TASKLEDGER_ACTOR_TYPE",
++        "TASKLEDGER_ACTOR_NAME",
++        "TASKLEDGER_ACTOR_ROLE",
++        "TASKLEDGER_OWNER_PID",
++        "TASKLEDGER_HARNESS_PID",
++    ):
++        monkeypatch.delenv(name, raising=False)
++
++    result = runner.invoke(
++        app,
++        ["--cwd", str(tmp_path), "--json", "next-action", "--task", task_id],
++    )
++
++    assert result.exit_code == 0, result.stdout
++    payload = _json(result)["result"]
++    assert payload["action"] == "todo-work"
++    assert payload["lock_status"]["classification"] == "active_current_execution"
++    assert not payload.get("lock_warning")
++
++
+ # specmason: req=REQ-0064 ac=AC-0707
+ def test_next_action_live_lock_keeps_todo_work_with_warning(
+     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

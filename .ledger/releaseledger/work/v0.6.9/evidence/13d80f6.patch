@@ -1,0 +1,16 @@
+ tests/test_taskledger_v2_cli.py | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tests/test_taskledger_v2_cli.py b/tests/test_taskledger_v2_cli.py
+index 262a38b..c686d94 100644
+--- a/tests/test_taskledger_v2_cli.py
++++ b/tests/test_taskledger_v2_cli.py
+@@ -1360,6 +1360,8 @@ def test_implement_resume_conflicts_with_different_session(
+         "TASKLEDGER_HARNESS_PID",
+     ):
+         monkeypatch.delenv(name, raising=False)
++    monkeypatch.setenv("TASKLEDGER_ACTOR_TYPE", "agent")
++    monkeypatch.setenv("TASKLEDGER_ACTOR_NAME", "taskledger")
+
+     result = runner.invoke(
+         app,

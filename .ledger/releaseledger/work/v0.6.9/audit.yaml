@@ -1,0 +1,79 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 1
+release_version: v0.6.9
+git_base_ref: v0.6.8
+git_base_sha: 4f9cd16f017a428dcc33eefa0deb74e1f32c8eff
+git_head_ref: HEAD
+git_head_sha: 7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+git_range: 4f9cd16f017a428dcc33eefa0deb74e1f32c8eff..7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+commit_count: 3
+rows:
+  - sha: b3fdec92ed65c2808f2707eceeffa7aa1b35a446
+    source_ref: git:b3fdec92ed65c2808f2707eceeffa7aa1b35a446
+    short_sha: b3fdec9
+    changed_paths:
+      - docs/command_contract.md
+      - docs/service_boundary_whitelist.md
+      - docs/usage.md
+      - skills/taskledger/SKILL.md
+      - taskledger/cli_implement.py
+      - taskledger/cli_misc.py
+      - taskledger/services/actors.py
+      - taskledger/services/implementation_flow.py
+      - taskledger/services/lock_diagnostics.py
+      - taskledger/services/navigation.py
+      - taskledger/services/run_store.py
+      - taskledger/services/task_collections.py
+      - taskledger/services/tasks.py
+      - tests/test_actor_resolution.py
+      - tests/test_docs_and_skill.py
+      - tests/test_lock_diagnostics.py
+      - tests/test_lock_lease_renewal.py
+      - tests/test_service_boundaries.py
+      - tests/test_taskledger_v2_cli.py
+    stats:
+      files_changed: 19
+      insertions: 1389
+      deletions: 91
+    inspected: false
+    inspected_paths: []
+    observed_behavior: ""
+    public_impact: unknown
+    decision: needs_review
+    stale: false
+    evidence_subject: "feat: better lock resume"
+  - sha: 13d80f61841b49181f3af945af3967b509688f2d
+    source_ref: git:13d80f61841b49181f3af945af3967b509688f2d
+    short_sha: 13d80f6
+    changed_paths:
+      - tests/test_taskledger_v2_cli.py
+    stats:
+      files_changed: 1
+      insertions: 2
+      deletions: 0
+    inspected: false
+    inspected_paths: []
+    observed_behavior: ""
+    public_impact: unknown
+    decision: needs_review
+    stale: false
+    evidence_subject: "fix: pytest"
+  - sha: 7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+    source_ref: git:7f50cf81942a53c0e11d7556aa1b71ae9fdbe262
+    short_sha: 7f50cf8
+    changed_paths:
+      - pyproject.toml
+    stats:
+      files_changed: 1
+      insertions: 1
+      deletions: 1
+    inspected: false
+    inspected_paths: []
+    observed_behavior: ""
+    public_impact: unknown
+    decision: needs_review
+    stale: false
+    evidence_subject: "chore: package version"

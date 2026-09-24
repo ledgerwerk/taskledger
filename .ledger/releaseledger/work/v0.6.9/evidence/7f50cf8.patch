@@ -1,0 +1,16 @@
+ pyproject.toml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pyproject.toml b/pyproject.toml
+index 119e0c8..9c20943 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -38,7 +38,7 @@ dependencies = [
+     "typer",
+     "click",
+     "PyYAML",
+-    "packaging>=23,<26",
++    "packaging>=23,<27",
+     "ledgercore>=0.6.1,<0.7.0",
+     "tomlkit>=0.13,<1",
+     "filelock>=3.16,<4",
