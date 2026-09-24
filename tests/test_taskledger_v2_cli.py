@@ -1360,6 +1360,8 @@ def test_implement_resume_conflicts_with_different_session(
         "TASKLEDGER_HARNESS_PID",
     ):
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("TASKLEDGER_ACTOR_TYPE", "agent")
+    monkeypatch.setenv("TASKLEDGER_ACTOR_NAME", "taskledger")
 
     result = runner.invoke(
         app,
