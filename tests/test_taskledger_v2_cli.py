@@ -2631,7 +2631,15 @@ def test_next_action_dead_pid_lock_routes_to_repair_lock(
 
 def test_next_action_dead_planning_lock_uses_stage_aware_reason(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from taskledger.services import lock_diagnostics
+
+    monkeypatch.setattr(
+        lock_diagnostics,
+        "default_pid_checker",
+        lambda _pid: lock_diagnostics.PID_CHECK_DEAD,
+    )
     _init_project(tmp_path)
     create = runner.invoke(
         app,
@@ -2658,6 +2666,8 @@ def test_next_action_dead_planning_lock_uses_stage_aware_reason(
     lock_path = task_lock_path(resolve_v2_paths(tmp_path), task_id)
     lock_data = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
     lock_data["holder"]["pid_scope"] = "owner"
+    lock_data["holder"]["session_id"] = "other-session"
+    lock_data["harness"]["session_id"] = "other-session"
     lock_path.write_text(yaml.safe_dump(lock_data, sort_keys=False), encoding="utf-8")
 
     result = runner.invoke(
@@ -2666,6 +2676,7 @@ def test_next_action_dead_planning_lock_uses_stage_aware_reason(
     )
 
     payload = _json(result)["result"]
+    assert payload["lock_status"]["classification"] == "active_dead_local_process"
     assert payload["action"] == "repair-lock"
     assert "Planning lock" in payload["reason"]
     assert "Implementation lock" not in payload["reason"]
