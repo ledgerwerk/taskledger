@@ -1,0 +1,1599 @@
+ README.md                                  |  22 ++-
+ docs/command_contract.md                   |  16 ++
+ docs/usage.md                              |  20 ++-
+ skills/taskledger/SKILL.md                 |  18 +-
+ taskledger/cli.py                          |  28 ++-
+ taskledger/cli_plan.py                     |  62 ++++++-
+ taskledger/domain/policies.py              |  26 +--
+ taskledger/services/navigation.py          |  64 +++++--
+ taskledger/services/next_action_payload.py |  65 +++++--
+ taskledger/services/plan_editing.py        |  22 +--
+ taskledger/services/plan_review.py         |  22 ++-
+ taskledger/services/planning_flow.py       | 120 +++++++++++--
+ taskledger/services/run_store.py           |  40 +++++
+ taskledger/services/task_repair.py         |   2 +-
+ taskledger/services/tasks.py               |  45 ++---
+ tests/test_docs_and_skill.py               |  19 ++-
+ tests/test_plan_input_cli.py               |  24 +--
+ tests/test_plan_revision_workflow.py       | 265 +++++++++++++++++++++++++++--
+ tests/test_service_boundaries.py           |   7 +
+ tests/test_taskledger_v2_cli.py            | 131 +++++++++++++-
+ 20 files changed, 885 insertions(+), 133 deletions(-)
+
+diff --git a/README.md b/README.md
+index a21ded7..61d3408 100644
+--- a/README.md
++++ b/README.md
+@@ -315,16 +315,26 @@ the final review with `taskledger review record` before answering. A
+ chat-only review is not durable task evidence. Post-completion review
+ records are append-only and do not reopen the task.
+
+-To revise a proposed plan, re-enter planning and edit an exported workspace
+-copy. Never edit `.taskledger/` files directly:
++To revise a proposed plan, prepare and check the editable draft before submitting it. Never edit `.taskledger/` files directly. Export to a distinct workspace file so an existing `plan.md` and local edits are preserved:
+
+ ```bash
+-taskledger plan revise
+-taskledger plan export --version latest --file ./plan.md
+-# edit ./plan.md
+-taskledger plan upsert --file ./plan.md
++taskledger plan export --version latest --file ./plan.revision.md
++# edit ./plan.revision.md
++taskledger plan check --file ./plan.revision.md
++taskledger plan upsert --auto-revise --file ./plan.revision.md
++taskledger plan diff --from 1 --to 2
++taskledger plan review --version 2
+ ```
+
++If you already have an edited `./plan.md`, check and submit it directly:
++
++```bash
++taskledger plan check --file ./plan.md
++taskledger plan upsert --auto-revise --file ./plan.md
++```
++
++Auto-revision proposes a new version; it does not approve it. Continue only after explicit user approval.
++
+ For manually completed work (e.g., manual testing, operations tasks, or work
+ completed outside the task-first lifecycle), use `task record` to create a
+ done task directly without acquiring lifecycle locks. **Note**: `task record`
+diff --git a/docs/command_contract.md b/docs/command_contract.md
+index 717e646..c6afae6 100644
+--- a/docs/command_contract.md
++++ b/docs/command_contract.md
+@@ -97,8 +97,24 @@ storage, and `taskledger plan amend` applies structured plan-review edits:
+ ```bash
+ taskledger plan export [--task TASK_REF] [--version latest|N] [--file PATH] [--overwrite] [--stdout]
+ taskledger plan amend [--task TASK_REF] [--drop-criterion CRITERION_ID ...] [--drop-todo TODO_ID ...] [--remove-file PATH ...] --reason "..."
++taskledger plan upsert [--task TASK_REF] [--file PATH] [--auto-revise]
+ ```
+
++Plan revision preparation should happen before submitting a revision, so export or
++check failures do not leave an active planning run:
++
++```bash
++taskledger plan export --version latest --file ./plan.revision.md
++# edit ./plan.revision.md
++taskledger plan check --file ./plan.revision.md
++taskledger plan upsert --auto-revise --file ./plan.revision.md
++```
++
++When an edited `./plan.md` already exists, check and submit it directly with
++`plan upsert --auto-revise --file ./plan.md`; do not export over it. Auto-revision
++proposes a version only. Explicit user approval is still required before
++implementation.
++
+ Plan proposal commands that accept `--file` reject file paths under
+ `.taskledger/` because that directory is private durable ledger state.
+
+diff --git a/docs/usage.md b/docs/usage.md
+index 7e6023b..5f35422 100644
+--- a/docs/usage.md
++++ b/docs/usage.md
+@@ -176,16 +176,26 @@ taskledger plan lint --version 1
+ taskledger plan review --version 1
+ ```
+
+-Revising a proposed plan safely:
++Revising a proposed plan safely: prepare the draft before opening a revision run. Export to a separate workspace file so an existing `plan.md` or local edits are not overwritten:
+
+ ```bash
+-taskledger plan revise
+-taskledger plan export --version latest --file ./plan.md
+-# edit ./plan.md (never edit .taskledger/ directly)
+-taskledger plan upsert --file ./plan.md
++taskledger plan export --version latest --file ./plan.revision.md
++# edit ./plan.revision.md (never edit .taskledger/ directly)
++taskledger plan check --file ./plan.revision.md
++taskledger plan upsert --auto-revise --file ./plan.revision.md
+ taskledger plan diff --from 1 --to 2
++taskledger plan review --version 2
++```
++
++If `./plan.md` is already edited, check and submit it directly:
++
++```bash
++taskledger plan check --file ./plan.md
++taskledger plan upsert --auto-revise --file ./plan.md
+ ```
+
++Auto-revision only proposes a new version; it does not approve it. Implementation still requires explicit user approval.
++
+ For structured scope trims, use:
+
+ ```bash
+diff --git a/skills/taskledger/SKILL.md b/skills/taskledger/SKILL.md
+index 286b6b2..3908322 100644
+--- a/skills/taskledger/SKILL.md
++++ b/skills/taskledger/SKILL.md
+@@ -216,14 +216,16 @@ not create changelog entries, render changelog context, or edit `CHANGELOG.md`.
+ 14. If answered questions exist, write the next plan with `taskledger plan upsert --from-answers --file ./plan.md`.
+ 15. Use `taskledger plan upsert --file ./plan.md` for plans that are not based on newly answered questions.
+ 16. Never edit `.taskledger/` files directly. Treat `.taskledger/` as Taskledger private durable state.
+-17. To revise a proposed plan in `plan_review`, run:
+-
+-- `taskledger plan revise`
+-- `taskledger plan export --version latest --file ./plan.md`
+-- edit `./plan.md`
+-- `taskledger plan check --file ./plan.md`
+-- `taskledger plan upsert --file ./plan.md`
+-- For simple structured removals, prefer `taskledger plan amend ... --reason "..."`
++17. To revise a proposed plan in `plan_review`, prepare the complete draft before entering revision planning:
++
++- Export read-only to `./plan.revision.md`: `taskledger plan export --version latest --file ./plan.revision.md`.
++- Edit the exported workspace file and check it: `taskledger plan check --file ./plan.revision.md`.
++- Submit only the checked draft with `taskledger plan upsert --auto-revise --file ./plan.revision.md`.
++- Inspect the diff and review the proposed version before asking the user to approve it.
++- If an edited `./plan.md` already exists, check and submit it directly with `taskledger plan check --file ./plan.md` and `taskledger plan upsert --auto-revise --file ./plan.md`.
++- Do not run `plan revise` merely to prepare an export; that opens a planning run before export/edit/check can fail.
++- Auto-revision proposes a version; it does not accept or approve it. Preserve the explicit user approval gate.
++- For simple structured removals, prefer `taskledger plan amend ... --reason "..."`.
+
+ 17. Ensure the plan front matter includes `acceptance_criteria` and `todos`; approved plan todos materialize into the implementation checklist.
+ 18. For diagnostic commands needed to build the plan, preserve their output in a linked artifact or use `taskledger plan command -- ...`.
+diff --git a/taskledger/cli.py b/taskledger/cli.py
+index 7bd5e4b..ea9a8d2 100644
+--- a/taskledger/cli.py
++++ b/taskledger/cli.py
+@@ -1225,7 +1225,33 @@ def repair_lock_command(
+     except LaunchError as exc:
+         emit_error(ctx, exc)
+         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+-    emit_payload(ctx, payload, human=f"repaired lock for {payload['task_id']}")
++    human = f"repaired lock for {payload['task_id']}"
++    orphaned_run = payload.get("orphaned_run")
++    next_commands = payload.get("next_commands")
++    if (
++        isinstance(orphaned_run, dict)
++        and isinstance(next_commands, list)
++        and next_commands
++        and isinstance(next_commands[0], str)
++    ):
++        run_id = orphaned_run.get("run_id", "unknown")
++        run_type = orphaned_run.get("run_type", "task")
++        if run_type == "planning":
++            follow_up = (
++                "Finish this orphaned planning run before starting or revising "
++                "planning again:"
++            )
++        elif run_type == "implementation":
++            follow_up = (
++                "Resume the existing implementation run before starting new work:"
++            )
++        else:
++            follow_up = "Inspect the task's next action before continuing:"
++        human += (
++            f"\n\nThe matching {run_type} run {run_id} is still marked running.\n"
++            f"{follow_up}\n  {next_commands[0]}"
++        )
++    emit_payload(ctx, payload, human=human)
+
+
+ @repair_app.command("locks")
+diff --git a/taskledger/cli_plan.py b/taskledger/cli_plan.py
+index 222842a..2ff595a 100644
+--- a/taskledger/cli_plan.py
++++ b/taskledger/cli_plan.py
+@@ -270,6 +270,17 @@ def upsert_command(
+     state = cli_state_from_context(ctx)
+     try:
+         task = resolve_cli_task(state.cwd, task_ref)
++        resolved_actor = None
++        resolved_harness = None
++        if auto_revise:
++            resolved_actor, resolved_harness = resolve_cli_actor_harness(
++                actor=None,
++                actor_name=None,
++                actor_role="planner",
++                harness=None,
++                session_id=None,
++                workspace_root=state.cwd,
++            )
+         payload = upsert_plan(
+             state.cwd,
+             task.id,
+@@ -278,6 +289,9 @@ def upsert_command(
+             from_answers=from_answers,
+             allow_open_questions=allow_open_questions,
+             auto_revise=auto_revise,
++            runtime=state.runtime,
++            actor=resolved_actor,
++            harness=resolved_harness,
+         )
+     except LaunchError as exc:
+         emit_error(ctx, exc)
+@@ -425,6 +439,24 @@ def export_command(
+         if output is not None:
+             target = output.expanduser()
+             if target.exists() and not overwrite:
++                try:
++                    existing_text = target.read_text(encoding="utf-8")
++                except (OSError, UnicodeError) as exc:
++                    raise LaunchError(
++                        f"Failed to read existing {target}: {exc}"
++                    ) from exc
++                if existing_text == plan_text:
++                    emit_payload(
++                        ctx,
++                        {
++                            **payload,
++                            "output_path": str(target),
++                            "unchanged": True,
++                        },
++                        human=f"editable plan already up to date at {target}",
++                        result_type="plan_export",
++                    )
++                    return
+                 raise LaunchError(
+                     f"Refusing to overwrite {target}. Use --overwrite to replace it."
+                 )
+@@ -596,7 +628,21 @@ def revise_command(
+     state = cli_state_from_context(ctx)
+     try:
+         task = resolve_cli_task(state.cwd, task_ref)
+-        payload = revise_plan(state.cwd, task.id)
++        resolved_actor, resolved_harness = resolve_cli_actor_harness(
++            actor=None,
++            actor_name=None,
++            actor_role="planner",
++            harness=None,
++            session_id=None,
++            workspace_root=state.cwd,
++        )
++        payload = revise_plan(
++            state.cwd,
++            task.id,
++            runtime=state.runtime,
++            actor=resolved_actor,
++            harness=resolved_harness,
++        )
+     except LaunchError as exc:
+         emit_error(ctx, exc)
+         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+@@ -623,6 +669,14 @@ def amend_command(
+     state = cli_state_from_context(ctx)
+     try:
+         task = resolve_cli_task(state.cwd, task_ref)
++        resolved_actor, resolved_harness = resolve_cli_actor_harness(
++            actor=None,
++            actor_name=None,
++            actor_role="planner",
++            harness=None,
++            session_id=None,
++            workspace_root=state.cwd,
++        )
+         payload = amend_plan(
+             state.cwd,
+             task.id,
+@@ -631,6 +685,8 @@ def amend_command(
+             remove_files=tuple(remove_file or ()),
+             reason=reason,
+             runtime=state.runtime,
++            actor=resolved_actor,
++            harness=resolved_harness,
+         )
+     except LaunchError as exc:
+         emit_error(ctx, exc)
+@@ -853,6 +909,10 @@ def render_plan_input_check(payload: dict[str, object]) -> str:
+     lines += [
+         "",
+         "Next: taskledger plan upsert --file ./plan.md",
++        (
++            "For a proposed-plan revision: "
++            "taskledger plan upsert --auto-revise --file ./plan.md"
++        ),
+         "Schema: taskledger plan schema",
+     ]
+     return "\n".join(lines)
+diff --git a/taskledger/domain/policies.py b/taskledger/domain/policies.py
+index 0864ed9..73651e5 100644
+--- a/taskledger/domain/policies.py
++++ b/taskledger/domain/policies.py
+@@ -346,9 +346,8 @@ def plan_propose_decision(
+     ):
+         if ctx.task.status_stage == "plan_review" and ctx.active_stage is None:
+             next_commands = (
+-                "taskledger plan revise",
+-                "taskledger plan export --version latest --file ./plan.md",
+-                "taskledger plan upsert --file ./plan.md",
++                "taskledger plan check --file ./plan.md",
++                "taskledger plan upsert --auto-revise --file ./plan.md",
+             )
+             return Decision(
+                 allowed=False,
+@@ -356,17 +355,24 @@ def plan_propose_decision(
+                 message=(
+                     "Plan proposals require active planning.\n\n"
+                     "This task is in plan_review and has no active planning run.\n"
+-                    "To revise the proposed plan:\n"
+-                    "  taskledger plan revise\n"
+-                    "  taskledger plan export --version latest --file ./plan.md\n"
+-                    "  # edit ./plan.md\n"
+-                    "  taskledger plan upsert --file ./plan.md\n\n"
++                    "If the workspace draft is already edited, submit it safely with:\n"
++                    "  taskledger plan check --file ./plan.md\n"
++                    "  taskledger plan upsert --auto-revise --file ./plan.md\n\n"
++                    "To start from the proposed plan, export it first to "
++                    "a separate file:\n"
++                    "  taskledger plan export --version latest --file "
++                    "./plan.revision.md\n"
++                    "  # edit and check ./plan.revision.md\n"
++                    "  taskledger plan upsert --auto-revise --file "
++                    "./plan.revision.md\n\n"
+                     "Do not edit files under .taskledger/ directly."
+                 ),
+                 details={
+                     "remediation": (
+-                        "Run `taskledger plan revise`, export/edit a workspace plan "
+-                        "file, then run `taskledger plan upsert --file ./plan.md`."
++                        "Check the edited workspace draft, then submit it with "
++                        "`taskledger plan upsert --auto-revise --file ./plan.md`. "
++                        "If starting from the stored plan, export to a separate "
++                        "workspace path before editing."
+                     ),
+                     "next_commands": list(next_commands),
+                 },
+diff --git a/taskledger/services/navigation.py b/taskledger/services/navigation.py
+index a4d2c9b..b3c21ae 100644
+--- a/taskledger/services/navigation.py
++++ b/taskledger/services/navigation.py
+@@ -45,6 +45,7 @@ from taskledger.services.tasks import (
+     _cli_error,
+     _current_lock,
+     _dependency_blockers,
++    _lock_matches_run,
+     _optional_run,
+     _planning_template_hints,
+     _resumable_implementation_run,
+@@ -183,15 +184,53 @@ def next_action_for_task(
+             workspace_root, task
+         )
+     else:
+-        (
+-            action,
+-            reason,
+-            next_item,
+-            status_blockers,
+-            status_progress,
+-        ) = _inactive_status_next_action(workspace_root, task, lock)
+-        blockers.extend(status_blockers)
+-        progress.update(status_progress)
++        orphaned_planning_run = next(
++            (
++                run
++                for run in runs
++                if run.status == "running"
++                and run.run_type == "planning"
++                and not _lock_matches_run(lock, run)
++            ),
++            None,
++        )
++        if orphaned_planning_run is not None:
++            run_id = orphaned_planning_run.run_id
++            recovery_command = (
++                f"taskledger repair run --task {task.id} --run {run_id} "
++                '--reason "Finish orphaned planning run."'
++            )
++            next_item = _task_next_item(task)
++            next_item.update(
++                {"run_id": run_id, "run_type": orphaned_planning_run.run_type}
++            )
++            run_details = _running_run_details(task, orphaned_planning_run, lock)
++            run_details["suggested_command"] = recovery_command
++            blockers.append(
++                {
++                    "kind": "running_run",
++                    "message": (
++                        f"Planning run {run_id} is still marked running but "
++                        "has no matching active lock."
++                    ),
++                    **run_details,
++                }
++            )
++            action = "repair-run-state"
++            reason = (
++                f"Planning run {run_id} is still marked running but has no "
++                "matching lock."
++            )
++        else:
++            (
++                action,
++                reason,
++                next_item,
++                status_blockers,
++                status_progress,
++            ) = _inactive_status_next_action(workspace_root, task, lock)
++            blockers.extend(status_blockers)
++            progress.update(status_progress)
+     if lock is not None and active_stage is None:
+         if lock_is_expired(lock):
+             from taskledger.services.next_action_model import (
+@@ -234,8 +273,13 @@ def next_action_for_task(
+         and lock_diagnostics_dict.get("classification") == "active_dead_local_process"
+     ):
+         action = "repair-lock"
++        stage_label = {
++            "planning": "Planning",
++            "implementing": "Implementation",
++            "validating": "Validation",
++        }.get(lock.stage, "Task")
+         reason = (
+-            "Implementation lock is active but the recorded holder "
++            f"{stage_label} lock is active but the recorded holder "
+             "process is not running."
+         )
+         blockers.append(
+diff --git a/taskledger/services/next_action_payload.py b/taskledger/services/next_action_payload.py
+index 409789f..4c58560 100644
+--- a/taskledger/services/next_action_payload.py
++++ b/taskledger/services/next_action_payload.py
+@@ -342,6 +342,13 @@ def _primary_command_for_next_item(
+     if kind == "task" and isinstance(item_id, str):
+         if action in ("implement-resume", "expired-lock-resume"):
+             return _implement_resume_command(item_id)
++        if action == "repair-run-state":
++            run_id = next_item.get("run_id")
++            if isinstance(run_id, str):
++                return (
++                    f"taskledger repair run --task {item_id} --run {run_id} "
++                    '--reason "Finish orphaned planning run."'
++                )
+         if action == "repair-active-stage":
+             return f"taskledger task show --task {item_id}"
+     if kind == "handoff" and isinstance(item_id, str):
+@@ -482,22 +489,30 @@ def _commands_for_next_item(
+                         ),
+                     )
+                 )
+-                commands.append(
+-                    _command(
+-                        "revise",
+-                        "Revise proposed plan",
+-                        "taskledger plan revise",
+-                    )
+-                )
+-                commands.append(
+-                    _command(
+-                        "export",
+-                        "Export editable plan",
+-                        (
+-                            "taskledger plan export "
+-                            f"--version {version} --file ./plan.md"
++                commands.extend(
++                    [
++                        _command(
++                            "export",
++                            "Export editable revision draft",
++                            (
++                                "taskledger plan export "
++                                f"--version {version} --file ./plan.revision.md"
++                            ),
+                         ),
+-                    )
++                        _command(
++                            "check",
++                            "Check revision draft",
++                            "taskledger plan check --file ./plan.revision.md",
++                        ),
++                        _command(
++                            "revise",
++                            "Propose revised plan",
++                            (
++                                "taskledger plan upsert --auto-revise "
++                                "--file ./plan.revision.md"
++                            ),
++                        ),
++                    ]
+                 )
+             return commands
+     if item_kind == "task" and isinstance(item_id, str):
+@@ -515,6 +530,26 @@ def _commands_for_next_item(
+                     "taskledger implement checklist",
+                 ),
+             ]
++        if action == "repair-run-state":
++            primary = _primary_command_for_next_item(action, next_item)
++            label = (
++                "Finish orphaned planning run"
++                if next_item.get("run_type") == "planning"
++                else "Inspect orphaned run state"
++            )
++            return [
++                _command(
++                    "repair",
++                    label,
++                    primary or "taskledger doctor",
++                    primary=True,
++                ),
++                _command(
++                    "context",
++                    "Show current task guidance",
++                    f"taskledger next-action --task {item_id}",
++                ),
++            ]
+         if action == "repair-active-stage":
+             return [
+                 _command(
+diff --git a/taskledger/services/plan_editing.py b/taskledger/services/plan_editing.py
+index 4d68b53..4b9baf4 100644
+--- a/taskledger/services/plan_editing.py
++++ b/taskledger/services/plan_editing.py
+@@ -25,29 +25,31 @@ def ensure_plan_input_path_allowed(workspace_root: Path, input_path: Path) -> No
+     ):
+         message = (
+             "Refusing to read a plan input file from Taskledger storage. "
+-            "Copy/export the plan to a workspace file such as ./plan.md, "
+-            "edit that file, then submit it. Never edit `.taskledger/` "
++            "Export the proposed plan to a workspace file such as "
++            "`./plan.revision.md`, edit and check that file, then submit it "
++            "with `taskledger plan upsert --auto-revise`. Never edit `.taskledger/` "
+             "files directly."
+         )
+         error = LaunchError(message)
+         error.taskledger_exit_code = EXIT_CODE_BAD_INPUT
+         error.taskledger_error_code = "INVALID_INPUT"
+         error.taskledger_remediation = [
+-            "taskledger plan revise",
+-            "taskledger plan export --version latest --file ./plan.md",
+-            "taskledger plan upsert --file ./plan.md",
++            "taskledger plan export --version latest --file ./plan.revision.md",
++            "taskledger plan check --file ./plan.revision.md",
++            "taskledger plan upsert --auto-revise --file ./plan.revision.md",
+         ]
+         error.taskledger_data = {
+             "input_path": str(candidate),
+             "taskledger_root": str(storage_root),
+             "next_commands": [
+-                "taskledger plan revise",
+-                "taskledger plan export --version latest --file ./plan.md",
+-                "taskledger plan upsert --file ./plan.md",
++                "taskledger plan export --version latest --file ./plan.revision.md",
++                "taskledger plan check --file ./plan.revision.md",
++                "taskledger plan upsert --auto-revise --file ./plan.revision.md",
+             ],
+             "remediation": (
+-                "Run `taskledger plan revise`, export/edit a workspace plan file, "
+-                "then run `taskledger plan upsert --file ./plan.md`."
++                "Export the proposed plan to `./plan.revision.md`, edit and check "
++                "that workspace file, then submit it with "
++                "`taskledger plan upsert --auto-revise`."
+             ),
+         }
+         raise error
+diff --git a/taskledger/services/plan_review.py b/taskledger/services/plan_review.py
+index 6d1a5c1..2477a86 100644
+--- a/taskledger/services/plan_review.py
++++ b/taskledger/services/plan_review.py
+@@ -423,15 +423,25 @@ def _review_commands(version: int) -> list[dict[str, object]]:
+             "primary": True,
+         },
+         {
+-            "kind": "revise",
+-            "label": "Revise proposed plan",
+-            "command": "taskledger plan revise",
++            "kind": "export",
++            "label": "Export editable revision draft",
++            "command": (
++                f"taskledger plan export --version {version} --file ./plan.revision.md"
++            ),
+             "primary": False,
+         },
+         {
+-            "kind": "export",
+-            "label": "Export editable plan",
+-            "command": f"taskledger plan export --version {version} --file ./plan.md",
++            "kind": "check",
++            "label": "Check revision draft",
++            "command": "taskledger plan check --file ./plan.revision.md",
++            "primary": False,
++        },
++        {
++            "kind": "revise",
++            "label": "Propose revised plan",
++            "command": (
++                "taskledger plan upsert --auto-revise --file ./plan.revision.md"
++            ),
+             "primary": False,
+         },
+     ]
+diff --git a/taskledger/services/planning_flow.py b/taskledger/services/planning_flow.py
+index ba8e597..475fb8a 100644
+--- a/taskledger/services/planning_flow.py
++++ b/taskledger/services/planning_flow.py
+@@ -6,13 +6,16 @@ from typing import TYPE_CHECKING, cast
+
+ if TYPE_CHECKING:
+     from taskledger.cli_common import CommandRuntime
+-from taskledger.domain.models import ActorRef, HarnessRef
++from taskledger.domain.models import ActorRef, HarnessRef, TaskRecord
+ from taskledger.domain.policies import plan_propose_decision
+ from taskledger.domain.states import EXIT_CODE_BAD_INPUT
++from taskledger.errors import LaunchError
+ from taskledger.services import tasks as _tasks
++from taskledger.services.actors import resolve_effective_identity
+ from taskledger.services.plan_editing import render_editable_plan
+ from taskledger.services.plan_hash import approved_plan_content_hash
+ from taskledger.services.plan_input import (
++    ParsedPlanInput,
+     parse_plan_input,
+     plan_input_error,
+ )
+@@ -48,6 +51,9 @@ def start_planning(
+             "Planning can only start from draft or plan_review.",
+             _tasks.EXIT_CODE_INVALID_TRANSITION,
+         )
++    actor, harness = resolve_effective_identity(
++        workspace_root, actor=actor, harness=harness, role="planner"
++    )
+     run = _tasks._start_run(
+         workspace_root,
+         task,
+@@ -88,6 +94,7 @@ def propose_plan(
+     criteria: tuple[str, ...] = (),
+     command_label: str = "plan propose",
+     runtime: CommandRuntime | None = None,
++    parsed_input: ParsedPlanInput | None = None,
+ ) -> dict[str, object]:
+     task = resolve_task(workspace_root, task_ref)
+     _tasks._ensure_not_archived(task, operation="propose plan for")
+@@ -96,7 +103,9 @@ def propose_plan(
+     _tasks._enforce_decision(plan_propose_decision(task, lock, run=run))
+     plans = list_plans(workspace_root, task.id)
+     version = plans[-1].plan_version + 1 if plans else 1
+-    parsed = parse_plan_input(workspace_root, body, criteria=criteria, strict=False)
++    parsed = parsed_input or parse_plan_input(
++        workspace_root, body, criteria=criteria, strict=False
++    )
+     if parsed.has_errors:
+         raise plan_input_error(parsed, command=command_label)
+     plan_body = parsed.body
+@@ -194,6 +203,9 @@ def upsert_plan(
+     from_answers: bool = False,
+     allow_open_questions: bool = False,
+     auto_revise: bool = False,
++    runtime: CommandRuntime | None = None,
++    actor: ActorRef | None = None,
++    harness: HarnessRef | None = None,
+ ) -> dict[str, object]:
+     task = resolve_task(workspace_root, task_ref)
+     _tasks._ensure_not_archived(task, operation="upsert plan for")
+@@ -230,18 +242,56 @@ def upsert_plan(
+         payload["command"] = "plan upsert"
+         return payload
+     auto_revised = False
++    parsed_input: ParsedPlanInput | None = None
++    revised: dict[str, object] = {}
+     if auto_revise:
+         lock = _tasks._current_lock(workspace_root, task.id)
+         if task.status_stage == "plan_review" and lock is None:
+-            revised = start_planning(workspace_root, task.id)
++            parsed_input = parse_plan_input(
++                workspace_root, body, criteria=criteria, strict=False
++            )
++            if parsed_input.has_errors:
++                raise plan_input_error(parsed_input, command="plan upsert")
++            running_before = {
++                run.run_id for run in _tasks._running_runs(workspace_root, task)
++            }
++            try:
++                revised = start_planning(
++                    workspace_root,
++                    task.id,
++                    runtime=runtime,
++                    actor=actor,
++                    harness=harness,
++                )
++            except Exception as exc:
++                newly_started_runs = [
++                    run
++                    for run in _tasks._running_runs(workspace_root, task)
++                    if run.run_id not in running_before
++                ]
++                if not newly_started_runs:
++                    raise
++                raise _revision_failure_error(
++                    workspace_root, task, newly_started_runs[0].run_id, exc
++                ) from exc
+             auto_revised = True
+-    payload = propose_plan(
+-        workspace_root,
+-        task.id,
+-        body=body,
+-        criteria=criteria,
+-        command_label="plan upsert",
+-    )
++    try:
++        payload = propose_plan(
++            workspace_root,
++            task.id,
++            body=body,
++            runtime=runtime,
++            criteria=criteria,
++            command_label="plan upsert",
++            parsed_input=parsed_input,
++        )
++    except Exception as exc:
++        if not auto_revised:
++            raise
++        run_id = revised.get("run_id")
++        if not isinstance(run_id, str):
++            raise
++        raise _revision_failure_error(workspace_root, task, run_id, exc) from exc
+     payload["operation"] = "proposed"
+     payload["command"] = "plan upsert"
+     if auto_revised:
+@@ -251,6 +301,45 @@ def upsert_plan(
+     return payload
+
+
++def _revision_failure_error(
++    workspace_root: Path,
++    task: TaskRecord,
++    run_id: str,
++    cause: Exception,
++) -> LaunchError:
++    run = _tasks._optional_run(workspace_root, task, run_id)
++    lock = _tasks._current_lock(workspace_root, task.id)
++    next_command = f"taskledger next-action --task {task.id}"
++    details: dict[str, object] = {
++        "task_id": task.id,
++        "revision_run": {
++            "run_id": run_id,
++            "run_type": "planning",
++            "status": run.status if run is not None else "unknown",
++            "has_matching_lock": bool(
++                run is not None and _tasks._lock_matches_run(lock, run)
++            ),
++        },
++        "cause": str(cause),
++        "next_commands": [next_command],
++        "remediation": (
++            f"Inspect the interrupted revision run {run_id} with "
++            f"`{next_command}` before continuing."
++        ),
++    }
++    cause_details = getattr(cause, "taskledger_data", None)
++    if isinstance(cause_details, dict):
++        details["cause_details"] = cause_details
++    error = _tasks._cli_error(
++        f"Plan revision failed after planning run {run_id} started: {cause}",
++        _tasks.EXIT_CODE_GENERIC_FAILURE,
++    )
++    error.taskledger_error_code = "PLAN_REVISION_INCOMPLETE"
++    error.taskledger_data = details
++    error.taskledger_remediation = [next_command]
++    return error
++
++
+ def export_plan(
+     workspace_root: Path,
+     task_ref: str,
+@@ -276,6 +365,8 @@ def amend_plan(
+     remove_files: tuple[str, ...] = (),
+     reason: str,
+     runtime: CommandRuntime | None = None,
++    actor: ActorRef | None = None,
++    harness: HarnessRef | None = None,
+ ) -> dict[str, object]:
+     if not reason.strip():
+         raise _tasks._cli_error("--reason is required.", EXIT_CODE_BAD_INPUT)
+@@ -320,12 +411,19 @@ def amend_plan(
+         todos=updated_todos,
+         files=updated_files,
+     )
+-    revised = start_planning(workspace_root, task.id)
++    revised = start_planning(
++        workspace_root,
++        task.id,
++        runtime=runtime,
++        actor=actor,
++        harness=harness,
++    )
+     payload = propose_plan(
+         workspace_root,
+         task.id,
+         body=render_editable_plan(draft),
+         command_label="plan amend",
++        runtime=runtime,
+     )
+     payload["command"] = "plan amend"
+     payload["operation"] = "amended"
+diff --git a/taskledger/services/run_store.py b/taskledger/services/run_store.py
+index 0b88a39..4c38e4f 100644
+--- a/taskledger/services/run_store.py
++++ b/taskledger/services/run_store.py
+@@ -14,6 +14,7 @@ from taskledger.services.task_events import (
+ from taskledger.storage.indexes import rebuild_v2_indexes
+ from taskledger.storage.locks import lock_status, read_lock, remove_lock
+ from taskledger.storage.task_store import (
++    list_runs,
+     resolve_task,
+     resolve_v2_paths,
+     task_lock_path,
+@@ -76,6 +77,21 @@ def break_lock(
+             "Run `taskledger next-action` to see what to do next.",
+             exit_code=EXIT_CODE_MISSING,
+         )
++    matching_run = next(
++        (
++            run
++            for run in list_runs(workspace_root, task.id)
++            if run.status == "running"
++            and lock.run_id == run.run_id
++            and lock.stage
++            == {
++                "planning": "planning",
++                "implementation": "implementing",
++                "validation": "validating",
++            }.get(run.run_type)
++        ),
++        None,
++    )
+     broken_lock = replace(
+         lock,
+         broken_at=utc_now_iso(),
+@@ -98,6 +114,29 @@ def break_lock(
+     )
+     remove_lock(lock_path)
+     rebuild_v2_indexes(paths)
++    recovery_details: dict[str, object] = {}
++    if matching_run is not None:
++        if matching_run.run_type == "planning":
++            next_command = (
++                f"taskledger repair run --task {task.id} "
++                f"--run {matching_run.run_id} "
++                '--reason "Planning lock holder was no longer valid."'
++            )
++        elif matching_run.run_type == "implementation":
++            next_command = (
++                f"taskledger implement resume --task {task.id} "
++                '--reason "Reacquire implementation lock for existing running run."'
++            )
++        else:
++            next_command = f"taskledger next-action --task {task.id}"
++        recovery_details = {
++            "orphaned_run": {
++                "run_id": matching_run.run_id,
++                "run_type": matching_run.run_type,
++                "status": matching_run.status,
++            },
++            "next_commands": [next_command],
++        }
+     return {
+         "ok": True,
+         "command": "lock break",
+@@ -105,6 +144,7 @@ def break_lock(
+         "status_stage": task.status_stage,
+         "changed": True,
+         "warnings": [],
++        **recovery_details,
+         "lock": broken_lock.to_dict(),
+         "reason": reason,
+         "audit_path": rel_path,
+diff --git a/taskledger/services/task_repair.py b/taskledger/services/task_repair.py
+index 86fac69..d1d5438 100644
+--- a/taskledger/services/task_repair.py
++++ b/taskledger/services/task_repair.py
+@@ -149,7 +149,7 @@ def repair_orphaned_planning_run(
+         "run_type": run.run_type,
+         "previous_status": run.status,
+         "new_status": "finished",
+-        "next_command": "taskledger implement start",
++        "next_command": f"taskledger next-action --task {task.id}",
+     }
+
+
+diff --git a/taskledger/services/tasks.py b/taskledger/services/tasks.py
+index de48f00..9cac9b3 100644
+--- a/taskledger/services/tasks.py
++++ b/taskledger/services/tasks.py
+@@ -487,6 +487,9 @@ def upsert_plan(
+     from_answers: bool = False,
+     allow_open_questions: bool = False,
+     auto_revise: bool = False,
++    runtime: CommandRuntime | None = None,
++    actor: ActorRef | None = None,
++    harness: HarnessRef | None = None,
+ ) -> dict[str, object]:
+     from taskledger.services.planning_flow import upsert_plan as _upsert_plan
+
+@@ -498,6 +501,9 @@ def upsert_plan(
+         from_answers=from_answers,
+         allow_open_questions=allow_open_questions,
+         auto_revise=auto_revise,
++        runtime=runtime,
++        actor=actor,
++        harness=harness,
+     )
+
+
+@@ -525,6 +531,8 @@ def amend_plan(
+     remove_files: tuple[str, ...] = (),
+     reason: str,
+     runtime: CommandRuntime | None = None,
++    actor: ActorRef | None = None,
++    harness: HarnessRef | None = None,
+ ) -> dict[str, object]:
+     from taskledger.services.planning_flow import amend_plan as _amend_plan
+
+@@ -536,6 +544,8 @@ def amend_plan(
+         remove_files=remove_files,
+         reason=reason,
+         runtime=runtime,
++        actor=actor,
++        harness=harness,
+     )
+
+
+@@ -686,13 +696,26 @@ def reject_plan(
+     )
+
+
+-def revise_plan(workspace_root: Path, task_ref: str) -> dict[str, object]:
++def revise_plan(
++    workspace_root: Path,
++    task_ref: str,
++    *,
++    runtime: CommandRuntime | None = None,
++    actor: ActorRef | None = None,
++    harness: HarnessRef | None = None,
++) -> dict[str, object]:
+     task = resolve_task(workspace_root, task_ref)
+     _ensure_not_archived(task, operation="revise plan for")
+     _enforce_decision(
+         plan_revise_decision(task, _current_lock(workspace_root, task.id))
+     )
+-    return start_planning(workspace_root, task_ref)
++    return start_planning(
++        workspace_root,
++        task_ref,
++        runtime=runtime,
++        actor=actor,
++        harness=harness,
++    )
+
+
+ def add_question(
+@@ -2144,8 +2167,7 @@ def _render_plan_template(
+         ),
+         "---",
+         "",
+-        "<!-- Required: keep this body. It is the implementation handoff context.",
+-        "     Run `taskledger plan check --file ./plan.md` before upsert. -->",
++        "<!-- Human-facing implementation handoff. -->",
+         "",
+         "# <short approval plan title>",
+         "",
+@@ -2171,21 +2193,6 @@ def _render_plan_template(
+         "",
+         "- <nearby cleanup or behavior change intentionally excluded>",
+         "",
+-        "## Plan input checklist before upsert",
+-        "",
+-        "- [ ] I ran `taskledger plan check --file plan.md`.",
+-        "- [ ] Every acceptance criterion uses `text`, not `description`.",
+-        (
+-            "- [ ] Todo mappings use supported keys only: "
+-            "`id`, `id_hint`, `text`, `mandatory`, `validation_hint`, "
+-            "`worker_step`."
+-        ),
+-        (
+-            "- [ ] File references are plan-level `files:` entries "
+-            "or are mentioned in todo text/body; "
+-            "todo-level `files:` is not captured."
+-        ),
+-        "- [ ] The Markdown body explains enough context for implementation handoff.",
+         "",
+     ]
+     if answered_questions:
+diff --git a/tests/test_docs_and_skill.py b/tests/test_docs_and_skill.py
+index 02696e8..89ac79d 100644
+--- a/tests/test_docs_and_skill.py
++++ b/tests/test_docs_and_skill.py
+@@ -203,15 +203,28 @@ def test_plan_revision_docs_and_skill_rules_are_present() -> None:
+     )
+     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
+
+-    assert "taskledger plan export --version latest --file ./plan.md" in readme
+-    assert "taskledger plan review --version" in readme
++    assert "taskledger plan export --version latest --file ./plan.revision.md" in readme
++    assert "taskledger plan revise\n" not in readme
++    assert "taskledger plan revise\n" not in usage
++    assert "taskledger plan export --version latest --file ./plan.md" not in readme
++    assert "taskledger plan export --version latest --file ./plan.md" not in usage
++    assert "taskledger plan upsert --auto-revise --file ./plan.revision.md" in readme
++    assert "taskledger plan upsert --auto-revise --file ./plan.md" in usage
+     assert "taskledger plan amend" in usage
+     assert "taskledger plan review --version" in usage
+     assert "Never edit `.taskledger/` files directly." in skill
+     assert "taskledger plan review --version N" in skill
+-    assert "taskledger plan revise" in skill
++    assert "taskledger plan upsert --auto-revise --file ./plan.revision.md" in skill
++    assert "taskledger plan revise" not in skill
++    assert "taskledger plan export --version latest --file ./plan.md" not in skill
++    assert "explicit user approval" in skill
+     assert "taskledger plan export" in command_contract
++    assert "taskledger plan check --file ./plan.revision.md" in command_contract
+     assert "taskledger plan review" in command_contract
++    assert (
++        "taskledger plan upsert [--task TASK_REF] [--file PATH] [--auto-revise]"
++        in command_contract
++    )
+
+
+ # specmason: req=REQ-0016 ac=AC-0174
+diff --git a/tests/test_plan_input_cli.py b/tests/test_plan_input_cli.py
+index 184a14b..ce5a338 100644
+--- a/tests/test_plan_input_cli.py
++++ b/tests/test_plan_input_cli.py
+@@ -324,11 +324,10 @@ def test_next_action_planning_without_profile_includes_plan_input_command_sequen
+
+
+ # ---------------------------------------------------------------------------
+-# Test 8: Template contains checklist and single body comment
+-# ---------------------------------------------------------------------------
++# Test 8: Template omits procedural checklist content from the plan body
+
+
+-def test_plan_template_contains_checklist_and_single_body_comment(
++def test_plan_template_omits_procedural_checklist_from_body(
+     tmp_path: Path,
+ ) -> None:
+     init_workspace(tmp_path)
+@@ -355,15 +354,16 @@ def test_plan_template_contains_checklist_and_single_body_comment(
+     assert result.exit_code == 0, result.stdout
+     payload = _json(result)["result"]
+     template = str(payload["template"])
+-    assert "## Plan input checklist before upsert" in template
+-    assert "- [ ] I ran `taskledger plan check --file plan.md`." in template
+-    assert template.count("Required: keep this body") == 1
+-    assert "# <short approval plan title>" in template
+-    assert "## Summary" in template
+-    assert "## Implementation Changes" in template
+-    assert "## Tests" in template
+-    assert "## Assumptions" in template
+-    assert "## Out of Scope" in template
++    body = template.split("---", 2)[2]
++    assert "## Plan input checklist before upsert" not in body
++    assert "taskledger plan check" not in body
++    assert body.count("Human-facing implementation handoff.") == 1
++    assert "# <short approval plan title>" in body
++    assert "## Summary" in body
++    assert "## Implementation Changes" in body
++    assert "## Tests" in body
++    assert "## Assumptions" in body
++    assert "## Out of Scope" in body
+
+
+ # ---------------------------------------------------------------------------
+diff --git a/tests/test_plan_revision_workflow.py b/tests/test_plan_revision_workflow.py
+index df94c44..425f89e 100644
+--- a/tests/test_plan_revision_workflow.py
++++ b/tests/test_plan_revision_workflow.py
+@@ -7,7 +7,17 @@ import pytest
+ from typer.testing import CliRunner
+
+ from taskledger.cli import app
+-from taskledger.storage.task_store import resolve_task
++from taskledger.services.lock_diagnostics import (
++    CLASSIFICATION_ACTIVE_DEAD_LOCAL_PROCESS,
++    diagnose_lock,
++)
++from taskledger.storage.locks import read_lock
++from taskledger.storage.task_store import (
++    list_runs,
++    resolve_task,
++    resolve_v2_paths,
++    task_lock_path,
++)
+ from tests.support.builders import init_workspace
+
+ pytestmark = [pytest.mark.cli, pytest.mark.integration, pytest.mark.slow]
+@@ -145,9 +155,9 @@ def test_plan_upsert_rejects_taskledger_storage_file(tmp_path: Path) -> None:
+     assert "Taskledger storage" in payload["error"]["message"]
+     next_commands = payload["error"]["details"]["next_commands"]
+     assert next_commands == [
+-        "taskledger plan revise",
+-        "taskledger plan export --version latest --file ./plan.md",
+-        "taskledger plan upsert --file ./plan.md",
++        "taskledger plan export --version latest --file ./plan.revision.md",
++        "taskledger plan check --file ./plan.revision.md",
++        "taskledger plan upsert --auto-revise --file ./plan.revision.md",
+     ]
+
+
+@@ -196,7 +206,13 @@ def test_plan_propose_and_regenerate_reject_taskledger_storage_file(
+ # specmason: req=REQ-0039 ac=AC-0449
+ def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
+     _setup_plan_review_task(tmp_path)
+-    exported = tmp_path / "plan.md"
++    review_v1 = runner.invoke(
++        app,
++        ["--cwd", str(tmp_path), "plan", "review", "--version", "1"],
++    )
++    assert review_v1.exit_code == 0, review_v1.stdout
++    assert "| Approval readiness | Ready |" in review_v1.stdout
++    exported = tmp_path / "plan.revision.md"
+
+     export_result = runner.invoke(
+         app,
+@@ -213,17 +229,36 @@ def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
+     )
+     assert export_result.exit_code == 0, export_result.stdout
+
+-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "revise"]).exit_code == 0
+-
+     updated_text = exported.read_text(encoding="utf-8").replace(
+         "Remove out-of-scope release criteria.",
+         "Remove out-of-scope release and CI criteria.",
+     )
+     exported.write_text(updated_text, encoding="utf-8")
++    check_result = runner.invoke(
++        app,
++        [
++            "--cwd",
++            str(tmp_path),
++            "plan",
++            "check",
++            "--file",
++            str(exported),
++        ],
++    )
++    assert check_result.exit_code == 0, check_result.stdout
+
+     upsert_result = runner.invoke(
+         app,
+-        ["--cwd", str(tmp_path), "--json", "plan", "upsert", "--file", str(exported)],
++        [
++            "--cwd",
++            str(tmp_path),
++            "--json",
++            "plan",
++            "upsert",
++            "--auto-revise",
++            "--file",
++            str(exported),
++        ],
+     )
+     assert upsert_result.exit_code == 0, upsert_result.stdout
+     upsert_payload = _json(upsert_result)
+@@ -249,6 +284,15 @@ def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
+         show_v2["result"]["plan"]["criteria"][1]["text"]
+         == "Remove out-of-scope release and CI criteria."
+     )
++    task = resolve_task(tmp_path, "plan-revision")
++    revision_run_id = str(upsert_payload["result"]["revision_run_id"])
++    revision_run = next(
++        run for run in list_runs(tmp_path, task.id) if run.run_id == revision_run_id
++    )
++    assert revision_run.status == "finished"
++    assert read_lock(task_lock_path(resolve_v2_paths(tmp_path), task.id)) is None
++    assert task.status_stage == "plan_review"
++    assert task.accepted_plan_version is None
+
+
+ # specmason: req=REQ-0039 ac=AC-0447
+@@ -388,11 +432,10 @@ def test_plan_upsert_without_active_planning_suggests_revision_workflow(
+     assert upsert.exit_code == 3, upsert.stdout
+     payload = _json(upsert)
+     assert "Plan proposals require active planning." in payload["error"]["message"]
+-    assert "taskledger plan revise" in payload["error"]["message"]
++    assert "plan upsert --auto-revise" in payload["error"]["message"]
+     assert payload["error"]["details"]["next_commands"] == [
+-        "taskledger plan revise",
+-        "taskledger plan export --version latest --file ./plan.md",
+-        "taskledger plan upsert --file ./plan.md",
++        "taskledger plan check --file ./plan.md",
++        "taskledger plan upsert --auto-revise --file ./plan.md",
+     ]
+
+
+@@ -408,8 +451,202 @@ def test_next_action_plan_review_mentions_revision_commands(tmp_path: Path) -> N
+         'taskledger plan accept --version 1 --note "User approved in harness."'
+         in next_action.stdout
+     )
+-    assert "Revise proposed plan: taskledger plan revise" in next_action.stdout
++    assert "Revise proposed plan: taskledger plan revise" not in next_action.stdout
++    assert (
++        "Export editable revision draft: "
++        "taskledger plan export --version 1 --file ./plan.revision.md"
++        in next_action.stdout
++    )
++    assert (
++        "Check revision draft: taskledger plan check --file ./plan.revision.md"
++        in next_action.stdout
++    )
+     assert (
+-        "Export editable plan: taskledger plan export --version 1 --file ./plan.md"
++        "Propose revised plan: "
++        "taskledger plan upsert --auto-revise --file ./plan.revision.md"
+         in next_action.stdout
+     )
++
++
++def test_plan_export_is_idempotent_without_overwriting_edits(tmp_path: Path) -> None:
++    _setup_plan_review_task(tmp_path)
++    exported = tmp_path / "plan.revision.md"
++    args = [
++        "--cwd",
++        str(tmp_path),
++        "--json",
++        "plan",
++        "export",
++        "--version",
++        "latest",
++        "--file",
++        str(exported),
++    ]
++
++    first = runner.invoke(app, args)
++    assert first.exit_code == 0, first.stdout
++    original = exported.read_text(encoding="utf-8")
++
++    repeated = runner.invoke(app, args)
++    assert repeated.exit_code == 0, repeated.stdout
++    assert _json(repeated)["result"]["unchanged"] is True
++
++    exported.write_text("user edits\n", encoding="utf-8")
++    refusal = runner.invoke(app, args)
++    assert refusal.exit_code != 0
++    assert "Refusing to overwrite" in _json(refusal)["error"]["message"]
++    assert exported.read_text(encoding="utf-8") == "user edits\n"
++
++    overwritten = runner.invoke(app, [*args, "--overwrite"])
++    assert overwritten.exit_code == 0, overwritten.stdout
++    assert exported.read_text(encoding="utf-8") == original
++
++
++def test_auto_revise_rejects_invalid_candidate_before_starting_run(
++    tmp_path: Path,
++) -> None:
++    _setup_plan_review_task(tmp_path)
++    task = resolve_task(tmp_path, "plan-revision")
++    runs_before = list_runs(tmp_path, task.id)
++    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task.id)
++    invalid_plan = tmp_path / "invalid-plan.md"
++    invalid_plan.write_text("---\nacceptance_criteria: [\n---\n", encoding="utf-8")
++
++    result = runner.invoke(
++        app,
++        [
++            "--cwd",
++            str(tmp_path),
++            "--json",
++            "plan",
++            "upsert",
++            "--auto-revise",
++            "--file",
++            str(invalid_plan),
++        ],
++    )
++
++    assert result.exit_code != 0
++    assert list_runs(tmp_path, task.id) == runs_before
++    assert read_lock(lock_path) is None
++
++
++def test_auto_revise_failure_reports_run_specific_recovery(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    _setup_plan_review_task(tmp_path)
++    plan_file = tmp_path / "edited-plan.md"
++    plan_file.write_text(PLAN_V1, encoding="utf-8")
++
++    def fail_proposal(*args: object, **kwargs: object) -> dict[str, object]:
++        raise RuntimeError("injected proposal failure")
++
++    monkeypatch.setattr("taskledger.services.planning_flow.propose_plan", fail_proposal)
++    result = runner.invoke(
++        app,
++        [
++            "--cwd",
++            str(tmp_path),
++            "--json",
++            "plan",
++            "upsert",
++            "--auto-revise",
++            "--file",
++            str(plan_file),
++        ],
++    )
++
++    assert result.exit_code != 0, result.stdout
++    error = _json(result)["error"]
++    assert error["code"] == "PLAN_REVISION_INCOMPLETE"
++    revision_run = error["details"]["revision_run"]
++    assert revision_run["run_id"].startswith("run-")
++    assert revision_run["status"] == "running"
++    assert revision_run["has_matching_lock"] is True
++    assert error["details"]["next_commands"] == [
++        f"taskledger next-action --task {resolve_task(tmp_path, 'plan-revision').id}"
++    ]
++
++
++@pytest.mark.parametrize("entrypoint", ["start", "revise", "upsert", "amend"])
++@pytest.mark.parametrize(
++    ("harness_variable", "harness_name"),
++    [
++        ("PI_VERSION", "pi"),
++        ("CODEX_VERSION", "codex"),
++        ("OPENCODE_VERSION", "opencode"),
++    ],
++)
++def test_planning_run_entry_paths_preserve_harness_identity(
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++    entrypoint: str,
++    harness_variable: str,
++    harness_name: str,
++) -> None:
++    _setup_plan_review_task(tmp_path)
++    for variable in (
++        "TASKLEDGER_ACTOR_TYPE",
++        "TASKLEDGER_ACTOR_NAME",
++        "TASKLEDGER_ACTOR_ROLE",
++        "TASKLEDGER_HARNESS",
++        "TASKLEDGER_OWNER_PID",
++        "TASKLEDGER_HARNESS_PID",
++        "CODEX_VERSION",
++        "OPENCODE_VERSION",
++        "PI_VERSION",
++        "PI_SESSION_ID",
++    ):
++        monkeypatch.delenv(variable, raising=False)
++    monkeypatch.setenv(harness_variable, "test")
++    monkeypatch.setenv("TASKLEDGER_SESSION_ID", "session-123")
++
++    command = ["plan", entrypoint]
++    if entrypoint == "upsert":
++        draft = tmp_path / "edited-plan.md"
++        draft.write_text(PLAN_V1, encoding="utf-8")
++        command = [
++            "plan",
++            "upsert",
++            "--auto-revise",
++            "--file",
++            str(draft),
++        ]
++    elif entrypoint == "amend":
++        command = ["plan", "amend", "--reason", "Verify harness identity."]
++
++    result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", *command])
++    assert result.exit_code == 0, result.stdout
++
++    task = resolve_task(tmp_path, "plan-revision")
++    planning_runs = [
++        run for run in list_runs(tmp_path, task.id) if run.run_type == "planning"
++    ]
++    revision_run = max(
++        planning_runs, key=lambda run: int(run.run_id.removeprefix("run-"))
++    )
++    assert revision_run.actor.tool == harness_name
++    assert revision_run.actor.session_id == "session-123"
++    assert revision_run.actor.pid is None
++    assert revision_run.actor.command_pid is not None
++    assert revision_run.actor.pid_scope == "unverifiable_harness"
++    assert revision_run.harness is not None
++    assert revision_run.harness.name == harness_name
++    assert revision_run.harness.session_id == "session-123"
++
++    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task.id)
++    lock = read_lock(lock_path)
++    if entrypoint in {"start", "revise"}:
++        assert lock is not None
++        assert lock.holder.pid is None
++        assert lock.holder.command_pid is not None
++        assert lock.holder.pid_scope == "unverifiable_harness"
++        assert lock.harness is not None and lock.harness.name == harness_name
++        diagnostics = diagnose_lock(
++            lock,
++            current_host=lock.holder.host or "unknown",
++        )
++        assert diagnostics.classification != CLASSIFICATION_ACTIVE_DEAD_LOCAL_PROCESS
++    else:
++        assert lock is None
++        assert revision_run.status == "finished"
+diff --git a/tests/test_service_boundaries.py b/tests/test_service_boundaries.py
+index e01ddb3..b016c1b 100644
+--- a/tests/test_service_boundaries.py
++++ b/tests/test_service_boundaries.py
+@@ -200,6 +200,13 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
+     "taskledger/services/lock_inventory.py::build_lock_inventory:except-2": (
+         "Lock inventory preserves lock diagnosis failures for diagnostics."
+     ),
++    "taskledger/services/planning_flow.py::upsert_plan:except-1": (
++        "Auto-revision reports recovery when run creation partially succeeds."
++    ),
++    "taskledger/services/planning_flow.py::upsert_plan:except-2": (
++        "Auto-revision preserves recovery details when plan proposal fails "
++        "after opening a planning run."
++    ),
+     "taskledger/storage/ledger_config.py::load_ledger_config:except-1": (
+         "Ledger config loader reports parse/runtime differences consistently "
+         "across Python versions."
+diff --git a/tests/test_taskledger_v2_cli.py b/tests/test_taskledger_v2_cli.py
+index c686d94..c431163 100644
+--- a/tests/test_taskledger_v2_cli.py
++++ b/tests/test_taskledger_v2_cli.py
+@@ -985,10 +985,68 @@ def test_v2_lock_break_and_expired_lock_report(tmp_path: Path) -> None:
+         ],
+     )
+     assert break_result.exit_code == 0
+-    assert _json(break_result)["result"]["command"] == "lock break"
++    break_payload = _json(break_result)["result"]
++    run_id = str(payload["run_id"])
++    assert break_payload["command"] == "lock break"
++    assert break_payload["orphaned_run"] == {
++        "run_id": run_id,
++        "run_type": "planning",
++        "status": "running",
++    }
++    assert break_payload["next_commands"] == [
++        (
++            f"taskledger repair run --task task-0001 --run {run_id} "
++            '--reason "Planning lock holder was no longer valid."'
++        )
++    ]
+     assert not lock_path.exists()
+
+
++def test_repair_lock_human_output_includes_orphan_run_recovery(
++    tmp_path: Path,
++) -> None:
++    _init_project(tmp_path)
++    create = runner.invoke(
++        app,
++        [
++            "--cwd",
++            str(tmp_path),
++            "task",
++            "create",
++            "planning-lock",
++            "--slug",
++            "planning-lock",
++            "--description",
++            "Exercise run-aware lock repair output.",
++        ],
++    )
++    assert create.exit_code == 0, create.stdout
++    start = runner.invoke(
++        app,
++        ["--cwd", str(tmp_path), "plan", "start", "--task", "planning-lock"],
++    )
++    assert start.exit_code == 0, start.stdout
++
++    result = runner.invoke(
++        app,
++        [
++            "--cwd",
++            str(tmp_path),
++            "repair",
++            "lock",
++            "--task",
++            "planning-lock",
++            "--reason",
++            "Planning lock holder was no longer valid.",
++        ],
++    )
++
++    assert result.exit_code == 0, result.stdout
++    assert "matching planning run run-0001 is still marked running" in result.stdout
++    assert "Finish this orphaned planning run" in result.stdout
++    assert "taskledger repair run --task task-0001 --run run-0001" in result.stdout
++
++
+ # specmason: req=REQ-0064 ac=AC-0687
+ def test_doctor_human_reports_non_looping_implementation_mismatch_hint(
+     tmp_path: Path,
+@@ -1128,6 +1186,32 @@ def test_next_action_recommends_repair_for_orphaned_planning_run(
+     assert blocker["running_run"]["run_type"] == "planning"
+
+
++# specmason: req=REQ-0064 ac=AC-0708
++def test_next_action_repairs_orphaned_planning_run_before_plan_review(
++    tmp_path: Path,
++) -> None:
++    task_id, run_id = _prepare_approved_task_with_orphaned_planning_run(tmp_path)
++    task = resolve_task(tmp_path, task_id)
++    save_task(
++        tmp_path,
++        replace(task, status_stage="plan_review", accepted_plan_version=None),
++    )
++
++    result = runner.invoke(
++        app,
++        ["--cwd", str(tmp_path), "--json", "next-action", "--task", task_id],
++    )
++
++    payload = _json(result)["result"]
++    assert payload["action"] == "repair-run-state"
++    assert payload["next_command"] == (
++        f"taskledger repair run --task {task_id} --run {run_id} "
++        '--reason "Finish orphaned planning run."'
++    )
++    assert payload["blocking"][0]["running_run"]["has_matching_lock"] is False
++    assert payload["commands"][0]["command"] == payload["next_command"]
++
++
+ # specmason: req=REQ-0064 ac=AC-0682
+ def test_can_implement_blocker_names_orphaned_planning_run(tmp_path: Path) -> None:
+     _, run_id = _prepare_approved_task_with_orphaned_planning_run(tmp_path)
+@@ -1189,6 +1273,9 @@ def test_repair_run_finishes_orphaned_planning_run(tmp_path: Path) -> None:
+     assert result.exit_code == 0, result.stdout
+     payload = json.loads(result.stdout)
+     assert payload["result"]["action"] == "finished_orphan_run"
++    assert payload["result"]["next_command"] == (
++        f"taskledger next-action --task {task_id}"
++    )
+     assert resolve_run(tmp_path, task_id, run_id).status == "finished"
+
+
+@@ -2542,6 +2629,48 @@ def test_next_action_dead_pid_lock_routes_to_repair_lock(
+     assert "is no longer running" in lock_blockers[0].get("message", "")
+
+
++def test_next_action_dead_planning_lock_uses_stage_aware_reason(
++    tmp_path: Path,
++) -> None:
++    _init_project(tmp_path)
++    create = runner.invoke(
++        app,
++        [
++            "--cwd",
++            str(tmp_path),
++            "task",
++            "create",
++            "planning-lock",
++            "--slug",
++            "planning-lock",
++            "--description",
++            "Exercise stage-aware lock recovery wording.",
++        ],
++    )
++    assert create.exit_code == 0, create.stdout
++    start = runner.invoke(
++        app,
++        ["--cwd", str(tmp_path), "plan", "start", "--task", "planning-lock"],
++    )
++    assert start.exit_code == 0, start.stdout
++    task_id = resolve_task(tmp_path, "planning-lock").id
++    _overwrite_holder_pid(tmp_path, task_id, pid=999999)
++    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task_id)
++    lock_data = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
++    lock_data["holder"]["pid_scope"] = "owner"
++    lock_path.write_text(yaml.safe_dump(lock_data, sort_keys=False), encoding="utf-8")
++
++    result = runner.invoke(
++        app,
++        ["--cwd", str(tmp_path), "--json", "next-action", "--task", task_id],
++    )
++
++    payload = _json(result)["result"]
++    assert payload["action"] == "repair-lock"
++    assert "Planning lock" in payload["reason"]
++    assert "Implementation lock" not in payload["reason"]
++
++
+ def test_next_action_uses_current_harness_session(
+     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+ ) -> None:

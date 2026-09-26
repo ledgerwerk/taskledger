@@ -1,0 +1,44 @@
+{
+  "candidate_count": 1,
+  "candidates": [
+    {
+      "additions": 885,
+      "deletions": 133,
+      "patch_file": "869a5ed.patch",
+      "patch_sha256": "d5fde8af0a4b5251b419b48758aec407692b88d1e7dab44015725a5f1d9f743d",
+      "paths": [
+        "README.md",
+        "docs/command_contract.md",
+        "docs/usage.md",
+        "skills/taskledger/SKILL.md",
+        "taskledger/cli.py",
+        "taskledger/cli_plan.py",
+        "taskledger/domain/policies.py",
+        "taskledger/services/navigation.py",
+        "taskledger/services/next_action_payload.py",
+        "taskledger/services/plan_editing.py",
+        "taskledger/services/plan_review.py",
+        "taskledger/services/planning_flow.py",
+        "taskledger/services/run_store.py",
+        "taskledger/services/task_repair.py",
+        "taskledger/services/tasks.py",
+        "tests/test_docs_and_skill.py",
+        "tests/test_plan_input_cli.py",
+        "tests/test_plan_revision_workflow.py",
+        "tests/test_service_boundaries.py",
+        "tests/test_taskledger_v2_cli.py"
+      ],
+      "sha": "869a5edc327702408a0f5fe83f30e8b46203b780",
+      "short_sha": "869a5ed",
+      "source_ref": "git:869a5edc327702408a0f5fe83f30e8b46203b780"
+    }
+  ],
+  "git_base_ref": "d17a4522d51ea1faf6ec585c9e8f57476a831025",
+  "git_base_sha": "d17a4522d51ea1faf6ec585c9e8f57476a831025",
+  "git_head_ref": "869a5edc327702408a0f5fe83f30e8b46203b780",
+  "git_head_sha": "869a5edc327702408a0f5fe83f30e8b46203b780",
+  "include_merges": "nontrivial",
+  "object_type": "git_evidence_manifest",
+  "release_version": "v0.6.10",
+  "schema_version": 1
+}

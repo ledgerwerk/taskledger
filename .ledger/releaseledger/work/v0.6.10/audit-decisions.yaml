@@ -1,0 +1,34 @@
+rows:
+  - sha: 869a5edc327702408a0f5fe83f30e8b46203b780
+    inspected: true
+    inspected_paths:
+      - README.md
+      - docs/command_contract.md
+      - docs/usage.md
+      - skills/taskledger/SKILL.md
+      - taskledger/cli.py
+      - taskledger/cli_plan.py
+      - taskledger/domain/policies.py
+      - taskledger/services/navigation.py
+      - taskledger/services/next_action_payload.py
+      - taskledger/services/plan_editing.py
+      - taskledger/services/plan_review.py
+      - taskledger/services/planning_flow.py
+      - taskledger/services/run_store.py
+      - taskledger/services/task_repair.py
+      - taskledger/services/tasks.py
+      - tests/test_docs_and_skill.py
+      - tests/test_plan_input_cli.py
+      - tests/test_plan_revision_workflow.py
+      - tests/test_service_boundaries.py
+      - tests/test_taskledger_v2_cli.py
+    observed_behavior: >-
+      Proposed-plan revisions now validate the candidate before opening a planning run;
+      exports avoid overwriting edited files, and orphaned planning runs expose targeted
+      recovery guidance. Planner runs retain harness identity while approval remains
+      an explicit user decision.
+    public_impact: public
+    decision: accepted
+    target_entry_id: null
+    notes: ""
+    stale: false

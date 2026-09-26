@@ -1,0 +1,43 @@
+schema: releaseledger.entry-batch.v1
+operation: create
+schema_version: 1
+object_type: release_entry_batch
+release_version: v0.6.10
+git_base_ref: d17a4522d51ea1faf6ec585c9e8f57476a831025
+git_base_sha: d17a4522d51ea1faf6ec585c9e8f57476a831025
+git_head_ref: 869a5edc327702408a0f5fe83f30e8b46203b780
+git_head_sha: 869a5edc327702408a0f5fe83f30e8b46203b780
+include_merges: nontrivial
+entries:
+  - kind: changed
+    summary: Improved proposed-plan revision safety with preflight checks, non-overwriting exports, and run-aware recovery guidance
+    status: accepted
+    source_refs:
+      - git:869a5edc327702408a0f5fe83f30e8b46203b780
+    paths:
+      - README.md
+      - docs/command_contract.md
+      - docs/usage.md
+      - skills/taskledger/SKILL.md
+      - taskledger/cli.py
+      - taskledger/cli_plan.py
+      - taskledger/domain/policies.py
+      - taskledger/services/navigation.py
+      - taskledger/services/next_action_payload.py
+      - taskledger/services/plan_editing.py
+      - taskledger/services/plan_review.py
+      - taskledger/services/planning_flow.py
+      - taskledger/services/run_store.py
+      - taskledger/services/task_repair.py
+      - taskledger/services/tasks.py
+      - tests/test_docs_and_skill.py
+      - tests/test_plan_input_cli.py
+      - tests/test_plan_revision_workflow.py
+      - tests/test_service_boundaries.py
+      - tests/test_taskledger_v2_cli.py
+    sources:
+      - git:869a5edc327702408a0f5fe83f30e8b46203b780
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"

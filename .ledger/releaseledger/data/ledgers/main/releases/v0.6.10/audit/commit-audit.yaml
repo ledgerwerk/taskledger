@@ -1,0 +1,74 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.6.10
+git_base_ref: v0.6.9
+git_base_sha: d17a4522d51ea1faf6ec585c9e8f57476a831025
+git_head_ref: HEAD
+git_head_sha: 869a5edc327702408a0f5fe83f30e8b46203b780
+git_range: d17a4522d51ea1faf6ec585c9e8f57476a831025..869a5edc327702408a0f5fe83f30e8b46203b780
+commit_count: 1
+rows:
+  - sha: 869a5edc327702408a0f5fe83f30e8b46203b780
+    source_ref: git:869a5edc327702408a0f5fe83f30e8b46203b780
+    short_sha: 869a5ed
+    changed_paths:
+      - README.md
+      - docs/command_contract.md
+      - docs/usage.md
+      - skills/taskledger/SKILL.md
+      - taskledger/cli.py
+      - taskledger/cli_plan.py
+      - taskledger/domain/policies.py
+      - taskledger/services/navigation.py
+      - taskledger/services/next_action_payload.py
+      - taskledger/services/plan_editing.py
+      - taskledger/services/plan_review.py
+      - taskledger/services/planning_flow.py
+      - taskledger/services/run_store.py
+      - taskledger/services/task_repair.py
+      - taskledger/services/tasks.py
+      - tests/test_docs_and_skill.py
+      - tests/test_plan_input_cli.py
+      - tests/test_plan_revision_workflow.py
+      - tests/test_service_boundaries.py
+      - tests/test_taskledger_v2_cli.py
+    stats:
+      files_changed: 20
+      insertions: 885
+      deletions: 133
+    inspected: true
+    inspected_paths:
+      - README.md
+      - docs/command_contract.md
+      - docs/usage.md
+      - skills/taskledger/SKILL.md
+      - taskledger/cli.py
+      - taskledger/cli_plan.py
+      - taskledger/domain/policies.py
+      - taskledger/services/navigation.py
+      - taskledger/services/next_action_payload.py
+      - taskledger/services/plan_editing.py
+      - taskledger/services/plan_review.py
+      - taskledger/services/planning_flow.py
+      - taskledger/services/run_store.py
+      - taskledger/services/task_repair.py
+      - taskledger/services/tasks.py
+      - tests/test_docs_and_skill.py
+      - tests/test_plan_input_cli.py
+      - tests/test_plan_revision_workflow.py
+      - tests/test_service_boundaries.py
+      - tests/test_taskledger_v2_cli.py
+    observed_behavior:
+      Proposed-plan revisions now validate the candidate before opening
+      a planning run; exports avoid overwriting edited files, and orphaned planning
+      runs expose targeted recovery guidance. Planner runs retain harness identity while
+      approval remains an explicit user decision.
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject: "feat: improved plan phase"
+    target_entry_id: entry-0001
+    notes: ""
