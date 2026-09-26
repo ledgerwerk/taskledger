@@ -14,6 +14,7 @@ from taskledger.services.task_events import (
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.locks import lock_status, read_lock, remove_lock
 from taskledger.storage.task_store import (
+    list_runs,
     resolve_task,
     resolve_v2_paths,
     task_lock_path,
@@ -76,6 +77,21 @@ def break_lock(
             "Run `taskledger next-action` to see what to do next.",
             exit_code=EXIT_CODE_MISSING,
         )
+    matching_run = next(
+        (
+            run
+            for run in list_runs(workspace_root, task.id)
+            if run.status == "running"
+            and lock.run_id == run.run_id
+            and lock.stage
+            == {
+                "planning": "planning",
+                "implementation": "implementing",
+                "validation": "validating",
+            }.get(run.run_type)
+        ),
+        None,
+    )
     broken_lock = replace(
         lock,
         broken_at=utc_now_iso(),
@@ -98,6 +114,29 @@ def break_lock(
     )
     remove_lock(lock_path)
     rebuild_v2_indexes(paths)
+    recovery_details: dict[str, object] = {}
+    if matching_run is not None:
+        if matching_run.run_type == "planning":
+            next_command = (
+                f"taskledger repair run --task {task.id} "
+                f"--run {matching_run.run_id} "
+                '--reason "Planning lock holder was no longer valid."'
+            )
+        elif matching_run.run_type == "implementation":
+            next_command = (
+                f"taskledger implement resume --task {task.id} "
+                '--reason "Reacquire implementation lock for existing running run."'
+            )
+        else:
+            next_command = f"taskledger next-action --task {task.id}"
+        recovery_details = {
+            "orphaned_run": {
+                "run_id": matching_run.run_id,
+                "run_type": matching_run.run_type,
+                "status": matching_run.status,
+            },
+            "next_commands": [next_command],
+        }
     return {
         "ok": True,
         "command": "lock break",
@@ -105,6 +144,7 @@ def break_lock(
         "status_stage": task.status_stage,
         "changed": True,
         "warnings": [],
+        **recovery_details,
         "lock": broken_lock.to_dict(),
         "reason": reason,
         "audit_path": rel_path,

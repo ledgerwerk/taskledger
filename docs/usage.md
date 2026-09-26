@@ -176,15 +176,25 @@ taskledger plan lint --version 1
 taskledger plan review --version 1
 ```
 
-Revising a proposed plan safely:
+Revising a proposed plan safely: prepare the draft before opening a revision run. Export to a separate workspace file so an existing `plan.md` or local edits are not overwritten:
 
 ```bash
-taskledger plan revise
-taskledger plan export --version latest --file ./plan.md
-# edit ./plan.md (never edit .taskledger/ directly)
-taskledger plan upsert --file ./plan.md
+taskledger plan export --version latest --file ./plan.revision.md
+# edit ./plan.revision.md (never edit .taskledger/ directly)
+taskledger plan check --file ./plan.revision.md
+taskledger plan upsert --auto-revise --file ./plan.revision.md
 taskledger plan diff --from 1 --to 2
+taskledger plan review --version 2
 ```
+
+If `./plan.md` is already edited, check and submit it directly:
+
+```bash
+taskledger plan check --file ./plan.md
+taskledger plan upsert --auto-revise --file ./plan.md
+```
+
+Auto-revision only proposes a new version; it does not approve it. Implementation still requires explicit user approval.
 
 For structured scope trims, use:
 

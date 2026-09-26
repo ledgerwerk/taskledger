@@ -342,6 +342,13 @@ def _primary_command_for_next_item(
     if kind == "task" and isinstance(item_id, str):
         if action in ("implement-resume", "expired-lock-resume"):
             return _implement_resume_command(item_id)
+        if action == "repair-run-state":
+            run_id = next_item.get("run_id")
+            if isinstance(run_id, str):
+                return (
+                    f"taskledger repair run --task {item_id} --run {run_id} "
+                    '--reason "Finish orphaned planning run."'
+                )
         if action == "repair-active-stage":
             return f"taskledger task show --task {item_id}"
     if kind == "handoff" and isinstance(item_id, str):
@@ -482,22 +489,30 @@ def _commands_for_next_item(
                         ),
                     )
                 )
-                commands.append(
-                    _command(
-                        "revise",
-                        "Revise proposed plan",
-                        "taskledger plan revise",
-                    )
-                )
-                commands.append(
-                    _command(
-                        "export",
-                        "Export editable plan",
-                        (
-                            "taskledger plan export "
-                            f"--version {version} --file ./plan.md"
+                commands.extend(
+                    [
+                        _command(
+                            "export",
+                            "Export editable revision draft",
+                            (
+                                "taskledger plan export "
+                                f"--version {version} --file ./plan.revision.md"
+                            ),
                         ),
-                    )
+                        _command(
+                            "check",
+                            "Check revision draft",
+                            "taskledger plan check --file ./plan.revision.md",
+                        ),
+                        _command(
+                            "revise",
+                            "Propose revised plan",
+                            (
+                                "taskledger plan upsert --auto-revise "
+                                "--file ./plan.revision.md"
+                            ),
+                        ),
+                    ]
                 )
             return commands
     if item_kind == "task" and isinstance(item_id, str):
@@ -513,6 +528,26 @@ def _commands_for_next_item(
                     "context",
                     "Show implementation checklist",
                     "taskledger implement checklist",
+                ),
+            ]
+        if action == "repair-run-state":
+            primary = _primary_command_for_next_item(action, next_item)
+            label = (
+                "Finish orphaned planning run"
+                if next_item.get("run_type") == "planning"
+                else "Inspect orphaned run state"
+            )
+            return [
+                _command(
+                    "repair",
+                    label,
+                    primary or "taskledger doctor",
+                    primary=True,
+                ),
+                _command(
+                    "context",
+                    "Show current task guidance",
+                    f"taskledger next-action --task {item_id}",
                 ),
             ]
         if action == "repair-active-stage":

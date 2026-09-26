@@ -7,7 +7,17 @@ import pytest
 from typer.testing import CliRunner
 
 from taskledger.cli import app
-from taskledger.storage.task_store import resolve_task
+from taskledger.services.lock_diagnostics import (
+    CLASSIFICATION_ACTIVE_DEAD_LOCAL_PROCESS,
+    diagnose_lock,
+)
+from taskledger.storage.locks import read_lock
+from taskledger.storage.task_store import (
+    list_runs,
+    resolve_task,
+    resolve_v2_paths,
+    task_lock_path,
+)
 from tests.support.builders import init_workspace
 
 pytestmark = [pytest.mark.cli, pytest.mark.integration, pytest.mark.slow]
@@ -145,9 +155,9 @@ def test_plan_upsert_rejects_taskledger_storage_file(tmp_path: Path) -> None:
     assert "Taskledger storage" in payload["error"]["message"]
     next_commands = payload["error"]["details"]["next_commands"]
     assert next_commands == [
-        "taskledger plan revise",
-        "taskledger plan export --version latest --file ./plan.md",
-        "taskledger plan upsert --file ./plan.md",
+        "taskledger plan export --version latest --file ./plan.revision.md",
+        "taskledger plan check --file ./plan.revision.md",
+        "taskledger plan upsert --auto-revise --file ./plan.revision.md",
     ]
 
 
@@ -196,7 +206,13 @@ def test_plan_propose_and_regenerate_reject_taskledger_storage_file(
 # specmason: req=REQ-0039 ac=AC-0449
 def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
     _setup_plan_review_task(tmp_path)
-    exported = tmp_path / "plan.md"
+    review_v1 = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "plan", "review", "--version", "1"],
+    )
+    assert review_v1.exit_code == 0, review_v1.stdout
+    assert "| Approval readiness | Ready |" in review_v1.stdout
+    exported = tmp_path / "plan.revision.md"
 
     export_result = runner.invoke(
         app,
@@ -213,17 +229,36 @@ def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
     )
     assert export_result.exit_code == 0, export_result.stdout
 
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "revise"]).exit_code == 0
-
     updated_text = exported.read_text(encoding="utf-8").replace(
         "Remove out-of-scope release criteria.",
         "Remove out-of-scope release and CI criteria.",
     )
     exported.write_text(updated_text, encoding="utf-8")
+    check_result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "plan",
+            "check",
+            "--file",
+            str(exported),
+        ],
+    )
+    assert check_result.exit_code == 0, check_result.stdout
 
     upsert_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "plan", "upsert", "--file", str(exported)],
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "plan",
+            "upsert",
+            "--auto-revise",
+            "--file",
+            str(exported),
+        ],
     )
     assert upsert_result.exit_code == 0, upsert_result.stdout
     upsert_payload = _json(upsert_result)
@@ -249,6 +284,15 @@ def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
         show_v2["result"]["plan"]["criteria"][1]["text"]
         == "Remove out-of-scope release and CI criteria."
     )
+    task = resolve_task(tmp_path, "plan-revision")
+    revision_run_id = str(upsert_payload["result"]["revision_run_id"])
+    revision_run = next(
+        run for run in list_runs(tmp_path, task.id) if run.run_id == revision_run_id
+    )
+    assert revision_run.status == "finished"
+    assert read_lock(task_lock_path(resolve_v2_paths(tmp_path), task.id)) is None
+    assert task.status_stage == "plan_review"
+    assert task.accepted_plan_version is None
 
 
 # specmason: req=REQ-0039 ac=AC-0447
@@ -388,11 +432,10 @@ def test_plan_upsert_without_active_planning_suggests_revision_workflow(
     assert upsert.exit_code == 3, upsert.stdout
     payload = _json(upsert)
     assert "Plan proposals require active planning." in payload["error"]["message"]
-    assert "taskledger plan revise" in payload["error"]["message"]
+    assert "plan upsert --auto-revise" in payload["error"]["message"]
     assert payload["error"]["details"]["next_commands"] == [
-        "taskledger plan revise",
-        "taskledger plan export --version latest --file ./plan.md",
-        "taskledger plan upsert --file ./plan.md",
+        "taskledger plan check --file ./plan.md",
+        "taskledger plan upsert --auto-revise --file ./plan.md",
     ]
 
 
@@ -408,8 +451,202 @@ def test_next_action_plan_review_mentions_revision_commands(tmp_path: Path) -> N
         'taskledger plan accept --version 1 --note "User approved in harness."'
         in next_action.stdout
     )
-    assert "Revise proposed plan: taskledger plan revise" in next_action.stdout
+    assert "Revise proposed plan: taskledger plan revise" not in next_action.stdout
     assert (
-        "Export editable plan: taskledger plan export --version 1 --file ./plan.md"
+        "Export editable revision draft: "
+        "taskledger plan export --version 1 --file ./plan.revision.md"
         in next_action.stdout
     )
+    assert (
+        "Check revision draft: taskledger plan check --file ./plan.revision.md"
+        in next_action.stdout
+    )
+    assert (
+        "Propose revised plan: "
+        "taskledger plan upsert --auto-revise --file ./plan.revision.md"
+        in next_action.stdout
+    )
+
+
+def test_plan_export_is_idempotent_without_overwriting_edits(tmp_path: Path) -> None:
+    _setup_plan_review_task(tmp_path)
+    exported = tmp_path / "plan.revision.md"
+    args = [
+        "--cwd",
+        str(tmp_path),
+        "--json",
+        "plan",
+        "export",
+        "--version",
+        "latest",
+        "--file",
+        str(exported),
+    ]
+
+    first = runner.invoke(app, args)
+    assert first.exit_code == 0, first.stdout
+    original = exported.read_text(encoding="utf-8")
+
+    repeated = runner.invoke(app, args)
+    assert repeated.exit_code == 0, repeated.stdout
+    assert _json(repeated)["result"]["unchanged"] is True
+
+    exported.write_text("user edits\n", encoding="utf-8")
+    refusal = runner.invoke(app, args)
+    assert refusal.exit_code != 0
+    assert "Refusing to overwrite" in _json(refusal)["error"]["message"]
+    assert exported.read_text(encoding="utf-8") == "user edits\n"
+
+    overwritten = runner.invoke(app, [*args, "--overwrite"])
+    assert overwritten.exit_code == 0, overwritten.stdout
+    assert exported.read_text(encoding="utf-8") == original
+
+
+def test_auto_revise_rejects_invalid_candidate_before_starting_run(
+    tmp_path: Path,
+) -> None:
+    _setup_plan_review_task(tmp_path)
+    task = resolve_task(tmp_path, "plan-revision")
+    runs_before = list_runs(tmp_path, task.id)
+    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task.id)
+    invalid_plan = tmp_path / "invalid-plan.md"
+    invalid_plan.write_text("---\nacceptance_criteria: [\n---\n", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "plan",
+            "upsert",
+            "--auto-revise",
+            "--file",
+            str(invalid_plan),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert list_runs(tmp_path, task.id) == runs_before
+    assert read_lock(lock_path) is None
+
+
+def test_auto_revise_failure_reports_run_specific_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _setup_plan_review_task(tmp_path)
+    plan_file = tmp_path / "edited-plan.md"
+    plan_file.write_text(PLAN_V1, encoding="utf-8")
+
+    def fail_proposal(*args: object, **kwargs: object) -> dict[str, object]:
+        raise RuntimeError("injected proposal failure")
+
+    monkeypatch.setattr("taskledger.services.planning_flow.propose_plan", fail_proposal)
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "--json",
+            "plan",
+            "upsert",
+            "--auto-revise",
+            "--file",
+            str(plan_file),
+        ],
+    )
+
+    assert result.exit_code != 0, result.stdout
+    error = _json(result)["error"]
+    assert error["code"] == "PLAN_REVISION_INCOMPLETE"
+    revision_run = error["details"]["revision_run"]
+    assert revision_run["run_id"].startswith("run-")
+    assert revision_run["status"] == "running"
+    assert revision_run["has_matching_lock"] is True
+    assert error["details"]["next_commands"] == [
+        f"taskledger next-action --task {resolve_task(tmp_path, 'plan-revision').id}"
+    ]
+
+
+@pytest.mark.parametrize("entrypoint", ["start", "revise", "upsert", "amend"])
+@pytest.mark.parametrize(
+    ("harness_variable", "harness_name"),
+    [
+        ("PI_VERSION", "pi"),
+        ("CODEX_VERSION", "codex"),
+        ("OPENCODE_VERSION", "opencode"),
+    ],
+)
+def test_planning_run_entry_paths_preserve_harness_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    entrypoint: str,
+    harness_variable: str,
+    harness_name: str,
+) -> None:
+    _setup_plan_review_task(tmp_path)
+    for variable in (
+        "TASKLEDGER_ACTOR_TYPE",
+        "TASKLEDGER_ACTOR_NAME",
+        "TASKLEDGER_ACTOR_ROLE",
+        "TASKLEDGER_HARNESS",
+        "TASKLEDGER_OWNER_PID",
+        "TASKLEDGER_HARNESS_PID",
+        "CODEX_VERSION",
+        "OPENCODE_VERSION",
+        "PI_VERSION",
+        "PI_SESSION_ID",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv(harness_variable, "test")
+    monkeypatch.setenv("TASKLEDGER_SESSION_ID", "session-123")
+
+    command = ["plan", entrypoint]
+    if entrypoint == "upsert":
+        draft = tmp_path / "edited-plan.md"
+        draft.write_text(PLAN_V1, encoding="utf-8")
+        command = [
+            "plan",
+            "upsert",
+            "--auto-revise",
+            "--file",
+            str(draft),
+        ]
+    elif entrypoint == "amend":
+        command = ["plan", "amend", "--reason", "Verify harness identity."]
+
+    result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", *command])
+    assert result.exit_code == 0, result.stdout
+
+    task = resolve_task(tmp_path, "plan-revision")
+    planning_runs = [
+        run for run in list_runs(tmp_path, task.id) if run.run_type == "planning"
+    ]
+    revision_run = max(
+        planning_runs, key=lambda run: int(run.run_id.removeprefix("run-"))
+    )
+    assert revision_run.actor.tool == harness_name
+    assert revision_run.actor.session_id == "session-123"
+    assert revision_run.actor.pid is None
+    assert revision_run.actor.command_pid is not None
+    assert revision_run.actor.pid_scope == "unverifiable_harness"
+    assert revision_run.harness is not None
+    assert revision_run.harness.name == harness_name
+    assert revision_run.harness.session_id == "session-123"
+
+    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task.id)
+    lock = read_lock(lock_path)
+    if entrypoint in {"start", "revise"}:
+        assert lock is not None
+        assert lock.holder.pid is None
+        assert lock.holder.command_pid is not None
+        assert lock.holder.pid_scope == "unverifiable_harness"
+        assert lock.harness is not None and lock.harness.name == harness_name
+        diagnostics = diagnose_lock(
+            lock,
+            current_host=lock.holder.host or "unknown",
+        )
+        assert diagnostics.classification != CLASSIFICATION_ACTIVE_DEAD_LOCAL_PROCESS
+    else:
+        assert lock is None
+        assert revision_run.status == "finished"

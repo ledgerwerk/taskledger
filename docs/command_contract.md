@@ -97,7 +97,23 @@ storage, and `taskledger plan amend` applies structured plan-review edits:
 ```bash
 taskledger plan export [--task TASK_REF] [--version latest|N] [--file PATH] [--overwrite] [--stdout]
 taskledger plan amend [--task TASK_REF] [--drop-criterion CRITERION_ID ...] [--drop-todo TODO_ID ...] [--remove-file PATH ...] --reason "..."
+taskledger plan upsert [--task TASK_REF] [--file PATH] [--auto-revise]
 ```
+
+Plan revision preparation should happen before submitting a revision, so export or
+check failures do not leave an active planning run:
+
+```bash
+taskledger plan export --version latest --file ./plan.revision.md
+# edit ./plan.revision.md
+taskledger plan check --file ./plan.revision.md
+taskledger plan upsert --auto-revise --file ./plan.revision.md
+```
+
+When an edited `./plan.md` already exists, check and submit it directly with
+`plan upsert --auto-revise --file ./plan.md`; do not export over it. Auto-revision
+proposes a version only. Explicit user approval is still required before
+implementation.
 
 Plan proposal commands that accept `--file` reject file paths under
 `.taskledger/` because that directory is private durable ledger state.

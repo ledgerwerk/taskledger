@@ -985,8 +985,66 @@ def test_v2_lock_break_and_expired_lock_report(tmp_path: Path) -> None:
         ],
     )
     assert break_result.exit_code == 0
-    assert _json(break_result)["result"]["command"] == "lock break"
+    break_payload = _json(break_result)["result"]
+    run_id = str(payload["run_id"])
+    assert break_payload["command"] == "lock break"
+    assert break_payload["orphaned_run"] == {
+        "run_id": run_id,
+        "run_type": "planning",
+        "status": "running",
+    }
+    assert break_payload["next_commands"] == [
+        (
+            f"taskledger repair run --task task-0001 --run {run_id} "
+            '--reason "Planning lock holder was no longer valid."'
+        )
+    ]
     assert not lock_path.exists()
+
+
+def test_repair_lock_human_output_includes_orphan_run_recovery(
+    tmp_path: Path,
+) -> None:
+    _init_project(tmp_path)
+    create = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "task",
+            "create",
+            "planning-lock",
+            "--slug",
+            "planning-lock",
+            "--description",
+            "Exercise run-aware lock repair output.",
+        ],
+    )
+    assert create.exit_code == 0, create.stdout
+    start = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "plan", "start", "--task", "planning-lock"],
+    )
+    assert start.exit_code == 0, start.stdout
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "repair",
+            "lock",
+            "--task",
+            "planning-lock",
+            "--reason",
+            "Planning lock holder was no longer valid.",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "matching planning run run-0001 is still marked running" in result.stdout
+    assert "Finish this orphaned planning run" in result.stdout
+    assert "taskledger repair run --task task-0001 --run run-0001" in result.stdout
 
 
 # specmason: req=REQ-0064 ac=AC-0687
@@ -1128,6 +1186,32 @@ def test_next_action_recommends_repair_for_orphaned_planning_run(
     assert blocker["running_run"]["run_type"] == "planning"
 
 
+# specmason: req=REQ-0064 ac=AC-0708
+def test_next_action_repairs_orphaned_planning_run_before_plan_review(
+    tmp_path: Path,
+) -> None:
+    task_id, run_id = _prepare_approved_task_with_orphaned_planning_run(tmp_path)
+    task = resolve_task(tmp_path, task_id)
+    save_task(
+        tmp_path,
+        replace(task, status_stage="plan_review", accepted_plan_version=None),
+    )
+
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "--json", "next-action", "--task", task_id],
+    )
+
+    payload = _json(result)["result"]
+    assert payload["action"] == "repair-run-state"
+    assert payload["next_command"] == (
+        f"taskledger repair run --task {task_id} --run {run_id} "
+        '--reason "Finish orphaned planning run."'
+    )
+    assert payload["blocking"][0]["running_run"]["has_matching_lock"] is False
+    assert payload["commands"][0]["command"] == payload["next_command"]
+
+
 # specmason: req=REQ-0064 ac=AC-0682
 def test_can_implement_blocker_names_orphaned_planning_run(tmp_path: Path) -> None:
     _, run_id = _prepare_approved_task_with_orphaned_planning_run(tmp_path)
@@ -1189,6 +1273,9 @@ def test_repair_run_finishes_orphaned_planning_run(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     assert payload["result"]["action"] == "finished_orphan_run"
+    assert payload["result"]["next_command"] == (
+        f"taskledger next-action --task {task_id}"
+    )
     assert resolve_run(tmp_path, task_id, run_id).status == "finished"
 
 
@@ -2540,6 +2627,48 @@ def test_next_action_dead_pid_lock_routes_to_repair_lock(
     blocker_diag = lock_blockers[0].get("diagnostics", {})
     assert blocker_diag.get("classification") == "active_dead_local_process"
     assert "is no longer running" in lock_blockers[0].get("message", "")
+
+
+def test_next_action_dead_planning_lock_uses_stage_aware_reason(
+    tmp_path: Path,
+) -> None:
+    _init_project(tmp_path)
+    create = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "task",
+            "create",
+            "planning-lock",
+            "--slug",
+            "planning-lock",
+            "--description",
+            "Exercise stage-aware lock recovery wording.",
+        ],
+    )
+    assert create.exit_code == 0, create.stdout
+    start = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "plan", "start", "--task", "planning-lock"],
+    )
+    assert start.exit_code == 0, start.stdout
+    task_id = resolve_task(tmp_path, "planning-lock").id
+    _overwrite_holder_pid(tmp_path, task_id, pid=999999)
+    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task_id)
+    lock_data = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    lock_data["holder"]["pid_scope"] = "owner"
+    lock_path.write_text(yaml.safe_dump(lock_data, sort_keys=False), encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["--cwd", str(tmp_path), "--json", "next-action", "--task", task_id],
+    )
+
+    payload = _json(result)["result"]
+    assert payload["action"] == "repair-lock"
+    assert "Planning lock" in payload["reason"]
+    assert "Implementation lock" not in payload["reason"]
 
 
 def test_next_action_uses_current_harness_session(

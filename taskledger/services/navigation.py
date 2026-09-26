@@ -45,6 +45,7 @@ from taskledger.services.tasks import (
     _cli_error,
     _current_lock,
     _dependency_blockers,
+    _lock_matches_run,
     _optional_run,
     _planning_template_hints,
     _resumable_implementation_run,
@@ -183,15 +184,53 @@ def next_action_for_task(
             workspace_root, task
         )
     else:
-        (
-            action,
-            reason,
-            next_item,
-            status_blockers,
-            status_progress,
-        ) = _inactive_status_next_action(workspace_root, task, lock)
-        blockers.extend(status_blockers)
-        progress.update(status_progress)
+        orphaned_planning_run = next(
+            (
+                run
+                for run in runs
+                if run.status == "running"
+                and run.run_type == "planning"
+                and not _lock_matches_run(lock, run)
+            ),
+            None,
+        )
+        if orphaned_planning_run is not None:
+            run_id = orphaned_planning_run.run_id
+            recovery_command = (
+                f"taskledger repair run --task {task.id} --run {run_id} "
+                '--reason "Finish orphaned planning run."'
+            )
+            next_item = _task_next_item(task)
+            next_item.update(
+                {"run_id": run_id, "run_type": orphaned_planning_run.run_type}
+            )
+            run_details = _running_run_details(task, orphaned_planning_run, lock)
+            run_details["suggested_command"] = recovery_command
+            blockers.append(
+                {
+                    "kind": "running_run",
+                    "message": (
+                        f"Planning run {run_id} is still marked running but "
+                        "has no matching active lock."
+                    ),
+                    **run_details,
+                }
+            )
+            action = "repair-run-state"
+            reason = (
+                f"Planning run {run_id} is still marked running but has no "
+                "matching lock."
+            )
+        else:
+            (
+                action,
+                reason,
+                next_item,
+                status_blockers,
+                status_progress,
+            ) = _inactive_status_next_action(workspace_root, task, lock)
+            blockers.extend(status_blockers)
+            progress.update(status_progress)
     if lock is not None and active_stage is None:
         if lock_is_expired(lock):
             from taskledger.services.next_action_model import (
@@ -234,8 +273,13 @@ def next_action_for_task(
         and lock_diagnostics_dict.get("classification") == "active_dead_local_process"
     ):
         action = "repair-lock"
+        stage_label = {
+            "planning": "Planning",
+            "implementing": "Implementation",
+            "validating": "Validation",
+        }.get(lock.stage, "Task")
         reason = (
-            "Implementation lock is active but the recorded holder "
+            f"{stage_label} lock is active but the recorded holder "
             "process is not running."
         )
         blockers.append(

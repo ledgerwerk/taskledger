@@ -487,6 +487,9 @@ def upsert_plan(
     from_answers: bool = False,
     allow_open_questions: bool = False,
     auto_revise: bool = False,
+    runtime: CommandRuntime | None = None,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
 ) -> dict[str, object]:
     from taskledger.services.planning_flow import upsert_plan as _upsert_plan
 
@@ -498,6 +501,9 @@ def upsert_plan(
         from_answers=from_answers,
         allow_open_questions=allow_open_questions,
         auto_revise=auto_revise,
+        runtime=runtime,
+        actor=actor,
+        harness=harness,
     )
 
 
@@ -525,6 +531,8 @@ def amend_plan(
     remove_files: tuple[str, ...] = (),
     reason: str,
     runtime: CommandRuntime | None = None,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
 ) -> dict[str, object]:
     from taskledger.services.planning_flow import amend_plan as _amend_plan
 
@@ -536,6 +544,8 @@ def amend_plan(
         remove_files=remove_files,
         reason=reason,
         runtime=runtime,
+        actor=actor,
+        harness=harness,
     )
 
 
@@ -686,13 +696,26 @@ def reject_plan(
     )
 
 
-def revise_plan(workspace_root: Path, task_ref: str) -> dict[str, object]:
+def revise_plan(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    runtime: CommandRuntime | None = None,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
+) -> dict[str, object]:
     task = resolve_task(workspace_root, task_ref)
     _ensure_not_archived(task, operation="revise plan for")
     _enforce_decision(
         plan_revise_decision(task, _current_lock(workspace_root, task.id))
     )
-    return start_planning(workspace_root, task_ref)
+    return start_planning(
+        workspace_root,
+        task_ref,
+        runtime=runtime,
+        actor=actor,
+        harness=harness,
+    )
 
 
 def add_question(
@@ -2144,8 +2167,7 @@ def _render_plan_template(
         ),
         "---",
         "",
-        "<!-- Required: keep this body. It is the implementation handoff context.",
-        "     Run `taskledger plan check --file ./plan.md` before upsert. -->",
+        "<!-- Human-facing implementation handoff. -->",
         "",
         "# <short approval plan title>",
         "",
@@ -2171,21 +2193,6 @@ def _render_plan_template(
         "",
         "- <nearby cleanup or behavior change intentionally excluded>",
         "",
-        "## Plan input checklist before upsert",
-        "",
-        "- [ ] I ran `taskledger plan check --file plan.md`.",
-        "- [ ] Every acceptance criterion uses `text`, not `description`.",
-        (
-            "- [ ] Todo mappings use supported keys only: "
-            "`id`, `id_hint`, `text`, `mandatory`, `validation_hint`, "
-            "`worker_step`."
-        ),
-        (
-            "- [ ] File references are plan-level `files:` entries "
-            "or are mentioned in todo text/body; "
-            "todo-level `files:` is not captured."
-        ),
-        "- [ ] The Markdown body explains enough context for implementation handoff.",
         "",
     ]
     if answered_questions:

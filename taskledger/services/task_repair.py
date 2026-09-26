@@ -149,7 +149,7 @@ def repair_orphaned_planning_run(
         "run_type": run.run_type,
         "previous_status": run.status,
         "new_status": "finished",
-        "next_command": "taskledger implement start",
+        "next_command": f"taskledger next-action --task {task.id}",
     }
 
 

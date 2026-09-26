@@ -1225,7 +1225,33 @@ def repair_lock_command(
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-    emit_payload(ctx, payload, human=f"repaired lock for {payload['task_id']}")
+    human = f"repaired lock for {payload['task_id']}"
+    orphaned_run = payload.get("orphaned_run")
+    next_commands = payload.get("next_commands")
+    if (
+        isinstance(orphaned_run, dict)
+        and isinstance(next_commands, list)
+        and next_commands
+        and isinstance(next_commands[0], str)
+    ):
+        run_id = orphaned_run.get("run_id", "unknown")
+        run_type = orphaned_run.get("run_type", "task")
+        if run_type == "planning":
+            follow_up = (
+                "Finish this orphaned planning run before starting or revising "
+                "planning again:"
+            )
+        elif run_type == "implementation":
+            follow_up = (
+                "Resume the existing implementation run before starting new work:"
+            )
+        else:
+            follow_up = "Inspect the task's next action before continuing:"
+        human += (
+            f"\n\nThe matching {run_type} run {run_id} is still marked running.\n"
+            f"{follow_up}\n  {next_commands[0]}"
+        )
+    emit_payload(ctx, payload, human=human)
 
 
 @repair_app.command("locks")

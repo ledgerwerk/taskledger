@@ -423,15 +423,25 @@ def _review_commands(version: int) -> list[dict[str, object]]:
             "primary": True,
         },
         {
-            "kind": "revise",
-            "label": "Revise proposed plan",
-            "command": "taskledger plan revise",
+            "kind": "export",
+            "label": "Export editable revision draft",
+            "command": (
+                f"taskledger plan export --version {version} --file ./plan.revision.md"
+            ),
             "primary": False,
         },
         {
-            "kind": "export",
-            "label": "Export editable plan",
-            "command": f"taskledger plan export --version {version} --file ./plan.md",
+            "kind": "check",
+            "label": "Check revision draft",
+            "command": "taskledger plan check --file ./plan.revision.md",
+            "primary": False,
+        },
+        {
+            "kind": "revise",
+            "label": "Propose revised plan",
+            "command": (
+                "taskledger plan upsert --auto-revise --file ./plan.revision.md"
+            ),
             "primary": False,
         },
     ]

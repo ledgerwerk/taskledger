@@ -200,6 +200,13 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/lock_inventory.py::build_lock_inventory:except-2": (
         "Lock inventory preserves lock diagnosis failures for diagnostics."
     ),
+    "taskledger/services/planning_flow.py::upsert_plan:except-1": (
+        "Auto-revision reports recovery when run creation partially succeeds."
+    ),
+    "taskledger/services/planning_flow.py::upsert_plan:except-2": (
+        "Auto-revision preserves recovery details when plan proposal fails "
+        "after opening a planning run."
+    ),
     "taskledger/storage/ledger_config.py::load_ledger_config:except-1": (
         "Ledger config loader reports parse/runtime differences consistently "
         "across Python versions."

@@ -270,6 +270,17 @@ def upsert_command(
     state = cli_state_from_context(ctx)
     try:
         task = resolve_cli_task(state.cwd, task_ref)
+        resolved_actor = None
+        resolved_harness = None
+        if auto_revise:
+            resolved_actor, resolved_harness = resolve_cli_actor_harness(
+                actor=None,
+                actor_name=None,
+                actor_role="planner",
+                harness=None,
+                session_id=None,
+                workspace_root=state.cwd,
+            )
         payload = upsert_plan(
             state.cwd,
             task.id,
@@ -278,6 +289,9 @@ def upsert_command(
             from_answers=from_answers,
             allow_open_questions=allow_open_questions,
             auto_revise=auto_revise,
+            runtime=state.runtime,
+            actor=resolved_actor,
+            harness=resolved_harness,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)
@@ -425,6 +439,24 @@ def export_command(
         if output is not None:
             target = output.expanduser()
             if target.exists() and not overwrite:
+                try:
+                    existing_text = target.read_text(encoding="utf-8")
+                except (OSError, UnicodeError) as exc:
+                    raise LaunchError(
+                        f"Failed to read existing {target}: {exc}"
+                    ) from exc
+                if existing_text == plan_text:
+                    emit_payload(
+                        ctx,
+                        {
+                            **payload,
+                            "output_path": str(target),
+                            "unchanged": True,
+                        },
+                        human=f"editable plan already up to date at {target}",
+                        result_type="plan_export",
+                    )
+                    return
                 raise LaunchError(
                     f"Refusing to overwrite {target}. Use --overwrite to replace it."
                 )
@@ -596,7 +628,21 @@ def revise_command(
     state = cli_state_from_context(ctx)
     try:
         task = resolve_cli_task(state.cwd, task_ref)
-        payload = revise_plan(state.cwd, task.id)
+        resolved_actor, resolved_harness = resolve_cli_actor_harness(
+            actor=None,
+            actor_name=None,
+            actor_role="planner",
+            harness=None,
+            session_id=None,
+            workspace_root=state.cwd,
+        )
+        payload = revise_plan(
+            state.cwd,
+            task.id,
+            runtime=state.runtime,
+            actor=resolved_actor,
+            harness=resolved_harness,
+        )
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
@@ -623,6 +669,14 @@ def amend_command(
     state = cli_state_from_context(ctx)
     try:
         task = resolve_cli_task(state.cwd, task_ref)
+        resolved_actor, resolved_harness = resolve_cli_actor_harness(
+            actor=None,
+            actor_name=None,
+            actor_role="planner",
+            harness=None,
+            session_id=None,
+            workspace_root=state.cwd,
+        )
         payload = amend_plan(
             state.cwd,
             task.id,
@@ -631,6 +685,8 @@ def amend_command(
             remove_files=tuple(remove_file or ()),
             reason=reason,
             runtime=state.runtime,
+            actor=resolved_actor,
+            harness=resolved_harness,
         )
     except LaunchError as exc:
         emit_error(ctx, exc)
@@ -853,6 +909,10 @@ def render_plan_input_check(payload: dict[str, object]) -> str:
     lines += [
         "",
         "Next: taskledger plan upsert --file ./plan.md",
+        (
+            "For a proposed-plan revision: "
+            "taskledger plan upsert --auto-revise --file ./plan.md"
+        ),
         "Schema: taskledger plan schema",
     ]
     return "\n".join(lines)

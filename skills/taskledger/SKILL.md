@@ -216,14 +216,16 @@ not create changelog entries, render changelog context, or edit `CHANGELOG.md`.
 14. If answered questions exist, write the next plan with `taskledger plan upsert --from-answers --file ./plan.md`.
 15. Use `taskledger plan upsert --file ./plan.md` for plans that are not based on newly answered questions.
 16. Never edit `.taskledger/` files directly. Treat `.taskledger/` as Taskledger private durable state.
-17. To revise a proposed plan in `plan_review`, run:
+17. To revise a proposed plan in `plan_review`, prepare the complete draft before entering revision planning:
 
-- `taskledger plan revise`
-- `taskledger plan export --version latest --file ./plan.md`
-- edit `./plan.md`
-- `taskledger plan check --file ./plan.md`
-- `taskledger plan upsert --file ./plan.md`
-- For simple structured removals, prefer `taskledger plan amend ... --reason "..."`
+- Export read-only to `./plan.revision.md`: `taskledger plan export --version latest --file ./plan.revision.md`.
+- Edit the exported workspace file and check it: `taskledger plan check --file ./plan.revision.md`.
+- Submit only the checked draft with `taskledger plan upsert --auto-revise --file ./plan.revision.md`.
+- Inspect the diff and review the proposed version before asking the user to approve it.
+- If an edited `./plan.md` already exists, check and submit it directly with `taskledger plan check --file ./plan.md` and `taskledger plan upsert --auto-revise --file ./plan.md`.
+- Do not run `plan revise` merely to prepare an export; that opens a planning run before export/edit/check can fail.
+- Auto-revision proposes a version; it does not accept or approve it. Preserve the explicit user approval gate.
+- For simple structured removals, prefer `taskledger plan amend ... --reason "..."`.
 
 17. Ensure the plan front matter includes `acceptance_criteria` and `todos`; approved plan todos materialize into the implementation checklist.
 18. For diagnostic commands needed to build the plan, preserve their output in a linked artifact or use `taskledger plan command -- ...`.

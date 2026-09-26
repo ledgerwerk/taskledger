@@ -324,11 +324,10 @@ def test_next_action_planning_without_profile_includes_plan_input_command_sequen
 
 
 # ---------------------------------------------------------------------------
-# Test 8: Template contains checklist and single body comment
-# ---------------------------------------------------------------------------
+# Test 8: Template omits procedural checklist content from the plan body
 
 
-def test_plan_template_contains_checklist_and_single_body_comment(
+def test_plan_template_omits_procedural_checklist_from_body(
     tmp_path: Path,
 ) -> None:
     init_workspace(tmp_path)
@@ -355,15 +354,16 @@ def test_plan_template_contains_checklist_and_single_body_comment(
     assert result.exit_code == 0, result.stdout
     payload = _json(result)["result"]
     template = str(payload["template"])
-    assert "## Plan input checklist before upsert" in template
-    assert "- [ ] I ran `taskledger plan check --file plan.md`." in template
-    assert template.count("Required: keep this body") == 1
-    assert "# <short approval plan title>" in template
-    assert "## Summary" in template
-    assert "## Implementation Changes" in template
-    assert "## Tests" in template
-    assert "## Assumptions" in template
-    assert "## Out of Scope" in template
+    body = template.split("---", 2)[2]
+    assert "## Plan input checklist before upsert" not in body
+    assert "taskledger plan check" not in body
+    assert body.count("Human-facing implementation handoff.") == 1
+    assert "# <short approval plan title>" in body
+    assert "## Summary" in body
+    assert "## Implementation Changes" in body
+    assert "## Tests" in body
+    assert "## Assumptions" in body
+    assert "## Out of Scope" in body
 
 
 # ---------------------------------------------------------------------------

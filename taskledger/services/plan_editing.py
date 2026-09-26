@@ -25,29 +25,31 @@ def ensure_plan_input_path_allowed(workspace_root: Path, input_path: Path) -> No
     ):
         message = (
             "Refusing to read a plan input file from Taskledger storage. "
-            "Copy/export the plan to a workspace file such as ./plan.md, "
-            "edit that file, then submit it. Never edit `.taskledger/` "
+            "Export the proposed plan to a workspace file such as "
+            "`./plan.revision.md`, edit and check that file, then submit it "
+            "with `taskledger plan upsert --auto-revise`. Never edit `.taskledger/` "
             "files directly."
         )
         error = LaunchError(message)
         error.taskledger_exit_code = EXIT_CODE_BAD_INPUT
         error.taskledger_error_code = "INVALID_INPUT"
         error.taskledger_remediation = [
-            "taskledger plan revise",
-            "taskledger plan export --version latest --file ./plan.md",
-            "taskledger plan upsert --file ./plan.md",
+            "taskledger plan export --version latest --file ./plan.revision.md",
+            "taskledger plan check --file ./plan.revision.md",
+            "taskledger plan upsert --auto-revise --file ./plan.revision.md",
         ]
         error.taskledger_data = {
             "input_path": str(candidate),
             "taskledger_root": str(storage_root),
             "next_commands": [
-                "taskledger plan revise",
-                "taskledger plan export --version latest --file ./plan.md",
-                "taskledger plan upsert --file ./plan.md",
+                "taskledger plan export --version latest --file ./plan.revision.md",
+                "taskledger plan check --file ./plan.revision.md",
+                "taskledger plan upsert --auto-revise --file ./plan.revision.md",
             ],
             "remediation": (
-                "Run `taskledger plan revise`, export/edit a workspace plan file, "
-                "then run `taskledger plan upsert --file ./plan.md`."
+                "Export the proposed plan to `./plan.revision.md`, edit and check "
+                "that workspace file, then submit it with "
+                "`taskledger plan upsert --auto-revise`."
             ),
         }
         raise error

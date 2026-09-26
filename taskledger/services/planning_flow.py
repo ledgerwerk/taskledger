@@ -6,13 +6,16 @@ from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from taskledger.cli_common import CommandRuntime
-from taskledger.domain.models import ActorRef, HarnessRef
+from taskledger.domain.models import ActorRef, HarnessRef, TaskRecord
 from taskledger.domain.policies import plan_propose_decision
 from taskledger.domain.states import EXIT_CODE_BAD_INPUT
+from taskledger.errors import LaunchError
 from taskledger.services import tasks as _tasks
+from taskledger.services.actors import resolve_effective_identity
 from taskledger.services.plan_editing import render_editable_plan
 from taskledger.services.plan_hash import approved_plan_content_hash
 from taskledger.services.plan_input import (
+    ParsedPlanInput,
     parse_plan_input,
     plan_input_error,
 )
@@ -48,6 +51,9 @@ def start_planning(
             "Planning can only start from draft or plan_review.",
             _tasks.EXIT_CODE_INVALID_TRANSITION,
         )
+    actor, harness = resolve_effective_identity(
+        workspace_root, actor=actor, harness=harness, role="planner"
+    )
     run = _tasks._start_run(
         workspace_root,
         task,
@@ -88,6 +94,7 @@ def propose_plan(
     criteria: tuple[str, ...] = (),
     command_label: str = "plan propose",
     runtime: CommandRuntime | None = None,
+    parsed_input: ParsedPlanInput | None = None,
 ) -> dict[str, object]:
     task = resolve_task(workspace_root, task_ref)
     _tasks._ensure_not_archived(task, operation="propose plan for")
@@ -96,7 +103,9 @@ def propose_plan(
     _tasks._enforce_decision(plan_propose_decision(task, lock, run=run))
     plans = list_plans(workspace_root, task.id)
     version = plans[-1].plan_version + 1 if plans else 1
-    parsed = parse_plan_input(workspace_root, body, criteria=criteria, strict=False)
+    parsed = parsed_input or parse_plan_input(
+        workspace_root, body, criteria=criteria, strict=False
+    )
     if parsed.has_errors:
         raise plan_input_error(parsed, command=command_label)
     plan_body = parsed.body
@@ -194,6 +203,9 @@ def upsert_plan(
     from_answers: bool = False,
     allow_open_questions: bool = False,
     auto_revise: bool = False,
+    runtime: CommandRuntime | None = None,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
 ) -> dict[str, object]:
     task = resolve_task(workspace_root, task_ref)
     _tasks._ensure_not_archived(task, operation="upsert plan for")
@@ -230,18 +242,56 @@ def upsert_plan(
         payload["command"] = "plan upsert"
         return payload
     auto_revised = False
+    parsed_input: ParsedPlanInput | None = None
+    revised: dict[str, object] = {}
     if auto_revise:
         lock = _tasks._current_lock(workspace_root, task.id)
         if task.status_stage == "plan_review" and lock is None:
-            revised = start_planning(workspace_root, task.id)
+            parsed_input = parse_plan_input(
+                workspace_root, body, criteria=criteria, strict=False
+            )
+            if parsed_input.has_errors:
+                raise plan_input_error(parsed_input, command="plan upsert")
+            running_before = {
+                run.run_id for run in _tasks._running_runs(workspace_root, task)
+            }
+            try:
+                revised = start_planning(
+                    workspace_root,
+                    task.id,
+                    runtime=runtime,
+                    actor=actor,
+                    harness=harness,
+                )
+            except Exception as exc:
+                newly_started_runs = [
+                    run
+                    for run in _tasks._running_runs(workspace_root, task)
+                    if run.run_id not in running_before
+                ]
+                if not newly_started_runs:
+                    raise
+                raise _revision_failure_error(
+                    workspace_root, task, newly_started_runs[0].run_id, exc
+                ) from exc
             auto_revised = True
-    payload = propose_plan(
-        workspace_root,
-        task.id,
-        body=body,
-        criteria=criteria,
-        command_label="plan upsert",
-    )
+    try:
+        payload = propose_plan(
+            workspace_root,
+            task.id,
+            body=body,
+            runtime=runtime,
+            criteria=criteria,
+            command_label="plan upsert",
+            parsed_input=parsed_input,
+        )
+    except Exception as exc:
+        if not auto_revised:
+            raise
+        run_id = revised.get("run_id")
+        if not isinstance(run_id, str):
+            raise
+        raise _revision_failure_error(workspace_root, task, run_id, exc) from exc
     payload["operation"] = "proposed"
     payload["command"] = "plan upsert"
     if auto_revised:
@@ -249,6 +299,45 @@ def upsert_plan(
         if isinstance(revised.get("run_id"), str):
             payload["revision_run_id"] = revised["run_id"]
     return payload
+
+
+def _revision_failure_error(
+    workspace_root: Path,
+    task: TaskRecord,
+    run_id: str,
+    cause: Exception,
+) -> LaunchError:
+    run = _tasks._optional_run(workspace_root, task, run_id)
+    lock = _tasks._current_lock(workspace_root, task.id)
+    next_command = f"taskledger next-action --task {task.id}"
+    details: dict[str, object] = {
+        "task_id": task.id,
+        "revision_run": {
+            "run_id": run_id,
+            "run_type": "planning",
+            "status": run.status if run is not None else "unknown",
+            "has_matching_lock": bool(
+                run is not None and _tasks._lock_matches_run(lock, run)
+            ),
+        },
+        "cause": str(cause),
+        "next_commands": [next_command],
+        "remediation": (
+            f"Inspect the interrupted revision run {run_id} with "
+            f"`{next_command}` before continuing."
+        ),
+    }
+    cause_details = getattr(cause, "taskledger_data", None)
+    if isinstance(cause_details, dict):
+        details["cause_details"] = cause_details
+    error = _tasks._cli_error(
+        f"Plan revision failed after planning run {run_id} started: {cause}",
+        _tasks.EXIT_CODE_GENERIC_FAILURE,
+    )
+    error.taskledger_error_code = "PLAN_REVISION_INCOMPLETE"
+    error.taskledger_data = details
+    error.taskledger_remediation = [next_command]
+    return error
 
 
 def export_plan(
@@ -276,6 +365,8 @@ def amend_plan(
     remove_files: tuple[str, ...] = (),
     reason: str,
     runtime: CommandRuntime | None = None,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
 ) -> dict[str, object]:
     if not reason.strip():
         raise _tasks._cli_error("--reason is required.", EXIT_CODE_BAD_INPUT)
@@ -320,12 +411,19 @@ def amend_plan(
         todos=updated_todos,
         files=updated_files,
     )
-    revised = start_planning(workspace_root, task.id)
+    revised = start_planning(
+        workspace_root,
+        task.id,
+        runtime=runtime,
+        actor=actor,
+        harness=harness,
+    )
     payload = propose_plan(
         workspace_root,
         task.id,
         body=render_editable_plan(draft),
         command_label="plan amend",
+        runtime=runtime,
     )
     payload["command"] = "plan amend"
     payload["operation"] = "amended"

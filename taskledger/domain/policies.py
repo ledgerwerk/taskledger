@@ -346,9 +346,8 @@ def plan_propose_decision(
     ):
         if ctx.task.status_stage == "plan_review" and ctx.active_stage is None:
             next_commands = (
-                "taskledger plan revise",
-                "taskledger plan export --version latest --file ./plan.md",
-                "taskledger plan upsert --file ./plan.md",
+                "taskledger plan check --file ./plan.md",
+                "taskledger plan upsert --auto-revise --file ./plan.md",
             )
             return Decision(
                 allowed=False,
@@ -356,17 +355,24 @@ def plan_propose_decision(
                 message=(
                     "Plan proposals require active planning.\n\n"
                     "This task is in plan_review and has no active planning run.\n"
-                    "To revise the proposed plan:\n"
-                    "  taskledger plan revise\n"
-                    "  taskledger plan export --version latest --file ./plan.md\n"
-                    "  # edit ./plan.md\n"
-                    "  taskledger plan upsert --file ./plan.md\n\n"
+                    "If the workspace draft is already edited, submit it safely with:\n"
+                    "  taskledger plan check --file ./plan.md\n"
+                    "  taskledger plan upsert --auto-revise --file ./plan.md\n\n"
+                    "To start from the proposed plan, export it first to "
+                    "a separate file:\n"
+                    "  taskledger plan export --version latest --file "
+                    "./plan.revision.md\n"
+                    "  # edit and check ./plan.revision.md\n"
+                    "  taskledger plan upsert --auto-revise --file "
+                    "./plan.revision.md\n\n"
                     "Do not edit files under .taskledger/ directly."
                 ),
                 details={
                     "remediation": (
-                        "Run `taskledger plan revise`, export/edit a workspace plan "
-                        "file, then run `taskledger plan upsert --file ./plan.md`."
+                        "Check the edited workspace draft, then submit it with "
+                        "`taskledger plan upsert --auto-revise --file ./plan.md`. "
+                        "If starting from the stored plan, export to a separate "
+                        "workspace path before editing."
                     ),
                     "next_commands": list(next_commands),
                 },

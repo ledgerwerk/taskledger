@@ -203,15 +203,28 @@ def test_plan_revision_docs_and_skill_rules_are_present() -> None:
     )
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
 
-    assert "taskledger plan export --version latest --file ./plan.md" in readme
-    assert "taskledger plan review --version" in readme
+    assert "taskledger plan export --version latest --file ./plan.revision.md" in readme
+    assert "taskledger plan revise\n" not in readme
+    assert "taskledger plan revise\n" not in usage
+    assert "taskledger plan export --version latest --file ./plan.md" not in readme
+    assert "taskledger plan export --version latest --file ./plan.md" not in usage
+    assert "taskledger plan upsert --auto-revise --file ./plan.revision.md" in readme
+    assert "taskledger plan upsert --auto-revise --file ./plan.md" in usage
     assert "taskledger plan amend" in usage
     assert "taskledger plan review --version" in usage
     assert "Never edit `.taskledger/` files directly." in skill
     assert "taskledger plan review --version N" in skill
-    assert "taskledger plan revise" in skill
+    assert "taskledger plan upsert --auto-revise --file ./plan.revision.md" in skill
+    assert "taskledger plan revise" not in skill
+    assert "taskledger plan export --version latest --file ./plan.md" not in skill
+    assert "explicit user approval" in skill
     assert "taskledger plan export" in command_contract
+    assert "taskledger plan check --file ./plan.revision.md" in command_contract
     assert "taskledger plan review" in command_contract
+    assert (
+        "taskledger plan upsert [--task TASK_REF] [--file PATH] [--auto-revise]"
+        in command_contract
+    )
 
 
 # specmason: req=REQ-0016 ac=AC-0174

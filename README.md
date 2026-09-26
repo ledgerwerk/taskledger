@@ -315,15 +315,25 @@ the final review with `taskledger review record` before answering. A
 chat-only review is not durable task evidence. Post-completion review
 records are append-only and do not reopen the task.
 
-To revise a proposed plan, re-enter planning and edit an exported workspace
-copy. Never edit `.taskledger/` files directly:
+To revise a proposed plan, prepare and check the editable draft before submitting it. Never edit `.taskledger/` files directly. Export to a distinct workspace file so an existing `plan.md` and local edits are preserved:
 
 ```bash
-taskledger plan revise
-taskledger plan export --version latest --file ./plan.md
-# edit ./plan.md
-taskledger plan upsert --file ./plan.md
+taskledger plan export --version latest --file ./plan.revision.md
+# edit ./plan.revision.md
+taskledger plan check --file ./plan.revision.md
+taskledger plan upsert --auto-revise --file ./plan.revision.md
+taskledger plan diff --from 1 --to 2
+taskledger plan review --version 2
 ```
+
+If you already have an edited `./plan.md`, check and submit it directly:
+
+```bash
+taskledger plan check --file ./plan.md
+taskledger plan upsert --auto-revise --file ./plan.md
+```
+
+Auto-revision proposes a new version; it does not approve it. Continue only after explicit user approval.
 
 For manually completed work (e.g., manual testing, operations tasks, or work
 completed outside the task-first lifecycle), use `task record` to create a
