@@ -7,12 +7,11 @@ from typing import TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from taskledger.cli_common import CommandRuntime
 from taskledger import timing as _timing
-from taskledger.domain.models import ActorRef, HarnessRef
+from taskledger.domain.models import ActorRef, HarnessRef, TaskRecord
 from taskledger.domain.policies import plan_propose_decision
 from taskledger.domain.states import EXIT_CODE_BAD_INPUT
 from taskledger.errors import LaunchError
 from taskledger.services import tasks as _tasks
-from taskledger.services.actors import resolve_effective_identity
 from taskledger.services.plan_editing import render_editable_plan
 from taskledger.services.plan_hash import approved_plan_content_hash
 from taskledger.services.plan_input import (

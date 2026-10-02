@@ -14,6 +14,7 @@ from taskledger.services.task_events import (
 )
 from taskledger.storage.locks import lock_status, read_lock
 from taskledger.storage.task_store import (
+    list_runs,
     remove_lock_from_paths,
     resolve_task,
     resolve_v2_paths,
@@ -100,6 +101,29 @@ def break_lock(
         broken_by=default_actor(),
         broken_reason=reason.strip(),
     )
+    recovery_details: dict[str, object] = {}
+    if matching_run is not None:
+        if matching_run.run_type == "planning":
+            next_command = (
+                "taskledger repair run "
+                f"--task {task.id} --run {matching_run.run_id} "
+                '--reason "Planning lock holder was no longer valid."'
+            )
+        elif matching_run.run_type == "implementation":
+            next_command = (
+                f"taskledger implement resume --task {task.id} "
+                '--reason "Reacquire implementation lock for existing running run."'
+            )
+        else:
+            next_command = f"taskledger next-action --task {task.id}"
+        recovery_details = {
+            "orphaned_run": {
+                "run_id": matching_run.run_id,
+                "run_type": matching_run.run_type,
+                "status": matching_run.status,
+            },
+            "next_commands": [next_command],
+        }
     audit_path = write_broken_lock_audit(paths, task.id, broken_lock)
     rel_path = audit_path.relative_to(paths.project_dir).as_posix()
     append_task_event(

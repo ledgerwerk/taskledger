@@ -1,0 +1,125 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.6.11
+git_base_ref: v0.6.10
+git_base_sha: 2c62e04040c1ef2b0ab748106e93352b524fe70d
+git_head_ref: HEAD
+git_head_sha: 2ac30782ca367ee550e075db75185f5dd001c25a
+git_range: 2c62e04040c1ef2b0ab748106e93352b524fe70d..2ac30782ca367ee550e075db75185f5dd001c25a
+commit_count: 1
+rows:
+- sha: 2ac30782ca367ee550e075db75185f5dd001c25a
+  source_ref: git:2ac30782ca367ee550e075db75185f5dd001c25a
+  short_sha: 2ac3078
+  changed_paths:
+  - API.md
+  - README.md
+  - docs/api.md
+  - docs/command_contract.md
+  - docs/public_surface.md
+  - docs/usage.md
+  - taskledger/api/__init__.py
+  - taskledger/api/maintenance.py
+  - taskledger/api/repair.py
+  - taskledger/cli.py
+  - taskledger/cli_maintenance.py
+  - taskledger/command_inventory.py
+  - taskledger/refs.py
+  - taskledger/services/doctor.py
+  - taskledger/services/doctor_checks/artifact_checks.py
+  - taskledger/services/doctor_checks/task_checks.py
+  - taskledger/services/file_links.py
+  - taskledger/services/implementation_flow.py
+  - taskledger/services/lock_inventory.py
+  - taskledger/services/maintenance.py
+  - taskledger/services/plan_materialization.py
+  - taskledger/services/planning_flow.py
+  - taskledger/services/ready_work.py
+  - taskledger/services/releases.py
+  - taskledger/services/run_store.py
+  - taskledger/services/task_archive.py
+  - taskledger/services/task_collections.py
+  - taskledger/services/task_lifecycle.py
+  - taskledger/services/tasks.py
+  - taskledger/services/usage.py
+  - taskledger/services/validation_flow.py
+  - taskledger/services/workspace_snapshot.py
+  - taskledger/storage/indexes.py
+  - taskledger/storage/sidecar_index.py
+  - taskledger/storage/task_ids.py
+  - taskledger/storage/task_index.py
+  - taskledger/storage/task_store.py
+  - taskledger/timing.py
+  - tests/test_docs_and_skill.py
+  - tests/test_doctor.py
+  - tests/test_indexes.py
+  - tests/test_maintenance_gc.py
+  - tests/test_performance_caching.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  stats:
+    files_changed: 45
+    insertions: 3296
+    deletions: 579
+  inspected: true
+  inspected_paths:
+  - API.md
+  - README.md
+  - docs/api.md
+  - docs/command_contract.md
+  - docs/public_surface.md
+  - docs/usage.md
+  - taskledger/api/__init__.py
+  - taskledger/api/maintenance.py
+  - taskledger/api/repair.py
+  - taskledger/cli.py
+  - taskledger/cli_maintenance.py
+  - taskledger/command_inventory.py
+  - taskledger/refs.py
+  - taskledger/services/doctor.py
+  - taskledger/services/doctor_checks/artifact_checks.py
+  - taskledger/services/doctor_checks/task_checks.py
+  - taskledger/services/file_links.py
+  - taskledger/services/implementation_flow.py
+  - taskledger/services/lock_inventory.py
+  - taskledger/services/maintenance.py
+  - taskledger/services/plan_materialization.py
+  - taskledger/services/planning_flow.py
+  - taskledger/services/ready_work.py
+  - taskledger/services/releases.py
+  - taskledger/services/run_store.py
+  - taskledger/services/task_archive.py
+  - taskledger/services/task_collections.py
+  - taskledger/services/task_lifecycle.py
+  - taskledger/services/tasks.py
+  - taskledger/services/usage.py
+  - taskledger/services/validation_flow.py
+  - taskledger/services/workspace_snapshot.py
+  - taskledger/storage/indexes.py
+  - taskledger/storage/sidecar_index.py
+  - taskledger/storage/task_ids.py
+  - taskledger/storage/task_index.py
+  - taskledger/storage/task_store.py
+  - taskledger/timing.py
+  - tests/test_docs_and_skill.py
+  - tests/test_doctor.py
+  - tests/test_indexes.py
+  - tests/test_maintenance_gc.py
+  - tests/test_performance_caching.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  observed_behavior: Adds dry-run-first maintenance cleanup for old unreferenced artifacts,
+    terminal workspace snapshots, and quarantined index generations, with path safety
+    checks and durable reports; adds explicit repairs that quarantine incomplete task
+    allocations and remove orphan locks while preserving audit state. Reduces project-wide
+    index rebuilds through indexed task summaries, bound-path readers, incremental
+    derived-index updates with dirty markers, and opt-in timing diagnostics.
+  public_impact: public
+  decision: accepted
+  stale: false
+  evidence_subject: 'feat: improve speed, add garbage collect'
+  target_entry_id: entry-0001
+  notes: ''
