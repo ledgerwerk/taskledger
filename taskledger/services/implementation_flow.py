@@ -12,11 +12,9 @@ if TYPE_CHECKING:
 from taskledger.domain.states import IMPLEMENTABLE_TASK_STAGES
 from taskledger.services import command_runner
 from taskledger.services import tasks as _tasks
-from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     list_changes,
     resolve_task,
-    resolve_v2_paths,
     save_run,
     save_task,
 )
@@ -119,7 +117,6 @@ def _start_implementation_for_task(
         "implementation.started",
         {"run_id": run.run_id},
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return _tasks._lifecycle_payload(
         "implement start",
         replace(updated, status_stage=task.status_stage),
@@ -232,7 +229,6 @@ def restart_implementation(
             "resumes_run_id": previous_run.run_id,
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return _tasks._lifecycle_payload(
         "implement restart",
         replace(updated, status_stage=task.status_stage),
@@ -364,7 +360,6 @@ def resume_implementation(
             "reason": resume_reason,
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return _tasks._lifecycle_payload(
         "implement resume",
         replace(updated, status_stage=task.status_stage),
@@ -649,7 +644,6 @@ def finish_implementation(
         "implementation.finished",
         {"run_id": run.run_id},
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return _tasks._lifecycle_payload(
         "implement finish",
         updated,

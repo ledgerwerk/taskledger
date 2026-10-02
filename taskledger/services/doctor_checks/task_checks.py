@@ -39,24 +39,29 @@ def _scan_task_integrity_phases(  # noqa: C901
     from taskledger.domain.policies import derive_active_stage
     from taskledger.storage.task_store import (
         change_markdown_path,
-        list_changes,
-        list_checks,
-        list_handoffs_with_errors,
-        list_plans,
-        load_requirements,
-        load_todos,
-        resolve_introduction,
+        list_changes_from_paths,
+        list_checks_from_paths,
+        list_handoffs_with_errors_from_paths,
+        list_plans_from_paths,
+        load_requirements_from_paths,
+        load_todos_from_paths,
+        resolve_introduction_from_paths,
         run_markdown_path,
     )
 
+    pipeline = load_worker_pipeline_config(workspace_root)
+    valid_worker_step_ids = (
+        set(pipeline.step_ids()) if pipeline and pipeline.enabled else set()
+    )
+
     for task in tasks:
-        plans = list_plans(workspace_root, task.id)
+        plans = list_plans_from_paths(paths, task.id)
         accepted = [plan for plan in plans if plan.status == "accepted"]
 
         # Broken introduction ref
         if task.introduction_ref:
             try:
-                resolve_introduction(workspace_root, task.introduction_ref)
+                resolve_introduction_from_paths(paths, task.introduction_ref)
             except Exception:  # noqa: BLE001
                 broken_links.append(
                     {
@@ -69,7 +74,7 @@ def _scan_task_integrity_phases(  # noqa: C901
         # Broken requirement refs
         for requirement in (
             item.task_id
-            for item in load_requirements(workspace_root, task.id).requirements
+            for item in load_requirements_from_paths(paths, task.id).requirements
         ):
             if requirement not in task_map:
                 broken_links.append(
@@ -81,7 +86,7 @@ def _scan_task_integrity_phases(  # noqa: C901
                 )
 
         # Handoff errors
-        _handoffs, handoff_errors = list_handoffs_with_errors(workspace_root, task.id)
+        _handoffs, handoff_errors = list_handoffs_with_errors_from_paths(paths, task.id)
         errors.extend(handoff_errors)
 
         # Accepted plan consistency
@@ -101,12 +106,12 @@ def _scan_task_integrity_phases(  # noqa: C901
             )
 
         # Duplicate todo ids
-        todos = load_todos(workspace_root, task.id).todos
+        todos = load_todos_from_paths(paths, task.id).todos
         if len({todo.id for todo in todos}) != len(todos):
             errors.append(f"Task {task.id} contains duplicate todo ids.")
         _warn_stale_worker_step_references(
-            workspace_root=workspace_root,
             task=task,
+            valid_worker_step_ids=valid_worker_step_ids,
             todos=todos,
             handoffs=_handoffs,
             warnings=warnings,
@@ -217,7 +222,7 @@ def _scan_task_integrity_phases(  # noqa: C901
             )
 
         # Change validation
-        for change in list_changes(workspace_root, task.id):
+        for change in list_changes_from_paths(paths, task.id):
             change_run = run_map.get((task.id, change.implementation_run))
             change_path = change_markdown_path(paths, task.id, change.change_id)
             if change_run is None:
@@ -293,7 +298,7 @@ def _scan_task_integrity_phases(  # noqa: C901
 
         # Validation run checks
         implementation_check_ids = {
-            check.check_id for check in list_checks(workspace_root, task.id)
+            check.check_id for check in list_checks_from_paths(paths, task.id)
         }
         for run in task_runs[task.id]:
             if run.run_type == "validation" and run.based_on_implementation_run:
@@ -525,23 +530,19 @@ def _append_diagnostic(
 
 def _warn_stale_worker_step_references(
     *,
-    workspace_root: Path,
     task: TaskRecord,
+    valid_worker_step_ids: set[str],
     todos: Sequence[TaskTodo],
     handoffs: Sequence[TaskHandoffRecord],
     warnings: list[str],
     diagnostics: list[dict[str, object]],
 ) -> None:
-    pipeline = load_worker_pipeline_config(workspace_root)
-    valid_step_ids = (
-        set(pipeline.step_ids()) if pipeline and pipeline.enabled else set()
-    )
     for todo in todos:
         worker_step_id = getattr(todo, "worker_step_id", None)
         if (
             not isinstance(worker_step_id, str)
             or not worker_step_id.strip()
-            or worker_step_id in valid_step_ids
+            or worker_step_id in valid_worker_step_ids
         ):
             continue
         _append_diagnostic(
@@ -568,7 +569,7 @@ def _warn_stale_worker_step_references(
         if (
             not isinstance(worker_step_id, str)
             or not worker_step_id.strip()
-            or worker_step_id in valid_step_ids
+            or worker_step_id in valid_worker_step_ids
             or not isinstance(handoff_id, str)
         ):
             continue

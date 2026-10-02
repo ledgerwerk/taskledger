@@ -246,8 +246,8 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/storage/task_index.py::rebuild_task_index:except-1": (
         "Task index rebuild skips unparseable task files and continues."
     ),
-    "taskledger/storage/task_store.py::save_task:except-1": (
-        "save_task write-through index update degrades gracefully on failure."
+    "taskledger/storage/task_store.py::save_task_from_paths:except-1": (
+        "save_task_from_paths write-through index update degrades gracefully."
     ),
     "taskledger/storage/task_store.py::rewrite_task_refs:except-1": (
         "rewrite_task_refs falls back to plain string replacement when "
@@ -265,18 +265,54 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/storage/task_store.py::save_todos:except-1": (
         "save_todos write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py::_task_latest_impl_run:except-1": (
-        "_task_latest_impl_run returns None when task resolution fails."
+    "taskledger/storage/task_store.py::_task_latest_impl_run_from_paths:except-1": (
+        "_task_latest_impl_run_from_paths returns None when resolution fails."
     ),
-    "taskledger/storage/task_store.py::list_handoffs_with_errors:except-1": (
-        "list_handoffs_with_errors tolerates malformed handoff records "
+    "taskledger/storage/task_store.py::list_handoffs_with_errors_from_paths:except-1": (
+        "list_handoffs_with_errors_from_paths tolerates malformed handoffs "
         "and continues scanning."
     ),
     "taskledger/storage/task_store.py::save_handoff:except-1": (
         "save_handoff write-through sidecar index update degrades gracefully."
     ),
-    "taskledger/storage/task_store.py::save_lock:except-1": (
-        "save_lock write-through sidecar index update degrades gracefully."
+    "taskledger/storage/task_store.py::save_lock_from_paths:except-1": (
+        "save_lock_from_paths active-lock index update degrades gracefully."
+    ),
+    "taskledger/storage/task_store.py::save_lock_from_paths:except-2": (
+        "save_lock_from_paths sidecar summary update degrades gracefully."
+    ),
+    "taskledger/api/repair.py::repair_allocations:except-1": (
+        "Allocation repair reports individual quarantine failures and continues."
+    ),
+    "taskledger/services/maintenance.py::garbage_collect:except-1": (
+        "Garbage collection reports individual deletion failures and continues."
+    ),
+    "taskledger/services/maintenance.py::garbage_collect:except-2": (
+        "Garbage-collection audit event append degrades gracefully."
+    ),
+    "taskledger/storage/indexes.py::_best_effort_update_index:except-1": (
+        "Derived-index update marks the index dirty instead of failing."
+    ),
+    "taskledger/storage/indexes.py::mark_index_dirty:except-1": (
+        "Dirty-marker write degrades gracefully when it cannot be recorded."
+    ),
+    "taskledger/storage/sidecar_index.py::update_sidecar_summary:except-1": (
+        "Sidecar summary write-through degrades gracefully on failure."
+    ),
+    "taskledger/storage/task_index.py::_best_effort_update_task_index:except-1": (
+        "Task-index update marks the index dirty instead of failing."
+    ),
+    "taskledger/storage/task_store.py::save_introduction_from_paths:except-1": (
+        "save_introduction_from_paths introductions index degrades gracefully."
+    ),
+    "taskledger/storage/task_store.py::save_requirements_from_paths:except-1": (
+        "save_requirements_from_paths sidecar summary degrades gracefully."
+    ),
+    "taskledger/storage/task_store.py::remove_lock_from_paths:except-1": (
+        "remove_lock_from_paths active-lock index removal degrades gracefully."
+    ),
+    "taskledger/storage/task_store.py::remove_lock_from_paths:except-2": (
+        "remove_lock_from_paths sidecar summary update degrades gracefully."
     ),
 }
 

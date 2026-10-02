@@ -12,7 +12,6 @@ from taskledger.domain.models import (
 from taskledger.errors import LaunchError
 from taskledger.services.actors import resolve_actor, resolve_harness
 from taskledger.storage.events import append_event, next_event_id
-from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     list_releases,
     list_tasks,
@@ -75,7 +74,6 @@ def tag_release(
             "previous_version": release.previous_version,
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     paths = resolve_v2_paths(workspace_root)
     return {
         "kind": "release",

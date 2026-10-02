@@ -7,6 +7,7 @@ from typing import cast
 from taskledger.domain.task import TaskRecord
 from taskledger.errors import LaunchError
 from taskledger.services.navigation import next_action
+from taskledger.storage.task_index import TaskSummaryRecord
 
 READY_STATUSES = {"approved", "failed_validation", "plan_review"}
 
@@ -37,7 +38,7 @@ def priority_rank(priority: str | None) -> tuple[int, str]:
 
 def ready_work_items(
     workspace_root: Path,
-    tasks: Iterable[TaskRecord],
+    tasks: Iterable[TaskRecord | TaskSummaryRecord],
     *,
     statuses: set[str] | None = None,
     max_items: int | None = None,

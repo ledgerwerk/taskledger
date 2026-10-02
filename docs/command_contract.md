@@ -464,6 +464,37 @@ to a durable non-active stage rather than directly re-entering an active stage.
 
 ## Run and lock repair
 
+A missing canonical task record can leave the active-task pointer and runtime lock in place. Forced deactivation clears only the dangling pointer. It does not silently remove the lock:
+
+```bash
+taskledger task deactivate --force --reason "Clear dangling active task after record loss."
+taskledger repair locks
+taskledger repair locks --apply --reason "Preserve and remove the orphaned runtime lock."
+```
+
+`repair locks` is dry-run by default. It reports `orphan_missing_task` separately from expired and dead-process locks, copies the orphan lock to the recovery audit area, removes the runtime lock, and updates derived lock indexes. Inspect the dry-run before applying.
+
+Doctor also reports nonempty task allocation directories that lack `task.md`. Their repair preserves all files in quarantine and writes a task-ID tombstone so the identifier cannot be reused:
+
+```bash
+taskledger repair allocations
+taskledger repair allocations --apply --reason "Quarantine incomplete task allocation after record loss."
+```
+
+## Maintenance garbage collection
+
+`taskledger maintenance gc` is an explicit maintenance operation and is dry-run by default:
+
+```bash
+taskledger maintenance gc
+taskledger maintenance gc --scope artifacts --task task-0042 --older-than 30d
+taskledger maintenance gc --apply --scope runtime --older-than 14d --reason "Prune retained terminal snapshots."
+```
+
+Scopes are `all`, `runtime`, `artifacts`, and `cache`. Default retention is 14 days for terminal workspace snapshots, 30 days for unreferenced artifacts, and 7 days for quarantined cache generations. `--older-than` overrides the selected scopes. `--task` limits runtime/artifact cleanup to one canonical task ID and cannot be used with cache cleanup.
+
+Artifact cleanup marks references from canonical task, run, todo, check, review, handoff, event, and agent-log records. Only old unreferenced artifacts owned by terminal, unlocked work are eligible. Runtime cleanup targets detailed manifests for terminal runs whose canonical summary hashes remain. Cache cleanup removes only old quarantined index generations, never the active indexes. Evidence/runtime deletion requires both `--apply` and `--reason`; every apply writes a durable report and attempts a project-level audit event. Canonical task history is never a GC target, and task completion does not run GC.
+
 ## Managed command wrappers
 
 `plan command` and `implement command` mirror the inner command exit code by

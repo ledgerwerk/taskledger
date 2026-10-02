@@ -63,6 +63,7 @@ from taskledger.cli_config import register_config_commands
 from taskledger.cli_help import register_help_command
 from taskledger.cli_implement import register_implement_v2_commands
 from taskledger.cli_ledger import ledger_app
+from taskledger.cli_maintenance import app as maintenance_app
 from taskledger.cli_migrate import migrate_app
 from taskledger.cli_misc import (
     emit_can_command,
@@ -167,6 +168,7 @@ app.add_typer(sync_app, name="sync")
 app.add_typer(doctor_app, name="doctor")
 app.add_typer(repair_app, name="repair")
 app.add_typer(migrate_app, name="migrate")
+app.add_typer(maintenance_app, name="maintenance")
 app.add_typer(runtime_app, name="runtime")
 app.add_typer(actors_app, name="actor")
 app.add_typer(harness_app, name="harness")
@@ -1295,6 +1297,50 @@ def repair_locks_command(
                 task_or_path = item.get("task_id", item.get("path"))
                 err = item.get("error")
                 lines.append(f"  failed: {task_or_path}: {err}")
+        emit_payload(ctx, payload, human="\n".join(lines))
+
+
+@repair_app.command("allocations")
+def repair_allocations_command(
+    ctx: typer.Context,
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Apply repairs (default is dry-run).")
+    ] = False,
+    reason: Annotated[
+        str, typer.Option("--reason", help="Reason for quarantining allocations.")
+    ] = "",
+) -> None:
+    from taskledger.api.repair import repair_allocations
+
+    state = ctx.obj
+    assert isinstance(state, CLIState)
+    try:
+        payload = repair_allocations(state.cwd, apply=apply, reason=reason)
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    if payload.get("dry_run"):
+        entries_raw = payload.get("incomplete_allocations", [])
+        entries = entries_raw if isinstance(entries_raw, list) else []
+        lines = [
+            f"INCOMPLETE TASK ALLOCATION REPAIR (dry-run): {len(entries)} allocation(s)"
+        ]
+        for entry in entries:
+            if isinstance(entry, dict):
+                lines.append(f"  {entry.get('task_id')}  {entry.get('path')}")
+        next_command = payload.get("next_command")
+        if next_command:
+            lines.append(f"\nNext: {next_command}")
+        emit_payload(ctx, payload, human="\n".join(lines))
+    else:
+        repaired_raw = payload.get("repaired", [])
+        repaired = repaired_raw if isinstance(repaired_raw, list) else []
+        failed_raw = payload.get("failed", [])
+        failed = failed_raw if isinstance(failed_raw, list) else []
+        lines = [f"quarantined {len(repaired)} incomplete task allocation(s)"]
+        for item in failed:
+            if isinstance(item, dict):
+                lines.append(f"  failed: {item.get('task_id')}: {item.get('error')}")
         emit_payload(ctx, payload, human="\n".join(lines))
 
 

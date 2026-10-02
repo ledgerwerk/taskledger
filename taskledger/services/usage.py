@@ -18,14 +18,17 @@ from taskledger.services.navigation import next_action_for_task
 from taskledger.services.ready_work import ready_work_items
 from taskledger.services.task_collections import next_todo
 from taskledger.storage.locks import read_lock
+from taskledger.storage.sidecar_index import load_sidecar_index
+from taskledger.storage.task_index import (
+    list_task_summaries as list_task_summary_records,
+)
 from taskledger.storage.task_store import (
-    list_code_reviews,
-    list_handoffs,
-    list_questions,
+    list_code_reviews_from_paths,
+    list_handoffs_from_paths,
+    list_questions_from_paths,
     list_runs,
-    list_tasks_by_visibility,
-    load_active_task_state,
-    load_lock_records,
+    load_active_task_state_from_paths,
+    load_lock_records_from_paths,
     resolve_task,
     resolve_v2_paths,
     task_lock_path,
@@ -175,7 +178,9 @@ def usage_payload(
     harness = resolve_harness(cwd=workspace_root, workspace_root=workspace_root)
     warnings: list[str] = []
 
-    all_tasks = list_tasks_by_visibility(workspace_root, visibility="visible")
+    paths = resolve_v2_paths(workspace_root)
+    sidecars = load_sidecar_index(paths)
+    all_tasks = list_task_summary_records(paths, visibility="visible")
     visible_tasks = (
         all_tasks
         if include_closed
@@ -190,7 +195,7 @@ def usage_payload(
         active_task = resolve_task(workspace_root, task_ref)
         focused = True
     else:
-        active_state = load_active_task_state(workspace_root)
+        active_state = load_active_task_state_from_paths(paths)
         if active_state is not None:
             try:
                 active_task = resolve_task(workspace_root, active_state.task_id)
@@ -202,31 +207,45 @@ def usage_payload(
     open_questions: list[dict[str, object]] = []
 
     for task in visible_tasks:
-        for handoff in list_handoffs(workspace_root, task.id):
-            if handoff.status != "open":
-                continue
-            claimable_handoffs.append(
-                {
-                    "task_id": task.id,
-                    "handoff_id": handoff.handoff_id,
-                    "mode": handoff.mode,
-                    "context_for": handoff.context_for,
-                    "summary": handoff.summary,
-                    "next_action": handoff.next_action,
-                    "created_at": handoff.created_at,
-                }
-            )
+        sidecar = sidecars.get(task.id, {})
+        handoffs_summary = sidecar.get("handoffs")
+        if (
+            isinstance(handoffs_summary, dict)
+            and isinstance(handoffs_summary.get("open"), int)
+            and handoffs_summary["open"] > 0
+        ):
+            for handoff in list_handoffs_from_paths(paths, task.id):
+                if handoff.status != "open":
+                    continue
+                claimable_handoffs.append(
+                    {
+                        "task_id": task.id,
+                        "handoff_id": handoff.handoff_id,
+                        "mode": handoff.mode,
+                        "context_for": handoff.context_for,
+                        "summary": handoff.summary,
+                        "next_action": handoff.next_action,
+                        "created_at": handoff.created_at,
+                    }
+                )
 
         if (
             task.status_stage
             in {"implemented", "validating", "failed_validation", "implementing"}
             and task.latest_implementation_run is not None
         ):
-            reviews = list_code_reviews(workspace_root, task.id)
-            has_latest_review = any(
-                review.implementation_run == task.latest_implementation_run
-                for review in reviews
+            reviews_summary = sidecar.get("reviews")
+            has_latest_review = (
+                isinstance(reviews_summary, dict)
+                and reviews_summary.get("has_review_for_latest_implementation_run")
+                is True
             )
+            if not has_latest_review:
+                reviews = list_code_reviews_from_paths(paths, task.id)
+                has_latest_review = any(
+                    review.implementation_run == task.latest_implementation_run
+                    for review in reviews
+                )
             if not has_latest_review:
                 review_ready.append(
                     {
@@ -241,22 +260,27 @@ def usage_payload(
                     }
                 )
 
-        for question in list_questions(workspace_root, task.id):
-            if question.status != "open":
-                continue
-            open_questions.append(
-                {
-                    "task_id": task.id,
-                    "question_id": question.id,
-                    "question": question.question,
-                    "command": (
-                        f'taskledger question answer {question.id} --text "..."'
-                    ),
-                }
-            )
-
+        questions_summary = sidecar.get("questions")
+        if (
+            isinstance(questions_summary, dict)
+            and isinstance(questions_summary.get("open"), int)
+            and questions_summary["open"] > 0
+        ):
+            for question in list_questions_from_paths(paths, task.id):
+                if question.status != "open":
+                    continue
+                open_questions.append(
+                    {
+                        "task_id": task.id,
+                        "question_id": question.id,
+                        "question": question.question,
+                        "command": (
+                            f'taskledger question answer {question.id} --text "..."'
+                        ),
+                    }
+                )
     stale_locks: list[dict[str, object]] = []
-    for lock in load_lock_records(workspace_root):
+    for lock in load_lock_records_from_paths(paths):
         diagnostics = diagnose_lock(lock, task_id=lock.task_id, current_actor=actor)
         if diagnostics.classification not in {
             CLASSIFICATION_EXPIRED,

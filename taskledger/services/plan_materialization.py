@@ -23,14 +23,12 @@ from taskledger.services.plan_input import (
     parse_plan_input,
     plan_input_error,
 )
-from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     list_plans,
     list_questions,
     overwrite_plan,
     resolve_plan,
     resolve_task,
-    resolve_v2_paths,
     save_plan,
     save_run,
     save_task,
@@ -286,7 +284,6 @@ def regenerate_plan_from_answers(
             "generation_reason": "after_questions",
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     regenerate_warnings: list[str] = []
     if not plan_body.strip():
         regenerate_warnings.append(

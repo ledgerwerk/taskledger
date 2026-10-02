@@ -236,31 +236,33 @@ def _compute_lock_summary(lock: TaskLock | None) -> LockSummary:
 
 
 def rebuild_sidecar_index(paths: V2Paths) -> dict[str, int]:
-    """Rebuild sidecar summaries for all tasks."""
+    from taskledger.storage.locks import lock_is_expired
     from taskledger.storage.task_store import (
-        list_code_reviews,
-        list_handoffs,
-        list_questions,
-        list_runs,
-        list_tasks,
-        load_active_locks,
-        load_todos,
+        list_code_reviews_from_paths,
+        list_handoffs_from_paths,
+        list_questions_from_paths,
+        list_runs_from_paths,
+        list_tasks_from_paths,
+        load_lock_records_from_paths,
+        load_todos_from_paths,
     )
 
-    tasks = list_tasks(paths.workspace_root)
-    lock_by_task: dict[str, TaskLock] = {}
-    for lock in load_active_locks(paths.workspace_root):
-        lock_by_task[lock.task_id] = lock
+    tasks = list_tasks_from_paths(paths)
+    lock_by_task = {
+        lock.task_id: lock
+        for lock in load_lock_records_from_paths(paths)
+        if not lock_is_expired(lock)
+    }
 
     entries: dict[str, dict[str, object]] = {}
     for task in tasks:
         try:
-            todos = load_todos(paths.workspace_root, task.id).todos
-            questions = list_questions(paths.workspace_root, task.id)
-            handoffs = list_handoffs(paths.workspace_root, task.id)
-            reviews = list_code_reviews(paths.workspace_root, task.id)
-            runs = list_runs(paths.workspace_root, task.id)
-            task_lock: TaskLock | None = lock_by_task.get(task.id)
+            todos = load_todos_from_paths(paths, task.id).todos
+            questions = list_questions_from_paths(paths, task.id)
+            handoffs = list_handoffs_from_paths(paths, task.id)
+            reviews = list_code_reviews_from_paths(paths, task.id)
+            runs = list_runs_from_paths(paths, task.id)
+            task_lock = lock_by_task.get(task.id)
 
             summary = TaskSidecarSummary(
                 task_id=task.id,
@@ -277,6 +279,7 @@ def rebuild_sidecar_index(paths: V2Paths) -> dict[str, int]:
         except Exception:
             logger.warning("Skipping sidecar summary for %s", task.id, exc_info=True)
 
+    from taskledger.storage.indexes import clear_index_dirty
     from taskledger.timeutils import utc_now_iso
 
     envelope = {
@@ -287,17 +290,19 @@ def rebuild_sidecar_index(paths: V2Paths) -> dict[str, int]:
         "entries": entries,
     }
     write_json(_sidecar_index_path(paths), envelope)
+    clear_index_dirty(paths, "sidecar_index")
     return {"sidecars": len(entries)}
 
 
 def load_sidecar_index(
     paths: V2Paths,
 ) -> dict[str, dict[str, object]]:
-    """Load sidecar summaries. Rebuilds if missing or malformed."""
+    """Load sidecar summaries, rebuilding a missing, malformed, or dirty index."""
     from taskledger.storage.common import try_load_json_object
+    from taskledger.storage.indexes import index_is_dirty
 
     path = _sidecar_index_path(paths)
-    if not path.exists():
+    if index_is_dirty(paths, "sidecar_index") or not path.exists():
         rebuild_sidecar_index(paths)
 
     data = try_load_json_object(path, "sidecar index")
@@ -311,9 +316,10 @@ def load_sidecar_index(
     if not isinstance(entries, dict):
         rebuild_sidecar_index(paths)
         data = try_load_json_object(path, "sidecar index") or {}
-        entries = data.get("entries", {}) or {}
-    assert isinstance(entries, dict)
-    return {k: v for k, v in entries.items() if isinstance(v, dict)}
+        entries = data.get("entries", {})
+    if not isinstance(entries, dict):
+        return {}
+    return {key: value for key, value in entries.items() if isinstance(value, dict)}
 
 
 def get_sidecar_summary(paths: V2Paths, task_id: str) -> dict[str, object] | None:
@@ -334,36 +340,49 @@ def update_sidecar_summary(
     lock: object = _UNSET,
     latest_implementation_run: str | None = None,
 ) -> None:
-    """Write-through update for one task's sidecar summary.
-
-    Only updates the sections for which data is provided.
-    """
-    entries = load_sidecar_index(paths)
-    current = entries.get(task_id, {})
-
-    if todos is not None:
-        current["todos"] = _compute_todos_summary(todos).to_dict()
-    if questions is not None:
-        current["questions"] = _compute_questions_summary(questions).to_dict()
-    if handoffs is not None:
-        current["handoffs"] = _compute_handoffs_summary(handoffs).to_dict()
-    if reviews is not None:
-        current["reviews"] = _compute_reviews_summary(
-            reviews, latest_implementation_run
-        ).to_dict()
-    if runs is not None:
-        current["runs"] = _compute_runs_summary(runs).to_dict()
-    if lock is not _UNSET:
-        current["locks"] = _compute_lock_summary(
-            lock if isinstance(lock, (TaskLock, type(None))) else None
-        ).to_dict()
-
-    entries[task_id] = current
+    """Write through one task's summary without triggering a project rebuild."""
+    from filelock import FileLock
 
     from taskledger.storage.common import try_load_json_object
+    from taskledger.storage.indexes import index_is_dirty, mark_index_dirty
+    from taskledger.timeutils import utc_now_iso
 
     path = _sidecar_index_path(paths)
-    existing = try_load_json_object(path, "sidecar index") or {}
+    if index_is_dirty(paths, "sidecar_index") or not path.is_file():
+        mark_index_dirty(paths, "sidecar_index", task_id=task_id)
+        return
 
-    existing["entries"] = entries
-    write_json(path, existing)
+    try:
+        with FileLock(f"{path}.lock"):
+            existing = try_load_json_object(path, "sidecar index")
+            if existing is None or not isinstance(existing.get("entries"), dict):
+                mark_index_dirty(paths, "sidecar_index", task_id=task_id)
+                return
+            entries = existing["entries"]
+            assert isinstance(entries, dict)
+            current_raw = entries.get(task_id)
+            current = dict(current_raw) if isinstance(current_raw, dict) else {}
+
+            if todos is not None:
+                current["todos"] = _compute_todos_summary(todos).to_dict()
+            if questions is not None:
+                current["questions"] = _compute_questions_summary(questions).to_dict()
+            if handoffs is not None:
+                current["handoffs"] = _compute_handoffs_summary(handoffs).to_dict()
+            if reviews is not None:
+                current["reviews"] = _compute_reviews_summary(
+                    reviews, latest_implementation_run
+                ).to_dict()
+            if runs is not None:
+                current["runs"] = _compute_runs_summary(runs).to_dict()
+            if lock is not _UNSET:
+                current["locks"] = _compute_lock_summary(
+                    lock if isinstance(lock, TaskLock) else None
+                ).to_dict()
+
+            entries[task_id] = current
+            existing["generated_at"] = utc_now_iso()
+            write_json(path, existing)
+    except Exception:
+        mark_index_dirty(paths, "sidecar_index", task_id=task_id)
+        logger.warning("Failed to update sidecar index for %s", task_id, exc_info=True)

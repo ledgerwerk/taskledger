@@ -49,7 +49,7 @@ The broader command surface is organized as:
 
 **Operations and advanced overlays:**
 
-- `context`, `pipeline`, `next-action`, `can`, `search`, `grep`, `symbols`, `deps`, `actor`, `view`, `usage`, `monitor`, `storage`, `sync`
+- `context`, `pipeline`, `next-action`, `can`, `search`, `grep`, `symbols`, `deps`, `actor`, `view`, `usage`, `monitor`, `storage`, `sync`, `maintenance`
 
 **Repair and inspection:**
 

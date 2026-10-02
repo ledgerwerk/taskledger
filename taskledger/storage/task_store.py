@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 if TYPE_CHECKING:
     from taskledger.storage.project_context import TaskledgerProjectContext
 
+from taskledger import timing as _timing
 from taskledger.domain.models import (
     ActiveActorState,
     ActiveHarnessState,
@@ -52,7 +53,7 @@ from taskledger.storage.frontmatter import (
     read_markdown_front_matter,
     write_markdown_front_matter,
 )
-from taskledger.storage.locks import read_lock, update_lock, write_lock
+from taskledger.storage.locks import read_lock, remove_lock, update_lock, write_lock
 from taskledger.storage.paths import ProjectPaths
 from taskledger.storage.yaml_store import load_yaml_object, write_yaml_object
 from taskledger.timeutils import utc_now_iso
@@ -286,7 +287,10 @@ def ensure_v2_layout(workspace_root: Path) -> V2Paths:
 
 
 def list_tasks(workspace_root: Path) -> list[TaskRecord]:
-    paths = resolve_v2_paths(workspace_root)
+    return list_tasks_from_paths(resolve_v2_paths(workspace_root))
+
+
+def list_tasks_from_paths(paths: V2Paths) -> list[TaskRecord]:
     return sorted(
         [_load_task(path) for path in paths.tasks_dir.glob("task-*/task.md")],
         key=lambda item: item.id,
@@ -298,7 +302,17 @@ def list_tasks_by_visibility(
     *,
     visibility: TaskVisibility = "visible",
 ) -> list[TaskRecord]:
-    tasks = list_tasks(workspace_root)
+    return list_tasks_by_visibility_from_paths(
+        resolve_v2_paths(workspace_root), visibility=visibility
+    )
+
+
+def list_tasks_by_visibility_from_paths(
+    paths: V2Paths,
+    *,
+    visibility: TaskVisibility = "visible",
+) -> list[TaskRecord]:
+    tasks = list_tasks_from_paths(paths)
     if visibility == "all":
         return tasks
     if visibility == "archived":
@@ -356,7 +370,12 @@ def resolve_task(
 
 
 def load_active_task_state(workspace_root: Path) -> ActiveTaskState | None:
-    paths = resolve_v2_paths(workspace_root)
+    return load_active_task_state_from_paths(resolve_v2_paths(workspace_root))
+
+
+def load_active_task_state_from_paths(
+    paths: V2Paths,
+) -> ActiveTaskState | None:
     if not paths.active_task_path.exists():
         return None
     payload = load_yaml_object(
@@ -462,7 +481,10 @@ def resolve_task_or_active(
 
 
 def save_task(workspace_root: Path, task: TaskRecord) -> TaskRecord:
-    paths = require_v2_layout(workspace_root)
+    return save_task_from_paths(require_v2_layout(workspace_root), task)
+
+
+def save_task_from_paths(paths: V2Paths, task: TaskRecord) -> TaskRecord:
     _ensure_task_bundle(paths, task.id)
     path = task_markdown_path(paths, task.id)
     if path.parent.name != task.id:
@@ -472,20 +494,23 @@ def save_task(workspace_root: Path, task: TaskRecord) -> TaskRecord:
     metadata.pop("file_links", None)
     metadata.pop("requirements", None)
     _write_markdown_record(path, metadata, task.body)
-    # Write-through: update the derived task index.
-    try:
-        from taskledger.storage.task_index import update_task_index_entry
+    with _timing.stage("derived_index_update"):
+        try:
+            from taskledger.storage.task_index import update_task_index_entry
 
-        update_task_index_entry(paths, task)
-    except Exception:
-        logging.getLogger(__name__).debug(
-            "Failed to update task index for %s", task.id, exc_info=True
-        )
+            update_task_index_entry(paths, task)
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "Failed to update task index for %s", task.id, exc_info=True
+            )
     return task
 
 
 def list_introductions(workspace_root: Path) -> list[IntroductionRecord]:
-    paths = resolve_v2_paths(workspace_root)
+    return list_introductions_from_paths(resolve_v2_paths(workspace_root))
+
+
+def list_introductions_from_paths(paths: V2Paths) -> list[IntroductionRecord]:
     return sorted(
         [_load_intro(path) for path in paths.introductions_dir.glob("intro-*.md")],
         key=lambda item: item.id,
@@ -518,8 +543,12 @@ def save_release(workspace_root: Path, release: ReleaseRecord) -> ReleaseRecord:
 
 
 def resolve_introduction(workspace_root: Path, ref: str) -> IntroductionRecord:
+    return resolve_introduction_from_paths(resolve_v2_paths(workspace_root), ref)
+
+
+def resolve_introduction_from_paths(paths: V2Paths, ref: str) -> IntroductionRecord:
     normalized_ref = ref.strip().lower()
-    for intro in list_introductions(workspace_root):
+    for intro in list_introductions_from_paths(paths):
         if intro.id == ref or intro.slug == normalized_ref:
             return intro
     raise LaunchError(f"Introduction not found: {ref}")
@@ -528,9 +557,28 @@ def resolve_introduction(workspace_root: Path, ref: str) -> IntroductionRecord:
 def save_introduction(
     workspace_root: Path, introduction: IntroductionRecord
 ) -> IntroductionRecord:
-    paths = require_v2_layout(workspace_root)
+    return save_introduction_from_paths(require_v2_layout(workspace_root), introduction)
+
+
+def save_introduction_from_paths(
+    paths: V2Paths, introduction: IntroductionRecord
+) -> IntroductionRecord:
     path = paths.introductions_dir / f"{introduction.id}.md"
     _write_markdown_record(path, introduction.to_dict(), introduction.body)
+    from taskledger.storage.indexes import (
+        mark_index_dirty,
+        update_introduction_index_entry,
+    )
+
+    try:
+        update_introduction_index_entry(paths, introduction)
+    except Exception:
+        mark_index_dirty(paths, "introductions")
+        logging.getLogger(__name__).debug(
+            "Failed to update introduction index for %s",
+            introduction.id,
+            exc_info=True,
+        )
     return introduction
 
 
@@ -643,9 +691,12 @@ def save_question(workspace_root: Path, question: QuestionRecord) -> QuestionRec
     try:
         from taskledger.storage.sidecar_index import update_sidecar_summary
 
-        questions = list_questions(workspace_root, question.task_id)
+        questions = list_questions_from_paths(paths, question.task_id)
         update_sidecar_summary(paths, question.task_id, questions=questions)
     except Exception:
+        from taskledger.storage.indexes import mark_index_dirty
+
+        mark_index_dirty(paths, "sidecar_index", task_id=question.task_id)
         logging.getLogger(__name__).debug(
             "Failed to update sidecar index for %s",
             question.task_id,
@@ -682,9 +733,12 @@ def save_run(workspace_root: Path, run: TaskRunRecord) -> TaskRunRecord:
     try:
         from taskledger.storage.sidecar_index import update_sidecar_summary
 
-        runs = list_runs(workspace_root, run.task_id)
+        runs = list_runs_from_paths(paths, run.task_id)
         update_sidecar_summary(paths, run.task_id, runs=runs)
     except Exception:
+        from taskledger.storage.indexes import mark_index_dirty
+
+        mark_index_dirty(paths, "sidecar_index", task_id=run.task_id)
         logging.getLogger(__name__).debug(
             "Failed to update sidecar index for %s",
             run.task_id,
@@ -726,11 +780,16 @@ def resolve_change(
 
 
 def list_checks(workspace_root: Path, task_id: str) -> list[ImplementationCheckRecord]:
-    paths = resolve_v2_paths(workspace_root)
+    return list_checks_from_paths(resolve_v2_paths(workspace_root), task_id)
+
+
+def list_checks_from_paths(
+    paths: V2Paths, task_id: str
+) -> list[ImplementationCheckRecord]:
     directory = task_checks_dir(paths, task_id)
     return sorted(
         [_load_check(path) for path in directory.glob("check-*.md")],
-        key=lambda c: c.check_id,
+        key=lambda check: check.check_id,
     )
 
 
@@ -755,7 +814,12 @@ def resolve_check(
 
 
 def list_code_reviews(workspace_root: Path, task_id: str) -> list[CodeReviewRecord]:
-    paths = resolve_v2_paths(workspace_root)
+    return list_code_reviews_from_paths(resolve_v2_paths(workspace_root), task_id)
+
+
+def list_code_reviews_from_paths(
+    paths: V2Paths, task_id: str
+) -> list[CodeReviewRecord]:
     directory = task_reviews_dir(paths, task_id)
     return sorted(
         [_load_code_review(path) for path in directory.glob("review-*.md")],
@@ -774,8 +838,8 @@ def save_code_review(
     try:
         from taskledger.storage.sidecar_index import update_sidecar_summary
 
-        reviews = list_code_reviews(workspace_root, review.task_id)
-        latest_impl_run = _task_latest_impl_run(workspace_root, review.task_id)
+        reviews = list_code_reviews_from_paths(paths, review.task_id)
+        latest_impl_run = _task_latest_impl_run_from_paths(paths, review.task_id)
         update_sidecar_summary(
             paths,
             review.task_id,
@@ -783,6 +847,9 @@ def save_code_review(
             latest_implementation_run=latest_impl_run,
         )
     except Exception:
+        from taskledger.storage.indexes import mark_index_dirty
+
+        mark_index_dirty(paths, "sidecar_index", task_id=review.task_id)
         logging.getLogger(__name__).debug(
             "Failed to update sidecar index for %s",
             review.task_id,
@@ -880,6 +947,9 @@ def save_todos(workspace_root: Path, collection: TodoCollection) -> TodoCollecti
 
         update_sidecar_summary(paths, collection.task_id, todos=list(collection.todos))
     except Exception:
+        from taskledger.storage.indexes import mark_index_dirty
+
+        mark_index_dirty(paths, "sidecar_index", task_id=collection.task_id)
         logging.getLogger(__name__).debug(
             "Failed to update sidecar index for %s",
             collection.task_id,
@@ -929,7 +999,10 @@ def save_links(workspace_root: Path, collection: LinkCollection) -> LinkCollecti
 
 
 def load_requirements(workspace_root: Path, task_id: str) -> RequirementCollection:
-    paths = resolve_v2_paths(workspace_root)
+    return load_requirements_from_paths(resolve_v2_paths(workspace_root), task_id)
+
+
+def load_requirements_from_paths(paths: V2Paths, task_id: str) -> RequirementCollection:
     directory = task_requirements_dir(paths, task_id)
     records = sorted(
         [
@@ -944,7 +1017,12 @@ def load_requirements(workspace_root: Path, task_id: str) -> RequirementCollecti
 def save_requirements(
     workspace_root: Path, collection: RequirementCollection
 ) -> RequirementCollection:
-    paths = require_v2_layout(workspace_root)
+    return save_requirements_from_paths(require_v2_layout(workspace_root), collection)
+
+
+def save_requirements_from_paths(
+    paths: V2Paths, collection: RequirementCollection
+) -> RequirementCollection:
     _ensure_task_bundle(paths, collection.task_id)
     directory = task_requirements_dir(paths, collection.task_id)
     directory.mkdir(parents=True, exist_ok=True)
@@ -970,10 +1048,28 @@ def save_requirements(
         )
         path = requirement_markdown_path(paths, collection.task_id, req_id)
         _write_markdown_record(path, metadata, body)
-    # Remove stale files
     for path in directory.glob("req-*.md"):
         if path.stem not in keep_ids:
             path.unlink()
+
+    from taskledger.storage.indexes import (
+        mark_index_dirty,
+        update_dependency_index_entry,
+    )
+
+    try:
+        update_dependency_index_entry(
+            paths,
+            collection.task_id,
+            [req.required_task_id or req.task_id for req in collection.requirements],
+        )
+    except Exception:
+        mark_index_dirty(paths, "dependencies", task_id=collection.task_id)
+        logging.getLogger(__name__).debug(
+            "Failed to update dependency index for %s",
+            collection.task_id,
+            exc_info=True,
+        )
     return collection
 
 
@@ -1178,8 +1274,12 @@ def _write_markdown_record(path: Path, metadata: dict[str, object], body: str) -
 
 def _task_latest_impl_run(workspace_root: Path, task_id: str) -> str | None:
     """Get latest_implementation_run from a task record."""
+    return _task_latest_impl_run_from_paths(resolve_v2_paths(workspace_root), task_id)
+
+
+def _task_latest_impl_run_from_paths(paths: V2Paths, task_id: str) -> str | None:
     try:
-        task = resolve_task(workspace_root, task_id)
+        task = _load_task(task_markdown_path(paths, task_id))
         return task.latest_implementation_run
     except Exception:  # noqa: BLE001
         return None
@@ -1264,11 +1364,26 @@ def list_handoffs(workspace_root: Path, task_id: str) -> list[TaskHandoffRecord]
     return handoffs
 
 
+def list_handoffs_from_paths(paths: V2Paths, task_id: str) -> list[TaskHandoffRecord]:
+    handoffs, errors = list_handoffs_with_errors_from_paths(paths, task_id)
+    if errors:
+        raise LaunchError(errors[0])
+    return handoffs
+
+
 def list_handoffs_with_errors(
     workspace_root: Path,
     task_id: str,
 ) -> tuple[list[TaskHandoffRecord], list[str]]:
-    paths = resolve_v2_paths(workspace_root)
+    return list_handoffs_with_errors_from_paths(
+        resolve_v2_paths(workspace_root), task_id
+    )
+
+
+def list_handoffs_with_errors_from_paths(
+    paths: V2Paths,
+    task_id: str,
+) -> tuple[list[TaskHandoffRecord], list[str]]:
     handoffs_dir = task_handoffs_dir(paths, task_id)
     if not handoffs_dir.exists():
         return [], []
@@ -1282,9 +1397,9 @@ def list_handoffs_with_errors(
             handoff = TaskHandoffRecord.from_dict(metadata)
             result.append(handoff)
         except Exception as exc:  # noqa: BLE001
-            label = _path_label(workspace_root, md_file)
+            label = _path_label(paths.workspace_root, md_file)
             errors.append(f"Malformed handoff record {label}: {exc}")
-    return sorted(result, key=lambda h: h.created_at), errors
+    return sorted(result, key=lambda handoff: handoff.created_at), errors
 
 
 def resolve_handoff(
@@ -1321,9 +1436,12 @@ def save_handoff(workspace_root: Path, handoff: TaskHandoffRecord) -> Path:
     try:
         from taskledger.storage.sidecar_index import update_sidecar_summary
 
-        handoffs = list_handoffs(workspace_root, handoff.task_id)
+        handoffs = list_handoffs_from_paths(paths, handoff.task_id)
         update_sidecar_summary(paths, handoff.task_id, handoffs=handoffs)
     except Exception:
+        from taskledger.storage.indexes import mark_index_dirty
+
+        mark_index_dirty(paths, "sidecar_index", task_id=handoff.task_id)
         logging.getLogger(__name__).debug(
             "Failed to update sidecar index for %s",
             handoff.task_id,
@@ -1340,23 +1458,71 @@ def resolve_lock(workspace_root: Path, task_id: str) -> TaskLock | None:
 
 
 def save_lock(workspace_root: Path, task_id: str, lock: TaskLock) -> Path:
-    """Save a lock record (creates if new, updates if exists)."""
-    paths = resolve_v2_paths(workspace_root)
+    """Save a lock record and update its derived index entries."""
+    return save_lock_from_paths(resolve_v2_paths(workspace_root), task_id, lock)
+
+
+def save_lock_from_paths(
+    paths: V2Paths,
+    task_id: str,
+    lock: TaskLock,
+    *,
+    create_only: bool = False,
+) -> Path:
     lock_path = task_lock_path(paths, task_id)
-    if lock_path.exists():
+    if create_only:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        write_lock(lock_path, lock)
+    elif lock_path.exists():
         update_lock(lock_path, lock)
     else:
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         write_lock(lock_path, lock)
-    # Write-through sidecar index.
-    try:
-        from taskledger.storage.sidecar_index import update_sidecar_summary
 
+    from taskledger.storage.indexes import (
+        mark_index_dirty,
+        update_active_lock_index_entry,
+    )
+    from taskledger.storage.sidecar_index import update_sidecar_summary
+
+    try:
+        update_active_lock_index_entry(paths, lock)
+    except Exception:
+        mark_index_dirty(paths, "active_locks", task_id=task_id)
+        logging.getLogger(__name__).debug(
+            "Failed to update active-lock index for %s", task_id, exc_info=True
+        )
+    try:
         update_sidecar_summary(paths, task_id, lock=lock)
     except Exception:
+        mark_index_dirty(paths, "sidecar_index", task_id=task_id)
         logging.getLogger(__name__).debug(
-            "Failed to update sidecar index for %s",
-            task_id,
-            exc_info=True,
+            "Failed to update sidecar index for %s", task_id, exc_info=True
         )
     return lock_path
+
+
+def remove_lock_from_paths(paths: V2Paths, task_id: str) -> None:
+    lock_path = task_lock_path(paths, task_id)
+    remove_lock(lock_path)
+
+    from taskledger.storage.indexes import (
+        mark_index_dirty,
+        remove_active_lock_index_entry,
+    )
+    from taskledger.storage.sidecar_index import update_sidecar_summary
+
+    try:
+        remove_active_lock_index_entry(paths, task_id)
+    except Exception:
+        mark_index_dirty(paths, "active_locks", task_id=task_id)
+        logging.getLogger(__name__).debug(
+            "Failed to update active-lock index for %s", task_id, exc_info=True
+        )
+    try:
+        update_sidecar_summary(paths, task_id, lock=None)
+    except Exception:
+        mark_index_dirty(paths, "sidecar_index", task_id=task_id)
+        logging.getLogger(__name__).debug(
+            "Failed to update sidecar index for %s", task_id, exc_info=True
+        )

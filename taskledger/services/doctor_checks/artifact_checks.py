@@ -24,12 +24,18 @@ _TASK_ID_RE = re.compile(r"^(task-\d+)$")
 def find_oversized_artifacts(
     paths: ArtifactPaths, *, max_bytes: int
 ) -> list[dict[str, object]]:
-    """Return metadata-only diagnostics for artifacts over ``max_bytes``."""
+    """Return metadata-only diagnostics for files under artifact roots."""
     violations: list[dict[str, object]] = []
     task_root = paths.tasks_dir
     agent_root = paths.events_dir.parent / "agent-logs" / "artifacts"
+    roots = [
+        (task_dir / "artifacts", "task")
+        for task_dir in task_root.glob("task-*")
+        if (task_dir / "artifacts").is_dir()
+    ]
+    roots.append((agent_root, "agent"))
 
-    for root, kind in ((task_root, "task"), (agent_root, "agent")):
+    for root, kind in roots:
         if not root.exists():
             continue
         for path in root.glob("**/*"):

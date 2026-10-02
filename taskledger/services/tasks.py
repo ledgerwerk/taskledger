@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 import yaml
 
+from taskledger import refs
 from taskledger.domain.models import (
     AcceptanceCriterion,
     ActiveTaskState,
@@ -89,34 +90,44 @@ from taskledger.services.validation import (
 )
 from taskledger.storage.artifact_policy import BoundedText, bound_text_to_bytes
 from taskledger.storage.atomic import atomic_write_text
-from taskledger.storage.indexes import rebuild_v2_indexes
+from taskledger.storage.indexes import (
+    load_active_locks_from_index,
+    rebuild_v2_indexes,
+)
 from taskledger.storage.locks import (
     lock_is_expired,
     read_lock,
-    remove_lock,
     update_lock,
-    write_lock,
 )
 from taskledger.storage.project_config import load_worker_pipeline_config
+from taskledger.storage.sidecar_index import load_sidecar_index
+from taskledger.storage.task_index import (
+    TaskSummaryRecord,
+)
+from taskledger.storage.task_index import (
+    list_task_summaries as list_task_summary_records,
+)
 from taskledger.storage.task_store import (
     TaskVisibility,
     list_changes,
     list_plans,
     list_questions,
     list_runs,
-    list_tasks_by_visibility,
     load_active_locks,
     load_active_task_state,
+    load_active_task_state_from_paths,
     load_links,
     load_requirements,
     load_todos,
     overwrite_plan,
+    remove_lock_from_paths,
     require_v2_layout,
     resolve_plan,
     resolve_question,
     resolve_run,
     resolve_task,
     resolve_v2_paths,
+    save_lock_from_paths,
     save_question,
     save_run,
     save_task,
@@ -230,6 +241,29 @@ def list_archived_task_summaries(*args, **kwargs):  # type: ignore[no-untyped-de
     return _impl(*args, **kwargs)
 
 
+def _summary_active_stage(
+    task: TaskSummaryRecord,
+    sidecar: dict[str, object] | None,
+    lock: TaskLock | None,
+) -> str | None:
+    if sidecar is None or lock is None:
+        return None
+    runs = sidecar.get("runs")
+    running = runs.get("running") if isinstance(runs, dict) else None
+    if not isinstance(running, list) or lock.run_id not in running:
+        return None
+    if lock.run_type == "planning" and lock.run_id == task.latest_planning_run:
+        return "planning"
+    if (
+        lock.run_type == "implementation"
+        and lock.run_id == task.latest_implementation_run
+    ):
+        return "implementation"
+    if lock.run_type == "validation" and lock.run_id == task.latest_validation_run:
+        return "validation"
+    return None
+
+
 def list_task_summaries(
     workspace_root: Path,
     *,
@@ -249,27 +283,38 @@ def list_task_summaries(
         visibility = "archived"
     else:
         visibility = "visible"
-    tasks = list_tasks_by_visibility(workspace_root, visibility=visibility)
-    slug_filter = slug.strip().lower() if slug and slug.strip() else None
-    active_state = load_active_task_state(workspace_root)
+
+    paths = resolve_v2_paths(workspace_root)
+    tasks = list_task_summary_records(paths, visibility=visibility)
+    active_locks = {lock.task_id: lock for lock in load_active_locks_from_index(paths)}
+    sidecars = load_sidecar_index(paths)
+    active_state = load_active_task_state_from_paths(paths)
     active_task_id = active_state.task_id if active_state is not None else None
-    rows = []
+    ref_context = refs.ref_context_for_workspace(workspace_root)
+    slug_filter = slug.strip().lower() if slug and slug.strip() else None
+    rows: list[dict[str, object]] = []
     for task in tasks:
         if slug_filter is not None and task.slug != slug_filter:
             continue
         rows.append(
             {
                 "id": task.id,
-                "global_ref": global_ref_for_local_id(workspace_root, task.id),
-                "file_ref": file_ref_for_local_id(workspace_root, task.id),
+                "global_ref": global_ref_for_local_id(
+                    workspace_root, task.id, context=ref_context
+                ),
+                "file_ref": file_ref_for_local_id(
+                    workspace_root, task.id, context=ref_context
+                ),
                 "slug": task.slug,
                 "title": task.title,
                 "status": task.status_stage,
                 "status_stage": task.status_stage,
                 "is_active": task.id == active_task_id,
-                "active_stage": _task_active_stage(workspace_root, task),
+                "active_stage": _summary_active_stage(
+                    task, sidecars.get(task.id), active_locks.get(task.id)
+                ),
                 "accepted_plan_version": task.accepted_plan_version,
-                "archived": is_archived_task(task),
+                "archived": task.archived_at is not None,
                 "archived_at": task.archived_at,
             }
         )
@@ -686,7 +731,6 @@ def reject_plan(
         "plan.rejected",
         {"plan_version": latest.plan_version, "reason": reason},
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return _lifecycle_payload(
         "plan reject",
         updated,
@@ -1838,8 +1882,7 @@ def _acquire_lock(
         harness=harness,
     )
     try:
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        write_lock(lock_path, lock)
+        save_lock_from_paths(paths, task.id, lock, create_only=True)
     except LaunchError as exc:
         raise _cli_error(
             _lock_conflict_message(task.id, read_lock(lock_path) or lock),
@@ -1881,7 +1924,7 @@ def _release_lock(
         )
     data = {"stage": expected_stage, "run_id": run_id, **(extra_data or {})}
     _append_event(workspace_root, task.id, event_name, data)
-    remove_lock(lock_path)
+    remove_lock_from_paths(paths, task.id)
     _append_event(
         workspace_root,
         task.id,
@@ -1905,7 +1948,6 @@ def _release_expired_lock(
 ) -> None:
     """Release an expired lock with audit trail, no stage transition."""
     paths = resolve_v2_paths(workspace_root)
-    lock_path = task_lock_path(paths, task_id)
     # Write broken-lock audit record
     broken = replace(
         lock,
@@ -1913,7 +1955,7 @@ def _release_expired_lock(
         broken_reason=reason,
     )
     _write_broken_lock_audit(paths, task_id, broken)
-    remove_lock(lock_path)
+    remove_lock_from_paths(paths, task_id)
     _append_event(
         workspace_root,
         task_id,

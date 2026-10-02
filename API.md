@@ -16,6 +16,7 @@ This repository exposes a task-first public API. The supported modules are:
 - `taskledger.api.storage`
 - `taskledger.api.sync`
 - `taskledger.api.search`
+- `taskledger.api.maintenance`
 
 ## Import boundary
 
@@ -299,6 +300,12 @@ details in JSON context payloads.
 - `sync_git_hooks_status`
 - `sync_git_hooks_uninstall`
 
+### `taskledger.api.maintenance`
+
+- `garbage_collect`
+
+`garbage_collect(workspace_root, *, scope="all", task_id=None, older_than=None, apply=False, reason="")` reports eligible cache, runtime snapshot, and unreferenced artifact files. It is dry-run by default. Evidence/runtime deletion requires `apply=True` and a non-empty `reason`; canonical task records are never targets.
+
 ## CLI command groups
 
 The public task-first CLI surface is organized around these command groups:
@@ -317,6 +324,7 @@ The public task-first CLI surface is organized around these command groups:
 - `release`
 - `lock`
 - `storage`
+- `maintenance`
 - `sync`
 - `config`
 - `context`

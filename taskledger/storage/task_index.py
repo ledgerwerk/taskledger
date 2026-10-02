@@ -7,9 +7,12 @@ canonical Markdown/YAML records. It is never the authoritative source of truth.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+
+from filelock import FileLock
 
 from taskledger.domain._model_utils import (
     _optional_int,
@@ -173,6 +176,9 @@ def rebuild_task_index(paths: V2Paths) -> dict[str, int]:
 
     envelope = _index_envelope(entries, paths.ledger_ref, utc_now_iso())
     write_json(_task_index_path(paths), envelope)
+    from taskledger.storage.indexes import clear_index_dirty
+
+    clear_index_dirty(paths, "task_index")
     return {"tasks": len(entries)}
 
 
@@ -190,6 +196,10 @@ def list_task_summaries(
     statuses: set[str] | None = None,
 ) -> list[TaskSummaryRecord]:
     """List task summaries from the index, rebuilding if necessary."""
+    from taskledger.storage.indexes import index_is_dirty
+
+    if index_is_dirty(paths, "task_index"):
+        rebuild_task_index(paths)
     index = _read_index(paths)
     if index is None:
         rebuild_task_index(paths)
@@ -272,54 +282,78 @@ def resolve_task_summary(
     raise ValueError(f"Task not found: {ref}")
 
 
+def _best_effort_update_task_index(
+    paths: V2Paths,
+    task_id: str,
+    update: Callable[[list[dict[str, object]]], None],
+) -> None:
+
+    from taskledger.storage.indexes import index_is_dirty, mark_index_dirty
+    from taskledger.timeutils import utc_now_iso
+
+    path = _task_index_path(paths)
+    if index_is_dirty(paths, "task_index") or not path.is_file():
+        mark_index_dirty(paths, "task_index", task_id=task_id)
+        return
+
+    try:
+        with FileLock(f"{path}.lock"):
+            index = _read_index(paths)
+            if index is None:
+                mark_index_dirty(paths, "task_index", task_id=task_id)
+                return
+            entries = index.get("entries")
+            if not isinstance(entries, list):
+                mark_index_dirty(paths, "task_index", task_id=task_id)
+                return
+            update(entries)
+            index["generated_at"] = utc_now_iso()
+            write_json(path, index)
+    except Exception:
+        mark_index_dirty(paths, "task_index", task_id=task_id)
+        logger.warning("Failed to update task index for %s", task_id, exc_info=True)
+
+
 def update_task_index_entry(paths: V2Paths, task: TaskRecord) -> None:
-    """Write-through update: refresh one task entry in the index."""
+    """Write through one task summary without a synchronous index rebuild."""
+
     path = task_markdown_path(paths, task.id)
-    if not path.exists():
+    if not path.is_file():
+        from taskledger.storage.indexes import mark_index_dirty
+
+        mark_index_dirty(paths, "task_index", task_id=task.id)
         return
     try:
         stat = path.stat()
     except OSError:
+        from taskledger.storage.indexes import mark_index_dirty
+
+        mark_index_dirty(paths, "task_index", task_id=task.id)
         return
+
     rel = path.relative_to(paths.ledger_dir).as_posix()
-    summary = _task_summary_from_record(task, rel, stat.st_size, stat.st_mtime_ns)
-    new_entry = summary.to_dict()
+    new_entry = _task_summary_from_record(
+        task, rel, stat.st_size, stat.st_mtime_ns
+    ).to_dict()
 
-    index = _read_index(paths)
-    if index is None:
-        rebuild_task_index(paths)
-        return
+    def update(entries: list[dict[str, object]]) -> None:
+        for index, entry in enumerate(entries):
+            if isinstance(entry, dict) and entry.get("id") == task.id:
+                entries[index] = new_entry
+                return
+        entries.append(new_entry)
 
-    raw_entries = index.get("entries")
-    if not isinstance(raw_entries, list):
-        rebuild_task_index(paths)
-        return
-
-    found = False
-    for i, raw in enumerate(raw_entries):
-        if isinstance(raw, dict) and raw.get("id") == task.id:
-            raw_entries[i] = new_entry
-            found = True
-            break
-    if not found:
-        raw_entries.append(new_entry)
-
-    from taskledger.timeutils import utc_now_iso
-
-    index["entries"] = raw_entries
-    index["generated_at"] = utc_now_iso()
-    write_json(_task_index_path(paths), index)
+    _best_effort_update_task_index(paths, task.id, update)
 
 
 def remove_task_index_entry(paths: V2Paths, task_id: str) -> None:
-    """Remove a task entry from the index."""
-    index = _read_index(paths)
-    if index is None:
-        return
-    raw_entries = index.get("entries")
-    if not isinstance(raw_entries, list):
-        return
-    index["entries"] = [
-        e for e in raw_entries if not (isinstance(e, dict) and e.get("id") == task_id)
-    ]
-    write_json(_task_index_path(paths), index)
+    """Remove one task summary without a synchronous index rebuild."""
+
+    def update(entries: list[dict[str, object]]) -> None:
+        entries[:] = [
+            entry
+            for entry in entries
+            if not (isinstance(entry, dict) and entry.get("id") == task_id)
+        ]
+
+    _best_effort_update_task_index(paths, task_id, update)

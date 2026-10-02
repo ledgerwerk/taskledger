@@ -8,10 +8,8 @@ from pathlib import Path
 from taskledger.domain.models import FileLink, LinkCollection
 from taskledger.errors import LaunchError
 from taskledger.services import tasks as _tasks
-from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     resolve_task,
-    resolve_v2_paths,
     save_links,
     save_task,
 )
@@ -223,7 +221,6 @@ def refresh_file_baseline(
             "target_type": refreshed.target_type,
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return {
         "kind": "file_baseline_refreshed",
         "task_id": updated.id,

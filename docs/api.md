@@ -17,6 +17,7 @@
 - `taskledger.api.storage`
 - `taskledger.api.sync`
 - `taskledger.api.search`
+- `taskledger.api.maintenance`
 
 ## Import boundary
 
@@ -211,6 +212,12 @@ payload = plan_guidance(Path.cwd(), "task-0001")
 - `grep_workspace`
 - `symbols_workspace`
 - `dependencies_for_module`
+
+### Maintenance API
+
+- `garbage_collect`
+
+`garbage_collect(workspace_root, *, scope="all", task_id=None, older_than=None, apply=False, reason="")` reports eligible cache, runtime snapshot, and unreferenced artifact files. It is dry-run by default. Evidence/runtime deletion requires `apply=True` and a non-empty `reason`; canonical task records are never targets.
 
 ### Sync API
 

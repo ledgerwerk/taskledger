@@ -34,7 +34,6 @@ from taskledger.domain.states import (
     EXIT_CODE_MISSING,
     normalize_file_link_kind,
 )
-from taskledger.errors import LaunchError
 from taskledger.ids import next_project_id
 from taskledger.services import tasks as _tasks
 from taskledger.services.file_links import (
@@ -46,17 +45,11 @@ from taskledger.services.file_links import (
 from taskledger.services.file_links import (
     with_baseline,
 )
-from taskledger.storage.indexes import (
-    rebuild_v2_indexes,
-    update_dependency_index_entry,
-    update_introduction_index_entry,
-)
 from taskledger.storage.task_store import (
     list_introductions,
     load_requirements,
     resolve_introduction,
     resolve_task,
-    resolve_v2_paths,
     save_introduction,
     save_links,
     save_requirements,
@@ -103,11 +96,6 @@ def create_introduction(
         labels=tuple(dict.fromkeys(labels)),
     )
     save_introduction(workspace_root, intro)
-    paths = resolve_v2_paths(workspace_root)
-    try:
-        update_introduction_index_entry(paths, intro)
-    except (OSError, RuntimeError, LaunchError):
-        rebuild_v2_indexes(paths)
     return intro
 
 
@@ -163,11 +151,6 @@ def add_requirement(
         ),
     )
     save_task(workspace_root, updated)
-    paths = resolve_v2_paths(workspace_root)
-    try:
-        update_dependency_index_entry(paths, updated.id, list(requirements))
-    except (OSError, RuntimeError, LaunchError):
-        rebuild_v2_indexes(paths)
     return updated
 
 
@@ -195,11 +178,6 @@ def remove_requirement(
         ),
     )
     save_task(workspace_root, updated)
-    paths = resolve_v2_paths(workspace_root)
-    try:
-        update_dependency_index_entry(paths, updated.id, list(remaining))
-    except (OSError, RuntimeError, LaunchError):
-        rebuild_v2_indexes(paths)
     return updated
 
 
@@ -271,15 +249,6 @@ def waive_requirement(
         "requirement.waived",
         {"required_task_id": required.id, "reason": reason.strip()},
     )
-    paths = resolve_v2_paths(workspace_root)
-    try:
-        update_dependency_index_entry(
-            paths,
-            updated.id,
-            [item.task_id for item in requirements],
-        )
-    except (OSError, RuntimeError, LaunchError):
-        rebuild_v2_indexes(paths)
     return updated
 
 
@@ -346,7 +315,6 @@ def add_file_link(
             "target_type": new_link.target_type,
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return updated
 
 
@@ -363,7 +331,6 @@ def remove_file_link(workspace_root: Path, task_ref: str, *, path: str) -> TaskR
     )
     save_links(workspace_root, LinkCollection(task_id=updated.id, links=remaining))
     save_task(workspace_root, updated)
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return updated
 
 

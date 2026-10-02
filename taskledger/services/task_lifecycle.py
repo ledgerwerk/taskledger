@@ -35,13 +35,13 @@ from taskledger.domain.states import (
 from taskledger.errors import LaunchError, LockConflict
 from taskledger.ids import next_project_id
 from taskledger.services import tasks as _tasks
-from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.locks import lock_is_expired
+from taskledger.storage.task_index import list_task_summaries
 from taskledger.storage.task_store import (
+    V2Paths,
     clear_active_task_state,
     list_runs,
     list_tasks,
-    list_tasks_by_visibility,
     load_active_task_state,
     require_v2_layout,
     resolve_task,
@@ -51,6 +51,8 @@ from taskledger.storage.task_store import (
     save_links,
     save_run,
     save_task,
+    save_task_from_paths,
+    task_markdown_path,
 )
 from taskledger.timeutils import utc_now_iso
 
@@ -59,13 +61,11 @@ from taskledger.timeutils import utc_now_iso
 # ---------------------------------------------------------------------------
 
 
-def _allocate_task_id_and_advance(
-    workspace_root: Path, existing_ids: list[str] | None = None
-) -> str:
+def _allocate_task_id_and_advance(paths: V2Paths) -> str:
     """Reserve the next task bundle directory using authoritative allocations."""
-    from taskledger.storage.task_ids import allocate_task_directory
+    from taskledger.storage.task_ids import allocate_task_directory_from_paths
 
-    task_id, _ = allocate_task_directory(workspace_root)
+    task_id, _ = allocate_task_directory_from_paths(paths)
     return task_id
 
 
@@ -292,13 +292,9 @@ def create_task(
 
     require_mutable_project_context(workspace_root)
     paths = require_v2_layout(workspace_root)
-    all_tasks = list_tasks(workspace_root)
-    visible_tasks = list_tasks_by_visibility(workspace_root, visibility="visible")
-    task_slug = _tasks._unique_slug(visible_tasks, slug or title)
+    task_slug = _tasks._unique_slug(list_task_summaries(paths), slug or title)
     task = TaskRecord(
-        id=_allocate_task_id_and_advance(
-            workspace_root, [item.id for item in all_tasks]
-        ),
+        id=_allocate_task_id_and_advance(paths),
         slug=task_slug,
         title=title,
         body=description.strip(),
@@ -307,14 +303,13 @@ def create_task(
         labels=tuple(dict.fromkeys(labels)),
         owner=owner,
     )
-    save_task(workspace_root, task)
+    save_task_from_paths(paths, task)
     _tasks._append_event(
         workspace_root,
         task.id,
         "task.created",
         {"slug": task.slug, "title": task.title},
     )
-    rebuild_v2_indexes(paths)
     return task
 
 
@@ -345,9 +340,7 @@ def create_follow_up_task(
             "Follow-up tasks require a done parent task.",
             EXIT_CODE_INVALID_TRANSITION,
         )
-    all_tasks = list_tasks(workspace_root)
-    visible_tasks = list_tasks_by_visibility(workspace_root, visibility="visible")
-    task_slug = _tasks._unique_slug(visible_tasks, slug or title)
+    task_slug = _tasks._unique_slug(list_task_summaries(paths), slug or title)
     body = _follow_up_description(parent, description=description, reason=reason)
     copied_links = _copy_follow_up_links(
         parent.file_links,
@@ -355,9 +348,7 @@ def create_follow_up_task(
         copy_links=copy_links,
     )
     child = TaskRecord(
-        id=_allocate_task_id_and_advance(
-            workspace_root, [item.id for item in all_tasks]
-        ),
+        id=_allocate_task_id_and_advance(paths),
         slug=task_slug,
         title=title,
         body=body,
@@ -367,7 +358,7 @@ def create_follow_up_task(
         parent_task_id=parent.id,
         parent_relation="follow_up",
     )
-    save_task(workspace_root, child)
+    save_task_from_paths(paths, child)
     if copied_links:
         save_links(workspace_root, LinkCollection(task_id=child.id, links=copied_links))
     _tasks._append_event(
@@ -391,7 +382,6 @@ def create_follow_up_task(
             "parent_relation": "follow_up",
         },
     )
-    rebuild_v2_indexes(paths)
     if activate:
         activate_task(workspace_root, child.id, reason=reason, actor_type="agent")
     return {
@@ -477,17 +467,13 @@ def record_completed_task(
 
     require_mutable_project_context(workspace_root)
     paths = require_v2_layout(workspace_root)
-    all_tasks = list_tasks(workspace_root)
-    visible_tasks = list_tasks_by_visibility(workspace_root, visibility="visible")
-    task_slug = _tasks._unique_slug(visible_tasks, slug or title)
+    task_slug = _tasks._unique_slug(list_task_summaries(paths), slug or title)
     now = utc_now_iso()
     resolved_completed_by = completed_by or _tasks._default_actor()
     resolved_recorded_by = recorded_by or _tasks._default_actor()
 
     task = TaskRecord(
-        id=_allocate_task_id_and_advance(
-            workspace_root, [item.id for item in all_tasks]
-        ),
+        id=_allocate_task_id_and_advance(paths),
         slug=task_slug,
         title=title.strip(),
         body=(description or "").strip(),
@@ -499,7 +485,7 @@ def record_completed_task(
         recorded_at=now,
         recorded_by=resolved_recorded_by,
     )
-    save_task(workspace_root, task)
+    save_task_from_paths(paths, task)
 
     from taskledger.storage.task_store import list_changes as _list_changes
 
@@ -614,8 +600,6 @@ def record_completed_task(
             },
         )
 
-    rebuild_v2_indexes(paths)
-
     return {
         "kind": "recorded_task",
         "task_id": task.id,
@@ -719,6 +703,40 @@ def clear_active_task(
         force=force,
         reason=reason,
     )
+    paths = resolve_v2_paths(workspace_root)
+    if force and not task_markdown_path(paths, state.task_id).is_file():
+        if not reason.strip():
+            raise LaunchError(
+                "Forced deactivation of a missing active task requires a reason."
+            )
+        clear_active_task_state(workspace_root)
+        _tasks._append_event(
+            workspace_root,
+            state.task_id,
+            "repair.active_task_cleared",
+            {
+                "task_id": state.task_id,
+                "reason": reason.strip(),
+                "actor_type": actor_type,
+                "forced": True,
+            },
+        )
+        from taskledger.refs import global_ref_for_local_id
+
+        return {
+            "kind": "active_task",
+            "task_id": state.task_id,
+            "task_ref": global_ref_for_local_id(workspace_root, state.task_id),
+            "slug": None,
+            "title": None,
+            "status_stage": None,
+            "active_stage": None,
+            "active": False,
+            "changed": True,
+            "previous_task_id": state.previous_task_id,
+            "state": state.to_dict(),
+            "repair": "cleared_dangling_active_task",
+        }
     from taskledger.storage.task_store import (
         resolve_active_task as storage_resolve_active_task,
     )
@@ -785,7 +803,6 @@ def edit_task(
         "task.updated",
         {"title": updated.title},
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return updated
 
 
@@ -822,7 +839,6 @@ def cancel_task(
         "task.cancelled",
         {"reason": reason},
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return _tasks._lifecycle_payload(
         "task cancel",
         updated,
@@ -900,7 +916,6 @@ def uncancel_task(
             "actor": resolved_actor.to_dict(),
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return _tasks._lifecycle_payload(
         "task uncancel", updated, warnings=[], changed=True
     )
@@ -936,5 +951,4 @@ def close_task(
         "task.closed",
         {"closed_at": closed_at, "note": note},
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return _tasks._lifecycle_payload("task close", updated, warnings=[], changed=True)

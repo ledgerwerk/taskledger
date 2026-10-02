@@ -109,19 +109,25 @@ def repair_locks(
     from taskledger.services.lock_inventory import (
         build_lock_inventory,
     )
-    from taskledger.services.run_store import break_lock
+    from taskledger.services.run_store import break_lock, break_orphan_lock
     from taskledger.storage.task_store import resolve_v2_paths
 
     paths = resolve_v2_paths(workspace_root)
     inventory = build_lock_inventory(paths)
     safe = inventory.safe_repairable
-
-    if not safe:
+    orphans = tuple(
+        entry
+        for entry in inventory.entries
+        if entry.classification == "orphan_missing_task"
+    )
+    eligible = (*safe, *orphans)
+    if not eligible:
         return {
             "kind": "bulk_lock_repair",
             "status": "nothing_to_repair",
             "dry_run": not apply,
             "safe_repairable": 0,
+            "orphan_missing_task": 0,
             "total_locks": inventory.lock_file_count,
         }
 
@@ -131,6 +137,7 @@ def repair_locks(
             "status": "dry_run",
             "dry_run": True,
             "safe_repairable": len(safe),
+            "orphan_missing_task": len(orphans),
             "total_locks": inventory.lock_file_count,
             "entries": [
                 {
@@ -141,7 +148,7 @@ def repair_locks(
                     if e.diagnostics
                     else [],
                 }
-                for e in safe
+                for e in eligible
             ],
             "next_command": (
                 "taskledger repair locks --apply "
@@ -153,8 +160,9 @@ def repair_locks(
         raise LaunchError("Bulk lock repair requires --reason when using --apply.")
 
     repaired: list[str] = []
+    orphan_repaired: list[str] = []
     failed: list[dict[str, str]] = []
-    for entry in safe:
+    for entry in eligible:
         if entry.task_id is None:
             failed.append(
                 {
@@ -164,7 +172,11 @@ def repair_locks(
             )
             continue
         try:
-            break_lock(workspace_root, entry.task_id, reason=reason)
+            if entry.classification == "orphan_missing_task":
+                break_orphan_lock(workspace_root, entry.task_id, reason=reason)
+                orphan_repaired.append(entry.task_id)
+            else:
+                break_lock(workspace_root, entry.task_id, reason=reason)
             repaired.append(entry.task_id)
         except Exception as exc:  # noqa: BLE001
             failed.append(
@@ -179,6 +191,121 @@ def repair_locks(
         "status": "applied",
         "dry_run": False,
         "repaired": repaired,
+        "orphan_missing_task_repaired": orphan_repaired,
         "failed": failed,
         "reason": reason,
+    }
+
+
+def repair_allocations(
+    workspace_root: Path,
+    *,
+    apply: bool = False,
+    reason: str = "",
+) -> dict[str, object]:
+    """Inspect or quarantine incomplete non-empty task allocations."""
+    from taskledger.services.task_events import append_task_event
+    from taskledger.storage.task_ids import (
+        inspect_task_id_inventory,
+        write_task_id_tombstone,
+    )
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    paths = resolve_v2_paths(workspace_root)
+    allocations = inspect_task_id_inventory(paths).incomplete_allocations
+    entries = [
+        {
+            "task_id": allocation.task_id,
+            "path": str(allocation.path),
+            "files": list(allocation.files),
+        }
+        for allocation in allocations
+    ]
+    if not allocations:
+        return {
+            "kind": "task_allocation_repair",
+            "status": "nothing_to_repair",
+            "dry_run": not apply,
+            "incomplete_allocations": [],
+        }
+    if not apply:
+        return {
+            "kind": "task_allocation_repair",
+            "status": "dry_run",
+            "dry_run": True,
+            "incomplete_allocations": entries,
+            "next_command": (
+                "taskledger repair allocations --apply "
+                '--reason "Quarantine incomplete task allocation."'
+            ),
+        }
+    if not reason.strip():
+        raise LaunchError(
+            "Incomplete task allocation repair requires --reason when using --apply."
+        )
+
+    repaired: list[dict[str, str]] = []
+    failed: list[dict[str, str]] = []
+    for allocation in allocations:
+        quarantine_path = (
+            paths.tasks_dir.parent
+            / "_recovery"
+            / "incomplete-task-allocations"
+            / allocation.task_id
+        )
+        if quarantine_path.exists():
+            failed.append(
+                {
+                    "task_id": allocation.task_id,
+                    "error": (
+                        f"Quarantine destination already exists: {quarantine_path}"
+                    ),
+                }
+            )
+            continue
+        try:
+            write_task_id_tombstone(
+                paths,
+                allocation.task_id,
+                reason=reason,
+                quarantined_path=quarantine_path,
+            )
+            quarantine_path.parent.mkdir(parents=True, exist_ok=True)
+            allocation.path.rename(quarantine_path)
+            tombstone_path = (
+                paths.ledger_dir / "tombstones" / f"{allocation.task_id}.toml"
+            )
+            relative_quarantine = quarantine_path.relative_to(
+                paths.tasks_dir.parent
+            ).as_posix()
+            append_task_event(
+                workspace_root,
+                "*",
+                "repair.task_allocation_quarantined",
+                {
+                    "task_id": allocation.task_id,
+                    "reason": reason.strip(),
+                    "quarantined_path": relative_quarantine,
+                    "tombstone_path": tombstone_path.relative_to(
+                        paths.ledger_dir
+                    ).as_posix(),
+                },
+            )
+            repaired.append(
+                {
+                    "task_id": allocation.task_id,
+                    "quarantined_path": str(quarantine_path),
+                    "tombstone_path": str(tombstone_path),
+                }
+            )
+        except Exception as exc:  # noqa: BLE001
+            failed.append({"task_id": allocation.task_id, "error": str(exc)})
+
+    return {
+        "kind": "task_allocation_repair",
+        "status": "applied",
+        "dry_run": False,
+        "repaired": repaired,
+        "failed": failed,
+        "reason": reason.strip(),
     }

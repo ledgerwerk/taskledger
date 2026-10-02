@@ -15,7 +15,6 @@ from taskledger.services.git_utils import (
     run_git,
 )
 from taskledger.storage.atomic import atomic_write_text
-from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     list_runs,
     resolve_task,
@@ -943,7 +942,6 @@ def refresh_implementation_snapshot(
             "changed_paths": old_eval.details.get("changed_paths", []),
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return {
         "kind": "implementation_snapshot_refresh",
         "task_id": task.id,

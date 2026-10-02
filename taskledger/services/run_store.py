@@ -6,19 +6,21 @@ from pathlib import Path
 from taskledger.domain.actor import ActorRef, HarnessRef
 from taskledger.domain.states import EXIT_CODE_MISSING
 from taskledger.errors import LaunchError
+from taskledger.ids import TASK_ID_FORMAT
 from taskledger.services.task_events import (
     append_task_event,
     default_actor,
     write_broken_lock_audit,
 )
-from taskledger.storage.indexes import rebuild_v2_indexes
-from taskledger.storage.locks import lock_status, read_lock, remove_lock
+from taskledger.storage.locks import lock_status, read_lock
 from taskledger.storage.task_store import (
-    list_runs,
+    remove_lock_from_paths,
     resolve_task,
     resolve_v2_paths,
     task_lock_path,
+    task_markdown_path,
 )
+from taskledger.storage.yaml_store import write_yaml_object
 from taskledger.timeutils import utc_now_iso
 
 
@@ -112,31 +114,7 @@ def break_lock(
         "repair.lock_broken",
         {"lock_id": lock.lock_id, "reason": reason, "audit_path": rel_path},
     )
-    remove_lock(lock_path)
-    rebuild_v2_indexes(paths)
-    recovery_details: dict[str, object] = {}
-    if matching_run is not None:
-        if matching_run.run_type == "planning":
-            next_command = (
-                f"taskledger repair run --task {task.id} "
-                f"--run {matching_run.run_id} "
-                '--reason "Planning lock holder was no longer valid."'
-            )
-        elif matching_run.run_type == "implementation":
-            next_command = (
-                f"taskledger implement resume --task {task.id} "
-                '--reason "Reacquire implementation lock for existing running run."'
-            )
-        else:
-            next_command = f"taskledger next-action --task {task.id}"
-        recovery_details = {
-            "orphaned_run": {
-                "run_id": matching_run.run_id,
-                "run_type": matching_run.run_type,
-                "status": matching_run.status,
-            },
-            "next_commands": [next_command],
-        }
+    remove_lock_from_paths(paths, task.id)
     return {
         "ok": True,
         "command": "lock break",
@@ -148,6 +126,72 @@ def break_lock(
         "lock": broken_lock.to_dict(),
         "reason": reason,
         "audit_path": rel_path,
+    }
+
+
+def break_orphan_lock(
+    workspace_root: Path,
+    task_id: str,
+    *,
+    reason: str,
+) -> dict[str, object]:
+    try:
+        task_id_parts = TASK_ID_FORMAT.parse_parts(task_id)
+    except ValueError as exc:
+        raise LaunchError(f"Invalid task ID for orphan lock: {task_id!r}.") from exc
+    if TASK_ID_FORMAT.format(task_id_parts.number) != task_id:
+        raise LaunchError(f"Non-canonical task ID for orphan lock: {task_id!r}.")
+    if not reason.strip():
+        raise LaunchError("Orphan lock repair requires a non-empty reason.")
+
+    paths = resolve_v2_paths(workspace_root)
+    if task_markdown_path(paths, task_id).is_file():
+        raise LaunchError(f"Task {task_id} exists; its lock is not orphaned.")
+    lock_path = task_lock_path(paths, task_id)
+    lock = read_lock(lock_path)
+    if lock is None:
+        raise LaunchError(f"No active lock exists for missing task {task_id}.")
+    if lock.task_id != task_id:
+        raise LaunchError(
+            f"Lock {lock_path} identifies task {lock.task_id}, not {task_id}."
+        )
+
+    broken_at = utc_now_iso()
+    broken_lock = replace(
+        lock,
+        broken_at=broken_at,
+        broken_by=default_actor(),
+        broken_reason=reason.strip(),
+    )
+    timestamp = broken_at.replace(":", "").replace("-", "")
+    audit_path = (
+        paths.ledger_dir
+        / "recovery"
+        / "orphan-locks"
+        / task_id
+        / f"broken-lock-{timestamp}.yaml"
+    )
+    write_yaml_object(audit_path, broken_lock.to_dict())
+    relative_audit_path = audit_path.relative_to(paths.ledger_dir).as_posix()
+    append_task_event(
+        workspace_root,
+        "*",
+        "repair.orphan_lock_broken",
+        {
+            "task_id": task_id,
+            "lock_id": lock.lock_id,
+            "reason": reason.strip(),
+            "audit_path": relative_audit_path,
+        },
+    )
+    remove_lock_from_paths(paths, task_id)
+    return {
+        "kind": "orphan_lock_repair",
+        "task_id": task_id,
+        "changed": True,
+        "lock": broken_lock.to_dict(),
+        "reason": reason.strip(),
+        "audit_path": relative_audit_path,
     }
 
 

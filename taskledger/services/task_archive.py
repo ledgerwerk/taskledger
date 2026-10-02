@@ -10,7 +10,6 @@ from taskledger.domain.states import (
 )
 from taskledger.ids import slugify_project_ref
 from taskledger.services import tasks as _tasks
-from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.locks import lock_is_expired, read_lock
 from taskledger.storage.task_store import (
     clear_active_task_state,
@@ -102,7 +101,6 @@ def archive_task(
             "force": force,
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return {
         "kind": "task_archived",
         "task_id": updated.id,
@@ -207,7 +205,6 @@ def unarchive_task(
             "target_stage": target_stage,
         },
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     result: dict[str, object] = {
         "kind": "task_unarchived",
         "task_id": updated.id,

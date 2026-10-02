@@ -65,16 +65,20 @@ def local_id_from_ref(workspace_root: Path, value: str, *, kind: str) -> str:
     return parse_taskledger_ref(workspace_root, value, allowed_kinds={kind}).local_id
 
 
-def global_ref_for_local_id(workspace_root: Path, local_id: str) -> str:
-    ctx = ref_context_for_workspace(workspace_root)
+def global_ref_for_local_id(
+    workspace_root: Path, local_id: str, *, context: RefContext | None = None
+) -> str:
+    ctx = context or ref_context_for_workspace(workspace_root)
     try:
         return parse_resource_ref(local_id, default_ledger=ctx.ledger_code).global_ref
     except IdFormatError as exc:
         raise LaunchError(f"Invalid local resource id {local_id!r}: {exc}") from exc
 
 
-def file_ref_for_local_id(workspace_root: Path, local_id: str) -> str:
-    ctx = ref_context_for_workspace(workspace_root)
+def file_ref_for_local_id(
+    workspace_root: Path, local_id: str, *, context: RefContext | None = None
+) -> str:
+    ctx = context or ref_context_for_workspace(workspace_root)
     try:
         return parse_resource_ref(local_id, default_ledger=ctx.ledger_code).file_ref
     except IdFormatError as exc:

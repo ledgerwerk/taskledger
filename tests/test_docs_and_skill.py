@@ -146,7 +146,7 @@ def test_docs_define_agent_golden_path_and_advanced_surfaces() -> None:
         assert "storage" in text
         assert "advanced" in text.lower()
 
-    assert "44 top-level CLI entries" in public_surface
+    assert "45 top-level CLI entries" in public_surface
     assert "41 registered command groups" not in public_surface
     assert "ledger fork/switch/adopt" in public_surface
     assert "search`/`grep`/`symbols`/`deps`" in public_surface

@@ -1,20 +1,61 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 from filelock import FileLock
 
+from taskledger.domain.models import TaskLock
 from taskledger.domain.task import IntroductionRecord
+from taskledger.errors import LaunchError
+from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.common import load_json_array, write_json
-from taskledger.storage.task_store import (
-    V2Paths,
-    list_introductions,
-    list_tasks,
-    load_active_locks,
-    load_requirements,
+from taskledger.storage.task_store import V2Paths
+
+logger = logging.getLogger(__name__)
+
+DirtyIndexName = Literal[
+    "task_index",
+    "sidecar_index",
+    "dependencies",
+    "introductions",
+    "active_locks",
+]
+
+
+_ALL_DIRTY_INDEX_NAMES: tuple[DirtyIndexName, ...] = (
+    "task_index",
+    "sidecar_index",
+    "dependencies",
+    "introductions",
+    "active_locks",
 )
+
+
+def _dirty_index_path(paths: V2Paths, index_name: DirtyIndexName) -> Path:
+    return paths.indexes_dir / f".{index_name}.dirty"
+
+
+def index_is_dirty(paths: V2Paths, index_name: DirtyIndexName) -> bool:
+    return _dirty_index_path(paths, index_name).exists()
+
+
+def mark_index_dirty(
+    paths: V2Paths, index_name: DirtyIndexName, *, task_id: str | None = None
+) -> None:
+    marker = _dirty_index_path(paths, index_name)
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(marker, f"{task_id or '*'}\n")
+    except Exception:
+        logger.warning("Failed to mark %s dirty", index_name, exc_info=True)
+
+
+def clear_index_dirty(paths: V2Paths, index_name: DirtyIndexName) -> None:
+    _dirty_index_path(paths, index_name).unlink(missing_ok=True)
+
 
 T = TypeVar("T")
 
@@ -33,20 +74,29 @@ def _update_index(
 
 
 def rebuild_v2_indexes(paths: V2Paths) -> dict[str, int]:
+    from taskledger.storage.locks import lock_is_expired
     from taskledger.storage.sidecar_index import rebuild_sidecar_index
     from taskledger.storage.task_index import rebuild_task_index
+    from taskledger.storage.task_store import (
+        list_introductions_from_paths,
+        list_tasks_from_paths,
+        load_lock_records_from_paths,
+        load_requirements_from_paths,
+    )
 
-    tasks = list_tasks(paths.workspace_root)
-    introductions = list_introductions(paths.workspace_root)
-    locks = load_active_locks(paths.workspace_root)
+    tasks = list_tasks_from_paths(paths)
+    introductions = list_introductions_from_paths(paths)
+    locks = [
+        lock
+        for lock in load_lock_records_from_paths(paths)
+        if not lock_is_expired(lock)
+    ]
     dependencies = [
         {
             "task_id": task.id,
             "requirements": [
-                item.task_id
-                for item in load_requirements(
-                    paths.workspace_root, task.id
-                ).requirements
+                item.required_task_id or item.task_id
+                for item in load_requirements_from_paths(paths, task.id).requirements
             ],
         }
         for task in tasks
@@ -63,6 +113,8 @@ def rebuild_v2_indexes(paths: V2Paths) -> dict[str, int]:
 
     task_index_counts = rebuild_task_index(paths)
     sidecar_counts = rebuild_sidecar_index(paths)
+    for index_name in _ALL_DIRTY_INDEX_NAMES:
+        clear_index_dirty(paths, index_name)
     return {
         "introductions": len(introductions),
         "locks": len(locks),
@@ -72,17 +124,61 @@ def rebuild_v2_indexes(paths: V2Paths) -> dict[str, int]:
     }
 
 
+def load_active_locks_from_index(paths: V2Paths) -> list[TaskLock]:
+    from taskledger.storage.locks import lock_is_expired
+    from taskledger.storage.task_store import load_lock_records_from_paths
+
+    path = paths.active_locks_index_path
+    if index_is_dirty(paths, "active_locks") or not path.is_file():
+        return _rebuild_active_lock_index(paths, load_lock_records_from_paths)
+    try:
+        locks = [
+            TaskLock.from_dict(entry)
+            for entry in load_json_array(path, label="active locks index")
+        ]
+    except LaunchError:
+        return _rebuild_active_lock_index(paths, load_lock_records_from_paths)
+    return [lock for lock in locks if not lock_is_expired(lock)]
+
+
+def _rebuild_active_lock_index(
+    paths: V2Paths,
+    load_locks: Callable[[V2Paths], list[TaskLock]],
+) -> list[TaskLock]:
+    from taskledger.storage.locks import lock_is_expired
+
+    locks = [lock for lock in load_locks(paths) if not lock_is_expired(lock)]
+    write_json(paths.active_locks_index_path, [lock.to_dict() for lock in locks])
+    clear_index_dirty(paths, "active_locks")
+    return locks
+
+
+def _best_effort_update_index(
+    paths: V2Paths,
+    index_name: DirtyIndexName,
+    index_path: Path,
+    update: Callable[[list[dict[str, object]]], None],
+    *,
+    task_id: str | None = None,
+) -> None:
+    if index_is_dirty(paths, index_name):
+        return
+    if not index_path.is_file():
+        mark_index_dirty(paths, index_name, task_id=task_id)
+        return
+    try:
+        _update_index(index_path, update)
+    except Exception:
+        mark_index_dirty(paths, index_name, task_id=task_id)
+        logger.warning("Failed to update %s index", index_name, exc_info=True)
+
+
 def update_dependency_index_entry(
     paths: V2Paths,
     task_id: str,
     requirement_task_ids: list[str],
 ) -> None:
-    """Update one task entry in the dependency index.
-
-    Reads the existing index, updates or inserts the entry for task_id,
-    and atomically rewrites the index file.
-    """
-    index_path = paths.dependencies_index_path
+    """Update one task entry in the dependency index without a global rebuild."""
 
     def update(entries: list[dict[str, object]]) -> None:
         for entry in entries:
@@ -91,19 +187,35 @@ def update_dependency_index_entry(
                 return
         entries.append({"task_id": task_id, "requirements": list(requirement_task_ids)})
 
-    _update_index(index_path, update)
+    _best_effort_update_index(
+        paths,
+        "dependencies",
+        paths.dependencies_index_path,
+        update,
+        task_id=task_id,
+    )
+
+
+def remove_dependency_index_entry(paths: V2Paths, task_id: str) -> None:
+    """Remove one task entry from the dependency index."""
+
+    def update(entries: list[dict[str, object]]) -> None:
+        entries[:] = [entry for entry in entries if entry.get("task_id") != task_id]
+
+    _best_effort_update_index(
+        paths,
+        "dependencies",
+        paths.dependencies_index_path,
+        update,
+        task_id=task_id,
+    )
 
 
 def update_introduction_index_entry(
     paths: V2Paths,
     introduction: IntroductionRecord,
 ) -> None:
-    """Update one entry in the introductions index.
-
-    Reads the existing index, updates or inserts the entry,
-    and atomically rewrites the index file.
-    """
-    index_path = paths.introductions_index_path
+    """Update one entry in the introductions index."""
     entry_data: dict[str, object] = {
         "id": introduction.id,
         "slug": introduction.slug,
@@ -117,21 +229,58 @@ def update_introduction_index_entry(
                 return
         entries.append(entry_data)
 
-    _update_index(index_path, update)
+    _best_effort_update_index(
+        paths,
+        "introductions",
+        paths.introductions_index_path,
+        update,
+    )
 
 
-def remove_introduction_index_entry(
-    paths: V2Paths,
-    introduction_id: str,
-) -> None:
-    """Remove one entry from the introductions index.
-
-    Reads the existing index, removes the entry,
-    and atomically rewrites the index file.
-    """
-    index_path = paths.introductions_index_path
+def remove_introduction_index_entry(paths: V2Paths, introduction_id: str) -> None:
+    """Remove one entry from the introductions index."""
 
     def update(entries: list[dict[str, object]]) -> None:
         entries[:] = [entry for entry in entries if entry.get("id") != introduction_id]
 
-    _update_index(index_path, update)
+    _best_effort_update_index(
+        paths,
+        "introductions",
+        paths.introductions_index_path,
+        update,
+    )
+
+
+def update_active_lock_index_entry(paths: V2Paths, lock: TaskLock) -> None:
+    """Insert or replace one active-lock index entry."""
+    entry_data = lock.to_dict()
+
+    def update(entries: list[dict[str, object]]) -> None:
+        for index, entry in enumerate(entries):
+            if entry.get("task_id") == lock.task_id:
+                entries[index] = entry_data
+                return
+        entries.append(entry_data)
+
+    _best_effort_update_index(
+        paths,
+        "active_locks",
+        paths.active_locks_index_path,
+        update,
+        task_id=lock.task_id,
+    )
+
+
+def remove_active_lock_index_entry(paths: V2Paths, task_id: str) -> None:
+    """Remove one task entry from the active-lock index."""
+
+    def update(entries: list[dict[str, object]]) -> None:
+        entries[:] = [entry for entry in entries if entry.get("task_id") != task_id]
+
+    _best_effort_update_index(
+        paths,
+        "active_locks",
+        paths.active_locks_index_path,
+        update,
+        task_id=task_id,
+    )

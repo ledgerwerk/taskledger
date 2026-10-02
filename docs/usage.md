@@ -733,7 +733,15 @@ taskledger implement resume --reason "Reacquire implementation lock for existing
 taskledger task uncancel --task TASK_REF --reason "Restore the task to a safe durable stage."
 taskledger next-action
 taskledger repair index
+taskledger task deactivate --force --reason "Clear dangling active task after record loss."
+taskledger repair locks
+taskledger repair locks --apply --reason "Preserve and remove the orphaned runtime lock."
+taskledger repair allocations
+taskledger repair allocations --apply --reason "Quarantine incomplete task allocation after record loss."
+taskledger maintenance gc --scope artifacts
 ```
+
+Forced deactivation clears only a dangling active-task pointer. Run the lock-repair dry-run separately to inspect orphan locks before applying. Allocation repair preserves the partial directory in quarantine and tombstones its ID. Garbage collection is explicit, dry-run by default, and never deletes canonical task history; see `docs/command_contract.md` for scope and retention details.
 
 ## Export and snapshots
 

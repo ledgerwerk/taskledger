@@ -8,7 +8,7 @@ task -> plan -> approval -> implement -> validate -> done
 
 ## Supported CLI entries
 
-The command inventory tracks 44 top-level CLI entries. Some are groups and some
+The command inventory tracks 45 top-level CLI entries. Some are groups and some
 are root commands. The normal agent path is intentionally smaller than the full
 registered surface.
 
@@ -44,7 +44,7 @@ the normal planning/approval path for agents.
 
 **Advanced entries** — power-user, storage, transfer, and project operations:
 
-- `ledger`, `storage`, `sync`, `release`, `migrate`
+- `ledger`, `storage`, `sync`, `release`, `migrate`, `maintenance`
 
 **Human-oriented entries** — interactive inspection and reporting:
 
@@ -138,6 +138,7 @@ advanced/compatibility read surfaces; prefer `context --for ...` and
 - `taskledger.api.storage`
 - `taskledger.api.sync`
 - `taskledger.api.search`
+- `taskledger.api.maintenance`
 
 `taskledger.api.task_runs` includes the public lifecycle helpers
 `start_implementation`, `restart_implementation`, `resume_implementation`,

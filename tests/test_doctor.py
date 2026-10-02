@@ -679,6 +679,9 @@ def test_inspect_v2_schema_no_errors(tmp_path: Path) -> None:
 # specmason: req=REQ-0017 ac=AC-0188
 def test_inspect_v2_indexes_all_present(tmp_path: Path) -> None:
     _setup_project(tmp_path)
+    from taskledger.storage.indexes import rebuild_v2_indexes
+
+    rebuild_v2_indexes(ensure_v2_layout(tmp_path))
     result = inspect_v2_indexes(tmp_path)
     assert result["healthy"] is True
     assert result["missing_indexes"] == []
@@ -687,6 +690,9 @@ def test_inspect_v2_indexes_all_present(tmp_path: Path) -> None:
 # specmason: req=REQ-0017 ac=AC-0199
 def test_inspect_v2_indexes_ignores_removed_legacy_indexes(tmp_path: Path) -> None:
     _setup_project(tmp_path)
+    from taskledger.storage.indexes import rebuild_v2_indexes
+
+    rebuild_v2_indexes(ensure_v2_layout(tmp_path))
     indexes_dir = ensure_v2_layout(tmp_path).indexes_dir
     for name in ("tasks.json", "plan_versions.json", "latest_runs.json"):
         (indexes_dir / name).write_text("{not valid json", encoding="utf-8")

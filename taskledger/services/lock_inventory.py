@@ -61,6 +61,8 @@ class LockInventoryEntry:
     diagnostics: LockDiagnostics | None
     parse_error: str | None
 
+    orphan_missing_task: bool = False
+
     @property
     def is_malformed(self) -> bool:
         return self.parse_error is not None
@@ -82,10 +84,12 @@ class LockInventoryEntry:
 
     @property
     def classification(self) -> str:
-        if self.diagnostics is not None:
-            return self.diagnostics.classification
         if self.is_malformed:
             return "malformed"
+        if self.orphan_missing_task:
+            return "orphan_missing_task"
+        if self.diagnostics is not None:
+            return self.diagnostics.classification
         return CLASSIFICATION_NONE
 
     def to_dict(self) -> dict[str, object]:
@@ -235,6 +239,13 @@ def build_lock_inventory(
                 parse_error = f"Failed to diagnose lock {lock_path}: {exc}"
                 logger.warning("Lock diagnosis failed %s: %s", lock_path, exc)
 
+        orphan_missing_task = (
+            lock is not None
+            and lock_path.parent.name == "locks"
+            and task_id is not None
+            and lock.task_id == task_id
+            and not (paths.tasks_dir / task_id / "task.md").is_file()
+        )
         entries.append(
             LockInventoryEntry(
                 task_id=task_id,
@@ -242,6 +253,7 @@ def build_lock_inventory(
                 lock=lock,
                 diagnostics=diagnostics,
                 parse_error=parse_error,
+                orphan_missing_task=orphan_missing_task,
             )
         )
 

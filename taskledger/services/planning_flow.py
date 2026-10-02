@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from taskledger.cli_common import CommandRuntime
-from taskledger.domain.models import ActorRef, HarnessRef, TaskRecord
+from taskledger import timing as _timing
+from taskledger.domain.models import ActorRef, HarnessRef
 from taskledger.domain.policies import plan_propose_decision
 from taskledger.domain.states import EXIT_CODE_BAD_INPUT
 from taskledger.errors import LaunchError
@@ -20,7 +21,6 @@ from taskledger.services.plan_input import (
     plan_input_error,
 )
 from taskledger.services.plan_lint import lint_plan
-from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     list_plans,
     list_questions,
@@ -28,7 +28,6 @@ from taskledger.storage.task_store import (
     overwrite_plan,
     resolve_plan,
     resolve_task,
-    resolve_v2_paths,
     save_plan,
     save_run,
     save_task,
@@ -44,46 +43,46 @@ def start_planning(
     actor: ActorRef | None = None,
     harness: HarnessRef | None = None,
 ) -> dict[str, object]:
-    task = resolve_task(workspace_root, task_ref)
-    _tasks._ensure_not_archived(task, operation="start planning for")
-    if task.status_stage not in {"draft", "plan_review"}:
-        raise _tasks._cli_error(
-            "Planning can only start from draft or plan_review.",
-            _tasks.EXIT_CODE_INVALID_TRANSITION,
+    with _timing.stage_timer():
+        with _timing.stage("resolve_task"):
+            task = resolve_task(workspace_root, task_ref)
+            _tasks._ensure_not_archived(task, operation="start planning for")
+            if task.status_stage not in {"draft", "plan_review"}:
+                raise _tasks._cli_error(
+                    "Planning can only start from draft or plan_review.",
+                    _tasks.EXIT_CODE_INVALID_TRANSITION,
+                )
+        with _timing.stage("create_run"):
+            run = _tasks._start_run(
+                workspace_root,
+                task,
+                run_type="planning",
+                stage="planning",
+                actor=actor,
+                harness=harness,
+            )
+        with _timing.stage("save_task"):
+            updated = replace(
+                resolve_task(workspace_root, task.id),
+                latest_planning_run=run.run_id,
+                updated_at=utc_now_iso(),
+            )
+            save_task(workspace_root, updated)
+        with _timing.stage("append_event"):
+            _tasks._append_event(
+                workspace_root,
+                updated.id,
+                "plan.started",
+                {"run_id": run.run_id},
+            )
+        return _tasks._lifecycle_payload(
+            "plan start",
+            updated,
+            warnings=[],
+            changed=True,
+            run=run,
+            lock=_tasks._require_lock(workspace_root, updated.id),
         )
-    actor, harness = resolve_effective_identity(
-        workspace_root, actor=actor, harness=harness, role="planner"
-    )
-    run = _tasks._start_run(
-        workspace_root,
-        task,
-        run_type="planning",
-        stage="planning",
-        actor=actor,
-        harness=harness,
-    )
-    updated = replace(
-        resolve_task(workspace_root, task.id),
-        latest_planning_run=run.run_id,
-        updated_at=utc_now_iso(),
-    )
-    save_task(workspace_root, updated)
-    _tasks._append_event(
-        workspace_root,
-        updated.id,
-        "plan.started",
-        {"run_id": run.run_id},
-    )
-    paths = runtime.paths() if runtime is not None else resolve_v2_paths(workspace_root)
-    rebuild_v2_indexes(paths)
-    return _tasks._lifecycle_payload(
-        "plan start",
-        updated,
-        warnings=[],
-        changed=True,
-        run=run,
-        lock=_tasks._require_lock(workspace_root, updated.id),
-    )
 
 
 def propose_plan(
@@ -162,8 +161,6 @@ def propose_plan(
         "plan.proposed",
         {"plan_version": version},
     )
-    paths = runtime.paths() if runtime is not None else resolve_v2_paths(workspace_root)
-    rebuild_v2_indexes(paths)
     warnings: list[str] = []
     if not plan_body.strip():
         warnings.append(
@@ -458,8 +455,6 @@ def amend_plan(
             "removed_files": sorted(remove_files_set),
         },
     )
-    paths = runtime.paths() if runtime is not None else resolve_v2_paths(workspace_root)
-    rebuild_v2_indexes(paths)
     return payload
 
 
@@ -636,8 +631,6 @@ def approve_plan(
             "approved_plan_hash": approved_hash,
         },
     )
-    paths = runtime.paths() if runtime is not None else resolve_v2_paths(workspace_root)
-    rebuild_v2_indexes(paths)
     payload = _tasks._lifecycle_payload(
         "plan approve",
         updated,

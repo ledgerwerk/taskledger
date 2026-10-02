@@ -28,11 +28,9 @@ from taskledger.errors import LaunchError
 from taskledger.services import command_runner
 from taskledger.services import tasks as _tasks
 from taskledger.services.check_reuse import evaluate_implementation_check_reuse
-from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
     resolve_plan,
     resolve_task,
-    resolve_v2_paths,
     save_run,
     save_task,
 )
@@ -105,7 +103,6 @@ def start_validation(
         "validation.started",
         {"run_id": updated_run.run_id},
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return _tasks._lifecycle_payload(
         "validate start",
         updated,
@@ -498,7 +495,6 @@ def finish_validation(
         "validation.finished",
         {"run_id": run.run_id, "result": normalized_result},
     )
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
     return _tasks._lifecycle_payload(
         "validate finish",
         updated,

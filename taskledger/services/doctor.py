@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from taskledger import timing as _timing
 from taskledger.domain.models import (
     ActiveTaskState,
     TaskLock,
@@ -13,6 +14,7 @@ from taskledger.domain.models import (
 )
 from taskledger.domain.states import TASKLEDGER_STORAGE_LAYOUT_VERSION
 from taskledger.errors import LaunchError
+from taskledger.services.lock_inventory import LockInventory
 from taskledger.storage.events import load_events
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.migrations import inspect_records_for_migration
@@ -22,6 +24,10 @@ from taskledger.storage.paths import (
     load_project_locator,
     resolve_project_paths,
 )
+from taskledger.storage.task_ids import (
+    IncompleteTaskAllocation,
+    inspect_task_id_inventory,
+)
 from taskledger.storage.task_store import (
     V2Paths,
     list_changes_from_paths,
@@ -29,8 +35,9 @@ from taskledger.storage.task_store import (
     list_questions_from_paths,
     list_runs_from_paths,
     list_tasks,
+    list_tasks_from_paths,
     load_active_locks_from_paths,
-    load_active_task_state,
+    load_active_task_state_from_paths,
     require_v2_layout,
     resolve_v2_paths,
 )
@@ -50,6 +57,7 @@ class DoctorScanContext:
     runs_by_task: Mapping[str, tuple[TaskRunRecord, ...]]
     run_by_key: Mapping[tuple[str, str], TaskRunRecord]
     active_state: ActiveTaskState | None
+    incomplete_task_allocations: tuple[IncompleteTaskAllocation, ...]
 
     artifact_limit_bytes: int
 
@@ -60,13 +68,14 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
     locator = load_project_locator(workspace_root)
     paths = resolve_v2_paths(workspace_root)
 
+    task_id_inventory = inspect_task_id_inventory(paths)
     from taskledger.storage.artifact_policy import ABSOLUTE_MAX_ARTIFACT_BYTES
     from taskledger.storage.project_config import (
         load_project_config_document,
         merge_project_config,
     )
 
-    tasks = tuple(list_tasks(workspace_root))
+    tasks = tuple(list_tasks_from_paths(paths))
     task_by_id: dict[str, TaskRecord] = {task.id: task for task in tasks}
 
     locks = tuple(load_active_locks_from_paths(paths))
@@ -80,7 +89,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
             run_by_key[(task.id, run.run_id)] = run
 
     try:
-        active_state = load_active_task_state(workspace_root)
+        active_state = load_active_task_state_from_paths(paths)
     except Exception:  # noqa: BLE001
         active_state = None
     try:
@@ -101,12 +110,67 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         runs_by_task=runs_by_task,
         run_by_key=run_by_key,
         active_state=active_state,
+        incomplete_task_allocations=task_id_inventory.incomplete_allocations,
         artifact_limit_bytes=artifact_limit_bytes,
     )
 
 
+def _inspect_implementation_snapshots(
+    workspace_root: Path,
+    ctx: DoctorScanContext,
+    warnings: list[str],
+    repair_hints: list[str],
+    diagnostics: list[dict[str, object]],
+) -> None:
+    from taskledger.services.workspace_snapshot import (
+        capture_current_workspace_state,
+        compare_implementation_snapshot,
+    )
+
+    candidates: list[tuple[TaskRecord, TaskRunRecord]] = []
+    for task in ctx.tasks:
+        if task.status_stage != "implemented":
+            continue
+        run = ctx.run_by_key.get((task.id, task.latest_implementation_run or ""))
+        if (
+            run is not None
+            and run.run_type == "implementation"
+            and run.status == "finished"
+        ):
+            candidates.append((task, run))
+    if not candidates:
+        return
+
+    current_workspace = capture_current_workspace_state(
+        workspace_root, include_content=True
+    )
+    for task, run in candidates:
+        evaluation = compare_implementation_snapshot(
+            workspace_root, task, run, current=current_workspace
+        )
+        if evaluation.ok:
+            continue
+        warnings.append(
+            f"Task {task.id} is implemented but validation is blocked by "
+            "implementation snapshot mismatch."
+        )
+        if evaluation.command_hint:
+            repair_hints.append(evaluation.command_hint)
+        diagnostics.append(
+            {
+                "severity": "warning",
+                "code": "IMPLEMENTATION_SNAPSHOT_MISMATCH",
+                "task_id": task.id,
+                "message": evaluation.message,
+                "command_hint": evaluation.command_hint,
+                "details": evaluation.to_dict(),
+            }
+        )
+
+
 def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
-    ctx = _build_scan_context(workspace_root)
+    with _timing.stage("scan_context"):
+        ctx = _build_scan_context(workspace_root)
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -120,14 +184,33 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
     from taskledger.services.doctor_checks.project_scan import scan_project_config
     from taskledger.services.doctor_checks.task_checks import scan_task_integrity
 
-    scan_project_config(
-        workspace_root=workspace_root,
-        resolved_paths=ctx.resolved_paths,
-        locator=ctx.locator,
-        errors=errors,
-        warnings=warnings,
-        repair_hints=repair_hints,
-    )
+    with _timing.stage("project_config"):
+        scan_project_config(
+            workspace_root=workspace_root,
+            resolved_paths=ctx.resolved_paths,
+            locator=ctx.locator,
+            errors=errors,
+            warnings=warnings,
+            repair_hints=repair_hints,
+        )
+
+    for allocation in ctx.incomplete_task_allocations:
+        message = f"Incomplete task allocation {allocation.task_id} is missing task.md."
+        errors.append(message)
+        repair_hints.append(
+            "Inspect and quarantine incomplete task allocations with "
+            '`taskledger repair allocations --apply --reason "..."`.'
+        )
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": "INCOMPLETE_TASK_ALLOCATION",
+                "message": message,
+                "task_id": allocation.task_id,
+                "path": str(allocation.path),
+                "files": list(allocation.files),
+            }
+        )
 
     # Active task check
     if ctx.active_state is not None:
@@ -141,118 +224,84 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
                 f"Active task {active_task.id} is {active_task.status_stage}."
             )
 
-    scan_task_integrity(
-        workspace_root=workspace_root,
-        paths=ctx.paths,
-        tasks=list(ctx.tasks),
-        task_map=dict(ctx.task_by_id),
-        locks=list(ctx.locks),
-        task_runs={tid: list(runs) for tid, runs in ctx.runs_by_task.items()},
-        run_map=dict(ctx.run_by_key),
-        active_state=ctx.active_state,
-        errors=errors,
-        warnings=warnings,
-        repair_hints=repair_hints,
-        broken_links=broken_links,
-        run_lock_mismatches=run_lock_mismatches,
-        diagnostics=diagnostics,
-    )
+    with _timing.stage("task_integrity"):
+        scan_task_integrity(
+            workspace_root=workspace_root,
+            paths=ctx.paths,
+            tasks=list(ctx.tasks),
+            task_map=dict(ctx.task_by_id),
+            locks=list(ctx.locks),
+            task_runs={tid: list(runs) for tid, runs in ctx.runs_by_task.items()},
+            run_map=dict(ctx.run_by_key),
+            active_state=ctx.active_state,
+            errors=errors,
+            warnings=warnings,
+            repair_hints=repair_hints,
+            broken_links=broken_links,
+            run_lock_mismatches=run_lock_mismatches,
+            diagnostics=diagnostics,
+        )
 
     from taskledger.services.doctor_checks.artifact_checks import (
         find_oversized_artifacts,
     )
 
-    for diagnostic in find_oversized_artifacts(
-        ctx.paths, max_bytes=ctx.artifact_limit_bytes
-    ):
-        diagnostics.append(diagnostic)
-        errors.append(str(diagnostic["message"]))
-
-    for lock in ctx.locks:
-        lock_task = ctx.task_by_id.get(lock.task_id)
-        if lock_task is None:
-            errors.append(
-                f"Lock {lock.lock_id} references missing task {lock.task_id}."
-            )
-            continue
-        try:
-            if lock_is_expired(lock):
-                expired_locks.append(lock.to_dict())
-        except Exception as exc:  # noqa: BLE001
-            errors.append(str(exc))
-        # Use pre-built run_map instead of resolve_run per task.
-        run = ctx.run_by_key.get((lock.task_id, lock.run_id))
-        if run is None:
-            errors.append(
-                f"Lock {lock.lock_id} references missing run {lock.run_id} "
-                f"for task {lock.task_id}."
-            )
-            continue
-        if run.status != "running":
-            errors.append(
-                f"Lock {lock.lock_id} references non-running run {run.run_id}."
-            )
-        expected_stage = {
-            "planning": "planning",
-            "implementation": "implementing",
-            "validation": "validating",
-        }[run.run_type]
-        if lock.stage != expected_stage:
-            errors.append(
-                f"Lock {lock.lock_id} stage {lock.stage} does not match "
-                f"run {run.run_id} type {run.run_type}."
-            )
-
-    scan_migration_state(
-        tasks=list(ctx.tasks),
-        paths=ctx.paths,
-        errors=errors,
-        warnings=warnings,
-        repair_hints=repair_hints,
-    )
-
-    # Implementation snapshot comparison with one shared workspace capture.
-    from taskledger.services.workspace_snapshot import (
-        capture_current_workspace_state,
-        compare_implementation_snapshot,
-    )
-
-    current_ws = capture_current_workspace_state(
-        workspace_root,
-        include_content=True,
-    )
-    for task in ctx.tasks:
-        if task.status_stage != "implemented":
-            continue
-        impl_run = ctx.run_by_key.get((task.id, task.latest_implementation_run or ""))
-        if (
-            impl_run is None
-            or impl_run.run_type != "implementation"
-            or impl_run.status != "finished"
+    with _timing.stage("artifact_policy"):
+        for diagnostic in find_oversized_artifacts(
+            ctx.paths, max_bytes=ctx.artifact_limit_bytes
         ):
-            continue
+            diagnostics.append(diagnostic)
+            errors.append(str(diagnostic["message"]))
 
-        evaluation = compare_implementation_snapshot(
-            workspace_root, task, impl_run, current=current_ws
+    with _timing.stage("lock_consistency"):
+        for lock in ctx.locks:
+            lock_task = ctx.task_by_id.get(lock.task_id)
+            if lock_task is None:
+                errors.append(
+                    f"Lock {lock.lock_id} references missing task {lock.task_id}."
+                )
+                continue
+            try:
+                if lock_is_expired(lock):
+                    expired_locks.append(lock.to_dict())
+            except Exception as exc:  # noqa: BLE001
+                errors.append(str(exc))
+            # Use pre-built run_map instead of resolve_run per task.
+            run = ctx.run_by_key.get((lock.task_id, lock.run_id))
+            if run is None:
+                errors.append(
+                    f"Lock {lock.lock_id} references missing run {lock.run_id} "
+                    f"for task {lock.task_id}."
+                )
+                continue
+            if run.status != "running":
+                errors.append(
+                    f"Lock {lock.lock_id} references non-running run {run.run_id}."
+                )
+            expected_stage = {
+                "planning": "planning",
+                "implementation": "implementing",
+                "validation": "validating",
+            }[run.run_type]
+            if lock.stage != expected_stage:
+                errors.append(
+                    f"Lock {lock.lock_id} stage {lock.stage} does not match "
+                    f"run {run.run_id} type {run.run_type}."
+                )
+
+    with _timing.stage("migration_state"):
+        scan_migration_state(
+            tasks=list(ctx.tasks),
+            paths=ctx.paths,
+            errors=errors,
+            warnings=warnings,
+            repair_hints=repair_hints,
         )
-        if not evaluation.ok:
-            warnings.append(
-                f"Task {task.id} is implemented but validation is blocked by "
-                "implementation snapshot mismatch."
-            )
-            if evaluation.command_hint:
-                repair_hints.append(evaluation.command_hint)
-            diagnostics.append(
-                {
-                    "severity": "warning",
-                    "code": "IMPLEMENTATION_SNAPSHOT_MISMATCH",
-                    "task_id": task.id,
-                    "message": evaluation.message,
-                    "command_hint": evaluation.command_hint,
-                    "details": evaluation.to_dict(),
-                }
-            )
 
+    with _timing.stage("workspace_snapshot"):
+        _inspect_implementation_snapshots(
+            workspace_root, ctx, warnings, repair_hints, diagnostics
+        )
     if broken_links:
         errors.append("V2 task records contain broken references.")
     if expired_locks:
@@ -293,6 +342,14 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
         "broken_links": broken_links,
         "expired_locks": expired_locks,
         "run_lock_mismatches": run_lock_mismatches,
+        "incomplete_task_allocations": [
+            {
+                "task_id": allocation.task_id,
+                "path": str(allocation.path),
+                "files": list(allocation.files),
+            }
+            for allocation in ctx.incomplete_task_allocations
+        ],
         "diagnostics": diagnostics,
     }
 
@@ -300,6 +357,102 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
 def inspect_v2_project(workspace_root: Path) -> dict[str, object]:
     """Run doctor checks through the phase-based scan implementation."""
     return _inspect_v2_project_with_boundary(workspace_root)
+
+
+def _run_lock_mismatches(
+    paths: V2Paths, inventory: LockInventory
+) -> tuple[list[dict[str, object]], list[str]]:
+    from taskledger.domain.policies import derive_active_stage
+    from taskledger.storage.sidecar_index import load_sidecar_index
+    from taskledger.storage.task_index import list_task_summaries
+    from taskledger.storage.task_store import list_runs_from_paths
+
+    task_summaries = {
+        task.id: task for task in list_task_summaries(paths, visibility="all")
+    }
+    sidecars = load_sidecar_index(paths)
+    active_locks = {
+        entry.lock.task_id: entry.lock
+        for entry in inventory.entries
+        if entry.lock is not None and not lock_is_expired(entry.lock)
+    }
+    candidate_task_ids = set(active_locks)
+    for task_id, sidecar in sidecars.items():
+        runs = sidecar.get("runs")
+        running = runs.get("running") if isinstance(runs, dict) else None
+        if isinstance(running, list) and running:
+            candidate_task_ids.add(task_id)
+
+    mismatches: list[dict[str, object]] = []
+    errors: list[str] = []
+    for task_id in sorted(candidate_task_ids):
+        runs = list_runs_from_paths(paths, task_id)
+        running_runs = [run for run in runs if run.status == "running"]
+        lock = active_locks.get(task_id)
+        active_stage = derive_active_stage(lock, running_runs)
+        if running_runs and active_stage is None:
+            errors.append(
+                f"Task {task_id} has a running run without a matching active lock."
+            )
+            task = task_summaries.get(task_id)
+            for run in running_runs:
+                next_command = f"taskledger task show --task {task_id}"
+                note = "Inspect task and run state before choosing repair."
+                if run.run_type == "planning":
+                    next_command = (
+                        "taskledger repair run "
+                        f"--task {task_id} --run {run.run_id} "
+                        '--reason "Finish orphaned planning run."'
+                    )
+                    note = "Planning run can be explicitly finished with repair run."
+                elif run.run_type == "implementation":
+                    if (
+                        task is not None
+                        and run.run_id == task.latest_implementation_run
+                        and task.status_stage
+                        in {"approved", "implementing", "failed_validation"}
+                    ):
+                        next_command = (
+                            "taskledger implement resume "
+                            f"--task {task_id} --run {run.run_id} "
+                            '--reason "Reacquire implementation lock."'
+                        )
+                        note = (
+                            "Reacquire the missing implementation lock for this "
+                            "running run."
+                        )
+                    else:
+                        next_command = "taskledger doctor locks"
+                        note = (
+                            "Historical or non-resumable implementation run. "
+                            "Inspect run state before repair."
+                        )
+                mismatches.append(
+                    {
+                        "kind": "running_run_without_matching_lock",
+                        "task_id": task_id,
+                        "run_id": run.run_id,
+                        "run_type": run.run_type,
+                        "status": run.status,
+                        "next_command": next_command,
+                        "note": note,
+                    }
+                )
+        elif lock is not None and active_stage is None:
+            errors.append(
+                f"Task {task_id} has a {lock.stage} lock without a running run."
+            )
+            mismatches.append(
+                {
+                    "kind": "lock_without_running_run",
+                    "task_id": task_id,
+                    "lock_id": lock.lock_id,
+                    "run_id": lock.run_id,
+                    "run_type": lock.run_type,
+                    "next_command": f"taskledger lock show --task {task_id}",
+                }
+            )
+    return mismatches, errors
 
 
 def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
@@ -364,18 +517,19 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
                 if isinstance(cmd, str) and not cmd.startswith("#"):
                     next_commands.append(cmd)
 
+    run_lock_mismatches, mismatch_errors = _run_lock_mismatches(paths, inventory)
+    errors.extend(mismatch_errors)
+    for mismatch in run_lock_mismatches:
+        command = mismatch.get("next_command")
+        if isinstance(command, str):
+            next_commands.append(command)
     healthy = (
         not expired_locks
         and not stale_locks
         and not malformed_locks
         and not unverifiable_locks
+        and not run_lock_mismatches
     )
-    # Also include run_lock_mismatches from the full doctor check.
-    payload = inspect_v2_project(workspace_root)
-    run_lock_mismatches = list(cast(list[object], payload["run_lock_mismatches"]))
-
-    if run_lock_mismatches:
-        healthy = False
 
     return {
         "kind": "taskledger_lock_inspection",
@@ -453,12 +607,27 @@ def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
 
 def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
     paths = require_v2_layout(workspace_root)
+    from taskledger.storage.indexes import index_is_dirty
+    from taskledger.storage.sidecar_index import SIDECAR_INDEX_FILENAME
+
+    dirty_indexes = [
+        name
+        for name, dirty in (
+            ("task_index", index_is_dirty(paths, "task_index")),
+            ("sidecar_index", index_is_dirty(paths, "sidecar_index")),
+            ("dependencies", index_is_dirty(paths, "dependencies")),
+            ("introductions", index_is_dirty(paths, "introductions")),
+            ("active_locks", index_is_dirty(paths, "active_locks")),
+        )
+        if dirty
+    ]
     missing = [
         str(path.relative_to(paths.project_dir))
         for path in (
             paths.active_locks_index_path,
             paths.dependencies_index_path,
             paths.introductions_index_path,
+            paths.indexes_dir / SIDECAR_INDEX_FILENAME,
         )
         if not path.exists()
     ]
@@ -504,11 +673,17 @@ def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
         load_events(paths.events_dir)
     except Exception as exc:  # noqa: BLE001
         event_errors.append(str(exc))
-    healthy = not missing and not event_errors and not stale_task_entries
+    healthy = (
+        not missing
+        and not event_errors
+        and not stale_task_entries
+        and not dirty_indexes
+    )
     return {
         "kind": "taskledger_index_inspection",
         "healthy": healthy,
         "missing_indexes": missing,
+        "dirty_indexes": dirty_indexes,
         "stale_task_entries": stale_task_entries[:20],
         "event_errors": event_errors,
     }
@@ -544,7 +719,8 @@ def _inspect_v2_project_with_boundary(workspace_root: Path) -> dict[str, object]
     )
 
     try:
-        return _inspect_v2_project_phases(workspace_root)
+        with _timing.stage_timer():
+            return _inspect_v2_project_phases(workspace_root)
     except TaskledgerRegistrationMissing as exc:
         boundary = scan_canonical_boundary(workspace_root)
         errors = list(cast(list[object], boundary["errors"]))
