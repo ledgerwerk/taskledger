@@ -48,9 +48,9 @@ def ledger_status_command(ctx: typer.Context) -> None:
 
     task_count = len(tasks)
     active_task_id = active.task_id if active else None
-    from taskledger.storage.task_ids import scan_task_id_inventory
+    from taskledger.storage.task_identity import scan_task_identity_inventory
 
-    next_task_id = scan_task_id_inventory(paths).next_task_id
+    next_task_id = scan_task_identity_inventory(paths).next_task_id
     next_task_ref = global_ref_for_local_id(state.cwd, next_task_id)
     payload = {
         "ok": True,
