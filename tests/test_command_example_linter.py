@@ -52,7 +52,6 @@ _SINGLE_TOKEN_COMMANDS = {
     "status",
     "export",
     "import",
-    "reindex",
     "context",
     "view",
     "can",

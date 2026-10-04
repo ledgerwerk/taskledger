@@ -47,7 +47,7 @@ _current_recorder: ContextVar[AgentCommandRecorder | None] = ContextVar(
 _SAFE_READ_ONLY = "safe_read_only"
 _LEDGER_MUTATION = "ledger_mutation"
 _TRUTHY = {"1", "true", "yes", "on"}
-_GLOBAL_VALUE_OPTIONS = {"--cwd", "--root"}
+_GLOBAL_VALUE_OPTIONS = {"--root"}
 _GLOBAL_BOOL_OPTIONS = {"--json", "--no-log", "--version"}
 _HELP_FLAGS = {"--help", "-h", "--show-completion", "--install-completion"}
 

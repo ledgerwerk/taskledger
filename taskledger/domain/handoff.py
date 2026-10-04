@@ -17,12 +17,12 @@ from taskledger.domain.states import (
     ContextFormat,
     ContextScope,
     normalize_actor_type,
-    normalize_context_for,
     normalize_context_format,
     normalize_context_scope,
     normalize_handoff_mode,
     normalize_handoff_status,
     normalize_lock_policy,
+    normalize_persisted_context_for,
 )
 from taskledger.errors import LaunchError
 from taskledger.timeutils import utc_now_iso
@@ -150,7 +150,7 @@ class TaskHandoffRecord:
             task_id=_string_value(data, "task_id"),
             mode=normalize_handoff_mode(_string_value(data, "mode")),
             context_for=(
-                normalize_context_for(v)
+                normalize_persisted_context_for(v)
                 if (v := _optional_string(data.get("context_for")))
                 else None
             ),

@@ -165,17 +165,17 @@ Each persistent record (task, plan, run, lock, handoff, event, etc.) is stored a
 ## JSON indexes as rebuildable derived caches
 
 **Drivers:** fast list and query operations, canonical records remain source of truth
-**Constraints:** summary index rebuildable on miss, reindex after out of band changes
+**Constraints:** summary index rebuildable on miss, index repair after out of band changes
 **Related ADRs:** adr-0047
 
 ## Strategy
 
-The task sidecar summary index is a derived cache stored in the configured rebuildable indexes mount, not alongside canonical task data. It is keyed by stable UUID identity and rebuilt from canonical Markdown records by `taskledger reindex`; human-readable task aliases remain available in the read models. Per-task sidecar writes update the summary through `update_sidecar_summary` in `taskledger/storage/sidecar_index.py`. `taskledger doctor indexes` checks for staleness.
+The task sidecar summary index is a derived cache stored in the configured rebuildable indexes mount, not alongside canonical task data. It is keyed by stable UUID identity and rebuilt from canonical Markdown records by `taskledger repair index`; human-readable task aliases remain available in the read models. Per-task sidecar writes update the summary through `update_sidecar_summary` in `taskledger/storage/sidecar_index.py`. `taskledger doctor indexes` checks for staleness.
 
 ## Trade-offs
 
 - Avoids the complexity of a query engine on front matter files.
-- Indexes can become stale if writes bypass taskledger (for example manual edits). `taskledger doctor` and `reindex` address this.
+- Indexes can become stale if writes bypass taskledger (for example manual edits). `taskledger doctor indexes` and `taskledger repair index` address this.
 - The summary index is a JSON document with a schema version and an `object_type` field; it is rebuildable from canonical records.
 
 ## Policy-based lifecycle gate decisions
@@ -339,7 +339,7 @@ The runtime view traces the main operational scenarios through the system:
 **Stale lock handling**:
 
 - `lock_is_expired` checks lease expiry
-- `lock break` requires explicit user action, records `broken_at`, `broken_by`, `broken_reason`
+- `repair lock` requires explicit user action, records `broken_at`, `broken_by`, `broken_reason`
 - `doctor` detects lock/run mismatches
 
 **Key source**: `taskledger/services/tasks.py` (`_start_run`), `taskledger/storage/locks.py`, `taskledger/domain/lock.py`.
@@ -428,19 +428,17 @@ The runtime view traces the main operational scenarios through the system:
 
 **Flow**:
 
-1. `sync git init` → Moves or copies `.taskledger/` content into a dedicated Git repository, updates `taskledger.toml` with `external_dir`
-2. `sync preflight` → Checks that no active locks would conflict with a sync operation
-3. `sync git commit --message "..."` → Commits current state to the sync repo
-4. `sync git export-local` / `sync git import-local` → Exchanges state between the sync repo and the project
-5. `sync git status` → Shows working tree status of the sync repo
-6. `sync git paths` → Shows resolved paths for the sync repo and project
-7. `cd "$(taskledger sync git cd)"` → Opens a shell in the sync repo directory for manual Git operations
-
-**Result**: Taskledger state is stored in a separate Git repository that can be versioned and shared manually. The design intentionally avoids automated push/pull to prevent merge conflicts — users run `git push`/`git pull` directly in the sync repo.
+1. `sync git init` → Sets up a dedicated repository and registers its external data directory.
+2. `sync preflight` → Checks that no active locks would conflict with a sync operation.
+3. `sync git status` → Shows the working tree status of the sync repository.
+4. `sync git path` → Shows the resolved paths for the sync repository and project.
+5. `sync git commit --message "..."` → Commits current state to the sync repository.
+6. Use `cd "$(taskledger sync git cd)"` for manual Git operations; run `git pull` or `git push` explicitly when needed.
+   **Result**: Taskledger state is stored in a separate Git repository that can be versioned and shared manually. The design intentionally avoids automated push/pull to prevent merge conflicts — users run `git push`/`git pull` directly in the sync repo.
 
 **Key source**: `taskledger/services/git_sync.py`, `taskledger/cli_sync.py`, `taskledger/api/sync.py`.
 
-## Migration, reindex, and doctor interaction
+## Migration, index repair, and doctor interaction
 
 **Trigger**: A developer updates a project using layout-5 numeric task bundles and a mutating Taskledger command needs canonical layout 6.
 
@@ -600,14 +598,14 @@ Listing tasks, locks, and dependencies requires scanning many front matter files
 
 ## Decision
 
-Maintain JSON index files under `.taskledger/indexes/` as derived caches. They are rebuilt from canonical records by `taskledger reindex` and checked by `doctor indexes`. They are never the source of truth.
+Maintain JSON index files under `.taskledger/indexes/` as derived caches. They are rebuilt from canonical records by `taskledger repair index` and checked by `doctor indexes`. They are never the source of truth.
 
 ## Consequences
 
 - Positive: Fast list/query operations without parsing all front matter files.
 - Positive: Indexes can always be rebuilt from canonical source.
 - Negative: Indexes can become stale after manual edits or crashes.
-- Negative: `reindex` must be run after out-of-band changes.
+- Negative: `taskledger repair index` must be run after out-of-band changes.
 
 ## Alternatives considered
 
@@ -757,7 +755,7 @@ Known risks and areas of technical debt:
 
 | Title                                      | Severity | Probability | Mitigation                                                                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------------------------------ | -------- | ----------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Storage scaling with many tasks            | medium   | medium      | Run reindex after bulk changes; consider task archival for completed work.                        | Each task is a directory with multiple sidecar files. Projects with hundreds of tasks may see slowdowns in list and query operations due to file system scanning. The `task_sidecars.json` summary index is updated in place by per-task sidecar writes and is rebuilt on miss, which keeps the common read path fast. Mitigation: run `taskledger reindex` after bulk changes; consider task archival for completed work; rely on the sidecar summary index for navigation.                                                                                                                                  |
+| Storage scaling with many tasks            | medium   | medium      | Run repair index after bulk changes; consider task archival for completed work.                   | Each task is a directory with multiple sidecar files. Projects with hundreds of tasks may see slowdowns in list and query operations due to file system scanning. The `task_sidecars.json` summary index is updated in place by per-task sidecar writes and is rebuilt on miss, which keeps the common read path fast. Mitigation: run `taskledger repair index` after bulk changes; consider task archival for completed work; rely on the sidecar summary index for navigation.                                                                                                                             |
 | Migration surface between storage versions | medium   | medium      | Doctor checks detect version mismatches; migration checks flag incompatible records.              | The current storage layout is v6 (`TASKLEDGER_STORAGE_LAYOUT_VERSION` in `taskledger/domain/states.py`). Layout-5-to-6 migration introduces a UUIDv7 identity inventory, deterministic conversion of numeric task bundles, and derived aliases; incomplete or mixed states must remain recoverable and must not reuse identities. Mitigation: migration performs safety preflight and preserves recovery data, read-only access does not migrate, and doctor checks validate layout and identity consistency. Future format changes must maintain backward compatibility or provide explicit migration steps. |
 | Service boundary erosion                   | medium   | medium      | test_service_boundaries.py whitelist tracks allowed cross-module imports and fails on violations. | Some service modules (notably `taskledger/services/tasks.py`) have grown large. The current long-function whitelist includes entries such as `taskledger/cli_sync.py::register_sync_commands` and `taskledger/services/doctor_checks/task_checks.py::scan_task_integrity`. The service layer has no formal interface contracts; boundaries are enforced by convention and the whitelist in `docs/service_boundary_whitelist.md` exercised by `tests/test_service_boundaries.py`.                                                                                                                              |
 | Growing dependency count                   | medium   | medium      | Small dependency set (typer, PyYAML, tomli); each justified by a core feature.                    | The runtime dependency set is small (`typer`, `click`, `PyYAML`, `tomli` on Python <3.11, and `ledgercore` for atomic I/O, JSON I/O, YAML I/O, front matter parsing, and cross-ledger ref parsing). Each dependency is justified by a core feature. Risk is low as long as new dependencies are not introduced without explicit justification, and as long as `ledgercore` remains the boundary for low-level primitives.                                                                                                                                                                                     |

@@ -24,12 +24,12 @@ def _json(result) -> dict[str, object]:
 
 # specmason: req=REQ-0040 ac=AC-0454
 def test_plan_approval_materializes_structured_todos_once(tmp_path: Path) -> None:
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "init"]).exit_code == 0
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -43,11 +43,11 @@ def test_plan_approval_materializes_structured_todos_once(tmp_path: Path) -> Non
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "todo-plan"],
+            ["--root", str(tmp_path), "task", "activate", "todo-plan"],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "plan", "start"]).exit_code == 0
 
     plan_text = """---
 acceptance_criteria:
@@ -67,7 +67,7 @@ Ship the feature.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "propose",
@@ -82,7 +82,7 @@ Ship the feature.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -102,7 +102,7 @@ Ship the feature.
     assert approved["result"]["materialized_todos"] == 2
 
     todos = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "todo", "list"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "todo", "list"])
     )["result"]["todos"]
     assert [todo["text"] for todo in todos] == ["Add feature tests.", "Update docs."]
     assert todos[0]["mandatory"] is True
@@ -114,7 +114,7 @@ Ship the feature.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",

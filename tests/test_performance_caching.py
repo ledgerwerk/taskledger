@@ -247,7 +247,9 @@ def test_task_list_uses_summaries_and_bounded_reference_resolution(
             refs, "ref_context_for_workspace", wraps=refs.ref_context_for_workspace
         ) as ref_context,
     ):
-        result = CliRunner().invoke(app, ["--cwd", str(ws), "--no-log", "task", "list"])
+        result = CliRunner().invoke(
+            app, ["--root", str(ws), "--no-log", "task", "list"]
+        )
 
     assert result.exit_code == 0, result.output
     assert task_md_reads == 0

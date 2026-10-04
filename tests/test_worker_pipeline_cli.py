@@ -123,7 +123,7 @@ def _setup_implemented_review_task(workspace: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "task",
                 "create",
@@ -137,11 +137,13 @@ def _setup_implemented_review_task(workspace: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(workspace), "task", "activate", "review-pipeline-task"],
+            ["--root", str(workspace), "task", "activate", "review-pipeline-task"],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(workspace), "plan", "start"]).exit_code == 0
+    assert (
+        runner.invoke(app, ["--root", str(workspace), "plan", "start"]).exit_code == 0
+    )
     plan_text = """---
 acceptance_criteria:
   - text: Pipeline next advances through review steps.
@@ -158,7 +160,7 @@ Drive review-step routing from closed worker handoffs once implementation is don
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(workspace), "plan", "propose", "--text", plan_text],
+            ["--root", str(workspace), "plan", "propose", "--text", plan_text],
         ).exit_code
         == 0
     )
@@ -166,7 +168,7 @@ Drive review-step routing from closed worker handoffs once implementation is don
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "plan",
                 "approve",
@@ -184,14 +186,14 @@ Drive review-step routing from closed worker handoffs once implementation is don
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(workspace), "implement", "start"]).exit_code
+        runner.invoke(app, ["--root", str(workspace), "implement", "start"]).exit_code
         == 0
     )
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "todo",
                 "done",
@@ -206,7 +208,7 @@ Drive review-step routing from closed worker handoffs once implementation is don
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "implement",
                 "finish",
@@ -225,7 +227,7 @@ def _setup_guided_implementation_task(workspace: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "task",
                 "create",
@@ -239,11 +241,13 @@ def _setup_guided_implementation_task(workspace: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(workspace), "task", "activate", "guided-next-action-task"],
+            ["--root", str(workspace), "task", "activate", "guided-next-action-task"],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(workspace), "plan", "start"]).exit_code == 0
+    assert (
+        runner.invoke(app, ["--root", str(workspace), "plan", "start"]).exit_code == 0
+    )
     plan_text = """---
 acceptance_criteria:
   - text: Guided next-action exposes worker hints.
@@ -263,7 +267,7 @@ Use the guided worker pipeline to surface the next implementation handoff.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(workspace), "plan", "propose", "--text", plan_text],
+            ["--root", str(workspace), "plan", "propose", "--text", plan_text],
         ).exit_code
         == 0
     )
@@ -271,7 +275,7 @@ Use the guided worker pipeline to surface the next implementation handoff.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "plan",
                 "approve",
@@ -289,7 +293,7 @@ Use the guided worker pipeline to surface the next implementation handoff.
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(workspace), "implement", "start"]).exit_code
+        runner.invoke(app, ["--root", str(workspace), "implement", "start"]).exit_code
         == 0
     )
 
@@ -298,7 +302,7 @@ def _close_spec_review_handoff(workspace: Path) -> None:
     handoff = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(workspace),
             "--json",
             "handoff",
@@ -316,7 +320,7 @@ def _close_spec_review_handoff(workspace: Path) -> None:
     close = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(workspace),
             "handoff",
             "close",
@@ -333,7 +337,7 @@ def test_pipeline_commands_print_no_config_message(tmp_path: Path) -> None:
     init_workspace(tmp_path)
 
     for command in (["pipeline", "show"], ["pipeline", "list"], ["pipeline", "next"]):
-        result = runner.invoke(app, ["--cwd", str(tmp_path), *command])
+        result = runner.invoke(app, ["--root", str(tmp_path), *command])
         assert result.exit_code == 0, result.stdout
         assert result.stdout.strip() == "No worker pipeline configured."
 
@@ -344,7 +348,7 @@ def test_pipeline_commands_print_disabled_message(tmp_path: Path) -> None:
     _append_pipeline_config(tmp_path / "taskledger.toml", _disabled_pipeline_config())
 
     for command in (["pipeline", "show"], ["pipeline", "list"], ["pipeline", "next"]):
-        result = runner.invoke(app, ["--cwd", str(tmp_path), *command])
+        result = runner.invoke(app, ["--root", str(tmp_path), *command])
         assert result.exit_code == 0, result.stdout
         assert result.stdout.strip() == "Worker pipeline is disabled."
 
@@ -356,7 +360,7 @@ def test_pipeline_show_and_list_render_enabled_config(tmp_path: Path) -> None:
 
     show_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "pipeline", "show"],
+        ["--root", str(tmp_path), "--json", "pipeline", "show"],
     )
     assert show_result.exit_code == 0, show_result.stdout
     show_payload = _json(show_result)
@@ -364,7 +368,7 @@ def test_pipeline_show_and_list_render_enabled_config(tmp_path: Path) -> None:
     assert show_payload["result"]["enabled"] is True
     assert show_payload["result"]["pipeline"]["name"] == "tdd-four-context"
 
-    list_result = runner.invoke(app, ["--cwd", str(tmp_path), "pipeline", "list"])
+    list_result = runner.invoke(app, ["--root", str(tmp_path), "pipeline", "list"])
     assert list_result.exit_code == 0, list_result.stdout
     assert "planner" in list_result.stdout
     assert "Test Writer" in list_result.stdout
@@ -379,7 +383,7 @@ def test_pipeline_next_returns_planner_before_plan_acceptance(tmp_path: Path) ->
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -393,12 +397,12 @@ def test_pipeline_next_returns_planner_before_plan_acceptance(tmp_path: Path) ->
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "pipeline-task"],
+            ["--root", str(tmp_path), "task", "activate", "pipeline-task"],
         ).exit_code
         == 0
     )
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "pipeline", "next"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "--json", "pipeline", "next"])
 
     assert result.exit_code == 0, result.stdout
     payload = _json(result)
@@ -412,13 +416,13 @@ def test_pipeline_next_advances_after_closed_worker_review_handoff(
 ) -> None:
     _setup_implemented_review_task(tmp_path)
 
-    first = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "pipeline", "next"])
+    first = runner.invoke(app, ["--root", str(tmp_path), "--json", "pipeline", "next"])
     assert first.exit_code == 0, first.stdout
     assert _json(first)["result"]["step"]["id"] == "spec-review"
 
     _close_spec_review_handoff(tmp_path)
 
-    second = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "pipeline", "next"])
+    second = runner.invoke(app, ["--root", str(tmp_path), "--json", "pipeline", "next"])
     assert second.exit_code == 0, second.stdout
     assert _json(second)["result"]["step"]["id"] == "code-review"
 
@@ -430,14 +434,14 @@ def test_pipeline_next_advances_after_passing_code_review_record(
     _setup_implemented_review_task(tmp_path)
     _close_spec_review_handoff(tmp_path)
 
-    before = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "pipeline", "next"])
+    before = runner.invoke(app, ["--root", str(tmp_path), "--json", "pipeline", "next"])
     assert before.exit_code == 0, before.stdout
     assert _json(before)["result"]["step"]["id"] == "code-review"
 
     record = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "review",
             "record",
@@ -451,7 +455,7 @@ def test_pipeline_next_advances_after_passing_code_review_record(
     )
     assert record.exit_code == 0, record.stdout
 
-    after = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "pipeline", "next"])
+    after = runner.invoke(app, ["--root", str(tmp_path), "--json", "pipeline", "next"])
     assert after.exit_code == 0, after.stdout
     assert _json(after)["result"]["step"]["id"] == "validator"
 
@@ -466,7 +470,7 @@ def test_pipeline_next_keeps_code_review_when_latest_review_failed(
     record = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "review",
             "record",
@@ -482,7 +486,7 @@ def test_pipeline_next_keeps_code_review_when_latest_review_failed(
 
     next_step = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "pipeline", "next"],
+        ["--root", str(tmp_path), "--json", "pipeline", "next"],
     )
     assert next_step.exit_code == 0, next_step.stdout
     assert _json(next_step)["result"]["step"]["id"] == "code-review"
@@ -495,7 +499,7 @@ def test_pipeline_next_ignores_cancelled_worker_review_handoff(tmp_path: Path) -
     handoff = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "handoff",
@@ -513,7 +517,7 @@ def test_pipeline_next_ignores_cancelled_worker_review_handoff(tmp_path: Path) -
     cancel = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "handoff",
             "cancel",
@@ -524,7 +528,7 @@ def test_pipeline_next_ignores_cancelled_worker_review_handoff(tmp_path: Path) -
     )
     assert cancel.exit_code == 0, cancel.stdout
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "pipeline", "next"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "--json", "pipeline", "next"])
     assert result.exit_code == 0, result.stdout
     assert _json(result)["result"]["step"]["id"] == "spec-review"
 
@@ -537,7 +541,7 @@ def test_next_action_guided_worker_pipeline_payload_and_commands(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "next-action"],
+        ["--root", str(tmp_path), "--json", "next-action"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -588,7 +592,7 @@ def test_next_action_guided_worker_pipeline_payload_and_commands(
 def test_next_action_guided_worker_pipeline_human_output(tmp_path: Path) -> None:
     _setup_guided_implementation_task(tmp_path)
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "next-action"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "next-action"])
 
     assert result.exit_code == 0, result.stdout
     assert "Worker step: tester" in result.stdout
@@ -606,7 +610,7 @@ def test_pipeline_next_ignores_normal_review_handoff(tmp_path: Path) -> None:
     handoff = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "handoff",
@@ -622,7 +626,7 @@ def test_pipeline_next_ignores_normal_review_handoff(tmp_path: Path) -> None:
     close = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "handoff",
             "close",
@@ -633,6 +637,6 @@ def test_pipeline_next_ignores_normal_review_handoff(tmp_path: Path) -> None:
     )
     assert close.exit_code == 0, close.stdout
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "pipeline", "next"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "--json", "pipeline", "next"])
     assert result.exit_code == 0, result.stdout
     assert _json(result)["result"]["step"]["id"] == "spec-review"

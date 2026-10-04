@@ -1,7 +1,7 @@
 """Tests covering the agent session failure patterns identified in the audit.
 
 These tests verify guardrails that prevent common agent misuse:
-- lock break no-lock message points to next-action
+- repair lock no-lock message points to next-action
 - plan approval escape hatches require --reason
 - plan approval blocks when plan has no todos
 - plan command records diagnostics during planning
@@ -111,7 +111,7 @@ def test_lock_break_no_lock_message_mentions_next_action(tmp_path: Path) -> None
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -126,11 +126,11 @@ def test_lock_break_no_lock_message_mentions_next_action(tmp_path: Path) -> None
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
+            "repair",
             "lock",
-            "break",
             "--task",
             "lock-test",
             "--reason",
@@ -151,7 +151,7 @@ def test_plan_propose_releases_planning_lock(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -164,7 +164,7 @@ def test_plan_propose_releases_planning_lock(tmp_path: Path) -> None:
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(tmp_path), "plan", "start", "--task", "lock-rel"]
+            app, ["--root", str(tmp_path), "plan", "start", "--task", "lock-rel"]
         ).exit_code
         == 0
     )
@@ -172,7 +172,7 @@ def test_plan_propose_releases_planning_lock(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "propose",
@@ -193,7 +193,7 @@ def test_plan_propose_releases_planning_lock(tmp_path: Path) -> None:
         == 0
     )
 
-    lock_show = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "lock", "show"])
+    lock_show = runner.invoke(app, ["--root", str(tmp_path), "--json", "lock", "show"])
     if lock_show.exit_code == 0:
         payload = _json(lock_show)
         # No active lock should exist after plan propose
@@ -213,7 +213,7 @@ def test_allow_empty_criteria_requires_reason(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -243,7 +243,7 @@ def test_allow_open_questions_requires_reason(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -273,7 +273,7 @@ def test_allow_empty_criteria_with_reason_succeeds(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "approve",
@@ -305,7 +305,7 @@ def test_plan_approval_blocks_when_no_todos(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -335,7 +335,7 @@ def test_plan_approval_empty_todos_with_reason_succeeds(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "approve",
@@ -364,7 +364,7 @@ def test_plan_approval_empty_todos_without_reason_fails(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -400,7 +400,7 @@ def test_plan_command_records_exit_code(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -413,7 +413,7 @@ def test_plan_command_records_exit_code(
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(tmp_path), "plan", "start", "--task", "cmd-test"]
+            app, ["--root", str(tmp_path), "plan", "start", "--task", "cmd-test"]
         ).exit_code
         == 0
     )
@@ -421,7 +421,7 @@ def test_plan_command_records_exit_code(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -446,7 +446,7 @@ def test_plan_command_fails_without_active_planning(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -461,7 +461,7 @@ def test_plan_command_fails_without_active_planning(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -491,7 +491,7 @@ def test_plan_command_no_change_records(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -504,7 +504,7 @@ def test_plan_command_no_change_records(
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(tmp_path), "plan", "start", "--task", "no-change-cmd"]
+            app, ["--root", str(tmp_path), "plan", "start", "--task", "no-change-cmd"]
         ).exit_code
         == 0
     )
@@ -512,7 +512,7 @@ def test_plan_command_no_change_records(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -534,7 +534,7 @@ def test_plan_command_no_change_records(
     view_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "view",
@@ -560,7 +560,7 @@ def test_plan_command_mirrors_inner_exit_code_by_default(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -574,14 +574,14 @@ def test_plan_command_mirrors_inner_exit_code_by_default(
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "plan", "start", "--task", "plan-cmd-exit"],
+            ["--root", str(tmp_path), "plan", "start", "--task", "plan-cmd-exit"],
         ).exit_code
         == 0
     )
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "command",
@@ -607,7 +607,7 @@ def test_plan_command_allow_failure_keeps_wrapper_exit_zero(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -622,7 +622,7 @@ def test_plan_command_allow_failure_keeps_wrapper_exit_zero(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "start",
@@ -635,7 +635,7 @@ def test_plan_command_allow_failure_keeps_wrapper_exit_zero(
     raw = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -668,7 +668,7 @@ def test_validate_finish_passed_blocks_unchecked_mandatory_criteria(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -690,14 +690,14 @@ def test_validate_finish_passed_blocks_unchecked_mandatory_criteria(
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "implement", "start", "--task", "test-task"],
+            ["--root", str(tmp_path), "implement", "start", "--task", "test-task"],
         ).exit_code
         == 0
     )
     # Mark the plan-materialized todo done so implement finish can pass
     todo_list_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "todo", "list", "--task", "test-task"],
+        ["--root", str(tmp_path), "--json", "todo", "list", "--task", "test-task"],
     )
     todo_payload = _json(todo_list_result)
     todos = todo_payload["result"]["todos"]
@@ -706,7 +706,7 @@ def test_validate_finish_passed_blocks_unchecked_mandatory_criteria(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "done",
@@ -723,7 +723,7 @@ def test_validate_finish_passed_blocks_unchecked_mandatory_criteria(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "implement",
                 "finish",
@@ -738,7 +738,7 @@ def test_validate_finish_passed_blocks_unchecked_mandatory_criteria(
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "validate", "start", "--task", "test-task"],
+            ["--root", str(tmp_path), "validate", "start", "--task", "test-task"],
         ).exit_code
         == 0
     )
@@ -746,7 +746,7 @@ def test_validate_finish_passed_blocks_unchecked_mandatory_criteria(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "validate",
@@ -779,7 +779,7 @@ def test_no_materialize_todos_without_reason_fails(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -809,7 +809,7 @@ def test_no_materialize_todos_with_reason_succeeds(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "approve",
@@ -844,7 +844,7 @@ def test_todo_added_during_implementation_is_implementer_sourced(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -866,7 +866,7 @@ def test_todo_added_during_implementation_is_implementer_sourced(
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "implement", "start", "--task", "test-task"],
+            ["--root", str(tmp_path), "implement", "start", "--task", "test-task"],
         ).exit_code
         == 0
     )
@@ -874,7 +874,7 @@ def test_todo_added_during_implementation_is_implementer_sourced(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "todo",
@@ -899,7 +899,7 @@ def test_todo_added_during_planning_is_planner_sourced(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -913,7 +913,7 @@ def test_todo_added_during_planning_is_planner_sourced(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "plan", "start", "--task", "source-test"],
+            ["--root", str(tmp_path), "plan", "start", "--task", "source-test"],
         ).exit_code
         == 0
     )
@@ -921,7 +921,7 @@ def test_todo_added_during_planning_is_planner_sourced(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "todo",
@@ -948,7 +948,7 @@ def test_todo_added_without_active_stage_defaults_to_user(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -963,7 +963,7 @@ def test_todo_added_without_active_stage_defaults_to_user(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "todo",

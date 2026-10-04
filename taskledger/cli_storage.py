@@ -313,31 +313,6 @@ def register_storage_commands(app: typer.Typer) -> None:
                 help="Configuration scope: project or local.",
             ),
         ] = None,
-        # Deprecated aliases
-        root: Annotated[
-            str | None,
-            typer.Option(
-                "--root",
-                help="Deprecated: use --storage-root instead.",
-                hidden=True,
-            ),
-        ] = None,
-        project: Annotated[
-            bool,
-            typer.Option(
-                "--project",
-                help="Deprecated: use --scope project instead.",
-                hidden=True,
-            ),
-        ] = False,
-        local: Annotated[
-            bool,
-            typer.Option(
-                "--local",
-                help="Deprecated: use --scope local instead.",
-                hidden=True,
-            ),
-        ] = False,
     ) -> None:
         """Set storage topology for a mount.
 
@@ -346,25 +321,14 @@ def register_storage_commands(app: typer.Typer) -> None:
         """
         state = cli_state_from_context(ctx)
 
-        # Resolve scope from deprecated options if not provided
-        if scope is None:
-            if project and not local:
-                scope = "project"
-            elif local and not project:
-                scope = "local"
-            else:
-                scope = "project"  # default
-
-        # Resolve storage_root from deprecated --root if not provided
-        resolved_root = storage_root or root
-
+        scope = scope or "project"
         try:
             payload = storage_set(
                 state.cwd,
                 mount=mount,
                 storage=storage,
                 target=scope,
-                external_root=resolved_root,
+                external_root=storage_root,
                 mode="copy",  # Compatibility parameter; storage_set is topology-only
             )
         except LaunchError as exc:

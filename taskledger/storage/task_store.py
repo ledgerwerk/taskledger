@@ -1,7 +1,7 @@
 # Derived index files
 #
 # Index files under .taskledger/indexes/ are derived caches.
-# They are rebuilt from canonical Markdown/YAML records by 'taskledger reindex'.
+# They are rebuilt from canonical Markdown/YAML records by 'taskledger repair index'.
 # They may be plain JSON arrays with no version metadata.
 # They are never the authoritative source of truth.
 # 'doctor indexes' checks staleness but not schema mismatches as migration blockers.

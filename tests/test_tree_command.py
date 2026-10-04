@@ -34,7 +34,7 @@ def _init(tmp_path: Path) -> None:
 
 
 def _create_task(tmp_path: Path, title: str, slug: str | None = None) -> None:
-    args = ["--cwd", str(tmp_path), "task", "create", title]
+    args = ["--root", str(tmp_path), "task", "create", title]
     if slug:
         args += ["--slug", slug]
     result = runner.invoke(app, args)
@@ -42,17 +42,17 @@ def _create_task(tmp_path: Path, title: str, slug: str | None = None) -> None:
 
 
 def _activate(tmp_path: Path, ref: str) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "task", "activate", ref])
+    result = runner.invoke(app, ["--root", str(tmp_path), "task", "activate", ref])
     assert result.exit_code == 0, result.output
 
 
 def _tree(tmp_path: Path, *extra: str) -> Result:
-    args = ["--cwd", str(tmp_path), "tree", *extra]
+    args = ["--root", str(tmp_path), "tree", *extra]
     return runner.invoke(app, args)
 
 
 def _json_tree(tmp_path: Path, *extra: str) -> dict:
-    args = ["--cwd", str(tmp_path), "--json", "tree", *extra]
+    args = ["--root", str(tmp_path), "--json", "tree", *extra]
     result = runner.invoke(app, args)
     assert result.exit_code == 0, result.output
     return _json(result)
@@ -154,7 +154,7 @@ class TestFollowUpNesting:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "record",
@@ -173,7 +173,7 @@ class TestFollowUpNesting:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "follow-up",
@@ -198,7 +198,7 @@ class TestFollowUpNesting:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "record",
@@ -216,7 +216,7 @@ class TestFollowUpNesting:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "follow-up",
@@ -281,7 +281,7 @@ class TestTaskSubtree:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "record",
@@ -299,7 +299,7 @@ class TestTaskSubtree:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "follow-up",
@@ -334,7 +334,7 @@ class TestDetails:
         _activate(tmp_path, "detailed")
 
         # Start planning to create a planning run
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "plan", "start"])
         assert result.exit_code == 0, result.output
 
         data = _json_tree(tmp_path, "--details")
@@ -381,7 +381,7 @@ class TestAllLedgers:
 
         # Fork to feature-a
         result = runner.invoke(
-            app, ["--cwd", str(tmp_path), "ledger", "fork", "feature-a"]
+            app, ["--root", str(tmp_path), "ledger", "fork", "feature-a"]
         )
         assert result.exit_code == 0, result.output
 
@@ -405,7 +405,7 @@ class TestAllLedgers:
         _init(tmp_path)
         _create_task(tmp_path, "Main task", slug="main-task")
         result = runner.invoke(
-            app, ["--cwd", str(tmp_path), "ledger", "fork", "feature-a"]
+            app, ["--root", str(tmp_path), "ledger", "fork", "feature-a"]
         )
         assert result.exit_code == 0, result.output
 
@@ -427,7 +427,7 @@ class TestReleaseRendering:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "record",
@@ -445,7 +445,7 @@ class TestReleaseRendering:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "release",
                 "tag",
@@ -473,7 +473,7 @@ class TestReleaseRendering:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "record",
@@ -491,7 +491,7 @@ class TestReleaseRendering:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "release",
                 "tag",
@@ -502,7 +502,7 @@ class TestReleaseRendering:
         )
         assert result.exit_code == 0, result.output
         result = runner.invoke(
-            app, ["--cwd", str(tmp_path), "ledger", "fork", "feature-a"]
+            app, ["--root", str(tmp_path), "ledger", "fork", "feature-a"]
         )
         assert result.exit_code == 0, result.output
 
@@ -547,7 +547,7 @@ class TestRecordedTaskType:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "record",
@@ -573,7 +573,7 @@ class TestRecordedTaskType:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "record",
@@ -602,7 +602,7 @@ class TestArchivedTasks:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "record",
@@ -622,7 +622,7 @@ class TestArchivedTasks:
         archived = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "archive",
@@ -644,7 +644,7 @@ class TestArchivedTasks:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "record",
@@ -664,7 +664,7 @@ class TestArchivedTasks:
         archived = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "archive",

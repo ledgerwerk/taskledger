@@ -23,7 +23,7 @@ runner = _make_runner()
 
 def _init_project(tmp_path: Path) -> None:
     result = runner.invoke(
-        app, ["--cwd", str(tmp_path), "init", "--create-sibling-store"]
+        app, ["--root", str(tmp_path), "init", "--create-sibling-store"]
     )
     assert result.exit_code == 0
 
@@ -62,7 +62,7 @@ def _setup_worker_pipeline_task(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -76,11 +76,11 @@ def _setup_worker_pipeline_task(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "pipeline-json-task"],
+            ["--root", str(tmp_path), "task", "activate", "pipeline-json-task"],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "plan", "start"]).exit_code == 0
     plan_text = """---
 acceptance_criteria:
   - text: Pipeline JSON surfaces remain stable.
@@ -100,7 +100,7 @@ Keep worker pipeline JSON payloads explicit and stable.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "plan", "propose", "--text", plan_text],
+            ["--root", str(tmp_path), "plan", "propose", "--text", plan_text],
         ).exit_code
         == 0
     )
@@ -108,7 +108,7 @@ Keep worker pipeline JSON payloads explicit and stable.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -126,7 +126,7 @@ Keep worker pipeline JSON payloads explicit and stable.
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(tmp_path), "implement", "start"]).exit_code
+        runner.invoke(app, ["--root", str(tmp_path), "implement", "start"]).exit_code
         == 0
     )
 
@@ -140,7 +140,7 @@ def test_json_success_envelope_uses_ok_command_result_and_events(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -169,7 +169,7 @@ def test_json_failure_envelope_includes_structured_error(tmp_path: Path) -> None
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -179,12 +179,12 @@ def test_json_failure_envelope_includes_structured_error(tmp_path: Path) -> None
         ],
     )
     runner.invoke(
-        app, ["--cwd", str(tmp_path), "plan", "start", "--task", "question-blocked"]
+        app, ["--root", str(tmp_path), "plan", "start", "--task", "question-blocked"]
     )
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "question",
             "add",
@@ -196,7 +196,7 @@ def test_json_failure_envelope_includes_structured_error(tmp_path: Path) -> None
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "propose",
@@ -210,7 +210,7 @@ def test_json_failure_envelope_includes_structured_error(tmp_path: Path) -> None
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -237,7 +237,7 @@ def test_context_missing_todo_focus_returns_json_error(tmp_path: Path) -> None:
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -246,12 +246,12 @@ def test_context_missing_todo_focus_returns_json_error(tmp_path: Path) -> None:
             "Need an active task for context errors.",
         ],
     )
-    runner.invoke(app, ["--cwd", str(tmp_path), "task", "activate", "focus-error"])
+    runner.invoke(app, ["--root", str(tmp_path), "task", "activate", "focus-error"])
 
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "context",
@@ -276,7 +276,7 @@ def test_status_json_reports_workspace_and_storage_paths(tmp_path: Path) -> None
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "status",
@@ -302,7 +302,7 @@ def test_worker_pipeline_json_contracts_cover_guided_surfaces(tmp_path: Path) ->
 
     show_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "pipeline", "show"],
+        ["--root", str(tmp_path), "--json", "pipeline", "show"],
     )
     assert show_result.exit_code == 0, show_result.stdout
     show_payload = json.loads(show_result.stdout)
@@ -311,7 +311,7 @@ def test_worker_pipeline_json_contracts_cover_guided_surfaces(tmp_path: Path) ->
 
     next_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "pipeline", "next"],
+        ["--root", str(tmp_path), "--json", "pipeline", "next"],
     )
     assert next_result.exit_code == 0, next_result.stdout
     next_payload = json.loads(next_result.stdout)
@@ -320,7 +320,7 @@ def test_worker_pipeline_json_contracts_cover_guided_surfaces(tmp_path: Path) ->
     context_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "pipeline",
@@ -337,7 +337,7 @@ def test_worker_pipeline_json_contracts_cover_guided_surfaces(tmp_path: Path) ->
     handoff_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "handoff",
@@ -354,7 +354,7 @@ def test_worker_pipeline_json_contracts_cover_guided_surfaces(tmp_path: Path) ->
 
     action_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "next-action"],
+        ["--root", str(tmp_path), "--json", "next-action"],
     )
     assert action_result.exit_code == 0, action_result.stdout
     action_payload = json.loads(action_result.stdout)
@@ -377,7 +377,7 @@ def test_python_m_taskledger_uses_canonical_json_command_names(tmp_path: Path) -
             sys.executable,
             "-m",
             "taskledger",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "status",
@@ -399,7 +399,7 @@ def test_workflow_positional_task_ref_returns_json_usage_error_envelope(
     _init_project(tmp_path)
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "plan", "start", "task-0001"],
+        ["--root", str(tmp_path), "--json", "plan", "start", "task-0001"],
     )
     assert result.exit_code == 2, result.stdout
     payload = json.loads(result.stdout)
@@ -418,7 +418,7 @@ def test_python_m_taskledger_json_parse_error_envelope(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "taskledger",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -446,7 +446,7 @@ def test_plan_lint_usage_error_includes_waiver_hint(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "taskledger",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -477,7 +477,7 @@ def test_doctor_usage_error_for_errors_argument_has_specific_hint(
             sys.executable,
             "-m",
             "taskledger",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "doctor",

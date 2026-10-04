@@ -150,7 +150,7 @@ def test_task_show_accepts_global_and_file_ref_aliases(tmp_path: Path) -> None:
     create = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -164,14 +164,14 @@ def test_task_show_accepts_global_and_file_ref_aliases(tmp_path: Path) -> None:
     canonical = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "task", "show", "task-0001"],
+            ["--root", str(tmp_path), "--json", "task", "show", "task-0001"],
         )
     )
     for ref in ("tl:task-0001", "tl-task-0001", "TL-TASK-0001"):
         payload = _json(
             runner.invoke(
                 app,
-                ["--cwd", str(tmp_path), "--json", "task", "show", ref],
+                ["--root", str(tmp_path), "--json", "task", "show", ref],
             )
         )
         assert payload["result"]["task"]["id"] == canonical["result"]["task"]["id"]
@@ -186,7 +186,7 @@ def test_ref_show_and_parse_emit_resource_ref_payload(tmp_path: Path) -> None:
         payload = _json(
             runner.invoke(
                 app,
-                ["--cwd", str(tmp_path), "--json", "ref", command, "TL-TASK-0001"],
+                ["--root", str(tmp_path), "--json", "ref", command, "TL-TASK-0001"],
             )
         )
         result = payload["result"]
@@ -202,7 +202,7 @@ def test_task_record_keeps_local_id_without_global_ref_fields(tmp_path: Path) ->
     create = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -231,7 +231,7 @@ def test_implement_command_records_stdout_stderr_and_exit_code(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -260,7 +260,7 @@ def test_implement_command_mirrors_inner_exit_code_by_default(tmp_path: Path) ->
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "implement",
             "command",
@@ -283,7 +283,7 @@ def test_implement_command_allow_failure_keeps_wrapper_exit_zero(
     raw = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -317,7 +317,7 @@ def test_planning_guidance_is_recommended_then_not_repeated(tmp_path: Path) -> N
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -331,19 +331,19 @@ def test_planning_guidance_is_recommended_then_not_repeated(tmp_path: Path) -> N
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "guidance-task"],
+            ["--root", str(tmp_path), "task", "activate", "guidance-task"],
         ).exit_code
         == 0
     )
     start = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "plan", "start", "--task", "guidance-task"],
+        ["--root", str(tmp_path), "plan", "start", "--task", "guidance-task"],
     )
     assert start.exit_code == 0, start.stdout
     assert "Next: taskledger plan guidance" in start.stdout
 
     next_action = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
     )["result"]
     assert next_action["guidance_command"] == "taskledger plan guidance"
     assert next_action["template_command"] == (
@@ -352,12 +352,12 @@ def test_planning_guidance_is_recommended_then_not_repeated(tmp_path: Path) -> N
 
     guidance = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "plan", "guidance", "--task", "guidance-task"],
+        ["--root", str(tmp_path), "plan", "guidance", "--task", "guidance-task"],
     )
     assert guidance.exit_code == 0, guidance.stdout
 
     next_after = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
     )["result"]
     assert next_after["guidance_command"] is None
 
@@ -366,10 +366,10 @@ def _break_task_lock(tmp_path: Path, task_ref: str = "resume-task") -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
+            "repair",
             "lock",
-            "break",
             "--task",
             task_ref,
             "--reason",
@@ -387,7 +387,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -403,18 +403,26 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "rewrite-v2"],
+            ["--root", str(tmp_path), "task", "activate", "rewrite-v2"],
         ).exit_code
         == 0
     )
     assert runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "can", "plan"],
+        ["--root", str(tmp_path), "--json", "can", "plan"],
     ).stdout
     start_plan = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "start", "--task", "rewrite-v2"],
+            [
+                "--root",
+                str(tmp_path),
+                "--json",
+                "plan",
+                "start",
+                "--task",
+                "rewrite-v2",
+            ],
         )
     )
     assert start_plan["result"]["status_stage"] == "draft"
@@ -423,7 +431,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -437,7 +445,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "answer",
@@ -452,7 +460,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -472,7 +480,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -491,7 +499,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -515,7 +523,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -531,7 +539,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "implement",
                 "log",
@@ -547,7 +555,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "implement",
                 "change",
@@ -567,7 +575,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -585,7 +593,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "validate",
@@ -601,7 +609,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "validate",
                 "check",
@@ -621,7 +629,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "validate",
@@ -640,7 +648,7 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
 
     show_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "show", "--task", "rewrite-v2"],
+        ["--root", str(tmp_path), "--json", "task", "show", "--task", "rewrite-v2"],
     )
     payload = _json(show_result)
     assert payload["command"] == "task.show"
@@ -652,10 +660,11 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
     handoff_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
-            "handoff",
-            "validation-context",
+            "context",
+            "--for",
+            "validator",
         ],
     )
     assert handoff_result.exit_code == 0
@@ -664,14 +673,14 @@ def test_v2_task_lifecycle_and_handoff(tmp_path: Path) -> None:
 
     doctor_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "doctor"],
+        ["--root", str(tmp_path), "--json", "doctor"],
     )
     doctor_payload = _json(doctor_result)
     assert doctor_payload["result"]["healthy"] is True
 
     reindex_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "reindex"],
+        ["--root", str(tmp_path), "--json", "repair", "index"],
     )
     reindex_payload = _json(reindex_result)
     assert reindex_payload["result"]["counts"] == {
@@ -691,7 +700,7 @@ def test_failed_validation_restarts_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -707,11 +716,11 @@ def test_failed_validation_restarts_implementation(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "validation-restart"],
+            ["--root", str(tmp_path), "task", "activate", "validation-restart"],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "plan", "start"]).exit_code == 0
 
     plan_text = """---
 goal: Exercise failed validation restart.
@@ -732,7 +741,7 @@ Ship the initial implementation, fail validation, and restart implementation.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "propose",
@@ -746,7 +755,7 @@ Ship the initial implementation, fail validation, and restart implementation.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -762,19 +771,19 @@ Ship the initial implementation, fail validation, and restart implementation.
     )
 
     start = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "implement", "start"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "implement", "start"])
     )
     first_implementation_run = start["result"]["run_id"]
 
     todo_list = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "todo", "list"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "todo", "list"])
     )
     todo_id = todo_list["result"]["todos"][0]["id"]
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "done",
@@ -789,7 +798,7 @@ Ship the initial implementation, fail validation, and restart implementation.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "implement",
                 "finish",
@@ -801,7 +810,7 @@ Ship the initial implementation, fail validation, and restart implementation.
     )
 
     validation_start = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "validate", "start"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "validate", "start"])
     )
     validation_run_id = validation_start["result"]["run_id"]
 
@@ -809,7 +818,7 @@ Ship the initial implementation, fail validation, and restart implementation.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "validate",
                 "check",
@@ -827,7 +836,7 @@ Ship the initial implementation, fail validation, and restart implementation.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "validate",
@@ -843,7 +852,7 @@ Ship the initial implementation, fail validation, and restart implementation.
     assert failed_validation["result"]["active_stage"] is None
 
     next_action = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
     )["result"]
     assert next_action["action"] == "implement-restart"
     assert (
@@ -864,7 +873,7 @@ Ship the initial implementation, fail validation, and restart implementation.
     can_restart = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "can", "implement-restart"],
+            ["--root", str(tmp_path), "--json", "can", "implement-restart"],
         )
     )
     assert can_restart["result"]["ok"] is True
@@ -873,7 +882,7 @@ Ship the initial implementation, fail validation, and restart implementation.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -898,7 +907,7 @@ Ship the initial implementation, fail validation, and restart implementation.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "validate",
@@ -915,7 +924,7 @@ Ship the initial implementation, fail validation, and restart implementation.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "task",
@@ -939,7 +948,7 @@ def test_v2_lock_break_and_expired_lock_report(tmp_path: Path) -> None:
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -948,7 +957,9 @@ def test_v2_lock_break_and_expired_lock_report(tmp_path: Path) -> None:
             "Task with a planning lock.",
         ],
     )
-    runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start", "--task", "lock-task"])
+    runner.invoke(
+        app, ["--root", str(tmp_path), "plan", "start", "--task", "lock-task"]
+    )
 
     lock_path = task_lock_path(resolve_v2_paths(tmp_path), "task-0001")
     payload = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
@@ -960,7 +971,7 @@ def test_v2_lock_break_and_expired_lock_report(tmp_path: Path) -> None:
 
     doctor_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "doctor", "locks"],
+        ["--root", str(tmp_path), "doctor", "locks"],
     )
     assert doctor_result.exit_code == 0
     assert "task-0001" in doctor_result.stdout
@@ -968,11 +979,11 @@ def test_v2_lock_break_and_expired_lock_report(tmp_path: Path) -> None:
     break_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
+            "repair",
             "lock",
-            "break",
             "--reason",
             "recover stale planning lock",
             "--task",
@@ -982,7 +993,7 @@ def test_v2_lock_break_and_expired_lock_report(tmp_path: Path) -> None:
     assert break_result.exit_code == 0
     break_payload = _json(break_result)["result"]
     run_id = str(payload["run_id"])
-    assert break_payload["command"] == "lock break"
+    assert break_payload["command"] == "repair lock"
     assert break_payload["orphaned_run"] == {
         "run_id": run_id,
         "run_type": "planning",
@@ -1004,7 +1015,7 @@ def test_repair_lock_human_output_includes_orphan_run_recovery(
     create = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -1018,14 +1029,14 @@ def test_repair_lock_human_output_includes_orphan_run_recovery(
     assert create.exit_code == 0, create.stdout
     start = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "plan", "start", "--task", "planning-lock"],
+        ["--root", str(tmp_path), "plan", "start", "--task", "planning-lock"],
     )
     assert start.exit_code == 0, start.stdout
 
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "repair",
             "lock",
@@ -1051,7 +1062,7 @@ def test_doctor_human_reports_non_looping_implementation_mismatch_hint(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "doctor"],
+        ["--root", str(tmp_path), "doctor"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -1067,7 +1078,7 @@ def test_doctor_verbose_option_is_supported(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "doctor", "--verbose"],
+        ["--root", str(tmp_path), "doctor", "--verbose"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -1082,7 +1093,7 @@ def test_implement_resume_reacquires_lock_after_break(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1103,7 +1114,15 @@ def test_implement_resume_reacquires_lock_after_break(tmp_path: Path) -> None:
     task_show = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "task", "show", "--task", "resume-task"],
+            [
+                "--root",
+                str(tmp_path),
+                "--json",
+                "task",
+                "show",
+                "--task",
+                "resume-task",
+            ],
         )
     )
     assert task_show["result"]["task"]["id"] == task_id
@@ -1118,7 +1137,7 @@ def test_implement_resume_does_not_create_new_run(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1146,7 +1165,7 @@ def test_implement_resume_requires_reason(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1169,7 +1188,7 @@ def test_next_action_recommends_repair_for_orphaned_planning_run(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "next-action"],
+        ["--root", str(tmp_path), "--json", "next-action"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -1194,7 +1213,7 @@ def test_next_action_repairs_orphaned_planning_run_before_plan_review(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "next-action", "--task", task_id],
+        ["--root", str(tmp_path), "--json", "next-action", "--task", task_id],
     )
 
     payload = _json(result)["result"]
@@ -1213,7 +1232,7 @@ def test_can_implement_blocker_names_orphaned_planning_run(tmp_path: Path) -> No
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "can", "implement"],
+        ["--root", str(tmp_path), "--json", "can", "implement"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -1231,7 +1250,7 @@ def test_implement_start_reports_running_run_details(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "implement", "start"],
+        ["--root", str(tmp_path), "--json", "implement", "start"],
     )
 
     assert result.exit_code != 0
@@ -1251,7 +1270,7 @@ def test_repair_run_finishes_orphaned_planning_run(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "repair",
@@ -1284,7 +1303,7 @@ def test_implement_resume_rejects_missing_accepted_plan(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1311,7 +1330,7 @@ def test_implement_resume_rejects_non_running_implementation_run(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1338,7 +1357,7 @@ def test_implement_resume_rejects_non_implementation_run(tmp_path: Path) -> None
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1383,7 +1402,7 @@ def test_implement_resume_same_current_session_is_noop(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1406,7 +1425,7 @@ def test_implement_resume_same_current_session_is_noop(
     human_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "implement",
             "resume",
@@ -1448,7 +1467,7 @@ def test_implement_resume_conflicts_with_different_session(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1499,7 +1518,7 @@ def test_implement_resume_requires_matching_lock_run_and_stage(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1538,7 +1557,7 @@ def test_can_implement_resume_reports_current_session_lock(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "can",
@@ -1575,7 +1594,7 @@ def test_implement_resume_rejects_completed_task(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1599,7 +1618,7 @@ def test_implement_resume_rejects_cancelled_task(tmp_path: Path) -> None:
     cancel = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "cancel",
@@ -1614,7 +1633,7 @@ def test_implement_resume_rejects_cancelled_task(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -1638,7 +1657,7 @@ def test_task_uncancel_restores_cancelled_task_to_approved(tmp_path: Path) -> No
     cancel = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "cancel",
@@ -1653,7 +1672,7 @@ def test_task_uncancel_restores_cancelled_task_to_approved(tmp_path: Path) -> No
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -1677,7 +1696,15 @@ def test_task_uncancel_restores_cancelled_task_to_approved(tmp_path: Path) -> No
     task_show = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "task", "show", "--task", "resume-task"],
+            [
+                "--root",
+                str(tmp_path),
+                "--json",
+                "task",
+                "show",
+                "--task",
+                "resume-task",
+            ],
         )
     )
     assert task_show["result"]["task"]["status_stage"] == "approved"
@@ -1691,7 +1718,7 @@ def test_next_action_after_uncancel_running_implementation_recommends_resume(
     cancel = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "cancel",
@@ -1705,7 +1732,7 @@ def test_next_action_after_uncancel_running_implementation_recommends_resume(
     uncancel = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "uncancel",
@@ -1720,7 +1747,7 @@ def test_next_action_after_uncancel_running_implementation_recommends_resume(
     )
     assert uncancel.exit_code == 0, uncancel.stdout
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
     payload = _json(result)["result"]
 
     assert payload["status_stage"] == "approved"
@@ -1744,7 +1771,7 @@ def test_can_implement_blocks_existing_running_run_after_uncancel(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "cancel",
@@ -1760,7 +1787,7 @@ def test_can_implement_blocks_existing_running_run_after_uncancel(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "uncancel",
@@ -1776,7 +1803,7 @@ def test_can_implement_blocks_existing_running_run_after_uncancel(
         == 0
     )
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "can", "implement"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "--json", "can", "implement"])
     payload = _json(result)["result"]
 
     assert payload["ok"] is False
@@ -1796,7 +1823,7 @@ def test_can_implement_resume_after_uncancel_running_implementation(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "cancel",
@@ -1812,7 +1839,7 @@ def test_can_implement_resume_after_uncancel_running_implementation(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "uncancel",
@@ -1830,7 +1857,7 @@ def test_can_implement_resume_after_uncancel_running_implementation(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "can", "implement-resume"],
+        ["--root", str(tmp_path), "--json", "can", "implement-resume"],
     )
     payload = _json(result)["result"]
 
@@ -1846,7 +1873,7 @@ def test_uncancel_non_cancelled_orphan_hints_resume(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -1876,7 +1903,7 @@ def test_task_uncancel_rejects_active_stage_target(tmp_path: Path) -> None:
     cancel = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "cancel",
@@ -1891,7 +1918,7 @@ def test_task_uncancel_rejects_active_stage_target(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -1919,7 +1946,7 @@ def test_repair_task_human_output_records_inspection_and_recovery_hint(
     cancel = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "cancel",
@@ -1934,7 +1961,7 @@ def test_repair_task_human_output_records_inspection_and_recovery_hint(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "repair",
             "task",
@@ -1963,7 +1990,7 @@ def test_task_first_support_commands_are_available(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -1977,7 +2004,7 @@ def test_task_first_support_commands_are_available(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "support-task"],
+            ["--root", str(tmp_path), "task", "activate", "support-task"],
         ).exit_code
         == 0
     )
@@ -1985,7 +2012,7 @@ def test_task_first_support_commands_are_available(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "add",
@@ -1999,7 +2026,7 @@ def test_task_first_support_commands_are_available(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "file",
                 "add",
@@ -2014,13 +2041,13 @@ def test_task_first_support_commands_are_available(tmp_path: Path) -> None:
 
     todo_show = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "todo", "show", "todo-0001"],
+        ["--root", str(tmp_path), "--json", "todo", "show", "todo-0001"],
     )
     assert _json(todo_show)["result"]["todo"]["id"] == "todo-0001"
 
     file_list = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "file", "list"],
+        ["--root", str(tmp_path), "file", "list"],
     )
     assert file_list.exit_code == 0
     assert "@README.md [doc]" in file_list.stdout
@@ -2055,7 +2082,7 @@ def test_plan_approval_blocks_open_questions_with_json_error(tmp_path: Path) -> 
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -2065,12 +2092,12 @@ def test_plan_approval_blocks_open_questions_with_json_error(tmp_path: Path) -> 
         ],
     )
     runner.invoke(
-        app, ["--cwd", str(tmp_path), "plan", "start", "--task", "question-blocked"]
+        app, ["--root", str(tmp_path), "plan", "start", "--task", "question-blocked"]
     )
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "question",
             "add",
@@ -2083,7 +2110,7 @@ def test_plan_approval_blocks_open_questions_with_json_error(tmp_path: Path) -> 
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "propose",
@@ -2097,7 +2124,7 @@ def test_plan_approval_blocks_open_questions_with_json_error(tmp_path: Path) -> 
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -2121,7 +2148,7 @@ def test_expired_lock_requires_explicit_break_json_error(tmp_path: Path) -> None
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -2131,7 +2158,7 @@ def test_expired_lock_requires_explicit_break_json_error(tmp_path: Path) -> None
         ],
     )
     runner.invoke(
-        app, ["--cwd", str(tmp_path), "plan", "start", "--task", "stale-lock-task"]
+        app, ["--root", str(tmp_path), "plan", "start", "--task", "stale-lock-task"]
     )
 
     lock_path = task_lock_path(resolve_v2_paths(tmp_path), "task-0001")
@@ -2145,7 +2172,7 @@ def test_expired_lock_requires_explicit_break_json_error(tmp_path: Path) -> None
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -2169,7 +2196,7 @@ def test_context_for_implementer_todo_renders_focused_context(tmp_path: Path) ->
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "context",
             "--for",
@@ -2199,7 +2226,7 @@ def test_context_for_spec_reviewer_run_renders_review_context(tmp_path: Path) ->
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "context",
             "--for",
@@ -2228,7 +2255,7 @@ def test_context_for_code_reviewer_run_renders_review_context(tmp_path: Path) ->
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "context",
             "--for",
@@ -2257,7 +2284,7 @@ def test_handoff_create_and_show_focused_todo_snapshot(tmp_path: Path) -> None:
     create_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "handoff",
@@ -2278,7 +2305,7 @@ def test_handoff_create_and_show_focused_todo_snapshot(tmp_path: Path) -> None:
     show_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "handoff",
             "show",
@@ -2303,7 +2330,7 @@ def test_repair_planning_command_changes_dry_run(tmp_path: Path) -> None:
     create_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -2321,7 +2348,7 @@ def test_repair_planning_command_changes_dry_run(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "repair",
@@ -2348,7 +2375,7 @@ def test_repair_planning_command_changes_requires_reason(tmp_path: Path) -> None
     create_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -2365,7 +2392,7 @@ def test_repair_planning_command_changes_requires_reason(tmp_path: Path) -> None
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "repair",
@@ -2387,7 +2414,7 @@ def test_status_command_with_check_flag(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "status",
@@ -2409,7 +2436,7 @@ def test_status_command_without_check_flag_fast(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "status",
@@ -2485,7 +2512,7 @@ def test_lock_show_human_reports_dead_holder_pid_and_next_commands(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "lock", "show", "--task", task_id],
+        ["--root", str(tmp_path), "lock", "show", "--task", task_id],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -2514,7 +2541,7 @@ def test_lock_show_json_payload_includes_diagnostics_and_storage_fields(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "lock", "show", "--task", task_id],
+        ["--root", str(tmp_path), "--json", "lock", "show", "--task", task_id],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -2546,7 +2573,7 @@ def test_lock_show_uses_current_harness_session(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "lock", "show", "--task", task_id],
+        ["--root", str(tmp_path), "--json", "lock", "show", "--task", task_id],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -2565,7 +2592,7 @@ def test_implement_resume_with_active_dead_pid_lock_explains_repair_not_expired_
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -2605,7 +2632,7 @@ def test_next_action_dead_pid_lock_routes_to_repair_lock(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "next-action"],
+        ["--root", str(tmp_path), "--json", "next-action"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -2639,7 +2666,7 @@ def test_next_action_dead_planning_lock_uses_stage_aware_reason(
     create = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -2653,7 +2680,7 @@ def test_next_action_dead_planning_lock_uses_stage_aware_reason(
     assert create.exit_code == 0, create.stdout
     start = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "plan", "start", "--task", "planning-lock"],
+        ["--root", str(tmp_path), "plan", "start", "--task", "planning-lock"],
     )
     assert start.exit_code == 0, start.stdout
     task_id = resolve_task(tmp_path, "planning-lock").id
@@ -2667,7 +2694,7 @@ def test_next_action_dead_planning_lock_uses_stage_aware_reason(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "next-action", "--task", task_id],
+        ["--root", str(tmp_path), "--json", "next-action", "--task", task_id],
     )
 
     payload = _json(result)["result"]
@@ -2695,7 +2722,7 @@ def test_next_action_uses_current_harness_session(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "next-action", "--task", task_id],
+        ["--root", str(tmp_path), "--json", "next-action", "--task", task_id],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -2721,7 +2748,7 @@ def test_next_action_live_lock_keeps_todo_work_with_warning(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "next-action"],
+        ["--root", str(tmp_path), "--json", "next-action"],
     )
 
     assert result.exit_code == 0, result.stdout

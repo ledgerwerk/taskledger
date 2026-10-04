@@ -187,7 +187,7 @@ def _prepare_active_implementation(project_root: Path, *, slug: str) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(project_root),
                 "task",
                 "create",
@@ -200,12 +200,13 @@ def _prepare_active_implementation(project_root: Path, *, slug: str) -> None:
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(project_root), "task", "activate", slug]
+            app, ["--root", str(project_root), "task", "activate", slug]
         ).exit_code
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(project_root), "plan", "start"]).exit_code == 0
+        runner.invoke(app, ["--root", str(project_root), "plan", "start"]).exit_code
+        == 0
     )
     plan_text = """---
 goal: Test cross-machine import behavior.
@@ -227,7 +228,7 @@ Keep implementation open for export/import testing.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(project_root), "plan", "propose", "--text", plan_text],
+            ["--root", str(project_root), "plan", "propose", "--text", plan_text],
         ).exit_code
         == 0
     )
@@ -235,7 +236,7 @@ Keep implementation open for export/import testing.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(project_root),
                 "plan",
                 "approve",
@@ -250,7 +251,9 @@ Keep implementation open for export/import testing.
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(project_root), "implement", "start"]).exit_code
+        runner.invoke(
+            app, ["--root", str(project_root), "implement", "start"]
+        ).exit_code
         == 0
     )
 
@@ -260,7 +263,7 @@ def _prepare_implemented_with_review(project_root: Path, *, slug: str) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(project_root),
                 "task",
                 "create",
@@ -273,12 +276,13 @@ def _prepare_implemented_with_review(project_root: Path, *, slug: str) -> None:
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(project_root), "task", "activate", slug]
+            app, ["--root", str(project_root), "task", "activate", slug]
         ).exit_code
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(project_root), "plan", "start"]).exit_code == 0
+        runner.invoke(app, ["--root", str(project_root), "plan", "start"]).exit_code
+        == 0
     )
     plan_text = """---
 goal: Exchange review records.
@@ -300,7 +304,7 @@ Exchange test setup.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(project_root), "plan", "propose", "--text", plan_text],
+            ["--root", str(project_root), "plan", "propose", "--text", plan_text],
         ).exit_code
         == 0
     )
@@ -308,7 +312,7 @@ Exchange test setup.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(project_root),
                 "plan",
                 "approve",
@@ -323,14 +327,16 @@ Exchange test setup.
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(project_root), "implement", "start"]).exit_code
+        runner.invoke(
+            app, ["--root", str(project_root), "implement", "start"]
+        ).exit_code
         == 0
     )
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(project_root),
                 "todo",
                 "done",
@@ -344,7 +350,7 @@ Exchange test setup.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(project_root), "implement", "finish", "--summary", "done"],
+            ["--root", str(project_root), "implement", "finish", "--summary", "done"],
         ).exit_code
         == 0
     )
@@ -352,7 +358,7 @@ Exchange test setup.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(project_root),
                 "review",
                 "record",
@@ -380,7 +386,7 @@ def test_export_and_import_include_v2_state(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -394,7 +400,7 @@ def test_export_and_import_include_v2_state(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "plan", "start", "--task", "migrate-v2"],
+            ["--root", str(source_root), "plan", "start", "--task", "migrate-v2"],
         ).exit_code
         == 0
     )
@@ -402,7 +408,7 @@ def test_export_and_import_include_v2_state(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "plan",
                 "propose",
@@ -418,7 +424,7 @@ def test_export_and_import_include_v2_state(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "handoff",
                 "create",
@@ -437,7 +443,7 @@ def test_export_and_import_include_v2_state(tmp_path: Path) -> None:
     archive_path = tmp_path / "export.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "export", str(archive_path)],
+        ["--root", str(source_root), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0
     assert archive_path.exists()
@@ -445,7 +451,7 @@ def test_export_and_import_include_v2_state(tmp_path: Path) -> None:
     # JSON export returns metadata, not full payload
     json_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "--json", "export", "--overwrite"],
+        ["--root", str(source_root), "--json", "export", "--overwrite"],
     )
     json_payload = _json(json_result)
     assert "project_uuid" in json_payload["result"]
@@ -454,13 +460,13 @@ def test_export_and_import_include_v2_state(tmp_path: Path) -> None:
     # Import into dest
     import_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "import", str(archive_path)],
+        ["--root", str(dest_root), "import", str(archive_path)],
     )
     assert import_result.exit_code == 0
 
     show_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "--json", "task", "show", "--task", "migrate-v2"],
+        ["--root", str(dest_root), "--json", "task", "show", "--task", "migrate-v2"],
     )
     task_payload = _json(show_result)
     assert task_payload["result"]["task"]["latest_plan_version"] == 1
@@ -480,7 +486,7 @@ def test_export_import_roundtrip_preserves_code_reviews(tmp_path: Path) -> None:
     archive_path = tmp_path / "reviews-export.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "export", str(archive_path)],
+        ["--root", str(source_root), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0, export_result.stdout
 
@@ -492,14 +498,14 @@ def test_export_import_roundtrip_preserves_code_reviews(tmp_path: Path) -> None:
 
     import_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "import", str(archive_path)],
+        ["--root", str(dest_root), "import", str(archive_path)],
     )
     assert import_result.exit_code == 0, import_result.stdout
 
     show_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(dest_root),
             "--json",
             "review",
@@ -521,12 +527,14 @@ def test_default_export_filename_includes_project_slug_and_ledger(
     workspace.mkdir()
     init_result = runner.invoke(
         app,
-        ["--cwd", str(workspace), "init", "--project-name", "Taskledger"],
+        ["--root", str(workspace), "init", "--project-name", "Taskledger"],
     )
     assert init_result.exit_code == 0, init_result.output
 
     export_result = _json(
-        runner.invoke(app, ["--cwd", str(workspace), "--json", "export", "--overwrite"])
+        runner.invoke(
+            app, ["--root", str(workspace), "--json", "export", "--overwrite"]
+        )
     )
     result = cast(dict[str, Any], export_result["result"])
     archive_path = Path(cast(str, result["path"]))
@@ -544,12 +552,14 @@ def test_default_export_filename_sanitizes_project_name(tmp_path: Path) -> None:
     workspace.mkdir()
     init_result = runner.invoke(
         app,
-        ["--cwd", str(workspace), "init", "--project-name", "Odoo 17 Addons!"],
+        ["--root", str(workspace), "init", "--project-name", "Odoo 17 Addons!"],
     )
     assert init_result.exit_code == 0, init_result.output
 
     export_result = _json(
-        runner.invoke(app, ["--cwd", str(workspace), "--json", "export", "--overwrite"])
+        runner.invoke(
+            app, ["--root", str(workspace), "--json", "export", "--overwrite"]
+        )
     )
     archive_path = Path(cast(str, export_result["result"]["path"]))
     assert archive_path.parent == workspace
@@ -567,7 +577,7 @@ def test_explicit_export_path_is_not_rewritten(tmp_path: Path) -> None:
     export_result = _json(
         runner.invoke(
             app,
-            ["--cwd", str(workspace), "--json", "export", str(archive_path)],
+            ["--root", str(workspace), "--json", "export", str(archive_path)],
         )
     )
     assert export_result["result"]["path"] == str(archive_path)
@@ -582,7 +592,7 @@ def test_export_positional_task_ref_exports_task_archive(tmp_path: Path) -> None
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "task",
                 "create",
@@ -597,7 +607,7 @@ def test_export_positional_task_ref_exports_task_archive(tmp_path: Path) -> None
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "task",
                 "create",
@@ -609,7 +619,7 @@ def test_export_positional_task_ref_exports_task_archive(tmp_path: Path) -> None
         == 0
     )
     export_result = _json(
-        runner.invoke(app, ["--cwd", str(workspace), "--json", "export", "task-0001"])
+        runner.invoke(app, ["--root", str(workspace), "--json", "export", "task-0001"])
     )
     payload = cast(dict[str, Any], export_result["result"])
     assert payload["archive_scope"] == "tasks"
@@ -632,7 +642,7 @@ def test_export_positional_tar_gz_still_means_output_path(tmp_path: Path) -> Non
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "task",
                 "create",
@@ -647,7 +657,7 @@ def test_export_positional_tar_gz_still_means_output_path(tmp_path: Path) -> Non
     export_result = _json(
         runner.invoke(
             app,
-            ["--cwd", str(workspace), "--json", "export", str(archive_path)],
+            ["--root", str(workspace), "--json", "export", str(archive_path)],
         )
     )
     payload = cast(dict[str, Any], export_result["result"])
@@ -661,13 +671,13 @@ def test_archive_manifest_includes_project_name_slug_and_uuid(tmp_path: Path) ->
     workspace.mkdir()
     init_result = runner.invoke(
         app,
-        ["--cwd", str(workspace), "init", "--project-name", "Taskledger"],
+        ["--root", str(workspace), "init", "--project-name", "Taskledger"],
     )
     assert init_result.exit_code == 0, init_result.output
     archive_path = tmp_path / "manifest-check.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(workspace), "export", str(archive_path)],
+        ["--root", str(workspace), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0, export_result.output
 
@@ -690,7 +700,7 @@ def test_archive_import_dry_run_reports_project_name(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "init", "--project-name", "Taskledger"],
+            ["--root", str(source_root), "init", "--project-name", "Taskledger"],
         ).exit_code
         == 0
     )
@@ -699,7 +709,7 @@ def test_archive_import_dry_run_reports_project_name(tmp_path: Path) -> None:
     archive_path = tmp_path / "dry-run-name.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "export", str(archive_path)],
+        ["--root", str(source_root), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0, export_result.output
 
@@ -707,7 +717,7 @@ def test_archive_import_dry_run_reports_project_name(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(dest_root),
                 "--json",
                 "import",
@@ -744,7 +754,7 @@ def test_export_import_preserves_agent_command_logs(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -761,13 +771,13 @@ def test_export_import_preserves_agent_command_logs(tmp_path: Path) -> None:
     archive_path = tmp_path / "agent-logs-export.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "export", str(archive_path)],
+        ["--root", str(source_root), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0, export_result.stdout
 
     import_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "import", str(archive_path)],
+        ["--root", str(dest_root), "import", str(archive_path)],
     )
     assert import_result.exit_code == 0, import_result.stdout
 
@@ -790,7 +800,7 @@ def test_export_and_import_include_release_records(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -803,12 +813,12 @@ def test_export_and_import_include_release_records(tmp_path: Path) -> None:
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(source_root), "task", "activate", "release-boundary"]
+            app, ["--root", str(source_root), "task", "activate", "release-boundary"]
         ).exit_code
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(source_root), "plan", "start"]).exit_code == 0
+        runner.invoke(app, ["--root", str(source_root), "plan", "start"]).exit_code == 0
     )
     plan_text = """---
 goal: Finish a release boundary task.
@@ -828,7 +838,7 @@ Finish the boundary task.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "plan", "propose", "--text", plan_text],
+            ["--root", str(source_root), "plan", "propose", "--text", plan_text],
         ).exit_code
         == 0
     )
@@ -836,7 +846,7 @@ Finish the boundary task.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "plan",
                 "approve",
@@ -853,7 +863,7 @@ Finish the boundary task.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "implement", "start"],
+            ["--root", str(source_root), "implement", "start"],
         ).exit_code
         == 0
     )
@@ -861,7 +871,7 @@ Finish the boundary task.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "implement",
                 "change",
@@ -879,7 +889,7 @@ Finish the boundary task.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "todo",
                 "done",
@@ -894,7 +904,7 @@ Finish the boundary task.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "implement",
                 "finish",
@@ -907,7 +917,7 @@ Finish the boundary task.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "validate", "start"],
+            ["--root", str(source_root), "validate", "start"],
         ).exit_code
         == 0
     )
@@ -915,7 +925,7 @@ Finish the boundary task.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "validate",
                 "check",
@@ -933,7 +943,7 @@ Finish the boundary task.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "validate",
                 "finish",
@@ -949,7 +959,7 @@ Finish the boundary task.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "release",
                 "tag",
@@ -967,20 +977,20 @@ Finish the boundary task.
     archive_path = tmp_path / "release-export.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "export", str(archive_path)],
+        ["--root", str(source_root), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0
 
     # Import into dest
     import_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "import", str(archive_path)],
+        ["--root", str(dest_root), "import", str(archive_path)],
     )
     assert import_result.exit_code == 0
 
     show_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "--json", "release", "show", "0.4.1"],
+        ["--root", str(dest_root), "--json", "release", "show", "0.4.1"],
     )
     payload = _json(show_result)
     assert payload["result"]["release"]["boundary_task_id"] == "task-0001"
@@ -1000,13 +1010,13 @@ def test_import_replace_quarantines_lock_and_allows_resume(tmp_path: Path) -> No
     archive_path = tmp_path / "portable-import.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "export", str(archive_path)],
+        ["--root", str(source_root), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0, export_result.stdout
 
     import_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "import", str(archive_path), "--replace"],
+        ["--root", str(dest_root), "import", str(archive_path), "--replace"],
     )
     assert import_result.exit_code == 0, import_result.stdout
 
@@ -1019,7 +1029,7 @@ def test_import_replace_quarantines_lock_and_allows_resume(tmp_path: Path) -> No
     assert imported_lock_audits
 
     next_action_payload = _json(
-        runner.invoke(app, ["--cwd", str(dest_root), "--json", "next-action"])
+        runner.invoke(app, ["--root", str(dest_root), "--json", "next-action"])
     )
     assert next_action_payload["result"]["action"] == "implement-resume"
 
@@ -1038,14 +1048,14 @@ def test_import_replace_lock_policy_keep_restores_lock(tmp_path: Path) -> None:
     archive_path = tmp_path / "keep-lock-import.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "export", str(archive_path)],
+        ["--root", str(source_root), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0, export_result.stdout
 
     import_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(dest_root),
             "import",
             str(archive_path),
@@ -1073,7 +1083,7 @@ def test_import_archive_rejects_different_project_uuid_without_mutation(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1088,7 +1098,7 @@ def test_import_archive_rejects_different_project_uuid_without_mutation(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(dest_root),
                 "task",
                 "create",
@@ -1103,20 +1113,20 @@ def test_import_archive_rejects_different_project_uuid_without_mutation(
     archive_path = tmp_path / "mismatch.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "export", str(archive_path)],
+        ["--root", str(source_root), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0, export_result.stdout
 
     import_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "import", str(archive_path), "--replace"],
+        ["--root", str(dest_root), "import", str(archive_path), "--replace"],
     )
     assert import_result.exit_code != 0
     assert "Project UUID mismatch" in import_result.output
 
     dest_task_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "task", "show", "--task", "dest-task"],
+        ["--root", str(dest_root), "task", "show", "--task", "dest-task"],
     )
     assert dest_task_result.exit_code == 0, dest_task_result.stdout
 
@@ -1134,7 +1144,7 @@ def test_import_single_task_preserves_id_when_free(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1148,13 +1158,20 @@ def test_import_single_task_preserves_id_when_free(tmp_path: Path) -> None:
     export_payload = _json(
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "--json", "export", "task-0001", "--overwrite"],
+            [
+                "--root",
+                str(source_root),
+                "--json",
+                "export",
+                "task-0001",
+                "--overwrite",
+            ],
         )
     )
     archive_path = Path(cast(str, export_payload["result"]["path"]))
     import_payload = _json(
         runner.invoke(
-            app, ["--cwd", str(dest_root), "--json", "import", str(archive_path)]
+            app, ["--root", str(dest_root), "--json", "import", str(archive_path)]
         )
     )
     result = cast(dict[str, Any], import_payload["result"])
@@ -1163,7 +1180,7 @@ def test_import_single_task_preserves_id_when_free(tmp_path: Path) -> None:
     assert result["imported_task_ids"] == ["task-0001"]
     show = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "--json", "task", "show", "--task", "task-0001"],
+        ["--root", str(dest_root), "--json", "task", "show", "--task", "task-0001"],
     )
     assert show.exit_code == 0, show.stdout
 
@@ -1183,7 +1200,7 @@ def test_import_single_task_derives_alias_without_overwrite(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1198,7 +1215,7 @@ def test_import_single_task_derives_alias_without_overwrite(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(dest_root),
                 "task",
                 "create",
@@ -1212,13 +1229,20 @@ def test_import_single_task_derives_alias_without_overwrite(
     export_payload = _json(
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "--json", "export", "task-0001", "--overwrite"],
+            [
+                "--root",
+                str(source_root),
+                "--json",
+                "export",
+                "task-0001",
+                "--overwrite",
+            ],
         )
     )
     archive_path = Path(cast(str, export_payload["result"]["path"]))
     import_payload = _json(
         runner.invoke(
-            app, ["--cwd", str(dest_root), "--json", "import", str(archive_path)]
+            app, ["--root", str(dest_root), "--json", "import", str(archive_path)]
         )
     )
     result = cast(dict[str, Any], import_payload["result"])
@@ -1233,14 +1257,14 @@ def test_import_single_task_derives_alias_without_overwrite(
     source_show = _json(
         runner.invoke(
             app,
-            ["--cwd", str(dest_root), "--json", "task", "show", "--task", source_id],
+            ["--root", str(dest_root), "--json", "task", "show", "--task", source_id],
         )
     )
     destination_show = _json(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(dest_root),
                 "--json",
                 "task",
@@ -1269,7 +1293,7 @@ def test_import_single_task_dry_run_reports_id_map_without_mutation(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1284,7 +1308,7 @@ def test_import_single_task_dry_run_reports_id_map_without_mutation(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(dest_root),
                 "task",
                 "create",
@@ -1298,7 +1322,14 @@ def test_import_single_task_dry_run_reports_id_map_without_mutation(
     export_payload = _json(
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "--json", "export", "task-0001", "--overwrite"],
+            [
+                "--root",
+                str(source_root),
+                "--json",
+                "export",
+                "task-0001",
+                "--overwrite",
+            ],
         )
     )
     archive_path = Path(cast(str, export_payload["result"]["path"]))
@@ -1306,7 +1337,7 @@ def test_import_single_task_dry_run_reports_id_map_without_mutation(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(dest_root),
                 "--json",
                 "import",
@@ -1324,7 +1355,7 @@ def test_import_single_task_dry_run_reports_id_map_without_mutation(
     assert result["task_id_map"] == {"task-0001": source_id}
     assert result["renumbered"] == ([] if source_id == "task-0001" else ["task-0001"])
     tasks = _json(
-        runner.invoke(app, ["--cwd", str(dest_root), "--json", "task", "list"])
+        runner.invoke(app, ["--root", str(dest_root), "--json", "task", "list"])
     )
     assert len(cast(list[dict[str, Any]], tasks["result"]["tasks"])) == 1
 
@@ -1342,7 +1373,7 @@ def test_import_single_task_uuid_ignores_numeric_alias_conflict(tmp_path: Path) 
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1357,7 +1388,7 @@ def test_import_single_task_uuid_ignores_numeric_alias_conflict(tmp_path: Path) 
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(dest_root),
                 "task",
                 "create",
@@ -1371,14 +1402,21 @@ def test_import_single_task_uuid_ignores_numeric_alias_conflict(tmp_path: Path) 
     export_payload = _json(
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "--json", "export", "task-0001", "--overwrite"],
+            [
+                "--root",
+                str(source_root),
+                "--json",
+                "export",
+                "task-0001",
+                "--overwrite",
+            ],
         )
     )
     archive_path = Path(cast(str, export_payload["result"]["path"]))
     import_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(dest_root),
             "import",
             str(archive_path),
@@ -1388,7 +1426,7 @@ def test_import_single_task_uuid_ignores_numeric_alias_conflict(tmp_path: Path) 
     )
     assert import_result.exit_code == 0, import_result.output
     tasks = _json(
-        runner.invoke(app, ["--cwd", str(dest_root), "--json", "task", "list"])
+        runner.invoke(app, ["--root", str(dest_root), "--json", "task", "list"])
     )
     assert len(cast(list[dict[str, Any]], tasks["result"]["tasks"])) == 2
 
@@ -1408,7 +1446,7 @@ def test_import_blocks_conflicting_content_for_existing_task_uuid(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1422,12 +1460,19 @@ def test_import_blocks_conflicting_content_for_existing_task_uuid(
     export = _json(
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "--json", "export", "task-0001", "--overwrite"],
+            [
+                "--root",
+                str(source_root),
+                "--json",
+                "export",
+                "task-0001",
+                "--overwrite",
+            ],
         )
     )
     archive_path = Path(cast(str, export["result"]["path"]))
     imported = runner.invoke(
-        app, ["--cwd", str(dest_root), "import", str(archive_path)]
+        app, ["--root", str(dest_root), "import", str(archive_path)]
     )
     assert imported.exit_code == 0, imported.output
 
@@ -1466,7 +1511,7 @@ def test_import_single_task_updates_ledger_next_task_number(tmp_path: Path) -> N
         assert (
             runner.invoke(
                 app,
-                ["--cwd", str(source_root), "task", "create", f"task-{i}"],
+                ["--root", str(source_root), "task", "create", f"task-{i}"],
             ).exit_code
             == 0
         )
@@ -1474,7 +1519,14 @@ def test_import_single_task_updates_ledger_next_task_number(tmp_path: Path) -> N
     export_payload = _json(
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "--json", "export", "task-0003", "--overwrite"],
+            [
+                "--root",
+                str(source_root),
+                "--json",
+                "export",
+                "task-0003",
+                "--overwrite",
+            ],
         )
     )
     archive_path = Path(cast(str, export_payload["result"]["path"]))
@@ -1482,20 +1534,20 @@ def test_import_single_task_updates_ledger_next_task_number(tmp_path: Path) -> N
     _json(
         runner.invoke(
             app,
-            ["--cwd", str(dest_root), "--json", "import", str(archive_path)],
+            ["--root", str(dest_root), "--json", "import", str(archive_path)],
         )
     )
     # Imported aliases are derived from UUID order; the next ID is task-0002.
     _json(
         runner.invoke(
             app,
-            ["--cwd", str(dest_root), "--json", "task", "create", "after-import"],
+            ["--root", str(dest_root), "--json", "task", "create", "after-import"],
         )
     )
     show = _json(
         runner.invoke(
             app,
-            ["--cwd", str(dest_root), "--json", "task", "show", "after-import"],
+            ["--root", str(dest_root), "--json", "task", "show", "after-import"],
         )
     )
     assert show["result"]["task"]["id"] == "task-0002"
@@ -1514,7 +1566,7 @@ def test_import_single_task_artifacts_follow_renumbered_task_id(tmp_path: Path) 
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1529,7 +1581,7 @@ def test_import_single_task_artifacts_follow_renumbered_task_id(tmp_path: Path) 
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(dest_root),
                 "task",
                 "create",
@@ -1548,7 +1600,7 @@ def test_import_single_task_artifacts_follow_renumbered_task_id(tmp_path: Path) 
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "--json",
                 "export",
@@ -1561,7 +1613,7 @@ def test_import_single_task_artifacts_follow_renumbered_task_id(tmp_path: Path) 
     archive_path = Path(cast(str, export_payload["result"]["path"]))
     _json(
         runner.invoke(
-            app, ["--cwd", str(dest_root), "--json", "import", str(archive_path)]
+            app, ["--root", str(dest_root), "--json", "import", str(archive_path)]
         )
     )
     imported_artifact = (
@@ -1586,7 +1638,7 @@ def test_import_single_task_does_not_replace_active_task(tmp_path: Path) -> None
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1601,7 +1653,7 @@ def test_import_single_task_does_not_replace_active_task(tmp_path: Path) -> None
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(dest_root),
                 "task",
                 "create",
@@ -1614,25 +1666,32 @@ def test_import_single_task_does_not_replace_active_task(tmp_path: Path) -> None
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(dest_root), "task", "activate", "dest-task"]
+            app, ["--root", str(dest_root), "task", "activate", "dest-task"]
         ).exit_code
         == 0
     )
     export_payload = _json(
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "--json", "export", "task-0001", "--overwrite"],
+            [
+                "--root",
+                str(source_root),
+                "--json",
+                "export",
+                "task-0001",
+                "--overwrite",
+            ],
         )
     )
     archive_path = Path(cast(str, export_payload["result"]["path"]))
     _json(
         runner.invoke(
             app,
-            ["--cwd", str(dest_root), "--json", "import", str(archive_path)],
+            ["--root", str(dest_root), "--json", "import", str(archive_path)],
         )
     )
     show = _json(
-        runner.invoke(app, ["--cwd", str(dest_root), "--json", "task", "show"])
+        runner.invoke(app, ["--root", str(dest_root), "--json", "task", "show"])
     )
     assert show["result"]["task"]["slug"] == "dest-task"
 
@@ -1688,7 +1747,7 @@ def test_export_import_preserves_archived_task_metadata_and_slug_reuse(
     record = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(source_root),
             "task",
             "record",
@@ -1708,7 +1767,7 @@ def test_export_import_preserves_archived_task_metadata_and_slug_reuse(
     archive = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(source_root),
             "task",
             "archive",
@@ -1722,23 +1781,23 @@ def test_export_import_preserves_archived_task_metadata_and_slug_reuse(
     archive_path = tmp_path / "archive-metadata.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "export", str(archive_path)],
+        ["--root", str(source_root), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0, export_result.output
 
     import_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "import", str(archive_path)],
+        ["--root", str(dest_root), "import", str(archive_path)],
     )
     assert import_result.exit_code == 0, import_result.output
 
-    visible = runner.invoke(app, ["--cwd", str(dest_root), "task", "list"])
+    visible = runner.invoke(app, ["--root", str(dest_root), "task", "list"])
     assert visible.exit_code == 0, visible.output
     assert "legacy-archive" not in visible.output
 
     archived = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "task", "list", "--archived"],
+        ["--root", str(dest_root), "task", "list", "--archived"],
     )
     assert archived.exit_code == 0, archived.output
     assert "legacy-archive" in archived.output
@@ -1746,7 +1805,7 @@ def test_export_import_preserves_archived_task_metadata_and_slug_reuse(
     create = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(dest_root),
             "--json",
             "task",
@@ -1774,7 +1833,7 @@ def test_old_archive_without_project_name_still_imports(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1788,7 +1847,7 @@ def test_old_archive_without_project_name_still_imports(tmp_path: Path) -> None:
     archive_path = tmp_path / "legacy-no-project-name.tar.gz"
     export_result = runner.invoke(
         app,
-        ["--cwd", str(source_root), "export", str(archive_path)],
+        ["--root", str(source_root), "export", str(archive_path)],
     )
     assert export_result.exit_code == 0, export_result.output
 
@@ -1819,7 +1878,7 @@ def test_old_archive_without_project_name_still_imports(tmp_path: Path) -> None:
 
     import_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "import", str(archive_path)],
+        ["--root", str(dest_root), "import", str(archive_path)],
     )
     assert import_result.exit_code == 0, import_result.output
 
@@ -1837,7 +1896,7 @@ def test_json_import_dry_run_does_not_mutate_state(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1854,7 +1913,7 @@ def test_json_import_dry_run_does_not_mutate_state(tmp_path: Path) -> None:
     snapshot_result = _json(
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "--json", "snapshot", str(snapshot_dir)],
+            ["--root", str(source_root), "--json", "snapshot", str(snapshot_dir)],
         )
     )
     export_path = Path(cast(str, snapshot_result["result"]["export_path"]))
@@ -1863,7 +1922,7 @@ def test_json_import_dry_run_does_not_mutate_state(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(dest_root),
                 "--json",
                 "import",
@@ -1876,7 +1935,7 @@ def test_json_import_dry_run_does_not_mutate_state(tmp_path: Path) -> None:
     assert dry_run_result["result"]["counts"]["tasks"] == 1
 
     list_result = _json(
-        runner.invoke(app, ["--cwd", str(dest_root), "--json", "task", "list"])
+        runner.invoke(app, ["--root", str(dest_root), "--json", "task", "list"])
     )
     assert list_result["result"]["tasks"] == []
 
@@ -1890,7 +1949,7 @@ def test_export_without_bodies_omits_plan_and_task_body(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1904,12 +1963,12 @@ def test_export_without_bodies_omits_plan_and_task_body(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "task", "activate", "body-export"],
+            ["--root", str(source_root), "task", "activate", "body-export"],
         ).exit_code
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(source_root), "plan", "start"]).exit_code == 0
+        runner.invoke(app, ["--root", str(source_root), "plan", "start"]).exit_code == 0
     )
     plan_text = """---
 goal: Verify body stripping.
@@ -1929,7 +1988,7 @@ This markdown body should be removed when include-bodies=false.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(source_root), "plan", "propose", "--text", plan_text],
+            ["--root", str(source_root), "plan", "propose", "--text", plan_text],
         ).exit_code
         == 0
     )
@@ -1937,7 +1996,7 @@ This markdown body should be removed when include-bodies=false.
     export_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(source_root),
             "export",
             str(archive_path),
@@ -1966,7 +2025,7 @@ def test_export_with_run_artifacts_includes_artifact_members(tmp_path: Path) -> 
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(source_root),
                 "task",
                 "create",
@@ -1986,7 +2045,7 @@ def test_export_with_run_artifacts_includes_artifact_members(tmp_path: Path) -> 
     export_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(source_root),
             "export",
             str(archive_path),
@@ -2000,7 +2059,7 @@ def test_export_with_run_artifacts_includes_artifact_members(tmp_path: Path) -> 
 
     import_result = runner.invoke(
         app,
-        ["--cwd", str(dest_root), "import", str(archive_path), "--replace"],
+        ["--root", str(dest_root), "import", str(archive_path), "--replace"],
     )
     assert import_result.exit_code == 0, import_result.output
     imported_artifact = (

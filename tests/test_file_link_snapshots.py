@@ -50,7 +50,7 @@ def test_new_links_record_baseline_fields(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(ws), "file", "link", task.id, "src/foo.py", "--kind", "code"],
+        ["--root", str(ws), "file", "link", task.id, "src/foo.py", "--kind", "code"],
     )
     assert result.exit_code == 0, result.stdout
 
@@ -74,7 +74,7 @@ def test_binary_files_hash_without_decoding_errors(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(ws),
             "file",
             "link",
@@ -99,13 +99,14 @@ def test_modified_file_status(tmp_path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("one\n", encoding="utf-8")
     runner.invoke(
-        app, ["--cwd", str(ws), "file", "link", task.id, "src/foo.py", "--kind", "code"]
+        app,
+        ["--root", str(ws), "file", "link", task.id, "src/foo.py", "--kind", "code"],
     )
     path.write_text("two\n", encoding="utf-8")
 
     result = runner.invoke(
         app,
-        ["--cwd", str(ws), "--json", "file", "status", task.id],
+        ["--root", str(ws), "--json", "file", "status", task.id],
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
@@ -120,11 +121,14 @@ def test_deleted_file_status(tmp_path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("old\n", encoding="utf-8")
     runner.invoke(
-        app, ["--cwd", str(ws), "file", "link", task.id, "docs/old.md", "--kind", "doc"]
+        app,
+        ["--root", str(ws), "file", "link", task.id, "docs/old.md", "--kind", "doc"],
     )
     path.unlink()
 
-    result = runner.invoke(app, ["--cwd", str(ws), "--json", "file", "status", task.id])
+    result = runner.invoke(
+        app, ["--root", str(ws), "--json", "file", "status", task.id]
+    )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     assert payload["result"]["links"][0]["status"] == "deleted"
@@ -135,13 +139,16 @@ def test_new_file_status_from_missing_baseline(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
     task = create_task(ws, title="New file task", slug="new-file-task", description="x")
     runner.invoke(
-        app, ["--cwd", str(ws), "file", "link", task.id, "src/new.py", "--kind", "code"]
+        app,
+        ["--root", str(ws), "file", "link", task.id, "src/new.py", "--kind", "code"],
     )
     new_file = ws / "src" / "new.py"
     new_file.parent.mkdir(parents=True, exist_ok=True)
     new_file.write_text("created\n", encoding="utf-8")
 
-    result = runner.invoke(app, ["--cwd", str(ws), "--json", "file", "status", task.id])
+    result = runner.invoke(
+        app, ["--root", str(ws), "--json", "file", "status", task.id]
+    )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     assert payload["result"]["links"][0]["status"] == "new"
@@ -159,10 +166,12 @@ def test_directory_status_is_unchanged_without_recursive_hashing(
     target.mkdir(parents=True, exist_ok=True)
     (target / "__init__.py").write_text("", encoding="utf-8")
     runner.invoke(
-        app, ["--cwd", str(ws), "file", "link", task.id, "src/pkg", "--kind", "dir"]
+        app, ["--root", str(ws), "file", "link", task.id, "src/pkg", "--kind", "dir"]
     )
 
-    result = runner.invoke(app, ["--cwd", str(ws), "--json", "file", "status", task.id])
+    result = runner.invoke(
+        app, ["--root", str(ws), "--json", "file", "status", task.id]
+    )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     link = payload["result"]["links"][0]
@@ -179,17 +188,20 @@ def test_refresh_rebaselines_modified_file(tmp_path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("one\n", encoding="utf-8")
     runner.invoke(
-        app, ["--cwd", str(ws), "file", "link", task.id, "src/foo.py", "--kind", "code"]
+        app,
+        ["--root", str(ws), "file", "link", task.id, "src/foo.py", "--kind", "code"],
     )
     path.write_text("two\n", encoding="utf-8")
 
-    before = runner.invoke(app, ["--cwd", str(ws), "--json", "file", "status", task.id])
+    before = runner.invoke(
+        app, ["--root", str(ws), "--json", "file", "status", task.id]
+    )
     assert json.loads(before.stdout)["result"]["links"][0]["status"] == "modified"
 
     refreshed = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(ws),
             "file",
             "refresh",
@@ -201,7 +213,7 @@ def test_refresh_rebaselines_modified_file(tmp_path: Path) -> None:
     )
     assert refreshed.exit_code == 0, refreshed.stdout
 
-    after = runner.invoke(app, ["--cwd", str(ws), "--json", "file", "status", task.id])
+    after = runner.invoke(app, ["--root", str(ws), "--json", "file", "status", task.id])
     assert json.loads(after.stdout)["result"]["links"][0]["status"] == "unchanged"
 
 
@@ -215,17 +227,18 @@ def test_existing_link_baseline_is_preserved_without_explicit_snapshot(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("one\n", encoding="utf-8")
     runner.invoke(
-        app, ["--cwd", str(ws), "file", "link", task.id, "src/foo.py", "--kind", "code"]
+        app,
+        ["--root", str(ws), "file", "link", task.id, "src/foo.py", "--kind", "code"],
     )
     path.write_text("two\n", encoding="utf-8")
 
     preserve = runner.invoke(
         app,
-        ["--cwd", str(ws), "file", "link", task.id, "src/foo.py", "--kind", "test"],
+        ["--root", str(ws), "file", "link", task.id, "src/foo.py", "--kind", "test"],
     )
     assert preserve.exit_code == 0, preserve.stdout
     preserved_status = runner.invoke(
-        app, ["--cwd", str(ws), "--json", "file", "status", task.id]
+        app, ["--root", str(ws), "--json", "file", "status", task.id]
     )
     assert (
         json.loads(preserved_status.stdout)["result"]["links"][0]["status"]
@@ -235,7 +248,7 @@ def test_existing_link_baseline_is_preserved_without_explicit_snapshot(
     refresh = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(ws),
             "file",
             "link",
@@ -248,7 +261,7 @@ def test_existing_link_baseline_is_preserved_without_explicit_snapshot(
     )
     assert refresh.exit_code == 0, refresh.stdout
     refreshed_status = runner.invoke(
-        app, ["--cwd", str(ws), "--json", "file", "status", task.id]
+        app, ["--root", str(ws), "--json", "file", "status", task.id]
     )
     assert (
         json.loads(refreshed_status.stdout)["result"]["links"][0]["status"]

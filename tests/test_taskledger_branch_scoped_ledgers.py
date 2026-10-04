@@ -12,7 +12,7 @@ runner = CliRunner()
 
 
 def _invoke(tmp_path: Path, *args: str):
-    return runner.invoke(app, ["--cwd", str(tmp_path), *args])
+    return runner.invoke(app, ["--root", str(tmp_path), *args])
 
 
 def _init(tmp_path: Path) -> None:

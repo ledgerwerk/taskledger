@@ -256,7 +256,7 @@ def migrate_inspect_command(
     source_data_root: Annotated[Path | None, typer.Option("--source-data-root")] = None,
     source_checkout_id: Annotated[
         str | None,
-        typer.Option("--source-checkout-id", "--source-checkout"),
+        typer.Option("--source-checkout-id"),
     ] = None,
     project_uuid: Annotated[str | None, typer.Option("--project-uuid")] = None,
 ) -> None:
@@ -283,7 +283,7 @@ def migrate_status_command(
     source_data_root: Annotated[Path | None, typer.Option("--source-data-root")] = None,
     source_checkout_id: Annotated[
         str | None,
-        typer.Option("--source-checkout-id", "--source-checkout"),
+        typer.Option("--source-checkout-id"),
     ] = None,
     project_uuid: Annotated[str | None, typer.Option("--project-uuid")] = None,
 ) -> None:
@@ -310,7 +310,7 @@ def migrate_plan_command(
     source_data_root: Annotated[Path | None, typer.Option("--source-data-root")] = None,
     source_checkout_id: Annotated[
         str | None,
-        typer.Option("--source-checkout-id", "--source-checkout"),
+        typer.Option("--source-checkout-id"),
     ] = None,
     project_uuid: Annotated[str | None, typer.Option("--project-uuid")] = None,
 ) -> None:
@@ -331,10 +331,6 @@ def migrate_plan_command(
 @migrate_app.command("apply")
 def migrate_apply_command(
     ctx: typer.Context,
-    backup: Annotated[
-        bool,
-        typer.Option("--backup/--no-backup", help="Deprecated; backup is automatic."),
-    ] = True,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     create_sibling_store: Annotated[
         bool,
@@ -359,13 +355,11 @@ def migrate_apply_command(
     source_data_root: Annotated[Path | None, typer.Option("--source-data-root")] = None,
     source_checkout_id: Annotated[
         str | None,
-        typer.Option("--source-checkout-id", "--source-checkout"),
+        typer.Option("--source-checkout-id"),
     ] = None,
     project_uuid: Annotated[str | None, typer.Option("--project-uuid")] = None,
     backup_dir: Annotated[Path | None, typer.Option("--backup-dir")] = None,
-    retire_source: Annotated[
-        bool, typer.Option("--retire-source", "--retire-legacy")
-    ] = False,
+    retire_source: Annotated[bool, typer.Option("--retire-source")] = False,
 ) -> None:
     state = ctx.obj
     assert isinstance(state, CLIState)
@@ -386,7 +380,6 @@ def migrate_apply_command(
                 create_sibling_store=create_sibling_store,
                 adopt_sibling_store=adopt_sibling_store,
             ),
-            backup=backup,
             backup_dir=backup_dir,
             dry_run=dry_run,
             retire_source=retire_source,

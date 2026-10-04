@@ -38,7 +38,7 @@ runner = _make_runner()
 # specmason: req=REQ-0070 ac=AC-0794
 def test_usage_works_in_empty_initialized_project(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
-    result = runner.invoke(app, ["--cwd", str(ws), "--no-log", "usage"])
+    result = runner.invoke(app, ["--root", str(ws), "--no-log", "usage"])
     assert result.exit_code == 0, result.stdout
     assert "SESSION" in result.stdout
     assert "ACTIVE" in result.stdout
@@ -48,7 +48,7 @@ def test_usage_works_in_empty_initialized_project(tmp_path: Path) -> None:
 def test_usage_json_emits_usage_result(empty_workspace: Path) -> None:
     result = runner.invoke(
         app,
-        ["--cwd", str(empty_workspace), "--no-log", "--json", "usage"],
+        ["--root", str(empty_workspace), "--no-log", "--json", "usage"],
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
@@ -69,7 +69,7 @@ def test_usage_reports_active_implementation_and_next_action(tmp_path: Path) -> 
     assert active["stage"] == "implementing"
     assert isinstance(active["next_action"], dict)
 
-    result = runner.invoke(app, ["--cwd", str(ws), "--no-log", "usage"])
+    result = runner.invoke(app, ["--root", str(ws), "--no-log", "usage"])
     assert result.exit_code == 0, result.stdout
     assert task_id in result.stdout
     assert "next:" in result.stdout
@@ -166,7 +166,7 @@ def test_usage_ready_work_human_render_shows_command_hint(
 ) -> None:
     ws = init_workspace(tmp_path)
     task_id = create_approved_task(ws, title="Ready to implement", slug="ready-impl")
-    result = runner.invoke(app, ["--cwd", str(ws), "--no-log", "usage"])
+    result = runner.invoke(app, ["--root", str(ws), "--no-log", "usage"])
     assert result.exit_code == 0, result.stdout
     assert task_id in result.stdout
     assert "command:" in result.stdout

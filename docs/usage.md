@@ -510,7 +510,7 @@ taskledger task report --task task-0030
 
 `context` is agent-handoff-oriented. `task report` and root `report` HTML
 commands are human-oriented. `task dossier` remains available as an
-advanced/compatibility full-context dump; prefer `context --for ...` for new
+advanced full-context dump; prefer `context --for ...` for new
 agent protocols.
 
 `task transcript` renders a per-task command transcript from the ledger-level
@@ -628,7 +628,7 @@ the child cwd, no-shell execution, and the parent environment. Use portable form
 such as `python -m pytest`, `pytest`, `ruff`, or `mypy` rather than hard-coding an
 absolute virtualenv interpreter path.
 
-> taskledger context --for implementation --format markdown
+> taskledger context --for implementer --format markdown
 > taskledger implement start
 > taskledger implement log --message "Started implementation."
 > taskledger implement change --path taskledger/storage/task_store.py --kind edit --summary "Updated storage semantics."
@@ -636,7 +636,7 @@ absolute virtualenv interpreter path.
 > taskledger implement finish --summary "Implemented the approved plan."
 > taskledger review record --result pass --summary "No blocking code-quality issues."
 >
-> taskledger context --for validation --format markdown
+> taskledger context --for validator --format markdown
 > taskledger validate start
 > taskledger validate check --criterion ac-0001 --status pass --evidence "pytest -q tests/test_taskledger_v2_cli.py"
 > taskledger validate finish --result passed --summary "Validated the rewrite."
@@ -656,7 +656,7 @@ correct, restart implementation instead of replanning:
 ```bash
 taskledger validate finish --result failed --summary "Parser edge case still fails."
 taskledger next-action
-taskledger context --for implementation --format markdown
+taskledger context --for implementer --format markdown
 taskledger implement restart --summary "Fix failed validation findings."
 ```
 
@@ -666,7 +666,7 @@ correct, restart implementation instead of replanning:
 ```bash
 taskledger validate finish --result failed --summary "Parser edge case still fails."
 taskledger next-action
-taskledger context --for implementation --format markdown
+taskledger context --for implementer --format markdown
 taskledger implement restart --summary "Fix failed validation findings."
 ```
 
@@ -677,7 +677,7 @@ taskledger --json info
 taskledger --json task active
 taskledger --json task show
 taskledger --json task show task-0001
-taskledger --json context --for validation --format json
+taskledger --json context --for validator --format json
 taskledger --json review list --task task-0001
 ```
 
@@ -750,9 +750,9 @@ taskledger init --project-name "Taskledger"
 taskledger export
 taskledger export --task task-0040
 taskledger export task-0040
-taskledger sync export --output ./taskledger-transfer.tar.gz
+taskledger export --output ./taskledger-transfer.tar.gz
 taskledger import ./taskledger-transfer.tar.gz --dry-run
-taskledger sync import ./taskledger-transfer.tar.gz --dry-run
+taskledger import ./taskledger-transfer.tar.gz --dry-run
 taskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz
 taskledger import ./taskledger-task-planledger-main-task-0040-20260509T101500Z.tar.gz --id-policy fail-on-conflict
 taskledger import ./taskledger-transfer.tar.gz --replace

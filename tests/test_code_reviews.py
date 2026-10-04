@@ -71,7 +71,7 @@ def _run(argv: list[str], cwd: Path) -> None:
 
 
 def _invoke(cwd: Path, args: list[str]) -> object:
-    result = runner.invoke(app, ["--cwd", str(cwd), *args])
+    result = runner.invoke(app, ["--root", str(cwd), *args])
     assert result.exit_code == 0, result.stdout
     return result
 
@@ -117,19 +117,25 @@ def test_code_review_record_rejects_invalid_result_and_source() -> None:
 # specmason: req=REQ-0009 ac=AC-0101
 def test_storage_save_list_resolve_code_reviews(tmp_path: Path) -> None:
     ws = init_workspace(tmp_path)
+    task_id = create_task(
+        ws,
+        title="Stored code review",
+        slug="stored-code-review",
+        description="Storage review fixture.",
+    ).id
     review = CodeReviewRecord(
         review_id="review-0001",
-        task_id="task-0001",
+        task_id=task_id,
         implementation_run="run-0001",
         result="pass",
         body="stored",
     )
     save_code_review(ws, review)
     paths = resolve_v2_paths(ws)
-    assert code_review_markdown_path(paths, "task-0001", "review-0001").exists()
-    listed = list_code_reviews(ws, "task-0001")
+    assert code_review_markdown_path(paths, task_id, "review-0001").exists()
+    listed = list_code_reviews(ws, task_id)
     assert [item.review_id for item in listed] == ["review-0001"]
-    resolved = resolve_code_review(ws, "task-0001", "review-1")
+    resolved = resolve_code_review(ws, task_id, "review-1")
     assert resolved.review_id == "review-0001"
 
 
@@ -301,7 +307,7 @@ def test_cli_review_record_summary_and_file_are_mutually_exclusive(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(ws),
             "review",
             "record",

@@ -61,7 +61,7 @@ def _prepare_approved_task(tmp_path: Path) -> str:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -75,11 +75,11 @@ def _prepare_approved_task(tmp_path: Path) -> str:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "logging-task"],
+            ["--root", str(tmp_path), "task", "activate", "logging-task"],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "plan", "start"]).exit_code == 0
     plan_text = """---
 goal: Test transcript capture.
 acceptance_criteria:
@@ -98,7 +98,7 @@ Capture a managed shell transcript.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "plan", "propose", "--text", plan_text],
+            ["--root", str(tmp_path), "plan", "propose", "--text", plan_text],
         ).exit_code
         == 0
     )
@@ -106,7 +106,7 @@ Capture a managed shell transcript.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -121,7 +121,7 @@ Capture a managed shell transcript.
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(tmp_path), "implement", "start"]).exit_code
+        runner.invoke(app, ["--root", str(tmp_path), "implement", "start"]).exit_code
         == 0
     )
     return "task-0001"
@@ -161,7 +161,7 @@ def test_cli_success_command_is_captured_when_enabled(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -192,7 +192,7 @@ def test_cli_error_command_is_captured_when_enabled(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "show",
@@ -221,7 +221,7 @@ def test_managed_shell_capture_and_transcript_report_rendering(tmp_path: Path) -
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "implement",
             "command",
@@ -248,7 +248,7 @@ def test_managed_shell_capture_and_transcript_report_rendering(tmp_path: Path) -
     transcript = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "transcript",
@@ -264,7 +264,7 @@ def test_managed_shell_capture_and_transcript_report_rendering(tmp_path: Path) -
     report = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "report",
@@ -367,7 +367,7 @@ def test_task_transcript_json_contract(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -381,7 +381,15 @@ def test_task_transcript_json_contract(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "transcript", "--task", "task-0001"],
+        [
+            "--root",
+            str(tmp_path),
+            "--json",
+            "task",
+            "transcript",
+            "--task",
+            "task-0001",
+        ],
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
@@ -399,7 +407,7 @@ def test_task_transcript_review_mode_groups_wrapper_and_managed_shell(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -457,7 +465,7 @@ def test_task_transcript_review_mode_groups_wrapper_and_managed_shell(
     transcript = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "transcript",
@@ -495,7 +503,7 @@ def test_task_transcript_failures_mode_renders_failed_rows_only(
     failing = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "implement",
             "command",
@@ -511,7 +519,7 @@ def test_task_transcript_failures_mode_renders_failed_rows_only(
     failures = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "transcript",
@@ -533,7 +541,7 @@ def test_transcript_tolerates_duplicate_log_ids_by_default(tmp_path: Path) -> No
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -564,7 +572,7 @@ def test_transcript_tolerates_duplicate_log_ids_by_default(tmp_path: Path) -> No
     transcript = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "transcript",
@@ -586,7 +594,7 @@ def test_default_transcript_produces_review_output(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -615,7 +623,7 @@ def test_default_transcript_produces_review_output(tmp_path: Path) -> None:
 
     transcript = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "transcript", "--task", "task-0001"],
+        ["--root", str(tmp_path), "task", "transcript", "--task", "task-0001"],
     )
     assert transcript.exit_code == 0, transcript.stdout
     # Default mode is review, not raw
@@ -631,7 +639,7 @@ def test_raw_flag_produces_raw_table_output(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -660,7 +668,7 @@ def test_raw_flag_produces_raw_table_output(tmp_path: Path) -> None:
 
     transcript = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "transcript", "--task", "task-0001", "--raw"],
+        ["--root", str(tmp_path), "task", "transcript", "--task", "task-0001", "--raw"],
     )
     assert transcript.exit_code == 0, transcript.stdout
     assert "## Raw Command Transcript" in transcript.stdout
@@ -708,7 +716,7 @@ def test_report_command_log_uses_logical_rows(tmp_path: Path) -> None:
     report = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "report",
@@ -734,7 +742,7 @@ def test_duplicate_log_id_warning_in_raw_mode(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -764,7 +772,7 @@ def test_duplicate_log_id_warning_in_raw_mode(tmp_path: Path) -> None:
 
     transcript = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "transcript", "--task", "task-0001", "--raw"],
+        ["--root", str(tmp_path), "task", "transcript", "--task", "task-0001", "--raw"],
     )
     assert transcript.exit_code == 0, transcript.stdout
     assert "## Raw Command Transcript" in transcript.stdout

@@ -27,7 +27,7 @@ runner = _make_runner()
 
 
 def _init_project(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert result.exit_code == 0
 
 
@@ -43,7 +43,7 @@ def _create_and_activate_task(tmp_path: Path, slug: str = "test-task") -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -59,7 +59,7 @@ def _create_and_activate_task(tmp_path: Path, slug: str = "test-task") -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", slug],
+            ["--root", str(tmp_path), "task", "activate", slug],
         ).exit_code
         == 0
     )
@@ -73,7 +73,7 @@ def test_task_events_human_output(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "events"],
+        ["--root", str(tmp_path), "task", "events"],
     )
     assert result.exit_code == 0
     assert "EVENTS" in result.output
@@ -88,7 +88,7 @@ def test_task_events_json_output(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "events"],
+        ["--root", str(tmp_path), "--json", "task", "events"],
     )
     payload = _json(result)
     assert payload["result_type"] == "event_list"
@@ -110,7 +110,7 @@ def test_task_events_all(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "events", "--all"],
+        ["--root", str(tmp_path), "task", "events", "--all"],
     )
     assert result.exit_code == 0
     assert "task.created" in result.output
@@ -124,7 +124,7 @@ def test_task_events_limit(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "events", "--limit", "1"],
+        ["--root", str(tmp_path), "task", "events", "--limit", "1"],
     )
     assert result.exit_code == 0
     lines = [
@@ -145,7 +145,7 @@ def test_task_events_empty(tmp_path: Path) -> None:
     # filter by a non-existent task slug
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "events", "--task", "no-such-task"],
+        ["--root", str(tmp_path), "task", "events", "--task", "no-such-task"],
     )
     # should error because no active task matches
     assert result.exit_code != 0
@@ -159,12 +159,12 @@ def test_task_events_with_explicit_task_ref(tmp_path: Path) -> None:
     # deactivate so active task is gone, then use --task
     runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "deactivate", "--reason", "done"],
+        ["--root", str(tmp_path), "task", "deactivate", "--reason", "done"],
     )
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "events", "--task", "target-task"],
+        ["--root", str(tmp_path), "task", "events", "--task", "target-task"],
     )
     assert result.exit_code == 0
     assert "EVENTS" in result.output

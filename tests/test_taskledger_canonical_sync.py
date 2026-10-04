@@ -110,6 +110,6 @@ def test_canonical_hooks_reindex_fixed_sibling_store(tmp_path: Path) -> None:
     hook = (tmp_path / "ledger" / ".git" / "hooks" / "post-merge").read_text(
         encoding="utf-8"
     )
-    assert "reindex" in hook
+    assert "repair index" in hook
     assert "import-local" not in hook
     assert "taskledger" in hook

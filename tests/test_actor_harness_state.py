@@ -53,7 +53,7 @@ def _clear_provider_harness_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _init_project(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert result.exit_code == 0
 
 
@@ -345,7 +345,7 @@ def test_cli_actor_set(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "actor",
             "set",
@@ -375,7 +375,7 @@ def test_cli_actor_set_json(tmp_path: Path) -> None:
         app,
         [
             "--json",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "actor",
             "set",
@@ -398,7 +398,7 @@ def test_cli_actor_clear(tmp_path: Path) -> None:
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "actor",
             "set",
@@ -408,7 +408,7 @@ def test_cli_actor_clear(tmp_path: Path) -> None:
             "will-clear",
         ],
     )
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "actor", "clear"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "actor", "clear"])
     assert result.exit_code == 0
     assert "Actor cleared." in result.output
     assert load_actor_state(tmp_path) is None
@@ -418,7 +418,7 @@ def test_cli_actor_clear(tmp_path: Path) -> None:
 # specmason: req=REQ-0002 ac=AC-0014
 def test_cli_actor_clear_empty(tmp_path: Path) -> None:
     _init_project(tmp_path)
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "actor", "clear"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "actor", "clear"])
     assert result.exit_code == 0
     assert "No stored actor to clear." in result.output
 
@@ -430,7 +430,7 @@ def test_cli_actor_clear_json(tmp_path: Path) -> None:
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "actor",
             "set",
@@ -444,7 +444,7 @@ def test_cli_actor_clear_json(tmp_path: Path) -> None:
         app,
         [
             "--json",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "actor",
             "clear",
@@ -461,7 +461,7 @@ def test_cli_harness_set(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "harness",
             "set",
@@ -487,7 +487,7 @@ def test_cli_harness_set_json(tmp_path: Path) -> None:
         app,
         [
             "--json",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "harness",
             "set",
@@ -507,7 +507,7 @@ def test_cli_harness_clear(tmp_path: Path) -> None:
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "harness",
             "set",
@@ -515,7 +515,7 @@ def test_cli_harness_clear(tmp_path: Path) -> None:
             "will-clear",
         ],
     )
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "harness", "clear"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "harness", "clear"])
     assert result.exit_code == 0
     assert "Harness cleared." in result.output
     assert load_harness_state(tmp_path) is None
@@ -525,7 +525,7 @@ def test_cli_harness_clear(tmp_path: Path) -> None:
 # specmason: req=REQ-0002 ac=AC-0019
 def test_cli_harness_clear_empty(tmp_path: Path) -> None:
     _init_project(tmp_path)
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "harness", "clear"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "harness", "clear"])
     assert result.exit_code == 0
     assert "No stored harness to clear." in result.output
 
@@ -536,7 +536,7 @@ def test_cli_whoami_uses_stored(tmp_path: Path) -> None:
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "actor",
             "set",
@@ -549,7 +549,7 @@ def test_cli_whoami_uses_stored(tmp_path: Path) -> None:
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "harness",
             "set",
@@ -558,7 +558,7 @@ def test_cli_whoami_uses_stored(tmp_path: Path) -> None:
         ],
     )
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "actor", "whoami"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "actor", "whoami"])
     assert result.exit_code == 0
     assert "stored-whoami" in result.output
     assert "stored-harness-whoami" in result.output
@@ -570,7 +570,7 @@ def test_cli_whoami_json_uses_stored(tmp_path: Path) -> None:
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "actor",
             "set",
@@ -585,7 +585,7 @@ def test_cli_whoami_json_uses_stored(tmp_path: Path) -> None:
         app,
         [
             "--json",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "actor",
             "whoami",

@@ -243,7 +243,7 @@ def test_cli_renders_remediation_and_shared_source_options(tmp_path: Path) -> No
     result = CliRunner().invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "migrate",
             "plan",

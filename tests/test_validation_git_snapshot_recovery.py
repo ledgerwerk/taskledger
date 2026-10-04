@@ -22,14 +22,14 @@ def _run_git(root: Path, *args: str) -> None:
 
 
 def _invoke(args: list[str], *, cwd: Path, ok: bool = True) -> Any:
-    result = runner.invoke(app, ["--cwd", str(cwd), *args])
+    result = runner.invoke(app, ["--root", str(cwd), *args])
     if ok:
         assert result.exit_code == 0, result.output
     return result
 
 
 def _invoke_json(args: list[str], *, cwd: Path, ok: bool = True) -> dict[str, Any]:
-    result = runner.invoke(app, ["--cwd", str(cwd), "--json", *args])
+    result = runner.invoke(app, ["--root", str(cwd), "--json", *args])
     if ok:
         assert result.exit_code == 0, result.output
         payload = json.loads(result.stdout)

@@ -299,14 +299,7 @@ def normalize_handoff_mode(value: str) -> HandoffMode:
 
 
 def normalize_context_for(value: str) -> ContextFor:
-    normalized = {
-        "planning": "planner",
-        "implementation": "implementer",
-        "validation": "validator",
-        "review": "reviewer",
-        "spec": "spec-reviewer",
-        "code": "code-reviewer",
-    }.get(value, value)
+    normalized = {"spec": "spec-reviewer", "code": "code-reviewer"}.get(value, value)
     if normalized not in {
         "planner",
         "implementer",
@@ -318,6 +311,19 @@ def normalize_context_for(value: str) -> ContextFor:
     }:
         raise LaunchError(f"Unsupported context role: {value!r}")
     return cast(ContextFor, normalized)
+
+
+def normalize_persisted_context_for(value: str) -> ContextFor:
+    """Read legacy lifecycle-noun context roles from existing records."""
+    normalized = {
+        "planning": "planner",
+        "implementation": "implementer",
+        "validation": "validator",
+        "review": "reviewer",
+        "spec": "spec-reviewer",
+        "code": "code-reviewer",
+    }.get(value, value)
+    return normalize_context_for(normalized)
 
 
 def normalize_context_scope(value: str) -> ContextScope:

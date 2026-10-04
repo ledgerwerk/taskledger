@@ -53,7 +53,7 @@ The broader command surface is organized as:
 
 **Repair and inspection:**
 
-- `lock`, `doctor`, `repair`, `reindex`
+- `lock`, `doctor`, `repair`
 
 **Project lifecycle:**
 
@@ -292,7 +292,7 @@ taskledger plan accept --version 1 --note "Ready."
 taskledger next-action
 taskledger --json next-action
 
-taskledger context --for implementation --format markdown
+taskledger context --for implementer --format markdown
 taskledger implement start
 taskledger implement checklist
 taskledger implement change --path taskledger/storage/task_store.py --kind edit --summary "Normalized v2 markdown storage."
@@ -300,7 +300,7 @@ taskledger todo done todo-0001 --evidence "Updated taskledger/storage/task_store
 taskledger implement finish --summary "Implemented the approved plan."
 taskledger review record --result pass --summary "No blocking code-quality issues."
 
-taskledger context --for validation --format markdown
+taskledger context --for validator --format markdown
 taskledger validate start
 taskledger validate status
 taskledger validate check --criterion ac-0001 --status pass --evidence "pytest -q tests/test_taskledger_v2_cli.py"
@@ -363,7 +363,7 @@ implementation explicitly:
 ```bash
 taskledger validate finish --result failed --summary "Parser edge case still fails."
 taskledger next-action
-taskledger context --for implementation --format markdown
+taskledger context --for implementer --format markdown
 taskledger implement restart --summary "Fix failed validation findings."
 ```
 
@@ -598,8 +598,8 @@ taskledger storage where
 taskledger sync preflight
 taskledger sync status
 taskledger sync commit --message "Sync project-a taskledger state"
-taskledger sync export --output ./taskledger-transfer.tar.gz
-taskledger sync import ./taskledger-transfer.tar.gz --dry-run
+taskledger export --output ./taskledger-transfer.tar.gz
+taskledger import ./taskledger-transfer.tar.gz --dry-run
 taskledger sync git init --repo ../taskledger-state --project-path project-a
 taskledger sync git status
 taskledger sync git pull
@@ -619,7 +619,7 @@ taskledger --json info
 taskledger --json task active
 taskledger --json task show
 taskledger --json task show task-0001
-taskledger --json context --for validation --format json
+taskledger --json context --for validator --format json
 ```
 
 Example status payload:
@@ -675,9 +675,9 @@ which remains **disabled by default** (see `[agent_logging]`).
 Fresh-context handoff is a primary feature:
 
 ```bash
-taskledger context --for planning --format markdown
-taskledger context --for implementation --format markdown
-taskledger context --for validation --format json
+taskledger context --for planner --format markdown
+taskledger context --for implementer --format markdown
+taskledger context --for validator --format json
 taskledger task report --task task-0030 -o task30.md
 taskledger task export task-0030 -o task-0030.llm.md
 taskledger usage --task task-0030
@@ -686,9 +686,7 @@ taskledger handoff claim handoff-0001
 taskledger handoff close handoff-0001 --reason "Implementation started."
 ```
 
-`task dossier`, root `view`, and the legacy `handoff *-context` renderers remain
-advanced/compatibility read surfaces. Prefer `context --for ...` and
-`handoff show` for agent continuation.
+`task dossier` and root `view` remain advanced read surfaces. Prefer `context --for planner|implementer|validator` and `handoff show` for agent continuation.
 
 ## Independent cross-harness review handoffs
 

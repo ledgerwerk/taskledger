@@ -238,7 +238,7 @@ def test_plan_review_stdout_markdown(tmp_path: Path) -> None:
     runner = _runner()
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "plan", "review", "--version", "1"],
+        ["--root", str(tmp_path), "plan", "review", "--version", "1"],
     )
     assert result.exit_code == 0, result.stdout
     assert "# Proposed Plan:" in result.stdout
@@ -253,7 +253,7 @@ def test_plan_review_output_writes_file(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "review",
@@ -277,7 +277,7 @@ def test_plan_review_json_output(tmp_path: Path) -> None:
     payload = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "review", "--version", "1"],
+            ["--root", str(tmp_path), "--json", "plan", "review", "--version", "1"],
         )
     )
     result = payload["result"]
@@ -299,6 +299,6 @@ def test_plan_review_defaults_to_latest_plan(tmp_path: Path) -> None:
     )
     runner = _runner()
     payload = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "plan", "review"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "plan", "review"])
     )
     assert payload["result"]["plan_id"] == "plan-v2"

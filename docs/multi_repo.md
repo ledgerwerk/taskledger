@@ -33,7 +33,7 @@ taskledger deps custom_sale.models.sale_order
 Then render fresh context for the next stage:
 
 ```bash
-taskledger context --for implementation --format markdown
+taskledger context --for implementer --format markdown
 taskledger handoff create --mode implementation --intended-actor agent --intended-harness codex
 ```
 

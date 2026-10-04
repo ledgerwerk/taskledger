@@ -459,22 +459,13 @@ def _mark_and_rebuild_indexes(paths: V2Paths) -> None:
 
 
 def _assert_no_active_locks(paths: V2Paths) -> None:
-    lock_roots = (
-        paths.runtime_root / "checkouts" / paths.ledger_ref / "locks",
-        paths.tasks_dir,
+    from taskledger.services.lock_inventory import (
+        build_lock_inventory,
+        require_migration_safe_locks,
     )
-    lock_paths: list[Path] = []
-    for lock_root in lock_roots:
-        if not lock_root.exists():
-            continue
-        pattern = "*.yaml" if lock_root.name == "locks" else "task-*/lock.yaml"
-        lock_paths.extend(path for path in lock_root.glob(pattern) if path.is_file())
-    if lock_paths:
-        rendered = ", ".join(str(path) for path in sorted(lock_paths))
-        raise LaunchError(
-            "UUIDv7 task-directory migration is blocked while workflow locks exist: "
-            f"{rendered}. Complete or explicitly recover the active workflow first."
-        )
+
+    inventory = build_lock_inventory(paths)
+    require_migration_safe_locks(inventory, project_root=paths.workspace_root)
 
 
 def _assert_no_unmerged_git_paths(workspace_root: Path) -> None:

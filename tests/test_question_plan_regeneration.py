@@ -49,7 +49,7 @@ def test_required_question_blocks_approval_until_answered_and_regenerated(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -64,7 +64,7 @@ def test_required_question_blocks_approval_until_answered_and_regenerated(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "propose",
@@ -79,7 +79,7 @@ def test_required_question_blocks_approval_until_answered_and_regenerated(
     blocked = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -97,7 +97,7 @@ def test_required_question_blocks_approval_until_answered_and_regenerated(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "answer",
@@ -110,7 +110,7 @@ def test_required_question_blocks_approval_until_answered_and_regenerated(
         == 0
     )
     status = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "question", "status"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "question", "status"])
     )
     assert status["result"]["plan_regeneration_needed"] is True
 
@@ -129,7 +129,7 @@ Use PostgreSQL only.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -145,7 +145,7 @@ Use PostgreSQL only.
     show = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "show", "--version", "2"],
+            ["--root", str(tmp_path), "--json", "plan", "show", "--version", "2"],
         )
     )
     plan = show["result"]["plan"]
@@ -153,7 +153,7 @@ Use PostgreSQL only.
     assert plan["based_on_question_ids"] == ["q-0001"]
 
     status = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "question", "status"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "question", "status"])
     )
     assert status["result"]["plan_regeneration_needed"] is False
 
@@ -167,7 +167,7 @@ def test_plan_regeneration_finishes_orphaned_latest_planning_run(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -182,7 +182,7 @@ def test_plan_regeneration_finishes_orphaned_latest_planning_run(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "answer",
@@ -198,10 +198,10 @@ def test_plan_regeneration_finishes_orphaned_latest_planning_run(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
+                "repair",
                 "lock",
-                "break",
                 "--reason",
                 "Simulate missing planning lock.",
             ],
@@ -226,7 +226,7 @@ Recover the orphaned planning run.
     regenerated = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -242,7 +242,7 @@ Recover the orphaned planning run.
     run = resolve_run(tmp_path, task.id, task.latest_planning_run)
     assert run.status == "finished"
     status = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "question", "status"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "question", "status"])
     )
     assert status["result"]["plan_regeneration_needed"] is False
 
@@ -254,7 +254,7 @@ def test_answered_question_blocks_approval_of_stale_plan(tmp_path: Path) -> None
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -269,7 +269,7 @@ def test_answered_question_blocks_approval_of_stale_plan(tmp_path: Path) -> None
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "propose",
@@ -285,7 +285,7 @@ def test_answered_question_blocks_approval_of_stale_plan(tmp_path: Path) -> None
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "answer",
@@ -301,7 +301,7 @@ def test_answered_question_blocks_approval_of_stale_plan(tmp_path: Path) -> None
     blocked = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -326,7 +326,7 @@ def test_changed_answer_requires_regeneration_again(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -341,7 +341,7 @@ def test_changed_answer_requires_regeneration_again(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "answer",
@@ -366,7 +366,7 @@ Use SQLite.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "regenerate",
@@ -381,7 +381,7 @@ Use SQLite.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "answer",
@@ -395,7 +395,7 @@ Use SQLite.
     )
 
     status = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "question", "status"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "question", "status"])
     )
 
     assert status["result"]["answered_since_latest_plan"] == ["q-0001"]
@@ -412,7 +412,7 @@ def test_answer_many_records_user_chat_answers_and_requires_regeneration(
             runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "question",
                     "add",
@@ -428,7 +428,7 @@ def test_answer_many_records_user_chat_answers_and_requires_regeneration(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "question",
@@ -468,7 +468,7 @@ def test_answer_many_rejects_duplicate_plain_text_ids(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -483,7 +483,7 @@ def test_answer_many_rejects_duplicate_plain_text_ids(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "question",
@@ -506,7 +506,7 @@ def test_answer_many_accepts_repeated_text_options(tmp_path: Path) -> None:
             runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "question",
                     "add",
@@ -522,7 +522,7 @@ def test_answer_many_accepts_repeated_text_options(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "question",
@@ -557,7 +557,7 @@ def test_required_question_needs_explicit_user_source_for_agent(tmp_path: Path) 
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -572,7 +572,7 @@ def test_required_question_needs_explicit_user_source_for_agent(tmp_path: Path) 
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "question",
@@ -597,7 +597,7 @@ def test_question_answer_accepts_question_option_alias(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -612,7 +612,7 @@ def test_question_answer_accepts_question_option_alias(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "question",
             "answer",
@@ -634,7 +634,7 @@ def test_question_answer_rejects_both_positional_and_option_id(tmp_path: Path) -
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -647,7 +647,7 @@ def test_question_answer_rejects_both_positional_and_option_id(tmp_path: Path) -
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "question",
             "answer",
@@ -672,7 +672,7 @@ def test_question_status_human_lists_required_open_ids(tmp_path: Path) -> None:
             runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "question",
                     "add",
@@ -687,7 +687,7 @@ def test_question_status_human_lists_required_open_ids(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "answer",
@@ -703,7 +703,7 @@ def test_question_status_human_lists_required_open_ids(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "question",
             "status",
@@ -725,7 +725,7 @@ def test_plan_upsert_from_answers_releases_planning_lock_and_allows_accept(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -740,7 +740,7 @@ def test_plan_upsert_from_answers_releases_planning_lock_and_allows_accept(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "answer-many",
@@ -767,7 +767,7 @@ Use PostgreSQL.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -782,14 +782,14 @@ Use PostgreSQL.
     assert upserted["result"]["operation"] == "regenerated"
     assert upserted["result"]["plan_version"] == 1
     next_action = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
     )
     assert next_action["result"]["action"] == "plan-approve"
 
     accepted = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -815,7 +815,7 @@ def test_next_action_prefers_question_answer_while_planning_questions_are_open(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -828,7 +828,7 @@ def test_next_action_prefers_question_answer_while_planning_questions_are_open(
     )
 
     payload = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
     )
 
     result = payload["result"]
@@ -877,7 +877,7 @@ def test_next_action_prefers_regenerate_over_approve_for_stale_answers(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -892,7 +892,7 @@ def test_next_action_prefers_regenerate_over_approve_for_stale_answers(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "propose",
@@ -908,7 +908,7 @@ def test_next_action_prefers_regenerate_over_approve_for_stale_answers(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "answer",
@@ -922,7 +922,7 @@ def test_next_action_prefers_regenerate_over_approve_for_stale_answers(
     )
 
     payload = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
     )
 
     result = payload["result"]

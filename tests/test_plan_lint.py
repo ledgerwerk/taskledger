@@ -26,7 +26,7 @@ runner = _make_runner()
 
 def _init_project_cli(tmp_path: Path) -> None:
     """Initialize project via CLI for tests that need .ledger layout."""
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert result.exit_code == 0, result.output
 
 
@@ -84,7 +84,7 @@ def _propose_plan(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "propose",
@@ -289,7 +289,7 @@ class TestPlanLintPasses:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "lint", "--task", "lint-pass"],
+            ["--root", str(tmp_path), "--json", "plan", "lint", "--task", "lint-pass"],
         )
         assert result.exit_code == 0, result.output
         payload = _json(result)
@@ -309,7 +309,7 @@ class TestPlanLintPasses:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "plan", "template", "--task", "template-stdout"],
+            ["--root", str(tmp_path), "plan", "template", "--task", "template-stdout"],
         )
 
         assert result.exit_code == 0, result.output
@@ -322,7 +322,7 @@ class TestPlanLintPasses:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "plan", "guidance", "--task", "guidance-empty"],
+            ["--root", str(tmp_path), "plan", "guidance", "--task", "guidance-empty"],
         )
 
         assert result.exit_code == 0, result.output
@@ -337,7 +337,7 @@ class TestPlanLintPasses:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -367,7 +367,7 @@ class TestPlanLintPasses:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "guidance",
@@ -391,7 +391,7 @@ class TestPlanLintPasses:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "template",
@@ -430,7 +430,7 @@ class TestPlanLintPasses:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "template",
@@ -464,7 +464,7 @@ class TestPlanLintPasses:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "template",
@@ -510,7 +510,7 @@ class TestPlanLintPasses:
         upserted = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "upsert",
@@ -526,7 +526,7 @@ class TestPlanLintPasses:
         linted = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -548,7 +548,7 @@ class TestPlanLintErrors:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -576,7 +576,7 @@ class TestPlanLintErrors:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -600,7 +600,7 @@ class TestPlanLintErrors:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -623,7 +623,7 @@ class TestPlanLintErrors:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "lint", "--task", "waived"],
+            ["--root", str(tmp_path), "--json", "plan", "lint", "--task", "waived"],
         )
         assert result.exit_code == 0, result.output
         payload = _json(result)
@@ -638,7 +638,7 @@ class TestPlanLintErrors:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "lint", "--task", "vague"],
+            ["--root", str(tmp_path), "--json", "plan", "lint", "--task", "vague"],
         )
         assert result.exit_code == EXIT_CODE_VALIDATION_FAILED
         payload = _json(result)
@@ -656,7 +656,7 @@ class TestPlanLintWarnings:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -681,7 +681,7 @@ class TestPlanLintWarnings:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -708,7 +708,7 @@ class TestPlanLintWarnings:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "lint", "--task", "todo-hints"],
+            ["--root", str(tmp_path), "--json", "plan", "lint", "--task", "todo-hints"],
         )
         assert result.exit_code == 0, result.output
         payload = _json(result)
@@ -731,7 +731,7 @@ class TestPlanLintWarnings:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -768,7 +768,7 @@ class TestPlanLintVersioning:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "lint", "--task", "multi"],
+            ["--root", str(tmp_path), "--json", "plan", "lint", "--task", "multi"],
         )
         assert result.exit_code == 0, result.output
         payload = _json(result)
@@ -785,7 +785,7 @@ class TestPlanLintApprovalGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -814,7 +814,7 @@ class TestPlanLintApprovalGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -843,7 +843,7 @@ class TestPlanLintApprovalGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -873,7 +873,7 @@ class TestPlanLintMissingBody:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -902,7 +902,7 @@ class TestPlanLintMissingBody:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -929,7 +929,7 @@ class TestPlanLintMissingBody:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -953,7 +953,7 @@ class TestPlanLintHumanOutput:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "lint",
@@ -976,7 +976,7 @@ class TestPlanLintHumanOutput:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "lint", "--task", "short-path"],
+            ["--root", str(tmp_path), "--json", "plan", "lint", "--task", "short-path"],
         )
 
         assert result.exit_code == 0, result.output
@@ -1000,7 +1000,7 @@ def test_plan_lint_warns_when_approval_ready_heading_is_missing(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -1035,7 +1035,7 @@ def test_plan_lint_strict_errors_when_approval_ready_heading_is_missing(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -1077,7 +1077,7 @@ def test_plan_lint_does_not_require_out_of_scope_heading(tmp_path: Path) -> None
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",

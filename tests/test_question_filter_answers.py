@@ -46,7 +46,7 @@ def _init_task_with_questions(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "add",
@@ -60,7 +60,7 @@ def _init_task_with_questions(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "question", "add", "--text", "Q2?"],
+            ["--root", str(tmp_path), "question", "add", "--text", "Q2?"],
         ).exit_code
         == 0
     )
@@ -69,7 +69,7 @@ def _init_task_with_questions(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "question",
                 "answer",
@@ -84,7 +84,7 @@ def _init_task_with_questions(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "question", "dismiss", "q-0002"],
+            ["--root", str(tmp_path), "question", "dismiss", "q-0002"],
         ).exit_code
         == 0
     )
@@ -100,7 +100,7 @@ def test_list_with_status_answered(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "question",
@@ -123,7 +123,7 @@ def test_list_with_status_dismissed(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "question",
@@ -145,7 +145,7 @@ def test_list_with_comma_separated_status(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "question",
@@ -167,7 +167,7 @@ def test_list_without_status_returns_all(tmp_path: Path) -> None:
     result = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "question", "list"],
+            ["--root", str(tmp_path), "--json", "question", "list"],
         )
     )
     items = result["result"]
@@ -180,7 +180,7 @@ def test_list_with_status_open_returns_empty(tmp_path: Path) -> None:
     result = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "question", "list", "--status", "open"],
+            ["--root", str(tmp_path), "--json", "question", "list", "--status", "open"],
         )
     )
     items = result["result"]
@@ -195,7 +195,7 @@ def test_answers_markdown_format(tmp_path: Path) -> None:
     _init_task_with_questions(tmp_path)
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "question", "answers"],
+        ["--root", str(tmp_path), "question", "answers"],
     )
     assert result.exit_code == 0
     assert "q-0001" in result.output
@@ -210,7 +210,7 @@ def test_answers_json_format(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "question",
@@ -234,25 +234,25 @@ def test_answers_empty_when_none_answered(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "create", "T", "--slug", "t"],
+            ["--root", str(tmp_path), "task", "create", "T", "--slug", "t"],
         ).exit_code
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(tmp_path), "task", "activate", "t"]).exit_code
+        runner.invoke(app, ["--root", str(tmp_path), "task", "activate", "t"]).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "plan", "start"]).exit_code == 0
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "question", "add", "--text", "Q?"],
+            ["--root", str(tmp_path), "question", "add", "--text", "Q?"],
         ).exit_code
         == 0
     )
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "question", "answers"],
+        ["--root", str(tmp_path), "question", "answers"],
     )
     assert result.exit_code == 0
     assert "(empty)" in result.output
@@ -269,26 +269,26 @@ def test_answer_empty_text_rejected(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "create", "T", "--slug", "t"],
+            ["--root", str(tmp_path), "task", "create", "T", "--slug", "t"],
         ).exit_code
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(tmp_path), "task", "activate", "t"]).exit_code
+        runner.invoke(app, ["--root", str(tmp_path), "task", "activate", "t"]).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "plan", "start"]).exit_code == 0
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "question", "add", "--text", "Q?"],
+            ["--root", str(tmp_path), "question", "add", "--text", "Q?"],
         ).exit_code
         == 0
     )
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "question",
@@ -309,26 +309,26 @@ def test_answer_whitespace_only_rejected(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "create", "T", "--slug", "t"],
+            ["--root", str(tmp_path), "task", "create", "T", "--slug", "t"],
         ).exit_code
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(tmp_path), "task", "activate", "t"]).exit_code
+        runner.invoke(app, ["--root", str(tmp_path), "task", "activate", "t"]).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "plan", "start"]).exit_code == 0
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "question", "add", "--text", "Q?"],
+            ["--root", str(tmp_path), "question", "add", "--text", "Q?"],
         ).exit_code
         == 0
     )
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "question",

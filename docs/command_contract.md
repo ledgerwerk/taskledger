@@ -12,8 +12,7 @@ taskledger [--root PATH] [--json] <area> <verb> [RESOURCE_REF] [--task TASK_REF]
 - `--json` is root-level only and must appear before the command group.
 - Command-local `--json` options are not part of the public contract.
 
-`--cwd` remains accepted as a compatibility root alias, but docs and examples
-should prefer `--root`.
+`--cwd` was removed in v0.7.0; use `--root` to select the workspace root.
 
 ## Task Scoping
 
@@ -309,8 +308,8 @@ taskledger storage move --to ../taskledger-state/project-a --mode copy|move [--a
 taskledger sync preflight
 taskledger sync status
 taskledger sync commit --message "Sync project-a taskledger state"
-taskledger sync export --output ./taskledger-transfer.tar.gz
-taskledger sync import ./taskledger-transfer.tar.gz --dry-run
+taskledger export --output ./taskledger-transfer.tar.gz
+taskledger import ./taskledger-transfer.tar.gz --dry-run
 taskledger sync git status
 taskledger sync git init --repo ../taskledger-state --project-path project-a
 taskledger sync git commit --message "Sync project-a taskledger state"
@@ -333,8 +332,8 @@ Rules:
   push/pull operations.
 - `sync status` and `sync commit` operate only on the Git repository that
   contains the resolved `taskledger_dir`.
-- `sync export` and `sync import` are archive aliases for the root
-  `export`/`import` commands.
+- `export` and `import` are root-level archive transfer commands; `sync`
+  remains focused on storage and Git synchronization.
 - `sync git` commands operate on a private external Git repository that stores
   full project taskledger state under `<repo>/<project_path>`.
 
@@ -657,8 +656,8 @@ Rules:
 - `--run` implies `--scope run`.
 - `--scope todo` requires `--todo`.
 - `--scope run` requires `--run`.
-- `--for implementation|validation|planning|review|full` remain accepted as
-  compatibility aliases.
+- `--for` accepts the role names shown above; `spec` and `code` normalize to
+  `spec-reviewer` and `code-reviewer`.
 - `handoff create --worker` derives mode and context from the configured
   worker step and stores `worker_step_id` in the handoff record.
 - `pipeline context STEP_ID` is equivalent to `context --worker STEP_ID`.
@@ -756,7 +755,7 @@ automatically. The remaining derived caches may be plain JSON arrays with no
 version metadata and can be rebuilt explicitly with:
 
 ```bash
-taskledger reindex
+taskledger repair index
 ```
 
 `taskledger repair index` uses the same recovery path and reports any quarantine

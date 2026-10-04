@@ -26,12 +26,12 @@ runner = _make_runner()
 
 def _init_and_prepare_for_implementation(tmp_path: Path) -> None:
     """Create a task, plan, approve it, and start implementation."""
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "init"]).exit_code == 0
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -46,7 +46,7 @@ def _init_and_prepare_for_implementation(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "test-task"],
+            ["--root", str(tmp_path), "task", "activate", "test-task"],
         ).exit_code
         == 0
     )
@@ -55,7 +55,7 @@ def _init_and_prepare_for_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -71,7 +71,7 @@ def _init_and_prepare_for_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -91,7 +91,7 @@ def _init_and_prepare_for_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -116,7 +116,7 @@ def _init_and_prepare_for_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -140,7 +140,7 @@ class TestTodoAddCompactOutput:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "add",
@@ -161,7 +161,7 @@ class TestTodoAddCompactOutput:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "todo",
@@ -198,7 +198,7 @@ class TestTodoDoneCompactOutput:
         add_result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "todo",
@@ -213,7 +213,7 @@ class TestTodoDoneCompactOutput:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "done",
@@ -232,7 +232,7 @@ class TestTodoDoneCompactOutput:
         add_result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "todo",
@@ -247,7 +247,7 @@ class TestTodoDoneCompactOutput:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "todo",
@@ -278,7 +278,7 @@ class TestImplementFinishCompactOutput:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "implement",
                 "finish",
@@ -298,7 +298,7 @@ class TestImplementFinishCompactOutput:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",

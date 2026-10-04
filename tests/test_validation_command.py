@@ -23,7 +23,7 @@ def _prepare_implemented(tmp_path: Path) -> None:
 
 
 def _start_validation(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "validate", "start"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "validate", "start"])
     assert result.exit_code == 0, result.stdout
 
 
@@ -33,7 +33,7 @@ def test_validate_command_requires_active_validation_run(tmp_path: Path) -> None
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "validate",
             "command",
@@ -58,7 +58,7 @@ def test_validate_command_captures_output_and_does_not_create_check(
         app,
         [
             "--json",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "validate",
             "command",
@@ -82,7 +82,7 @@ def test_validate_command_captures_output_and_does_not_create_check(
 
     status = runner.invoke(
         app,
-        ["--json", "--cwd", str(tmp_path), "validate", "status"],
+        ["--json", "--root", str(tmp_path), "validate", "status"],
     )
     assert status.exit_code == 0, status.stdout
     status_result = _json(status)["result"]["result"]
@@ -94,7 +94,7 @@ def test_validate_command_failed_exit_and_allow_failure(tmp_path: Path) -> None:
     _prepare_implemented(tmp_path)
     _start_validation(tmp_path)
     command = [
-        "--cwd",
+        "--root",
         str(tmp_path),
         "validate",
         "command",
@@ -113,7 +113,7 @@ def test_validate_command_failed_exit_and_allow_failure(tmp_path: Path) -> None:
 
     run = runner.invoke(
         app,
-        ["--json", "--cwd", str(tmp_path), "validate", "show"],
+        ["--json", "--root", str(tmp_path), "validate", "show"],
     )
     assert run.exit_code == 0, run.stdout
     run_data = _json(run)["result"]["run"]
@@ -130,7 +130,7 @@ def test_validate_command_stores_large_output_artifact(tmp_path: Path) -> None:
         app,
         [
             "--json",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "validate",
             "command",
@@ -154,7 +154,7 @@ def test_validate_command_bounds_configured_artifact(tmp_path: Path) -> None:
     config = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "config",
             "set",
@@ -169,7 +169,7 @@ def test_validate_command_bounds_configured_artifact(tmp_path: Path) -> None:
         app,
         [
             "--json",
-            "--cwd",
+            "--root",
             str(tmp_path),
             "validate",
             "command",

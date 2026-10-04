@@ -8,9 +8,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from taskledger.api.project import init_project as init_project_api
 from taskledger.cli import app
 from taskledger.services.git_utils import run_git
-from taskledger.storage.task_store import resolve_v2_paths
+from taskledger.storage.task_store import resolve_v2_paths, task_dir
 
 pytestmark = [
     pytest.mark.cli,
@@ -63,13 +64,7 @@ def _init_legacy_sync_workspace(
         raise AssertionError(f"workspace already exists: {workspace}")
     workspace.mkdir()
     taskledger_dir = workspace / ".taskledger"
-    assert (
-        runner.invoke(
-            app,
-            ["--root", str(workspace), "init", "--taskledger-dir", str(taskledger_dir)],
-        ).exit_code
-        == 0
-    )
+    init_project_api(workspace, taskledger_dir=taskledger_dir)
     if sync_repo is None:
         sync_repo = tmp_path / "state-repo"
     init_result = runner.invoke(
@@ -115,13 +110,7 @@ def test_sync_git_help_promotes_pull_and_push(
     workspace = tmp_path / "repo"
     workspace.mkdir()
     taskledger_dir = workspace / ".taskledger"
-    assert (
-        runner.invoke(
-            app,
-            ["--root", str(workspace), "init", "--taskledger-dir", str(taskledger_dir)],
-        ).exit_code
-        == 0
-    )
+    init_project_api(workspace, taskledger_dir=taskledger_dir)
 
     git_help = runner.invoke(app, ["--root", str(workspace), "sync", "git", "--help"])
     hooks_help = runner.invoke(
@@ -135,8 +124,8 @@ def test_sync_git_help_promotes_pull_and_push(
     assert "cd" in git_help.stdout
     assert "path" in git_help.stdout
     assert "commit" in git_help.stdout
-    assert "import-local" in git_help.stdout
-    assert "export-local" in git_help.stdout
+    assert "import-local" not in git_help.stdout
+    assert "export-local" not in git_help.stdout
     assert "pull" in git_help.stdout
     assert "push" in git_help.stdout
     assert "hooks" in git_help.stdout
@@ -235,35 +224,16 @@ def test_sync_git_commit_ignores_unrelated_dirty_paths(tmp_path: Path) -> None:
 
 
 # specmason: req=REQ-0057 ac=AC-0619
-def test_sync_git_export_local_remains_compatibility_alias(tmp_path: Path) -> None:
-    workspace, sync_repo = _init_sync_workspace(tmp_path)
-    (sync_repo / "project-a" / "alias-note.txt").write_text(
-        "compat\n",
-        encoding="utf-8",
-    )
-
-    result = runner.invoke(
-        app,
-        [
-            "--root",
-            str(workspace),
-            "--json",
-            "sync",
-            "git",
-            "export-local",
-            "--repo",
-            str(sync_repo),
-            "--project-path",
-            "project-a",
-            "--message",
-            "Compatibility export",
-        ],
-    )
-
-    assert result.exit_code == 0, _output(result)
-    payload = json.loads(result.stdout)["result"]
-    assert payload["kind"] == "taskledger_sync_git_export_local"
-    assert payload["committed"] is True
+def test_removed_sync_git_compatibility_commands_are_unregistered(
+    tmp_path: Path,
+) -> None:
+    workspace, _ = _init_sync_workspace(tmp_path)
+    for command in ("import-local", "export-local", "sync"):
+        result = runner.invoke(
+            app,
+            ["--root", str(workspace), "sync", "git", command, "--help"],
+        )
+        assert result.exit_code != 0, command
 
 
 # specmason: req=REQ-0057 ac=AC-0617
@@ -579,9 +549,13 @@ def test_sync_git_push_rejects_oversized_artifact_before_commit(
     tmp_path: Path,
 ) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
+    create_result = runner.invoke(
+        app,
+        ["--root", str(workspace), "task", "create", "Oversized artifact"],
+    )
+    assert create_result.exit_code == 0, _output(create_result)
     artifact = (
-        resolve_v2_paths(workspace).tasks_dir
-        / "task-0001"
+        task_dir(resolve_v2_paths(workspace), "task-0001")
         / "artifacts"
         / "run-0001-command-0001.log"
     )

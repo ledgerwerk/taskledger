@@ -239,26 +239,26 @@ def test_todo_cli_passes_resolved_actor_and_harness(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from taskledger import cli_misc
+    from taskledger import cli_todo
 
     _start_implementation(tmp_path)
     resolved: dict[str, object] = {}
-    original_set_todo_done = cli_misc.set_todo_done
+    original_set_todo_done = cli_todo.set_todo_done
 
     def capture_identity(*args, **kwargs):
         resolved.update(kwargs)
         return original_set_todo_done(*args, **kwargs)
 
     monkeypatch.setattr(
-        cli_misc,
+        cli_todo,
         "resolve_effective_identity",
         lambda _root, *, cwd: (ACTOR, HARNESS),
     )
-    monkeypatch.setattr(cli_misc, "set_todo_done", capture_identity)
+    monkeypatch.setattr(cli_todo, "set_todo_done", capture_identity)
     runner = CliRunner()
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "todo", "done", "todo-0001"],
+        ["--root", str(tmp_path), "todo", "done", "todo-0001"],
     )
 
     assert result.exit_code == 0, result.stdout

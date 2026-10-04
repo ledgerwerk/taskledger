@@ -141,7 +141,7 @@ def break_lock(
     remove_lock_from_paths(paths, task.id)
     return {
         "ok": True,
-        "command": "lock break",
+        "command": "repair lock",
         "task_id": task.id,
         "status_stage": task.status_stage,
         "changed": True,

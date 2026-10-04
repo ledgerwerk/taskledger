@@ -93,7 +93,7 @@ def test_release_tag_persists_release_record(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "release",
             "tag",
@@ -120,7 +120,7 @@ def test_release_tag_rejects_non_done_boundary(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -136,7 +136,7 @@ def test_release_tag_rejects_non_done_boundary(tmp_path: Path) -> None:
     tag_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "release",
             "tag",
@@ -159,7 +159,7 @@ def test_release_tag_rejects_duplicate_version(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "release",
                 "tag",
@@ -174,7 +174,7 @@ def test_release_tag_rejects_duplicate_version(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "release",
             "tag",
@@ -200,20 +200,20 @@ def test_release_list_is_sorted_by_boundary_task(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "release", "tag", "0.4.2", "--at-task", second],
+            ["--root", str(tmp_path), "release", "tag", "0.4.2", "--at-task", second],
         ).exit_code
         == 0
     )
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "release", "tag", "0.4.1", "--at-task", first],
+            ["--root", str(tmp_path), "release", "tag", "0.4.1", "--at-task", first],
         ).exit_code
         == 0
     )
 
     result = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "release", "list"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "release", "list"])
     )
     versions = [item["version"] for item in result["result"]["releases"]]
     assert versions == ["0.4.1", "0.4.2"]
@@ -229,7 +229,7 @@ def test_release_show_returns_persisted_record(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "release",
                 "tag",
@@ -246,7 +246,7 @@ def test_release_show_returns_persisted_record(tmp_path: Path) -> None:
     result = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "release", "show", "0.4.1"],
+            ["--root", str(tmp_path), "--json", "release", "show", "0.4.1"],
         )
     )
     release = result["result"]["release"]
@@ -270,7 +270,7 @@ def test_release_changelog_subcommand_is_not_registered(tmp_path: Path) -> None:
     _create_done_task(tmp_path, title="Release boundary", slug="release-boundary")
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "release", "changelog", "0.4.2", "--since", "0.4.1"],
+        ["--root", str(tmp_path), "release", "changelog", "0.4.2", "--since", "0.4.1"],
     )
     assert result.exit_code != 0
     assert (

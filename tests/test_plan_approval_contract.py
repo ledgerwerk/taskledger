@@ -46,7 +46,7 @@ def _prepare_proposed_plan(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -60,12 +60,12 @@ def _prepare_proposed_plan(
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "plan", "start", "--task", "approval-task"],
+            ["--root", str(tmp_path), "plan", "start", "--task", "approval-task"],
         ).exit_code
         == 0
     )
     command = [
-        "--cwd",
+        "--root",
         str(tmp_path),
         "plan",
         "propose",
@@ -87,7 +87,7 @@ def test_plan_approval_records_actor_metadata_and_criteria_ids(tmp_path: Path) -
     approve = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -114,7 +114,7 @@ def test_plan_approval_records_actor_metadata_and_criteria_ids(tmp_path: Path) -
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "plan",
@@ -144,7 +144,7 @@ def test_plan_approval_warns_when_source_is_missing(tmp_path: Path) -> None:
     approve = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -177,7 +177,7 @@ def test_task_report_warns_when_approved_plan_hash_mismatches(tmp_path: Path) ->
     approve = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "approve",
@@ -207,7 +207,7 @@ def test_task_report_warns_when_approved_plan_hash_mismatches(tmp_path: Path) ->
     report = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "report",
@@ -235,7 +235,7 @@ def test_plan_approval_blocks_running_planning_run_without_lock(
     approve = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -272,7 +272,7 @@ def test_plan_approval_rejects_agent_approval_without_escape_hatch(
     approve = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -304,7 +304,7 @@ def test_plan_approval_requires_criteria_by_default(tmp_path: Path) -> None:
     approve = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -336,7 +336,7 @@ def test_plan_accept_human_error_includes_lint_issue_details(tmp_path: Path) -> 
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "approve",
@@ -371,7 +371,7 @@ def test_plan_approve_default_actor_is_agent(tmp_path: Path) -> None:
     approve = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -401,7 +401,7 @@ def test_plan_yaml_single_key_shorthand_criteria(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -415,7 +415,7 @@ def test_plan_yaml_single_key_shorthand_criteria(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "plan", "start", "--task", "shorthand-task"],
+            ["--root", str(tmp_path), "plan", "start", "--task", "shorthand-task"],
         ).exit_code
         == 0
     )
@@ -430,7 +430,7 @@ acceptance_criteria:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "propose",
@@ -446,7 +446,7 @@ acceptance_criteria:
     show = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",

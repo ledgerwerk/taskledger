@@ -58,7 +58,7 @@ Rules:
 - Inspect resolved data and index mounts with `taskledger storage where`.
 - Run `taskledger init` after cloning when the configured mounts are absent.
 - `taskledger export --task TASK_REF` and `taskledger export TASK_REF` export task-scoped archives.
-- `taskledger sync export` and `taskledger sync import` are aliases for the same archive transfer primitives.
+- `taskledger export` and `taskledger import` are root-level archive transfer commands, separate from Git sync.
 - Task-scoped import is additive by default; if the task id already exists locally, import renumbers and reports an id map.
 - `--replace` is for full-state replacement, not the normal single-task workflow.
 - Task IDs are allocated from the active ledger's task and tombstone inventory; imports do not restore a persisted counter.

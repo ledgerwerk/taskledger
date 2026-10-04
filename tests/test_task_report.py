@@ -34,7 +34,7 @@ def _invoke(args: list[str], cwd: Path) -> tuple[int, str, str]:
         runner = CliRunner(mix_stderr=False)
     except TypeError:
         runner = CliRunner()
-    full_args = ["--cwd", str(cwd), *args]
+    full_args = ["--root", str(cwd), *args]
     result = runner.invoke(app, full_args)
     return result.exit_code, result.output, (result.stderr or "")
 

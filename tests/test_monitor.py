@@ -165,7 +165,7 @@ def test_render_monitor_text_truncates_without_throwing() -> None:
 def test_monitor_cli_once_exits_zero(empty_workspace: Path) -> None:
     result = runner.invoke(
         app,
-        ["--cwd", str(empty_workspace), "--no-log", "monitor", "--once"],
+        ["--root", str(empty_workspace), "--no-log", "monitor", "--once"],
     )
     assert result.exit_code == 0, result.stdout
     assert "CURRENT WORK" in result.stdout
@@ -175,7 +175,7 @@ def test_monitor_cli_once_exits_zero(empty_workspace: Path) -> None:
 def test_monitor_cli_json_once_emits_monitor_snapshot(empty_workspace: Path) -> None:
     result = runner.invoke(
         app,
-        ["--cwd", str(empty_workspace), "--no-log", "--json", "monitor", "--once"],
+        ["--root", str(empty_workspace), "--no-log", "--json", "monitor", "--once"],
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
@@ -328,7 +328,7 @@ def test_monitor_cli_activity_scope_task(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(ws),
             "--no-log",
             "--json",
@@ -349,7 +349,7 @@ def test_monitor_cli_activity_scope_invalid(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(ws),
             "--no-log",
             "monitor",

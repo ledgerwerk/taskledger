@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from taskledger.api.project import init_project as init_project_api
 from taskledger.cli import app
 from taskledger.storage.project_identity import load_project_uuid
 
@@ -51,11 +52,7 @@ def test_storage_where_reports_external_storage_details(tmp_path: Path) -> None:
     storage = tmp_path / "state" / "repo"
     workspace.mkdir()
 
-    init_result = runner.invoke(
-        app,
-        ["--root", str(workspace), "init", "--taskledger-dir", str(storage)],
-    )
-    assert init_result.exit_code == 0, init_result.stdout
+    init_project_api(workspace, taskledger_dir=storage)
 
     result = runner.invoke(
         app,
@@ -81,10 +78,7 @@ def test_storage_move_copy_updates_config_and_preserves_project_uuid(
     workspace.mkdir()
     taskledger_dir = workspace / ".taskledger"
 
-    init_result = runner.invoke(
-        app, ["--root", str(workspace), "init", "--taskledger-dir", str(taskledger_dir)]
-    )
-    assert init_result.exit_code == 0, init_result.stdout
+    init_project_api(workspace, taskledger_dir=taskledger_dir)
     original_uuid = load_project_uuid(workspace / "taskledger.toml")
 
     result = runner.invoke(
@@ -124,10 +118,7 @@ def test_storage_move_refuses_non_empty_target(tmp_path: Path) -> None:
     target.mkdir(parents=True)
     (target / "keep.txt").write_text("occupied\n", encoding="utf-8")
 
-    init_result = runner.invoke(
-        app, ["--root", str(workspace), "init", "--taskledger-dir", str(taskledger_dir)]
-    )
-    assert init_result.exit_code == 0, init_result.stdout
+    init_project_api(workspace, taskledger_dir=taskledger_dir)
 
     result = runner.invoke(
         app,
@@ -243,13 +234,7 @@ def test_sync_status_reports_git_changes_for_external_state_repo(
     workspace = tmp_path / "repo"
     storage = tmp_path / "state" / "repo"
     workspace.mkdir()
-    assert (
-        runner.invoke(
-            app,
-            ["--root", str(workspace), "init", "--taskledger-dir", str(storage)],
-        ).exit_code
-        == 0
-    )
+    init_project_api(workspace, taskledger_dir=storage)
 
     _git(storage, "init")
 
@@ -268,13 +253,7 @@ def test_sync_commit_commits_external_state_repo(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     storage = tmp_path / "state" / "repo"
     workspace.mkdir()
-    assert (
-        runner.invoke(
-            app,
-            ["--root", str(workspace), "init", "--taskledger-dir", str(storage)],
-        ).exit_code
-        == 0
-    )
+    init_project_api(workspace, taskledger_dir=storage)
 
     _git(storage, "init")
     _git(storage, "config", "user.email", "test@example.com")
@@ -302,7 +281,7 @@ def test_sync_commit_commits_external_state_repo(tmp_path: Path) -> None:
 
 
 # specmason: req=REQ-0056 ac=AC-0613
-def test_sync_help_includes_aliases_and_git_group(tmp_path: Path) -> None:
+def test_sync_help_lists_only_storage_and_git_commands(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
     assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
@@ -313,39 +292,23 @@ def test_sync_help_includes_aliases_and_git_group(tmp_path: Path) -> None:
     assert "preflight" in result.stdout
     assert "status" in result.stdout
     assert "commit" in result.stdout
-    assert "export" in result.stdout
-    assert "import" in result.stdout
+    assert "export" not in result.stdout
+    assert "import" not in result.stdout
     assert "git" in result.stdout
 
 
 # specmason: req=REQ-0056 ac=AC-0612
-def test_sync_export_alias_writes_archive(tmp_path: Path) -> None:
+def test_sync_archive_aliases_are_unregistered(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
     assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
 
-    root_archive = tmp_path / "root-export.tar.gz"
-    sync_archive = tmp_path / "sync-export.tar.gz"
-    root_result = runner.invoke(
-        app,
-        ["--root", str(workspace), "--json", "export", "-o", str(root_archive)],
-    )
-    sync_result = runner.invoke(
-        app,
-        ["--root", str(workspace), "--json", "sync", "export", "-o", str(sync_archive)],
-    )
-
-    assert root_result.exit_code == 0, root_result.stdout
-    assert sync_result.exit_code == 0, sync_result.stdout
-    root_payload = json.loads(root_result.stdout)
-    sync_payload = json.loads(sync_result.stdout)
-    assert (
-        root_payload["result"]["kind"]
-        == sync_payload["result"]["kind"]
-        == "taskledger_archive_export"
-    )
-    assert root_archive.exists()
-    assert sync_archive.exists()
+    for command in ("export", "import"):
+        result = runner.invoke(
+            app,
+            ["--root", str(workspace), "sync", command, "--help"],
+        )
+        assert result.exit_code != 0, command
 
 
 # specmason: req=REQ-0056 ac=AC-0607
@@ -356,25 +319,12 @@ def test_export_conflicting_output_args_include_command_specific_hint(
     workspace.mkdir()
     assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
 
-    root_result = runner.invoke(
+    result = runner.invoke(
         app,
         [
             "--root",
             str(workspace),
             "--json",
-            "export",
-            "first.tar.gz",
-            "-o",
-            "second.tar.gz",
-        ],
-    )
-    sync_result = runner.invoke(
-        app,
-        [
-            "--root",
-            str(workspace),
-            "--json",
-            "sync",
             "export",
             "first.tar.gz",
             "-o",
@@ -382,9 +332,6 @@ def test_export_conflicting_output_args_include_command_specific_hint(
         ],
     )
 
-    assert root_result.exit_code == 2, root_result.stdout
-    assert sync_result.exit_code == 2, sync_result.stdout
-    root_payload = json.loads(root_result.stdout)
-    sync_payload = json.loads(sync_result.stdout)
-    assert "taskledger export -o OUT.tar.gz" in root_payload["error"]["message"]
-    assert "taskledger sync export -o OUT.tar.gz" in sync_payload["error"]["message"]
+    assert result.exit_code == 2, result.stdout
+    payload = json.loads(result.stdout)
+    assert "taskledger export -o OUT.tar.gz" in payload["error"]["message"]

@@ -16,7 +16,7 @@ Use taskledger for staged coding work that needs a durable task record, reviewab
 
 - Do not implement before a plan approval has been recorded. Prefer `plan accept` for explicit chat approval.
 - Do not validate before implementation has been finished.
-- Do not use repair commands (`repair lock`, `repair run`, `repair task`, `repair index`) in the normal lifecycle. Use them only after `doctor`/`lock show` proves there is stale or corrupted state. (`lock break` is a deprecated alias for `repair lock`.) For a normal expired implementation lock, use `implement resume --repair-expired-lock` instead.
+- Do not use repair commands (`repair lock`, `repair run`, `repair task`, `repair index`) in the normal lifecycle. Use them only after `doctor`/`lock show` proves there is stale or corrupted state. For a normal expired implementation lock, use `implement resume --repair-expired-lock` instead.
 - Do not break locks without a reason.
 - Do not break locks for normal actor or harness transfer; use durable handoffs.
 - Do not mark validation passed without checking every mandatory acceptance criterion.
@@ -74,7 +74,7 @@ the sibling marker and does not repair target metadata.
    - Run `next_command` when it is safe and appropriate.
    - Do not invent question answers, evidence, or approval notes.
 5. Run `taskledger todo next`.
-6. Run `taskledger context --for planning|implementation|validation --format markdown`.
+6. Run `taskledger context --for planner|implementer|validator --format markdown`.
 7. Inspect `taskledger lock show` before active work.
 8. Use `taskledger can implement` or `taskledger can validate` before those stages.
    - Use `taskledger can implement-resume` when `next-action` recommends resuming an existing implementation run.
@@ -276,7 +276,7 @@ The plan file should use version ids like `plan-v1`, `plan-v2` in references. Do
 
 ## Implementation protocol
 
-1. `taskledger context --for implementation --format markdown`
+1. `taskledger context --for implementer --format markdown`
 2. `taskledger implement start`
    - If validation already failed and the plan is still correct, prefer `taskledger implement restart --summary "Fix failed validation findings."`
    - If implementation start fails because another run is already running, stop and run `taskledger doctor`, not only `taskledger doctor locks`.
@@ -354,14 +354,11 @@ Rules for agents:
 | Fresh worker context      | `context` or durable `handoff show`                 |
 | Command audit             | `task transcript`                                   |
 
-`task dossier`, root `view`, and legacy `handoff *-context` renderers remain
-advanced/compatibility read surfaces. Prefer `context --for ...` and
-`handoff show` for new agent protocols. Use `file status TASK_REF` when you need
-linked-file drift checks.
+`task dossier` and root `view` remain advanced read surfaces. Prefer `context --for planner|implementer|validator` and `handoff show` for agent protocols. Use `file status TASK_REF` when you need linked-file drift checks.
 
 ## Validation protocol
 
-1. `taskledger context --for validation --format markdown`
+1. `taskledger context --for validator --format markdown`
 2. `taskledger validate start`
 3. Check `taskledger validate status` to see current validation state and blockers.
 4. Run verification with `taskledger validate command -- ...` whenever practical.
@@ -450,7 +447,7 @@ To receive work:
 1. Run `taskledger actor whoami`.
 2. Run `taskledger handoff claim handoff-0001`.
 3. Run `taskledger next-action`.
-4. Run `taskledger context --for implementation|validation --format markdown`.
+4. Run `taskledger context --for implementer|validator --format markdown`.
 
 ## Cross-harness review handoff protocol
 
@@ -513,8 +510,8 @@ Lock recovery decision tree:
   non-empty unbound cache is quarantined rather than deleted; conflicting
   markers are not auto-adopted. Read-only commands do not bootstrap the cache.
 - If indexes are stale or an unusual cache-binding problem needs explicit
-  repair, run `taskledger repair index`; `taskledger reindex` is a compatibility
-  alias. Do not tell users to manually create `.ledger-project.toml`.
+  repair, run `taskledger repair index`. Do not tell users to manually create
+  `.ledger-project.toml`.
 - If a task is truly cancelled and the user wants to continue, use `taskledger task uncancel --task TASK_REF --reason "..." [--to STAGE]` to restore a safe durable stage before re-entering an active stage.
 - If dependencies must be bypassed, only a user waiver may unblock implementation.
 
@@ -559,7 +556,7 @@ taskledger plan upsert --from-answers --file ./plan.md
 taskledger plan review --version 1
 taskledger plan lint --version 1
 taskledger plan accept --version 1 --note "User approved in harness."
-taskledger context --for implementation --format markdown
+taskledger context --for implementer --format markdown
 taskledger context --for implementer --todo todo-0003
 taskledger context --for spec-reviewer --run run-0008
 taskledger context --for code-reviewer --run run-0008
@@ -580,8 +577,8 @@ taskledger ledger doctor
 taskledger storage where
 taskledger sync preflight
 taskledger sync status
-taskledger sync export --output ./taskledger-transfer.tar.gz
-taskledger sync import ./taskledger-transfer.tar.gz --dry-run
+taskledger export --output ./taskledger-transfer.tar.gz
+taskledger import ./taskledger-transfer.tar.gz --dry-run
 taskledger sync git status
 taskledger sync git pull
 taskledger sync git push

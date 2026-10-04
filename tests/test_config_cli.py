@@ -26,7 +26,7 @@ def _json(result) -> dict[str, object]:
 
 
 def _init_project(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert result.exit_code == 0, result.stdout
 
 
@@ -34,7 +34,7 @@ def _init_project(tmp_path: Path) -> None:
 def test_config_list_and_get_json(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
-    listed = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "config", "list"])
+    listed = runner.invoke(app, ["--root", str(tmp_path), "--json", "config", "list"])
     assert listed.exit_code == 0, listed.stdout
     listed_payload = _json(listed)
     assert listed_payload["ok"] is True
@@ -48,7 +48,7 @@ def test_config_list_and_get_json(tmp_path: Path) -> None:
 
     gotten = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "config", "get", "config_version"],
+        ["--root", str(tmp_path), "--json", "config", "get", "config_version"],
     )
     assert gotten.exit_code == 0, gotten.stdout
     gotten_payload = _json(gotten)
@@ -61,7 +61,7 @@ def test_config_list_and_get_json(tmp_path: Path) -> None:
 def test_config_keys_lists_known_paths(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "config", "keys"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "--json", "config", "keys"])
     assert result.exit_code == 0, result.stdout
     payload = _json(result)
     assert payload["ok"] is True
@@ -82,7 +82,7 @@ def test_config_describe_shows_allowed_values_and_current_value(tmp_path: Path) 
     set_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "config",
@@ -96,7 +96,7 @@ def test_config_describe_shows_allowed_values_and_current_value(tmp_path: Path) 
     describe_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "config",
@@ -121,7 +121,7 @@ def test_config_describe_unknown_key_returns_error(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "config", "describe", "does.not.exist"],
+        ["--root", str(tmp_path), "--json", "config", "describe", "does.not.exist"],
     )
     assert result.exit_code == 1
     payload = _json(result)
@@ -136,7 +136,7 @@ def test_config_set_updates_prompt_profile_numbers(tmp_path: Path) -> None:
     set_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "config",
@@ -154,7 +154,7 @@ def test_config_set_updates_prompt_profile_numbers(tmp_path: Path) -> None:
     get_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "config",
@@ -173,7 +173,7 @@ def test_config_set_parses_bare_string_value(tmp_path: Path) -> None:
     set_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "config",
@@ -187,7 +187,7 @@ def test_config_set_parses_bare_string_value(tmp_path: Path) -> None:
     get_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "config",
@@ -206,7 +206,7 @@ def test_config_set_rejects_invalid_values_with_json_error(tmp_path: Path) -> No
     first_set = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "config",
             "set",
@@ -219,7 +219,7 @@ def test_config_set_rejects_invalid_values_with_json_error(tmp_path: Path) -> No
     invalid_set = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "config",
@@ -236,7 +236,7 @@ def test_config_set_rejects_invalid_values_with_json_error(tmp_path: Path) -> No
     get_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "config",
@@ -255,7 +255,7 @@ def test_config_get_missing_key_returns_error(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "config", "get", "does.not.exist"],
+        ["--root", str(tmp_path), "--json", "config", "get", "does.not.exist"],
     )
     assert result.exit_code == 1
     payload = _json(result)
@@ -269,7 +269,7 @@ def test_config_set_rejects_reserved_keys(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "config", "set", "taskledger_dir", "other"],
+        ["--root", str(tmp_path), "--json", "config", "set", "taskledger_dir", "other"],
     )
     assert result.exit_code == 1
     payload = _json(result)
@@ -290,7 +290,7 @@ def test_config_set_handles_inline_section_comments(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "config",
             "set",
@@ -318,7 +318,7 @@ def test_config_describes_artifact_limit(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "config",

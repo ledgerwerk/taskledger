@@ -23,12 +23,12 @@ def _json(result) -> dict[str, object]:
 
 
 def _init_planning_task(tmp_path: Path, slug: str = "question-batch") -> None:
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "init"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "init"]).exit_code == 0
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -42,11 +42,11 @@ def _init_planning_task(tmp_path: Path, slug: str = "question-batch") -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", slug],
+            ["--root", str(tmp_path), "task", "activate", slug],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "plan", "start"]).exit_code == 0
 
 
 # specmason: req=REQ-0042 ac=AC-0482
@@ -57,7 +57,7 @@ def test_question_add_many_adds_required_questions_to_active_task(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "question",
@@ -90,7 +90,7 @@ def test_question_add_many_supports_yaml_file_and_explicit_task(tmp_path: Path) 
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "question",
@@ -116,7 +116,7 @@ def test_question_add_many_rejects_blank_lines_without_partial_write(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "question",
@@ -130,7 +130,7 @@ def test_question_add_many_rejects_blank_lines_without_partial_write(
 
     listed = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "question", "list"],
+        ["--root", str(tmp_path), "--json", "question", "list"],
     )
     assert listed.exit_code == 0, listed.output
     assert _json(listed)["result"] == []
@@ -144,7 +144,7 @@ def test_question_add_many_rejects_duplicates_without_partial_write(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "question",
@@ -158,7 +158,7 @@ def test_question_add_many_rejects_duplicates_without_partial_write(
 
     listed = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "question", "list"],
+        ["--root", str(tmp_path), "--json", "question", "list"],
     )
     assert listed.exit_code == 0, listed.output
     assert _json(listed)["result"] == []

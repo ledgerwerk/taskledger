@@ -21,7 +21,7 @@ def _json_output(result) -> dict[str, object]:
 def _init(tmp_path: Path) -> None:
     shutil.rmtree(tmp_path.parent / "ledger", ignore_errors=True)
     result = runner.invoke(
-        app, ["--cwd", str(tmp_path), "init", "--create-sibling-store"]
+        app, ["--root", str(tmp_path), "init", "--create-sibling-store"]
     )
     assert result.exit_code == 0, result.stdout
 
@@ -30,7 +30,7 @@ def _record_done(tmp_path: Path, *, title: str, slug: str) -> str:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -57,7 +57,7 @@ def _create_task(tmp_path: Path, *, title: str, slug: str) -> str:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -75,7 +75,7 @@ def _create_task(tmp_path: Path, *, title: str, slug: str) -> str:
 
 def _archive(tmp_path: Path, ref: str, *, force: bool = False) -> None:
     args = [
-        "--cwd",
+        "--root",
         str(tmp_path),
         "task",
         "archive",
@@ -95,13 +95,13 @@ def test_archive_hides_task_from_default_list(tmp_path: Path) -> None:
     task_id = _record_done(tmp_path, title="Legacy task", slug="legacy-task")
     _archive(tmp_path, task_id)
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "task", "list"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "task", "list"])
     assert result.exit_code == 0, result.stdout
     assert "legacy-task" not in result.stdout
 
     archived = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "list", "--archived"],
+        ["--root", str(tmp_path), "task", "list", "--archived"],
     )
     assert archived.exit_code == 0, archived.stdout
     assert "legacy-task" in archived.stdout
@@ -122,7 +122,7 @@ def test_archived_slug_can_be_reused_and_archived_slug_can_be_ambiguous(
     archived = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "list",
@@ -138,7 +138,7 @@ def test_archived_slug_can_be_reused_and_archived_slug_can_be_ambiguous(
     ambiguous = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "show",
@@ -163,7 +163,7 @@ def test_unarchive_rejects_visible_slug_conflict_and_accepts_new_slug(
     conflict = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "unarchive",
@@ -178,7 +178,7 @@ def test_unarchive_rejects_visible_slug_conflict_and_accepts_new_slug(
     restored = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "unarchive",
@@ -216,14 +216,14 @@ def test_archived_task_mutation_is_rejected_and_exact_id_still_reads(
 
     activate = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "activate", task_id],
+        ["--root", str(tmp_path), "task", "activate", task_id],
     )
     assert activate.exit_code != 0
     assert "Cannot activate archived task" in activate.output
 
     show = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "show", task_id],
+        ["--root", str(tmp_path), "task", "show", task_id],
     )
     assert show.exit_code == 0, show.stdout
     assert "immutable-archived" in show.stdout
@@ -235,14 +235,14 @@ def test_task_show_exact_id_marks_archived_task(tmp_path: Path) -> None:
     task_id = _record_done(tmp_path, title="Old", slug="old")
     _archive(tmp_path, task_id)
 
-    show = runner.invoke(app, ["--cwd", str(tmp_path), "task", "show", task_id])
+    show = runner.invoke(app, ["--root", str(tmp_path), "task", "show", task_id])
     assert show.exit_code == 0, show.stdout
     assert "visibility: archived" in show.stdout
     assert "archived_at:" in show.stdout
 
     show_json = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "show", task_id],
+        ["--root", str(tmp_path), "--json", "task", "show", task_id],
     )
     payload = json.loads(show_json.stdout)
     assert payload["result"]["task"]["archived"] is True
@@ -256,7 +256,7 @@ def test_task_show_visible_task_has_visibility_visible(tmp_path: Path) -> None:
 
     show = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "show", "active"],
+        ["--root", str(tmp_path), "task", "show", "active"],
     )
     assert show.exit_code == 0, show.stdout
     assert "visibility: visible" in show.stdout
@@ -264,7 +264,7 @@ def test_task_show_visible_task_has_visibility_visible(tmp_path: Path) -> None:
     show_json = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -287,7 +287,7 @@ def test_archive_already_archived_task_reports_noop(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "archive",
@@ -310,7 +310,7 @@ def test_unarchive_visible_task_reports_noop(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "unarchive",
@@ -333,7 +333,7 @@ def test_can_validate_archived_implemented_task_is_false(tmp_path: Path) -> None
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "can", "validate", "--task", task_id],
+        ["--root", str(tmp_path), "--json", "can", "validate", "--task", task_id],
     )
 
     payload = json.loads(result.stdout)
@@ -352,7 +352,7 @@ def test_next_action_archived_task_reports_archived(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "next-action",
@@ -377,7 +377,7 @@ def test_unarchive_implemented_task_requires_recovery_mode(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "unarchive",
@@ -403,7 +403,7 @@ def test_unarchive_implemented_reopen_for_work_blocks_direct_validation(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "unarchive",
@@ -418,14 +418,14 @@ def test_unarchive_implemented_reopen_for_work_blocks_direct_validation(
     # Check status is failed_validation now
     show_json = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "show", task_id],
+        ["--root", str(tmp_path), "--json", "task", "show", task_id],
     )
     payload = json.loads(show_json.stdout)
     assert payload["result"]["task"]["status_stage"] == "failed_validation"
 
     can = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "can", "validate", "--task", task_id],
+        ["--root", str(tmp_path), "--json", "can", "validate", "--task", task_id],
     )
     payload = json.loads(can.stdout)
     assert payload["result"]["ok"] is False
@@ -437,7 +437,7 @@ def _prepare_implemented_task(tmp_path: Path) -> str:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -454,13 +454,13 @@ def _prepare_implemented_task(tmp_path: Path) -> str:
     # Activate
     runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "activate", task_id],
+        ["--root", str(tmp_path), "task", "activate", task_id],
     )
 
     # Start planning
     runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "plan", "start", "--task", task_id],
+        ["--root", str(tmp_path), "plan", "start", "--task", task_id],
     )
 
     # Create a concrete plan file and upsert
@@ -487,7 +487,7 @@ def _prepare_implemented_task(tmp_path: Path) -> str:
     upsert_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "upsert",
@@ -503,7 +503,7 @@ def _prepare_implemented_task(tmp_path: Path) -> str:
     approve_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "accept",
@@ -521,21 +521,21 @@ def _prepare_implemented_task(tmp_path: Path) -> str:
     # Start and finish implementation
     impl_start = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "implement", "start", "--task", task_id],
+        ["--root", str(tmp_path), "implement", "start", "--task", task_id],
     )
     assert impl_start.exit_code == 0, impl_start.output
 
     # Get the materialized todo ID and mark it done
     todo_status = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "todo", "status", "--task", task_id],
+        ["--root", str(tmp_path), "--json", "todo", "status", "--task", task_id],
     )
     todo_payload = json.loads(todo_status.stdout)
     todo_id = todo_payload["result"]["open_todos"][0]
     todo_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "todo",
             "done",
@@ -551,7 +551,7 @@ def _prepare_implemented_task(tmp_path: Path) -> str:
     impl_finish = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "implement",
             "finish",

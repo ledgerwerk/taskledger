@@ -1211,5 +1211,5 @@ def _render_hook_script(
         "  exit 0\n"
         "fi\n"
         "TASKLEDGER_GIT_HOOK=1 exec taskledger "
-        f"--root {shlex.quote(workspace_root.as_posix())} reindex{quiet_suffix}\n"
+        f"--root {shlex.quote(workspace_root.as_posix())} repair index{quiet_suffix}\n"
     )

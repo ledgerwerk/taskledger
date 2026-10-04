@@ -47,13 +47,13 @@ description = "Add failing tests first."
 
 
 def _setup_active_task(workspace: Path) -> None:
-    assert runner.invoke(app, ["--cwd", str(workspace), "init"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
     _append_pipeline_config(workspace / ".ledger" / "taskledger" / "config.toml")
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "task",
                 "create",
@@ -67,7 +67,7 @@ def _setup_active_task(workspace: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(workspace), "task", "activate", "worker-handoff"],
+            ["--root", str(workspace), "task", "activate", "worker-handoff"],
         ).exit_code
         == 0
     )
@@ -80,7 +80,7 @@ def test_worker_handoff_stores_worker_step_id_sparse(tmp_path: Path) -> None:
     worker_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "handoff",
@@ -102,7 +102,7 @@ def test_worker_handoff_stores_worker_step_id_sparse(tmp_path: Path) -> None:
     normal_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "handoff",
@@ -127,7 +127,7 @@ def test_worker_handoff_rejects_conflicting_mode_override(tmp_path: Path) -> Non
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "handoff",
             "create",
@@ -150,7 +150,7 @@ def test_worker_handoff_rejects_conflicting_context_override(tmp_path: Path) -> 
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "handoff",
             "create",

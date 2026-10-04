@@ -9,6 +9,7 @@ import yaml
 from typer.testing import CliRunner
 
 from taskledger.cli import app
+from taskledger.storage.task_store import resolve_v2_paths, task_lock_path
 from tests.support.builders import (
     create_approved_task,
     init_workspace,
@@ -23,7 +24,7 @@ def _json(output: str) -> dict:
 
 
 def _expire_lock(tmp: Path, task_id: str) -> dict:
-    lock_path = tmp / ".taskledger" / "checkouts" / "main" / "locks" / f"{task_id}.yaml"
+    lock_path = task_lock_path(resolve_v2_paths(tmp), task_id)
     lock_payload = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
     lock_payload["expires_at"] = "2000-01-01T00:00:00+00:00"
     lock_path.write_text(
@@ -57,7 +58,7 @@ def test_expired_impl_lock_next_action_recommends_resume(
 
     r = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "next-action"],
+        ["--root", str(tmp_path), "--json", "next-action"],
     )
     assert r.exit_code == 0, r.output
     data = _json(r.stdout)["result"]
@@ -76,7 +77,7 @@ def test_expired_impl_lock_resume_succeeds(tmp_path: Path) -> None:
     r = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "implement",
             "resume",
@@ -95,19 +96,19 @@ def test_expired_planning_lock_still_routes_to_repair(tmp_path: Path) -> None:
     # Just create + activate + plan start (no plan upsert/approve)
     r = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "create", "pt", "--slug", "pt"],
+        ["--root", str(tmp_path), "task", "create", "pt", "--slug", "pt"],
     )
     assert r.exit_code == 0
-    r = runner.invoke(app, ["--cwd", str(tmp_path), "task", "activate", "pt"])
+    r = runner.invoke(app, ["--root", str(tmp_path), "task", "activate", "pt"])
     assert r.exit_code == 0
-    r = runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"])
+    r = runner.invoke(app, ["--root", str(tmp_path), "plan", "start"])
     assert r.exit_code == 0
 
     _expire_lock(tmp_path, "task-0001")
 
     r = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "next-action"],
+        ["--root", str(tmp_path), "--json", "next-action"],
     )
     assert r.exit_code == 0, r.output
     data = _json(r.stdout)["result"]

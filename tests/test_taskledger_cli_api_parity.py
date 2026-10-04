@@ -19,8 +19,8 @@ runner = _make_runner()
 
 # specmason: req=REQ-0063 ac=AC-0678
 def test_cli_command_tree_matches_task_first_contract(tmp_path: Path) -> None:
-    runner.invoke(app, ["--cwd", str(tmp_path), "init"])
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "--help"])
+    runner.invoke(app, ["--root", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "--help"])
 
     assert result.exit_code == 0
     for name in (
@@ -29,6 +29,7 @@ def test_cli_command_tree_matches_task_first_contract(tmp_path: Path) -> None:
         "monitor",
         "status",
         "doctor",
+        "info",
         "export",
         "import",
         "snapshot",
@@ -53,7 +54,6 @@ def test_cli_command_tree_matches_task_first_contract(tmp_path: Path) -> None:
         "repair",
         "next-action",
         "can",
-        "reindex",
         "tree",
     ):
         assert name in result.stdout
@@ -61,7 +61,7 @@ def test_cli_command_tree_matches_task_first_contract(tmp_path: Path) -> None:
 
 # specmason: req=REQ-0063 ac=AC-0680
 def test_legacy_cli_groups_are_removed(tmp_path: Path) -> None:
-    runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    runner.invoke(app, ["--root", str(tmp_path), "init"])
 
     for command in (
         "board",
@@ -77,13 +77,13 @@ def test_legacy_cli_groups_are_removed(tmp_path: Path) -> None:
         "compose",
         "runtime-support",
     ):
-        result = runner.invoke(app, ["--cwd", str(tmp_path), command, "--help"])
+        result = runner.invoke(app, ["--root", str(tmp_path), command, "--help"])
         assert result.exit_code != 0
 
 
 # specmason: req=REQ-0063 ac=AC-0681
 def test_task_first_subcommands_are_registered(tmp_path: Path) -> None:
-    runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    runner.invoke(app, ["--root", str(tmp_path), "init"])
 
     expected = {
         "task": (
@@ -129,18 +129,33 @@ def test_task_first_subcommands_are_registered(tmp_path: Path) -> None:
         "link": ("add", "remove", "list"),
         "require": ("add", "list", "remove", "waive"),
         "release": ("tag", "list", "show"),
-        "lock": ("show", "break", "list"),
+        "lock": ("show", "list"),
         "handoff": (
+            "create",
+            "review",
+            "list",
+            "claim",
+            "release",
+            "retarget",
+            "close",
+            "cancel",
             "show",
-            "plan-context",
-            "implementation-context",
-            "validation-context",
         ),
-        "repair": ("index", "lock", "task"),
+        "repair": (
+            "index",
+            "lock",
+            "locks",
+            "allocations",
+            "project-identity",
+            "task",
+            "run",
+            "planning-command-changes",
+            "task-dirs",
+        ),
     }
 
     for command, subcommands in expected.items():
-        result = runner.invoke(app, ["--cwd", str(tmp_path), command, "--help"])
+        result = runner.invoke(app, ["--root", str(tmp_path), command, "--help"])
         assert result.exit_code == 0
         for subcommand in subcommands:
             assert subcommand in result.stdout
@@ -148,10 +163,10 @@ def test_task_first_subcommands_are_registered(tmp_path: Path) -> None:
 
 # specmason: req=REQ-0063 ac=AC-0679
 def test_file_and_link_help_describe_distinct_surfaces(tmp_path: Path) -> None:
-    runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    runner.invoke(app, ["--root", str(tmp_path), "init"])
 
-    file_help = runner.invoke(app, ["--cwd", str(tmp_path), "file", "--help"])
-    link_help = runner.invoke(app, ["--cwd", str(tmp_path), "link", "--help"])
+    file_help = runner.invoke(app, ["--root", str(tmp_path), "file", "--help"])
+    link_help = runner.invoke(app, ["--root", str(tmp_path), "link", "--help"])
 
     assert file_help.exit_code == 0
     assert link_help.exit_code == 0

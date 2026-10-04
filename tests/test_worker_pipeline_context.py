@@ -54,12 +54,12 @@ kind = "todo"
 
 
 def _setup_task_with_accepted_plan(workspace: Path) -> None:
-    assert runner.invoke(app, ["--cwd", str(workspace), "init"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "task",
                 "create",
@@ -73,11 +73,13 @@ def _setup_task_with_accepted_plan(workspace: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(workspace), "task", "activate", "worker-context"],
+            ["--root", str(workspace), "task", "activate", "worker-context"],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(workspace), "plan", "start"]).exit_code == 0
+    assert (
+        runner.invoke(app, ["--root", str(workspace), "plan", "start"]).exit_code == 0
+    )
     plan_text = """---
 acceptance_criteria:
   - id: ac-0001
@@ -96,7 +98,7 @@ Add worker-aware context support without changing default context rendering.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "plan",
                 "propose",
@@ -110,7 +112,7 @@ Add worker-aware context support without changing default context rendering.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "plan",
                 "approve",
@@ -137,7 +139,7 @@ def test_context_for_implementer_unchanged_without_worker_pipeline(
 
     before = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "context", "--for", "implementer"],
+        ["--root", str(tmp_path), "context", "--for", "implementer"],
     )
     assert before.exit_code == 0, before.stdout
 
@@ -145,7 +147,7 @@ def test_context_for_implementer_unchanged_without_worker_pipeline(
 
     after = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "context", "--for", "implementer"],
+        ["--root", str(tmp_path), "context", "--for", "implementer"],
     )
     assert after.exit_code == 0, after.stdout
     assert after.stdout == before.stdout
@@ -160,7 +162,7 @@ def test_worker_context_renders_base_context_plus_worker_guidance(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "context", "--worker", "tester"],
+        ["--root", str(tmp_path), "context", "--worker", "tester"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -191,7 +193,7 @@ def test_pipeline_context_command_renders_worker_context(tmp_path: Path) -> None
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "pipeline", "context", "tester"],
+        ["--root", str(tmp_path), "pipeline", "context", "tester"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -205,7 +207,7 @@ def test_context_worker_requires_enabled_pipeline(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "context", "--worker", "tester"],
+        ["--root", str(tmp_path), "context", "--worker", "tester"],
     )
 
     assert result.exit_code != 0
@@ -221,7 +223,7 @@ def test_validator_context_distinguishes_target_and_probe_failures(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "context", "--for", "validator"],
+        ["--root", str(tmp_path), "context", "--for", "validator"],
     )
 
     assert result.exit_code == 0, result.stdout

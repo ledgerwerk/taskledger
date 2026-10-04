@@ -43,7 +43,7 @@ def test_init_json_initializes_default_storage(tmp_path: Path) -> None:
     workspace.mkdir()
     result = CliRunner().invoke(
         app,
-        ["--cwd", str(workspace), "--json", "init"],
+        ["--root", str(workspace), "--json", "init"],
     )
 
     assert result.exit_code == 0, result.stdout

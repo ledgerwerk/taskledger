@@ -28,7 +28,7 @@ def _json(result) -> dict[str, object]:
 
 
 def _init_project(app, tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert result.exit_code == 0, result.output
 
 
@@ -51,7 +51,7 @@ def test_optional_release_import_failure_keeps_core_commands_available(
         assert (
             runner.invoke(
                 broken_cli.app,
-                ["--cwd", str(tmp_path), "actor", "whoami"],
+                ["--root", str(tmp_path), "actor", "whoami"],
             ).exit_code
             == 0
         )
@@ -59,7 +59,7 @@ def test_optional_release_import_failure_keeps_core_commands_available(
             runner.invoke(
                 broken_cli.app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "task",
                     "create",
@@ -74,7 +74,7 @@ def test_optional_release_import_failure_keeps_core_commands_available(
             runner.invoke(
                 broken_cli.app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "task",
                     "activate",
@@ -86,7 +86,7 @@ def test_optional_release_import_failure_keeps_core_commands_available(
         assert (
             runner.invoke(
                 broken_cli.app,
-                ["--cwd", str(tmp_path), "task", "active"],
+                ["--root", str(tmp_path), "task", "active"],
             ).exit_code
             == 0
         )
@@ -94,7 +94,7 @@ def test_optional_release_import_failure_keeps_core_commands_available(
         assert (
             runner.invoke(
                 broken_cli.app,
-                ["--cwd", str(tmp_path), "next-action"],
+                ["--root", str(tmp_path), "next-action"],
             ).exit_code
             == 0
         )
@@ -102,7 +102,7 @@ def test_optional_release_import_failure_keeps_core_commands_available(
         failed_release = runner.invoke(
             broken_cli.app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "release",

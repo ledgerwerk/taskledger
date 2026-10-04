@@ -146,7 +146,7 @@ def test_docs_define_agent_golden_path_and_advanced_surfaces() -> None:
         assert "storage" in text
         assert "advanced" in text.lower()
 
-    assert "45 top-level CLI entries" in public_surface
+    assert "derives top-level command names" in public_surface
     assert "41 registered command groups" not in public_surface
     assert "ledger fork/switch/adopt" in public_surface
     assert "search`/`grep`/`symbols`/`deps`" in public_surface
@@ -167,7 +167,6 @@ def test_read_report_export_terminology_is_consolidated() -> None:
 
     for text in (readme, usage, public_surface, skill):
         assert "task dossier" in text
-        assert "advanced/compatibility" in text
         assert "context" in text
         assert "handoff show" in text
 
@@ -412,7 +411,7 @@ def _command_key(tokens: list[str]) -> str | None:
     remaining = tokens[1:]
     while remaining and remaining[0].startswith("-"):
         option = remaining.pop(0)
-        if option in {"--cwd", "--root"} and remaining:
+        if option == "--root" and remaining:
             remaining.pop(0)
     if not remaining:
         return None

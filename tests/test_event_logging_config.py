@@ -20,7 +20,7 @@ runner = _make_runner()
 
 
 def _init_project(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert result.exit_code == 0
 
 
@@ -48,7 +48,7 @@ def _create_and_activate_task(tmp_path: Path, slug: str = "test-task") -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -64,7 +64,7 @@ def _create_and_activate_task(tmp_path: Path, slug: str = "test-task") -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", slug],
+            ["--root", str(tmp_path), "task", "activate", slug],
         ).exit_code
         == 0
     )
@@ -99,7 +99,7 @@ def test_task_events_reads_default_action_events(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "events"],
+        ["--root", str(tmp_path), "--json", "task", "events"],
     )
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
@@ -114,7 +114,7 @@ def test_lock_break_writes_events_by_default(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -127,7 +127,7 @@ def test_lock_break_writes_events_by_default(tmp_path: Path) -> None:
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(tmp_path), "plan", "start", "--task", "lock-test"]
+            app, ["--root", str(tmp_path), "plan", "start", "--task", "lock-test"]
         ).exit_code
         == 0
     )
@@ -135,11 +135,11 @@ def test_lock_break_writes_events_by_default(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
+            "repair",
             "lock",
-            "break",
             "--task",
             "lock-test",
             "--reason",
@@ -177,7 +177,7 @@ def test_event_logging_false_disables_new_action_events(tmp_path: Path) -> None:
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "events"],
+        ["--root", str(tmp_path), "--json", "task", "events"],
     )
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
@@ -211,7 +211,7 @@ def test_existing_events_readable_after_disable(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -228,7 +228,7 @@ def test_existing_events_readable_after_disable(tmp_path: Path) -> None:
     # Old events still readable
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "events", "--all"],
+        ["--root", str(tmp_path), "--json", "task", "events", "--all"],
     )
     assert result.exit_code == 0
     payload = json.loads(result.stdout)

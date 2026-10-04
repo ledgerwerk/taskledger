@@ -99,7 +99,7 @@ def test_repair_index_recovers_and_reports_quarantine(
     _create_task(project, "repair task")
     (context.paths.indexes_root / ".ledger-project.toml").unlink()
 
-    result = runner.invoke(app, ["--cwd", str(project), "--json", "repair", "index"])
+    result = runner.invoke(app, ["--root", str(project), "--json", "repair", "index"])
 
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)

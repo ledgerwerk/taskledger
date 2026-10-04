@@ -53,12 +53,12 @@ kind = "review"
 
 
 def _setup_planning_task(workspace: Path) -> None:
-    assert runner.invoke(app, ["--cwd", str(workspace), "init"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "task",
                 "create",
@@ -72,11 +72,13 @@ def _setup_planning_task(workspace: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(workspace), "task", "activate", "worker-template"],
+            ["--root", str(workspace), "task", "activate", "worker-template"],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(workspace), "plan", "start"]).exit_code == 0
+    assert (
+        runner.invoke(app, ["--root", str(workspace), "plan", "start"]).exit_code == 0
+    )
 
 
 # specmason: req=REQ-0075 ac=AC-0820
@@ -85,7 +87,7 @@ def test_plan_template_unchanged_without_worker_pipeline(tmp_path: Path) -> None
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "plan", "template", "--task", "worker-template"],
+        ["--root", str(tmp_path), "plan", "template", "--task", "worker-template"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -104,7 +106,7 @@ def test_plan_template_requires_opt_in_flag_for_worker_pipeline_hints(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "plan", "template", "--task", "worker-template"],
+        ["--root", str(tmp_path), "plan", "template", "--task", "worker-template"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -124,7 +126,7 @@ def test_worker_plan_template_uses_configured_steps_not_hardcoded_names(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "template",
@@ -153,7 +155,7 @@ def test_plan_template_worker_hints_require_template_or_guided_mode(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "template",

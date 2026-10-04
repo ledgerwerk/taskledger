@@ -88,7 +88,7 @@ def test_workflow_commands_reject_positional_task_refs_with_json_remediation(
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "init", "--create-sibling-store"],
+            ["--root", str(tmp_path), "init", "--create-sibling-store"],
         ).exit_code
         == 0
     )
@@ -100,7 +100,7 @@ def test_workflow_commands_reject_positional_task_refs_with_json_remediation(
     for group, command in workflow_commands:
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", group, command, "task-0001"],
+            ["--root", str(tmp_path), "--json", group, command, "task-0001"],
         )
         assert result.exit_code == 2, (group, command, result.stdout)
         payload = json.loads(result.stdout)
@@ -116,7 +116,7 @@ def test_task_show_accepts_positional_task_ref_and_task_option(tmp_path: Path) -
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "init", "--create-sibling-store"],
+            ["--root", str(tmp_path), "init", "--create-sibling-store"],
         ).exit_code
         == 0
     )
@@ -124,7 +124,7 @@ def test_task_show_accepts_positional_task_ref_and_task_option(tmp_path: Path) -
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -140,7 +140,7 @@ def test_task_show_accepts_positional_task_ref_and_task_option(tmp_path: Path) -
 
     positional = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "show", "contract-task"],
+        ["--root", str(tmp_path), "--json", "task", "show", "contract-task"],
     )
     assert positional.exit_code == 0, positional.stdout
     positional_payload = json.loads(positional.stdout)
@@ -149,7 +149,7 @@ def test_task_show_accepts_positional_task_ref_and_task_option(tmp_path: Path) -
 
     explicit = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "show", "--task", "contract-task"],
+        ["--root", str(tmp_path), "--json", "task", "show", "--task", "contract-task"],
     )
     assert explicit.exit_code == 0, explicit.stdout
     explicit_payload = json.loads(explicit.stdout)
@@ -164,7 +164,7 @@ def test_task_cancel_requires_explicit_target_even_when_active_exists(
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "init", "--create-sibling-store"],
+            ["--root", str(tmp_path), "init", "--create-sibling-store"],
         ).exit_code
         == 0
     )
@@ -172,7 +172,7 @@ def test_task_cancel_requires_explicit_target_even_when_active_exists(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -189,7 +189,7 @@ def test_task_cancel_requires_explicit_target_even_when_active_exists(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "activate",
@@ -201,7 +201,7 @@ def test_task_cancel_requires_explicit_target_even_when_active_exists(
 
     result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "cancel", "--reason", "duplicate"],
+        ["--root", str(tmp_path), "--json", "task", "cancel", "--reason", "duplicate"],
     )
     assert result.exit_code == 2, result.stdout
     payload = json.loads(result.stdout)
@@ -217,7 +217,7 @@ def test_task_cancel_accepts_positional_task_ref_and_active_flag(
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "init", "--create-sibling-store"],
+            ["--root", str(tmp_path), "init", "--create-sibling-store"],
         ).exit_code
         == 0
     )
@@ -225,7 +225,7 @@ def test_task_cancel_accepts_positional_task_ref_and_active_flag(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -242,7 +242,7 @@ def test_task_cancel_accepts_positional_task_ref_and_active_flag(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "task",
@@ -256,7 +256,7 @@ def test_task_cancel_accepts_positional_task_ref_and_active_flag(
     )
     show_a = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "show", "task-a"],
+        ["--root", str(tmp_path), "--json", "task", "show", "task-a"],
     )
     assert show_a.exit_code == 0
     show_payload = json.loads(show_a.stdout)
@@ -266,7 +266,7 @@ def test_task_cancel_accepts_positional_task_ref_and_active_flag(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -282,14 +282,14 @@ def test_task_cancel_accepts_positional_task_ref_and_active_flag(
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "task-b"],
+            ["--root", str(tmp_path), "task", "activate", "task-b"],
         ).exit_code
         == 0
     )
     cancel_active = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -309,7 +309,7 @@ def test_global_json_only_for_task_show(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "init", "--create-sibling-store"],
+            ["--root", str(tmp_path), "init", "--create-sibling-store"],
         ).exit_code
         == 0
     )
@@ -317,7 +317,7 @@ def test_global_json_only_for_task_show(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -333,13 +333,13 @@ def test_global_json_only_for_task_show(tmp_path: Path) -> None:
 
     local = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "show", "--task", "json-task", "--json"],
+        ["--root", str(tmp_path), "task", "show", "--task", "json-task", "--json"],
     )
     assert local.exit_code != 0
 
     global_result = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "task", "show", "--task", "json-task"],
+        ["--root", str(tmp_path), "--json", "task", "show", "--task", "json-task"],
     )
     assert global_result.exit_code == 0, global_result.stdout
     payload = json.loads(global_result.stdout)
@@ -378,7 +378,7 @@ def test_task_bundle_does_not_create_bdd_directory(tmp_path: Path) -> None:
     from tests.support.builders import init_workspace
 
     init_workspace(tmp_path)
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "task", "create", "Example"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "task", "create", "Example"])
     assert result.exit_code == 0
     assert not list(tmp_path.glob(".taskledger/**/tasks/task-*/bdd"))
 
@@ -408,10 +408,35 @@ def test_release_changelog_subcommand_is_not_registered(tmp_path: Path) -> None:
     workspace = init_workspace(tmp_path)
     result = runner.invoke(
         app,
-        ["--cwd", str(workspace), "release", "changelog", "--help"],
+        ["--root", str(workspace), "release", "changelog", "--help"],
     )
     assert result.exit_code != 0
-    assert (
-        "No such command" in result.output
-        or "Got unexpected extra argument" in result.output
+
+
+# specmason: req=REQ-0007 ac=AC-0085
+def test_removed_v07_compatibility_syntax_is_rejected(tmp_path: Path) -> None:
+    removed_invocations = (
+        ["--cwd", str(tmp_path), "--help"],
+        ["status", "--full"],
+        ["init", "--taskledger-dir", str(tmp_path / "legacy")],
+        ["reindex"],
+        ["lock", "break", "--reason", "legacy"],
+        ["sync", "export", "archive.tar.gz"],
+        ["sync", "import", "archive.tar.gz"],
+        ["sync", "git", "import-local"],
+        ["sync", "git", "export-local"],
+        ["sync", "git", "sync"],
+        ["handoff", "plan-context"],
+        ["handoff", "implementation-context"],
+        ["handoff", "validation-context"],
+        ["context", "--for", "planning"],
+        ["storage", "set", "data", "external", "--root", str(tmp_path)],
+        ["storage", "set", "data", "project", "--project"],
+        ["storage", "set", "data", "project", "--local"],
+        ["migrate", "apply", "--source-checkout", "legacy"],
+        ["migrate", "apply", "--retire-legacy"],
+        ["migrate", "apply", "--no-backup"],
     )
+    for args in removed_invocations:
+        result = runner.invoke(app, list(args))
+        assert result.exit_code != 0, args

@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from taskledger.cli import app
 from taskledger.storage.project_context import load_project_context
+from taskledger.storage.task_store import resolve_v2_paths, task_lock_path
 
 
 def _enable_event_logging(tmp_path: Path) -> None:
@@ -29,7 +30,7 @@ runner = _make_runner()
 
 
 def _init_project(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert result.exit_code == 0
 
 
@@ -41,11 +42,6 @@ def _data_root(tmp_path: Path) -> Path:
 def _logs_root(tmp_path: Path) -> Path:
     context = load_project_context(tmp_path)
     return context.paths.logs_root
-
-
-def _runtime_root(tmp_path: Path) -> Path:
-    context = load_project_context(tmp_path)
-    return context.paths.runtime_root
 
 
 def _json(result) -> dict[str, object]:
@@ -60,7 +56,7 @@ def test_break_lock_writes_audit_file_and_repair_event(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -73,7 +69,7 @@ def test_break_lock_writes_audit_file_and_repair_event(tmp_path: Path) -> None:
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(tmp_path), "plan", "start", "--task", "lock-audit"]
+            app, ["--root", str(tmp_path), "plan", "start", "--task", "lock-audit"]
         ).exit_code
         == 0
     )
@@ -81,11 +77,11 @@ def test_break_lock_writes_audit_file_and_repair_event(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
+            "repair",
             "lock",
-            "break",
             "--task",
             "lock-audit",
             "--reason",
@@ -95,9 +91,9 @@ def test_break_lock_writes_audit_file_and_repair_event(tmp_path: Path) -> None:
     payload = _json(result)
     assert result.exit_code == 0
     assert payload["ok"] is True
-    assert payload["result"]["audit_path"].startswith(
-        "tasks/task-0001/audit/broken-lock-"
-    )
+    audit_path_ref = payload["result"]["audit_path"]
+    assert audit_path_ref.startswith("tasks/")
+    assert "/audit/broken-lock-" in audit_path_ref
 
     project_dir = _data_root(tmp_path) / "ledgers" / "main"
     audit_path = project_dir / payload["result"]["audit_path"]
@@ -123,7 +119,7 @@ def test_stale_lock_blocks_new_run_until_explicit_break(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -136,12 +132,12 @@ def test_stale_lock_blocks_new_run_until_explicit_break(tmp_path: Path) -> None:
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(tmp_path), "plan", "start", "--task", "stale-lock"]
+            app, ["--root", str(tmp_path), "plan", "start", "--task", "stale-lock"]
         ).exit_code
         == 0
     )
 
-    lock_path = _runtime_root(tmp_path) / "checkouts/main/locks/task-0001.yaml"
+    lock_path = task_lock_path(resolve_v2_paths(tmp_path), "task-0001")
     lock_payload = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
     lock_payload["expires_at"] = "2000-01-01T00:00:00+00:00"
     lock_path.write_text(
@@ -150,7 +146,7 @@ def test_stale_lock_blocks_new_run_until_explicit_break(tmp_path: Path) -> None:
 
     blocked = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "plan", "start", "--task", "stale-lock"],
+        ["--root", str(tmp_path), "--json", "plan", "start", "--task", "stale-lock"],
     )
     blocked_payload = _json(blocked)
     assert blocked.exit_code != 0

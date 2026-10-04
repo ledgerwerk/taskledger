@@ -14,6 +14,8 @@ from typer.testing import CliRunner
 
 from taskledger.cli import app
 from taskledger.services.tasks import start_implementation
+from taskledger.storage.task_store import resolve_v2_paths
+from taskledger.storage.task_store import task_dir as resolve_task_dir
 from tests.support.builders import create_approved_task, init_workspace
 
 pytestmark = [pytest.mark.cli, pytest.mark.integration, pytest.mark.slow]
@@ -109,7 +111,7 @@ class TestTodoImplementationGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "add",
@@ -123,7 +125,7 @@ class TestTodoImplementationGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -146,7 +148,7 @@ class TestTodoImplementationGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "todo",
@@ -163,7 +165,7 @@ class TestTodoImplementationGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "done",
@@ -176,7 +178,7 @@ class TestTodoImplementationGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -199,7 +201,7 @@ class TestTodoImplementationGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -222,7 +224,7 @@ class TestTodoImplementationGate:
             result = runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "todo",
                     "add",
@@ -235,14 +237,14 @@ class TestTodoImplementationGate:
         # Mark first todo done
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "todo", "list"],
+            ["--root", str(tmp_path), "--json", "todo", "list"],
         )
         todos = _json(result).get("result", {}).get("todos", [])
         first_todo_id = todos[0]["id"]
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "todo", "done", first_todo_id],
+            ["--root", str(tmp_path), "todo", "done", first_todo_id],
         )
         assert result.exit_code == 0
 
@@ -250,7 +252,7 @@ class TestTodoImplementationGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -276,7 +278,7 @@ class TestTodoImplementationGate:
             result = runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "--json",
                     "todo",
@@ -293,7 +295,7 @@ class TestTodoImplementationGate:
         for todo_id in todo_ids:
             result = runner.invoke(
                 app,
-                ["--cwd", str(tmp_path), "--json", "todo", "done", todo_id],
+                ["--root", str(tmp_path), "--json", "todo", "done", todo_id],
             )
             assert result.exit_code == 0
 
@@ -301,7 +303,7 @@ class TestTodoImplementationGate:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -325,7 +327,7 @@ class TestTodoImplementationGate:
             runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "task",
                     "create",
@@ -339,7 +341,7 @@ class TestTodoImplementationGate:
         assert (
             runner.invoke(
                 app,
-                ["--cwd", str(tmp_path), "plan", "start", "--task", "validation-hint"],
+                ["--root", str(tmp_path), "plan", "start", "--task", "validation-hint"],
             ).exit_code
             == 0
         )
@@ -359,7 +361,7 @@ Implement the feature.
             runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "plan",
                     "propose",
@@ -375,7 +377,7 @@ Implement the feature.
             runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "plan",
                     "approve",
@@ -399,7 +401,7 @@ Implement the feature.
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "validate",
@@ -430,7 +432,7 @@ Implement the feature.
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "add",
@@ -444,7 +446,7 @@ Implement the feature.
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "implement",
                 "finish",
@@ -457,7 +459,7 @@ Implement the feature.
         # Verify lock is still active by checking task status
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "task", "show", "--task", "test-task"],
+            ["--root", str(tmp_path), "--json", "task", "show", "--task", "test-task"],
         )
         assert result.exit_code == 0
         task_data = _json(result)
@@ -477,7 +479,7 @@ Implement the feature.
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "add",
@@ -491,7 +493,7 @@ Implement the feature.
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -505,7 +507,7 @@ Implement the feature.
         # Verify run is still running
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "implement", "log"],
+            ["--root", str(tmp_path), "--json", "implement", "log"],
         )
         assert result.exit_code == 0
         run_data = _json(result)
@@ -521,7 +523,7 @@ Implement the feature.
             runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "todo",
                     "add",
@@ -534,7 +536,7 @@ Implement the feature.
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "implement",
@@ -574,7 +576,7 @@ class TestTodoObservability:
             result = runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "--json",
                     "todo",
@@ -591,7 +593,7 @@ class TestTodoObservability:
         # Check status shows all four
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "todo", "status"],
+            ["--root", str(tmp_path), "--json", "todo", "status"],
         )
         assert result.exit_code == 0
         # --json output may contain multiple JSON objects separated by blank lines
@@ -604,7 +606,7 @@ class TestTodoObservability:
         # Check list shows all four
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "todo", "list"],
+            ["--root", str(tmp_path), "--json", "todo", "list"],
         )
         assert result.exit_code == 0
         listed = _json(result)
@@ -622,7 +624,7 @@ class TestTodoObservability:
             runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "todo",
                     "add",
@@ -633,7 +635,7 @@ class TestTodoObservability:
             == 0
         )
 
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "todo", "next"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "--json", "todo", "next"])
         assert result.exit_code == 0, result.stdout
         payload = _json(result)["result"]
 
@@ -660,7 +662,7 @@ class TestTodoObservability:
     ) -> None:
         _prepare_task_with_planned_todo(tmp_path)
 
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "todo", "next"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "todo", "next"])
         assert result.exit_code == 0, result.stdout
         assert "Next todo: todo-0001" in result.stdout
         assert "Validation hint:" in result.stdout
@@ -676,7 +678,7 @@ class TestTodoObservability:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "todo", "show", "todo-0001"],
+            ["--root", str(tmp_path), "todo", "show", "todo-0001"],
         )
         assert result.exit_code == 0, result.stdout
         assert "todo-0001  open" in result.stdout
@@ -699,7 +701,7 @@ class TestNextActionTodoOutput:
             result = runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "todo",
                     "add",
@@ -709,7 +711,7 @@ class TestNextActionTodoOutput:
             )
             assert result.exit_code == 0
 
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
         assert result.exit_code == 0, result.stdout
         payload = _json(result)["result"]
 
@@ -747,7 +749,7 @@ class TestNextActionTodoOutput:
     ) -> None:
         _prepare_task_with_planned_todo(tmp_path)
 
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
         assert result.exit_code == 0, result.stdout
         payload = _json(result)["result"]
 
@@ -765,7 +767,7 @@ class TestNextActionTodoOutput:
             runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "todo",
                     "add",
@@ -776,7 +778,7 @@ class TestNextActionTodoOutput:
             == 0
         )
 
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "next-action"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "next-action"])
         assert result.exit_code == 0, result.stdout
         assert (
             "todo-work: Implementation is in progress; 1 todos remain." in result.stdout
@@ -794,7 +796,7 @@ class TestNextActionTodoOutput:
         added = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "todo",
@@ -808,7 +810,7 @@ class TestNextActionTodoOutput:
         done = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "done",
@@ -817,7 +819,7 @@ class TestNextActionTodoOutput:
         )
         assert done.exit_code == 0
 
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
         assert result.exit_code == 0, result.stdout
         payload = _json(result)["result"]
 
@@ -839,17 +841,17 @@ class TestNextActionTodoOutput:
         broken = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
+                "repair",
                 "lock",
-                "break",
                 "--reason",
                 "Recover stale implementation lock.",
             ],
         )
         assert broken.exit_code == 0, broken.stdout
 
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "next-action"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "--json", "next-action"])
         assert result.exit_code == 0, result.stdout
         payload = _json(result)["result"]
 
@@ -885,17 +887,17 @@ class TestNextActionTodoOutput:
         broken = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
+                "repair",
                 "lock",
-                "break",
                 "--reason",
                 "Recover stale implementation lock.",
             ],
         )
         assert broken.exit_code == 0, broken.stdout
 
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "next-action"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "next-action"])
         assert result.exit_code == 0, result.stdout
         assert "The task is cancelled." not in result.stdout
         assert (
@@ -924,7 +926,7 @@ class TestLegacyTodoSidecars:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -935,7 +937,7 @@ class TestLegacyTodoSidecars:
         )
         assert result.exit_code == 0
 
-        task_dir = tmp_path / ".taskledger" / "ledgers" / "main" / "tasks" / "task-0001"
+        task_dir = resolve_task_dir(resolve_v2_paths(tmp_path), "task-0001")
         todos_file = task_dir / "todos.yaml"
 
         legacy_todos = """schema_version: 1
@@ -961,7 +963,15 @@ todos:
 
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "task", "show", "--task", "legacy-task"],
+            [
+                "--root",
+                str(tmp_path),
+                "--json",
+                "task",
+                "show",
+                "--task",
+                "legacy-task",
+            ],
         )
         assert result.exit_code == 0
         task_data = _json(result)
@@ -972,7 +982,7 @@ todos:
     def test_legacy_todos_yaml_does_not_block_finish(self, tmp_path: Path) -> None:
         _prepare_task_for_implementation(tmp_path)
 
-        task_dir = tmp_path / ".taskledger" / "ledgers" / "main" / "tasks" / "task-0001"
+        task_dir = resolve_task_dir(resolve_v2_paths(tmp_path), "task-0001")
         todos_file = task_dir / "todos.yaml"
 
         legacy_todos = """schema_version: 1
@@ -992,7 +1002,7 @@ todos:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "implement",
                 "finish",

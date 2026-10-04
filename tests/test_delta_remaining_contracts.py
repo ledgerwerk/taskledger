@@ -93,7 +93,7 @@ def test_validation_pass_requires_mandatory_criteria_checks(tmp_path: Path) -> N
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "validate",
@@ -120,7 +120,7 @@ def test_validation_pass_accepts_canonical_criterion_check(tmp_path: Path) -> No
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "validate",
                 "check",
@@ -140,7 +140,7 @@ def test_validation_pass_accepts_canonical_criterion_check(tmp_path: Path) -> No
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "validate",
@@ -165,7 +165,7 @@ def test_context_dossier_and_link_alias_are_canonical(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -180,7 +180,7 @@ def test_context_dossier_and_link_alias_are_canonical(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "file",
                 "add",
@@ -198,13 +198,13 @@ def test_context_dossier_and_link_alias_are_canonical(tmp_path: Path) -> None:
     context = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "context",
             "--task",
             "context-task",
             "--for",
-            "planning",
+            "planner",
             "--format",
             "markdown",
         ],
@@ -216,7 +216,7 @@ def test_context_dossier_and_link_alias_are_canonical(tmp_path: Path) -> None:
     dossier = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "dossier",
@@ -238,7 +238,7 @@ def test_user_dependency_waiver_unblocks_implementation(tmp_path: Path) -> None:
             runner.invoke(
                 app,
                 [
-                    "--cwd",
+                    "--root",
                     str(tmp_path),
                     "task",
                     "create",
@@ -253,7 +253,7 @@ def test_user_dependency_waiver_unblocks_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "require",
                 "add",
@@ -266,7 +266,7 @@ def test_user_dependency_waiver_unblocks_implementation(tmp_path: Path) -> None:
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(tmp_path), "plan", "start", "--task", "main-task"]
+            app, ["--root", str(tmp_path), "plan", "start", "--task", "main-task"]
         ).exit_code
         == 0
     )
@@ -274,7 +274,7 @@ def test_user_dependency_waiver_unblocks_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "propose",
@@ -292,7 +292,7 @@ def test_user_dependency_waiver_unblocks_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -315,7 +315,15 @@ def test_user_dependency_waiver_unblocks_implementation(tmp_path: Path) -> None:
 
     blocked = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "implement", "start", "--task", "main-task"],
+        [
+            "--root",
+            str(tmp_path),
+            "--json",
+            "implement",
+            "start",
+            "--task",
+            "main-task",
+        ],
     )
     assert blocked.exit_code == 3
 
@@ -323,7 +331,7 @@ def test_user_dependency_waiver_unblocks_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "require",
                 "waive",
@@ -340,7 +348,15 @@ def test_user_dependency_waiver_unblocks_implementation(tmp_path: Path) -> None:
     )
     allowed = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "--json", "implement", "start", "--task", "main-task"],
+        [
+            "--root",
+            str(tmp_path),
+            "--json",
+            "implement",
+            "start",
+            "--task",
+            "main-task",
+        ],
     )
     assert allowed.exit_code == 0, allowed.stdout
 
@@ -447,7 +463,7 @@ def test_reject_unknown_criterion_at_check_time(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "validate",
             "check",
@@ -477,7 +493,7 @@ def test_latest_check_wins_semantics(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "validate",
             "check",
@@ -496,7 +512,7 @@ def test_latest_check_wins_semantics(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "validate",
             "check",
@@ -515,7 +531,7 @@ def test_latest_check_wins_semantics(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "validate",
@@ -541,7 +557,7 @@ def test_waiver_satisfies_criterion(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "validate",
             "waive",
@@ -558,7 +574,7 @@ def test_waiver_satisfies_criterion(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "validate",
@@ -584,7 +600,7 @@ def test_validation_status_command_shows_blockers(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "validate",
@@ -610,7 +626,7 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -623,7 +639,7 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(tmp_path), "plan", "start", "--task", "validation-gate"]
+            app, ["--root", str(tmp_path), "plan", "start", "--task", "validation-gate"]
         ).exit_code
         == 0
     )
@@ -631,7 +647,7 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "propose",
@@ -649,7 +665,7 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -675,7 +691,7 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "todo",
                 "add",
@@ -692,7 +708,14 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "implement", "start", "--task", "validation-gate"],
+            [
+                "--root",
+                str(tmp_path),
+                "implement",
+                "start",
+                "--task",
+                "validation-gate",
+            ],
         ).exit_code
         == 0
     )
@@ -700,7 +723,7 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "implement",
                 "finish",
@@ -715,7 +738,7 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "validate", "start", "--task", "validation-gate"],
+            ["--root", str(tmp_path), "validate", "start", "--task", "validation-gate"],
         ).exit_code
         == 0
     )
@@ -723,7 +746,7 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "validate",
             "check",
@@ -741,7 +764,7 @@ def test_mandatory_todo_blocks_validation_completion(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "validate",
@@ -768,7 +791,7 @@ def test_next_action_validation_includes_next_missing_criterion(tmp_path: Path) 
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "next-action",
@@ -815,7 +838,7 @@ def test_next_action_validation_with_no_blockers_returns_finish(tmp_path: Path) 
     checked = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "validate",
             "check",
@@ -834,7 +857,7 @@ def test_next_action_validation_with_no_blockers_returns_finish(tmp_path: Path) 
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "next-action",
@@ -868,7 +891,7 @@ def test_next_action_with_expired_lock_returns_repair_hint(tmp_path: Path) -> No
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -881,7 +904,7 @@ def test_next_action_with_expired_lock_returns_repair_hint(tmp_path: Path) -> No
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(tmp_path), "plan", "start", "--task", "stale-lock"]
+            app, ["--root", str(tmp_path), "plan", "start", "--task", "stale-lock"]
         ).exit_code
         == 0
     )
@@ -897,7 +920,7 @@ def test_next_action_with_expired_lock_returns_repair_hint(tmp_path: Path) -> No
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "next-action",
@@ -959,7 +982,7 @@ def test_task_follow_up_creates_linked_child_and_copies_lightweight_links(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -993,7 +1016,7 @@ def test_task_follow_up_creates_linked_child_and_copies_lightweight_links(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "task",
@@ -1020,7 +1043,7 @@ def test_task_follow_up_creates_linked_child_and_copies_lightweight_links(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "task",
@@ -1044,7 +1067,7 @@ def test_task_follow_up_activate_sets_child_active_and_next_command(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -1060,7 +1083,7 @@ def test_task_follow_up_activate_sets_child_active_and_next_command(
     assert payload["next_command"] == "taskledger plan start"
 
     active = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "task", "active"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "task", "active"])
     )["result"]
     assert active["task_id"] == "task-0002"
 
@@ -1074,7 +1097,7 @@ def test_task_follow_up_rejects_non_done_parent_without_mutating_state(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -1091,7 +1114,7 @@ def test_task_follow_up_rejects_non_done_parent_without_mutating_state(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -1105,7 +1128,7 @@ def test_task_follow_up_rejects_non_done_parent_without_mutating_state(
     assert "done parent task" in payload["error"]["message"]
 
     tasks = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "task", "list"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "task", "list"])
     )["result"]["tasks"]
     assert len(tasks) == 1
 
@@ -1117,7 +1140,7 @@ def test_task_close_persists_closure_metadata_and_is_idempotent(tmp_path: Path) 
     first = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -1136,7 +1159,7 @@ def test_task_close_persists_closure_metadata_and_is_idempotent(tmp_path: Path) 
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "task",
@@ -1153,7 +1176,7 @@ def test_task_close_persists_closure_metadata_and_is_idempotent(tmp_path: Path) 
     second = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "task",
@@ -1175,7 +1198,7 @@ def test_follow_up_relationships_render_in_show_dossier_and_context(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "follow-up",
@@ -1188,14 +1211,14 @@ def test_follow_up_relationships_render_in_show_dossier_and_context(
 
     child_show = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "show", "--task", "task-0002"],
+        ["--root", str(tmp_path), "task", "show", "--task", "task-0002"],
     )
     assert child_show.exit_code == 0
     assert "follow-up of: task-0001 Parent task" in child_show.stdout
 
     parent_show = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "task", "show", "--task", "parent-task"],
+        ["--root", str(tmp_path), "task", "show", "--task", "parent-task"],
     )
     assert parent_show.exit_code == 0
     assert "follow-ups: task-0002 Rename label" in parent_show.stdout
@@ -1203,7 +1226,7 @@ def test_follow_up_relationships_render_in_show_dossier_and_context(
     dossier = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "dossier",
@@ -1220,13 +1243,13 @@ def test_follow_up_relationships_render_in_show_dossier_and_context(
     context = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "context",
             "--task",
             "task-0002",
             "--for",
-            "planning",
+            "planner",
             "--format",
             "markdown",
         ],
@@ -1247,7 +1270,7 @@ def test_done_parent_next_action_stays_none_after_follow_up_creation(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "follow-up",
@@ -1261,7 +1284,7 @@ def test_done_parent_next_action_stays_none_after_follow_up_creation(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "next-action",

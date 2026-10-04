@@ -20,8 +20,7 @@ FUNCTION_LINE_WHITELIST: dict[str, str] = {
         "run, and validation checks."
     ),
     "taskledger/cli_sync.py::register_sync_commands": (
-        "Sync command registration currently co-locates legacy"
-        " sync, archive alias, git sync, and hook command wiring."
+        "Git-sync registration still co-locates Git sync and hook command wiring."
     ),
     "taskledger/storage/layout_migration.py::_apply_migration_phases": (
         "Migration apply logic covers file moves, UUID resolution,"
@@ -31,30 +30,23 @@ FUNCTION_LINE_WHITELIST: dict[str, str] = {
         "Migration inspect logic covers candidate discovery,"
         " config analysis, and issue assembly."
     ),
-    "taskledger/cli_misc.py::register_handoff_v2_commands": (
-        "Handoff v2 command registration covers create, claim, release,"
-        " retarget, review, show, list, close, and cancel command wiring."
-    ),
 }
 
 CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
-    "taskledger/cli.py:taskledger.services.dashboard": (
+    "taskledger/cli_monitor.py:taskledger.services.dashboard": (
         "Dashboard and view rendering are currently service-level read models."
     ),
     "taskledger/cli.py:taskledger.services.agent_logging": (
         "Root CLI initializes recorder and payload/error notes."
     ),
-    "taskledger/cli.py:taskledger.services.tree": (
+    "taskledger/cli_project.py:taskledger.services.tree": (
         "Tree rendering currently lives in services/tree.py."
     ),
-    "taskledger/cli.py:taskledger.services.doctor": (
-        "Repair command uses doctor cleanup helper pending API wrapper."
-    ),
-    "taskledger/cli.py:taskledger.services.monitor": (
+    "taskledger/cli_monitor.py:taskledger.services.monitor": (
         "Root monitor command renders the terminal monitor read model."
     ),
-    "taskledger/cli.py:taskledger.services.usage": (
-        "Root usage command renders the fresh-session usage read model."
+    "taskledger/cli_navigation.py:taskledger.services.usage": (
+        "Navigation command renders the fresh-session usage read model."
     ),
     "taskledger/cli_actor.py:taskledger.services.actors": (
         "Actor and harness resolution currently lives in services/actors.py."
@@ -71,10 +63,10 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     "taskledger/cli_validate.py:taskledger.services.agent_logging": (
         "Validation command wrapper records managed-shell command failures."
     ),
-    "taskledger/cli_misc.py:taskledger.services.doctor": (
+    "taskledger/cli_repair.py:taskledger.services.doctor": (
         "Doctor commands still consume doctor service inspectors directly."
     ),
-    "taskledger/cli_misc.py:taskledger.services.actors": (
+    "taskledger/cli_todo.py:taskledger.services.actors": (
         "Todo updates resolve identity for todo completion metadata.",
     ),
     "taskledger/cli_pipeline.py:taskledger.services.handoff": (
@@ -127,6 +119,12 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     ),
     "taskledger/cli_runtime.py:taskledger.services.runtime_info": (
         "Runtime CLI delegates provenance collection to the runtime service."
+    ),
+    "taskledger/cli_lock.py:taskledger.services.actors": (
+        "Lock commands resolve actor and harness context for lock changes."
+    ),
+    "taskledger/cli_navigation.py:taskledger.services.actors": (
+        "Navigation commands resolve actor and harness context for usage metadata."
     ),
 }
 EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
@@ -314,6 +312,17 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/storage/task_store.py::remove_lock_from_paths:except-2": (
         "remove_lock_from_paths sidecar summary update degrades gracefully."
     ),
+    "taskledger/api/repair.py::repair_allocations:except-2": (
+        "Allocation quarantine restores the source path before propagating failure."
+    ),
+    (
+        "taskledger/storage/task_directory_migration.py::"
+        "migrate_v5_task_directories_to_uuidv7:except-1"
+    ): ("Task-directory migration rolls back state when migration phases fail."),
+    (
+        "taskledger/storage/task_directory_migration.py::"
+        "migrate_v5_task_directories_to_uuidv7:except-2"
+    ): ("Task-directory migration reports when rollback itself fails."),
 }
 
 

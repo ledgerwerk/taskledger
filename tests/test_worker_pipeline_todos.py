@@ -57,14 +57,14 @@ kind = "review"
 
 
 def _setup_planning_task(workspace: Path, *, with_pipeline: bool) -> None:
-    assert runner.invoke(app, ["--cwd", str(workspace), "init"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(workspace), "init"]).exit_code == 0
     if with_pipeline:
         _append_pipeline_config(workspace / ".ledger" / "taskledger" / "config.toml")
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "task",
                 "create",
@@ -78,11 +78,13 @@ def _setup_planning_task(workspace: Path, *, with_pipeline: bool) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(workspace), "task", "activate", "worker-todo"],
+            ["--root", str(workspace), "task", "activate", "worker-todo"],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(workspace), "plan", "start"]).exit_code == 0
+    assert (
+        runner.invoke(app, ["--root", str(workspace), "plan", "start"]).exit_code == 0
+    )
 
 
 def _approve_plan(workspace: Path, plan_text: str) -> None:
@@ -90,7 +92,7 @@ def _approve_plan(workspace: Path, plan_text: str) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "plan",
                 "propose",
@@ -104,7 +106,7 @@ def _approve_plan(workspace: Path, plan_text: str) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(workspace),
                 "--json",
                 "plan",
@@ -148,7 +150,7 @@ Use worker-tagged todos when the pipeline is enabled.
     )
 
     todos = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "todo", "list"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "todo", "list"])
     )["result"]["todos"]
 
     assert todos[0]["worker_step_id"] == "tester"
@@ -178,7 +180,7 @@ Drive pipeline-next from worker-tagged todos.
 """,
     )
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "pipeline", "next"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "--json", "pipeline", "next"])
 
     assert result.exit_code == 0, result.stdout
     payload = _json(result)
@@ -192,7 +194,7 @@ def test_plan_todo_worker_step_requires_enabled_pipeline(tmp_path: Path) -> None
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "propose",
@@ -239,6 +241,6 @@ Keep no-config serialization unchanged.
     )
 
     todos = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "todo", "list"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "todo", "list"])
     )["result"]["todos"]
     assert "worker_step_id" not in todos[0]

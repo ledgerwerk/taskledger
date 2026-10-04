@@ -32,7 +32,7 @@ def _json(result) -> dict[str, object]:
 
 
 def _init_project(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert result.exit_code == 0
 
 
@@ -42,7 +42,7 @@ def _prepare_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -55,7 +55,7 @@ def _prepare_implementation(tmp_path: Path) -> None:
     )
     assert (
         runner.invoke(
-            app, ["--cwd", str(tmp_path), "plan", "start", "--task", "impl-scan"]
+            app, ["--root", str(tmp_path), "plan", "start", "--task", "impl-scan"]
         ).exit_code
         == 0
     )
@@ -63,7 +63,7 @@ def _prepare_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "propose",
@@ -81,7 +81,7 @@ def _prepare_implementation(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -104,7 +104,7 @@ def _prepare_implementation(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "implement", "start", "--task", "impl-scan"],
+            ["--root", str(tmp_path), "implement", "start", "--task", "impl-scan"],
         ).exit_code
         == 0
     )
@@ -154,7 +154,7 @@ def test_scan_changes_from_git_records_branch_status_and_diff_stat(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -180,7 +180,7 @@ def test_scan_changes_from_git_rejects_non_git_workspace(tmp_path: Path) -> None
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -205,7 +205,7 @@ def test_manual_implement_change_still_works_via_canonical_command(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -234,7 +234,7 @@ def test_implement_finish_warns_when_git_scan_missing(tmp_path: Path) -> None:
     manual = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "implement",
             "change",
@@ -253,7 +253,7 @@ def test_implement_finish_warns_when_git_scan_missing(tmp_path: Path) -> None:
     finish = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",
@@ -281,7 +281,7 @@ def test_implement_finish_warning_clears_after_git_scan(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "implement",
                 "change",
@@ -301,7 +301,7 @@ def test_implement_finish_warning_clears_after_git_scan(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "implement",
                 "scan-changes",
@@ -317,7 +317,7 @@ def test_implement_finish_warning_clears_after_git_scan(tmp_path: Path) -> None:
     finish = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "implement",

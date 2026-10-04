@@ -7,6 +7,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
+from taskledger.api.project import init_project as init_project_api
 from taskledger.cli import app
 from taskledger.errors import LaunchError
 from taskledger.services.doctor import inspect_v2_project
@@ -101,19 +102,15 @@ def test_init_project_name_option_overrides_basename(tmp_path: Path) -> None:
 
 
 # specmason: req=REQ-0041 ac=AC-0462
-def test_init_with_external_taskledger_dir_uses_directory_directly(
+def test_public_api_init_with_external_taskledger_dir_uses_directory_directly(
     tmp_path: Path,
 ) -> None:
     workspace = tmp_path / "repo"
     storage = tmp_path / "cloud" / "taskledger" / "repo"
     workspace.mkdir()
 
-    result = runner.invoke(
-        app,
-        ["--root", str(workspace), "init", "--taskledger-dir", str(storage)],
-    )
+    init_project_api(workspace, taskledger_dir=storage)
 
-    assert result.exit_code == 0, result.stdout
     config_text = (workspace / "taskledger.toml").read_text(encoding="utf-8")
     assert storage.as_posix() in config_text
     assert (storage / "storage.yaml").exists()
@@ -128,11 +125,7 @@ def test_task_create_uses_configured_external_storage(tmp_path: Path) -> None:
     storage = tmp_path / "cloud" / "taskledger" / "repo"
     workspace.mkdir()
 
-    init_result = runner.invoke(
-        app,
-        ["--root", str(workspace), "init", "--taskledger-dir", str(storage)],
-    )
-    assert init_result.exit_code == 0, init_result.stdout
+    init_project_api(workspace, taskledger_dir=storage)
 
     result = runner.invoke(
         app,
@@ -148,7 +141,7 @@ def test_task_create_uses_configured_external_storage(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0, result.stdout
-    assert any((storage / "ledgers" / "main" / "tasks").glob("task-*"))
+    assert any((storage / "ledgers" / "main" / "tasks").glob("*/task.md"))
     assert not (workspace / ".taskledger" / "tasks").exists()
 
 

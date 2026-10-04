@@ -124,6 +124,6 @@ def test_missing_shared_sibling_store_has_human_and_json_errors(tmp_path: Path) 
     workspace.mkdir()
     runner = CliRunner()
 
-    human = runner.invoke(app, ["--cwd", str(workspace), "init"])
+    human = runner.invoke(app, ["--root", str(workspace), "init"])
     # Behavior changed: init no longer requires sibling store
     assert human.exit_code == 0

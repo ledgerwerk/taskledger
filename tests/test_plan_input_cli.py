@@ -93,7 +93,7 @@ def test_plan_upsert_accepts_recoverable_plan_input_fixture_with_warnings(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -135,7 +135,7 @@ def test_plan_check_passes_with_warnings_on_recoverable_fixture(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -168,7 +168,7 @@ def test_plan_check_strict_fails_on_recoverable_fixture(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -208,7 +208,7 @@ def test_plan_upsert_invalid_input_returns_nonzero(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -236,7 +236,7 @@ def test_plan_check_invalid_input_returns_nonzero(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -272,7 +272,7 @@ def test_plan_guidance_without_profile_prints_builtin_contract(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "guidance",
@@ -306,7 +306,7 @@ def test_next_action_planning_without_profile_includes_plan_input_command_sequen
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "next-action",
@@ -343,7 +343,7 @@ def test_plan_template_omits_procedural_checklist_from_body(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -386,7 +386,7 @@ def test_plan_start_prints_next_step_hints(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "start",

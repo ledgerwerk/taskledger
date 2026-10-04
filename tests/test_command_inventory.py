@@ -68,7 +68,7 @@ def test_inventory_marks_core_and_repair_commands() -> None:
     assert COMMAND_METADATA["task uncancel"].audience == STABLE_FOR_AGENTS
     assert COMMAND_METADATA["usage"].audience == STABLE_FOR_AGENTS
     assert COMMAND_METADATA["monitor"].audience == HUMAN_ORIENTED
-    assert COMMAND_METADATA["lock break"].audience == REPAIR
+    assert COMMAND_METADATA["repair lock"].audience == REPAIR
     assert COMMAND_METADATA["doctor"].audience == REPAIR
 
 
@@ -178,23 +178,23 @@ def test_critical_tier_is_primary_surface() -> None:
 
 
 # specmason: req=REQ-0011 ac=AC-0110
-def test_lock_break_is_deprecated() -> None:
-    spec = COMMAND_METADATA["lock break"]
-    assert spec.deprecated is True
-    assert spec.replaced_by == "repair lock"
-    assert spec.tier == TIER_RARE
+def test_removed_compat_command_metadata_is_absent() -> None:
+    removed = {
+        "lock break",
+        "sync git import-local",
+        "sync git export-local",
+        "sync git sync",
+        "sync export",
+        "sync import",
+    }
+    assert removed.isdisjoint(COMMAND_METADATA)
 
 
 # specmason: req=REQ-0011 ac=AC-0108
 def test_no_other_deprecated_commands() -> None:
     """Deprecated commands should stay limited and intentional."""
     deprecated = sorted(k for k, v in COMMAND_METADATA.items() if v.deprecated)
-    assert deprecated == [
-        "lock break",
-        "sync git export-local",
-        "sync git import-local",
-        "sync git sync",
-    ]
+    assert deprecated == []
 
 
 # specmason: req=REQ-0011 ac=AC-0113
@@ -264,7 +264,6 @@ def test_advanced_operations_are_not_in_agent_golden_path() -> None:
         "storage move",
         "sync git pull",
         "sync git push",
-        "sync git sync",
         "sync git hooks install",
         "sync git hooks uninstall",
         "ledger fork",
@@ -316,7 +315,7 @@ def test_legacy_mutation_commands_classified_correctly() -> None:
         if v.effect == "ledger_mutation" and v.ledger_effect != EFFECT_WRITE
     ]
     # export/sync export read ledger and write external files
-    assert sorted(legacy_mut_not_write) == ["export", "sync export"]
+    assert sorted(legacy_mut_not_write) == ["export"]
 
 
 # specmason: req=REQ-0011 ac=AC-0109
@@ -332,24 +331,16 @@ def test_read_only_commands_have_read_or_none_ledger_effect() -> None:
 
 
 # specmason: req=REQ-0011 ac=AC-0107
-def test_deprecated_hidden_by_default_in_commands_cli() -> None:
-    """taskledger commands should not show lock break."""
+def test_removed_commands_are_absent_from_commands_cli() -> None:
+    """Removed commands should not reappear in normal or deprecated listings."""
     from typer.testing import CliRunner
 
     runner = CliRunner()
-    result = runner.invoke(app, ["commands"])
-    assert result.exit_code == 0
-    assert "lock break" not in result.stdout
-    assert "sync git pull" in result.stdout
-    assert "sync git push" in result.stdout
-    assert "sync git sync" not in result.stdout
-
-    result_with = runner.invoke(app, ["commands", "--include-deprecated"])
-    assert result_with.exit_code == 0
-    assert "lock break" in result_with.stdout
-    assert "sync git pull" in result_with.stdout
-    assert "sync git push" in result_with.stdout
-    assert "sync git sync" in result_with.stdout
+    removed = ("lock break", "sync export", "sync import", "sync git sync")
+    for args in (("commands",), ("commands", "--include-deprecated")):
+        result = runner.invoke(app, list(args))
+        assert result.exit_code == 0
+        assert all(command not in result.stdout for command in removed)
 
 
 def test_sync_git_command_metadata_matches_revised_surface() -> None:
@@ -357,10 +348,14 @@ def test_sync_git_command_metadata_matches_revised_surface() -> None:
     assert COMMAND_METADATA["sync git cd"].effect == "safe_read_only"
     assert COMMAND_METADATA["sync git path"].effect == "safe_read_only"
     assert COMMAND_METADATA["sync git commit"].external_effect == EXTERNAL_PROCESS_EXEC
-    assert COMMAND_METADATA["sync git export-local"].surface == "advanced"
     assert COMMAND_METADATA["sync git pull"].deprecated is False
     assert COMMAND_METADATA["sync git push"].deprecated is False
-    assert COMMAND_METADATA["sync git sync"].deprecated is True
+    for removed in (
+        "sync git export-local",
+        "sync git import-local",
+        "sync git sync",
+    ):
+        assert removed not in COMMAND_METADATA
 
 
 # specmason: req=REQ-0011 ac=AC-0116
@@ -402,6 +397,8 @@ def test_commands_json_includes_new_fields() -> None:
         "targeting",
         "deprecated",
         "replaced_by",
+        "deprecated_since",
+        "remove_in",
         "ledger_effect",
         "workspace_effect",
         "external_effect",

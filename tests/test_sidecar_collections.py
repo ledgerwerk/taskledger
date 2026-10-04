@@ -23,7 +23,7 @@ runner = _make_runner()
 
 
 def _init_project(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert result.exit_code == 0
 
 
@@ -34,7 +34,7 @@ def test_todos_links_and_requirements_use_per_record_markdown(tmp_path: Path) ->
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -46,7 +46,7 @@ def test_todos_links_and_requirements_use_per_record_markdown(tmp_path: Path) ->
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -59,7 +59,7 @@ def test_todos_links_and_requirements_use_per_record_markdown(tmp_path: Path) ->
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "todo",
             "add",
@@ -72,7 +72,7 @@ def test_todos_links_and_requirements_use_per_record_markdown(tmp_path: Path) ->
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "file",
             "add",
@@ -87,7 +87,7 @@ def test_todos_links_and_requirements_use_per_record_markdown(tmp_path: Path) ->
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "require",
             "add",
@@ -138,7 +138,7 @@ def test_todos_links_and_requirements_use_per_record_markdown(tmp_path: Path) ->
     assert "object_type: requirement" in req_text
 
     result = runner.invoke(
-        app, ["--cwd", str(tmp_path), "task", "show", "--task", "sidecar-task"]
+        app, ["--root", str(tmp_path), "task", "show", "--task", "sidecar-task"]
     )
     assert result.exit_code == 0, result.output
     assert "sidecar-task" in result.output

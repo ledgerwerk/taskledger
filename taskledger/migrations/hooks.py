@@ -171,7 +171,7 @@ def finalize_migration(
             f"Index rebuild failed after migration: {exc}",
             code="TASKLEDGER_INDEX_REBUILD_FAILED",
             details={"migration_id": migration_id, "error": str(exc)},
-            remediation=["Run `taskledger reindex` to rebuild indexes manually."],
+            remediation=["Run `taskledger repair index` to rebuild indexes manually."],
         ) from exc
 
 

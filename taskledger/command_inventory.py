@@ -114,6 +114,8 @@ class CommandSpec(NamedTuple):
     external_effect: str = ""
     agent_safe: bool = True
     targeting: str = TARGETING_NONE
+    deprecated_since: str | None = None
+    remove_in: str | None = None
 
 
 COMMAND_METADATA: dict[str, CommandSpec] = {
@@ -959,27 +961,6 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         PHASE_TRANSFER,
         ledger_effect=EFFECT_WRITE,
     ),
-    "handoff plan-context": CommandSpec(
-        STABLE_FOR_AGENTS,
-        "safe_read_only",
-        ADVANCED,
-        PHASE_TRANSFER,
-        ledger_effect=EFFECT_READ,
-    ),
-    "handoff implementation-context": CommandSpec(
-        STABLE_FOR_AGENTS,
-        "safe_read_only",
-        ADVANCED,
-        PHASE_TRANSFER,
-        ledger_effect=EFFECT_READ,
-    ),
-    "handoff validation-context": CommandSpec(
-        STABLE_FOR_AGENTS,
-        "safe_read_only",
-        ADVANCED,
-        PHASE_TRANSFER,
-        ledger_effect=EFFECT_READ,
-    ),
     # ── human-oriented reads ──────────────────────────────────────
     "status": CommandSpec(
         STABLE_FOR_AGENTS,
@@ -1375,22 +1356,6 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         workspace_effect=EFFECT_READ,
         external_effect=EXTERNAL_PROCESS_EXEC,
     ),
-    "sync export": CommandSpec(
-        STABLE_FOR_AGENTS,
-        "ledger_mutation",
-        SUPPORT,
-        PHASE_TRANSFER,
-        ledger_effect=EFFECT_READ,
-        external_effect=EXTERNAL_FILE_WRITE,
-    ),
-    "sync import": CommandSpec(
-        STABLE_FOR_AGENTS,
-        "ledger_mutation",
-        ADVANCED,
-        PHASE_TRANSFER,
-        ledger_effect=EFFECT_WRITE,
-        external_effect=EXTERNAL_FILE_WRITE,
-    ),
     "sync git": CommandSpec(
         HUMAN_ORIENTED,
         "safe_read_only",
@@ -1432,33 +1397,11 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         ledger_effect=EFFECT_READ,
         workspace_effect=EFFECT_READ,
     ),
-    "sync git import-local": CommandSpec(
-        HUMAN_ORIENTED,
-        "workspace_mutation",
-        ADVANCED,
-        PHASE_TRANSFER,
-        deprecated=True,
-        replaced_by="migrate apply",
-        ledger_effect=EFFECT_READ,
-        workspace_effect=EFFECT_WRITE,
-        external_effect=EXTERNAL_PROCESS_EXEC,
-    ),
     "sync git commit": CommandSpec(
         HUMAN_ORIENTED,
         "workspace_mutation",
         HUMAN,
         PHASE_TRANSFER,
-        ledger_effect=EFFECT_READ,
-        workspace_effect=EFFECT_READ,
-        external_effect=EXTERNAL_PROCESS_EXEC,
-    ),
-    "sync git export-local": CommandSpec(
-        HUMAN_ORIENTED,
-        "workspace_mutation",
-        ADVANCED,
-        PHASE_TRANSFER,
-        deprecated=True,
-        replaced_by="migrate apply",
         ledger_effect=EFFECT_READ,
         workspace_effect=EFFECT_READ,
         external_effect=EXTERNAL_PROCESS_EXEC,
@@ -1477,17 +1420,6 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         "workspace_mutation",
         HUMAN,
         PHASE_TRANSFER,
-        ledger_effect=EFFECT_READ,
-        workspace_effect=EFFECT_WRITE,
-        external_effect=EXTERNAL_PROCESS_EXEC,
-    ),
-    "sync git sync": CommandSpec(
-        HUMAN_ORIENTED,
-        "workspace_mutation",
-        ADVANCED,
-        PHASE_TRANSFER,
-        deprecated=True,
-        replaced_by="sync git cd",
         ledger_effect=EFFECT_READ,
         workspace_effect=EFFECT_WRITE,
         external_effect=EXTERNAL_PROCESS_EXEC,
@@ -1634,16 +1566,6 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         PHASE_REPAIR,
         tier=TIER_RARE,
         ledger_effect=EFFECT_READ,
-    ),
-    "lock break": CommandSpec(
-        REPAIR,
-        "ledger_mutation",
-        ADVANCED,
-        PHASE_REPAIR,
-        tier=TIER_RARE,
-        deprecated=True,
-        replaced_by="repair lock",
-        ledger_effect=EFFECT_WRITE,
     ),
     "repair lock": CommandSpec(
         REPAIR,
@@ -1795,14 +1717,6 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         tier=TIER_RARE,
         ledger_effect=EFFECT_READ,
     ),
-    "reindex": CommandSpec(
-        REPAIR,
-        "ledger_mutation",
-        REPAIR_SURFACE,
-        PHASE_REPAIR,
-        tier=TIER_RARE,
-        ledger_effect=EFFECT_WRITE,
-    ),
     "storage path": CommandSpec(
         STABLE_FOR_AGENTS,
         "safe_read_only",
@@ -1822,6 +1736,11 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         workspace_effect=EFFECT_READ,
     ),
 }
+
+
+def top_level_command_names() -> frozenset[str]:
+    """Return top-level command names derived from the authoritative registry."""
+    return frozenset(path.split(maxsplit=1)[0] for path in COMMAND_METADATA)
 
 
 # ── Family schema mapping helpers ─────────────────────────────────────
@@ -1902,6 +1821,8 @@ def get_command_family_metadata(path: str) -> dict[str, object]:
         "aliases": (),
         "deprecated": spec.deprecated,
         "replacement": spec.replaced_by or None,
+        "deprecated_since": spec.deprecated_since,
+        "remove_in": spec.remove_in,
         "extensions": {
             "taskledger": {
                 "surface": spec.surface,

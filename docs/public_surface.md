@@ -8,9 +8,7 @@ task -> plan -> approval -> implement -> validate -> done
 
 ## Supported CLI entries
 
-The command inventory tracks 45 top-level CLI entries. Some are groups and some
-are root commands. The normal agent path is intentionally smaller than the full
-registered surface.
+The command inventory records registered command paths and derives top-level command names used by root-option parsing. The normal agent path is intentionally smaller than the complete CLI surface.
 
 ### Core agent path
 
@@ -52,7 +50,7 @@ the normal planning/approval path for agents.
 
 **Repair and migration groups** — exceptional recovery:
 
-- `doctor`, `repair`, `reindex`, `migrate`
+- `doctor`, `repair`, `migrate`
 
 `usage` is the compact fresh-session startup command. It summarizes actor,
 harness, active work, inbox items, and ready tasks without mutating ledger
@@ -102,10 +100,7 @@ advanced metadata control and compatibility.
 - `task export` writes a full single-file LLM/archive bundle.
 - `task transcript` renders a per-task command transcript in `markdown` or `json`
 
-`task dossier`, root `view`, and `handoff plan-context` /
-`handoff implementation-context` / `handoff validation-context` remain
-advanced/compatibility read surfaces; prefer `context --for ...` and
-`handoff show` for new agent protocols.
+`task dossier` and root `view` remain advanced read surfaces; prefer `context --for planner|implementer|validator` and `handoff show` for continuation.
 
 ## todo subcommands
 

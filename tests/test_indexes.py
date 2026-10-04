@@ -35,7 +35,7 @@ def test_incremental_index_updates_match_rebuild(tmp_path: Path) -> None:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",

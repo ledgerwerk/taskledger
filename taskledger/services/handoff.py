@@ -1201,9 +1201,6 @@ def _canonical_mode(mode: str | None) -> str:
     if mode is None:
         return "full"
     return {
-        "plan-context": "planning",
-        "implementation-context": "implementation",
-        "validation-context": "validation",
         "show": "full",
     }.get(mode, mode)
 

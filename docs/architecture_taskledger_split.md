@@ -58,7 +58,7 @@ evidence without creating a new lifecycle stage.
 The supported command groups are `task`, `plan`, `question`, `implement`,
 `validate`, `todo`, `intro`, `file`, `link`, `require`, `release`, `lock`,
 `handoff`, `context`, `actor`, `harness`, `view`, `tree`, `next-action`,
-`can`, `search`, `grep`, `symbols`, `deps`, `doctor`, `repair`, `reindex`,
+`can`, `search`, `grep`, `symbols`, `deps`, `doctor`, `repair`,
 `migrate`, `init`, `status`, `export`, `import`, `snapshot`, `storage`,
 `sync`, `ledger`, `pipeline`, `commands`, `review`, `monitor`, `usage`, and
 `ref`. The authoritative source for the complete command surface and flags

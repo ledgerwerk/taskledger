@@ -98,7 +98,6 @@ Before starting work on a PC:
 cd ~/src/project-a
 taskledger sync git status
 taskledger sync git pull
-taskledger sync git import-local
 taskledger doctor
 taskledger next-action
 ```
@@ -127,14 +126,13 @@ or semantic conflicts across canonical task records.
 
 ## When to use export/import instead
 
-Archive commands are still the transfer primitive and remain available at both
-the root and under `sync`:
+Archive commands are the root-level transfer primitives:
 
 ```bash
 taskledger export task-0040
 taskledger import ./taskledger-task-project-a-main-task-0040-...tar.gz
-taskledger sync export --output ./taskledger-transfer.tar.gz
-taskledger sync import ./taskledger-transfer.tar.gz --dry-run
+taskledger export --output ./taskledger-transfer.tar.gz
+taskledger import ./taskledger-transfer.tar.gz --dry-run
 ```
 
 If work must move mid-run, prefer task-scoped transfer archives instead of

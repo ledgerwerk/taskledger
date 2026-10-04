@@ -4,11 +4,14 @@ from pathlib import Path
 
 import pytest
 
+from taskledger.domain.actor import ActorRef
+from taskledger.domain.lock import TaskLock
 from taskledger.domain.models import TaskRecord
 from taskledger.errors import LaunchError
 from taskledger.services.task_lifecycle import create_task
 from taskledger.storage.frontmatter import write_markdown_front_matter
 from taskledger.storage.init import init_canonical_project_state
+from taskledger.storage.locks import write_lock
 from taskledger.storage.meta import StorageMeta, read_storage_meta, write_storage_meta
 from taskledger.storage.migrations import apply_layout_migrations
 from taskledger.storage.task_identity import (
@@ -229,8 +232,43 @@ def test_layout5_migration_refuses_mixed_layout_and_existing_locks(
     (locked_paths.tasks_dir / "task-0001" / "lock.yaml").write_text(
         "active: true\n", encoding="utf-8"
     )
-    with pytest.raises(LaunchError, match="workflow locks exist"):
+    with pytest.raises(LaunchError, match="migration is blocked"):
         _migrate(locked_root)
+
+
+def test_layout5_migration_allows_and_preserves_expired_lock(
+    tmp_path: Path,
+) -> None:
+    root, paths = _legacy_project(tmp_path / "expired-lock")
+    _add_task(paths, "task-0001", "2024-06-02T10:00:00+00:00")
+    lock_path = paths.tasks_dir / "task-0001" / "lock.yaml"
+    write_lock(
+        lock_path,
+        TaskLock(
+            lock_id="lock-expired",
+            task_id="task-0001",
+            stage="implementing",
+            run_id="run-0001",
+            created_at="2020-01-01T00:00:00+00:00",
+            expires_at="2020-01-01T02:00:00+00:00",
+            reason="expired legacy lock",
+            holder=ActorRef.from_dict(
+                {
+                    "actor_type": "agent",
+                    "actor_name": "former-agent",
+                    "host": "old-host",
+                    "pid": 123,
+                }
+            ),
+        ),
+    )
+    original_lock = lock_path.read_bytes()
+
+    _migrate(root)
+
+    migrated = scan_task_identity_inventory(resolve_v2_paths(root)).entries[0]
+    assert (migrated.path / "lock.yaml").read_bytes() == original_lock
+    assert _storage_version(root) == 6
 
 
 def test_layout5_migration_recovers_a_prepared_partial_rename(

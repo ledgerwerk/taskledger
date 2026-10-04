@@ -29,7 +29,7 @@ runner = _make_runner()
 
 
 def _init_project(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "init"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "init"])
     assert result.exit_code == 0, result.stdout
 
 
@@ -66,11 +66,11 @@ class TestCommandKeyParsing:
 
     # specmason: req=REQ-0035 ac=AC-0384
     def test_command_with_global_cwd_option(self) -> None:
-        assert _command_key_from_argv(("--cwd", "/tmp/x", "view")) == "view"
+        assert _command_key_from_argv(("--root", "/tmp/x", "view")) == "view"
 
     # specmason: req=REQ-0035 ac=AC-0384
     def test_command_with_global_cwd_equals_option(self) -> None:
-        assert _command_key_from_argv(("--cwd=/tmp/x", "view")) == "view"
+        assert _command_key_from_argv(("--root=/tmp/x", "view")) == "view"
 
     # specmason: req=REQ-0035 ac=AC-0393
     def test_nested_command_two_word(self) -> None:
@@ -256,7 +256,7 @@ class TestNoLogIntegration:
         _enable_agent_logging(tmp_path)
 
         # Run a read-only command with --no-log
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "--no-log", "status"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "--no-log", "status"])
         assert result.exit_code == 0
 
         # Check that no log was written
@@ -269,7 +269,7 @@ class TestNoLogIntegration:
         _enable_agent_logging(tmp_path)
 
         # Run a read-only command without --no-log
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "status"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "status"])
         assert result.exit_code == 0
 
         # Check that a log was written
@@ -285,7 +285,7 @@ class TestNoLogIntegration:
         monkeypatch.setenv("TASKLEDGER_NO_LOG", "1")
 
         # Run a read-only command with TASKLEDGER_NO_LOG set
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "status"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "status"])
         assert result.exit_code == 0
 
         # Check that no log was written
@@ -304,7 +304,7 @@ class TestNoLogIntegration:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--no-log",
                 "task",
@@ -322,7 +322,7 @@ class TestNoLogIntegration:
 
         # Verify the task was created despite --no-log
         result = runner.invoke(
-            app, ["--cwd", str(tmp_path), "task", "show", "--task", "test"]
+            app, ["--root", str(tmp_path), "task", "show", "--task", "test"]
         )
         assert result.exit_code == 0
         assert "test-task" in result.stdout
@@ -348,7 +348,7 @@ class TestConfigFiltering:
         initial_logs = _get_log_count(tmp_path)
 
         # Run status command (read-only) - should not be logged
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "status"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "status"])
         assert result.exit_code == 0
 
         # Check that no new log was written
@@ -376,7 +376,7 @@ class TestConfigFiltering:
         # Create a task (mutation) - should still be logged
         result = runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "create", "test-task", "--slug", "test"],
+            ["--root", str(tmp_path), "task", "create", "test-task", "--slug", "test"],
         )
         assert result.exit_code == 0
 
@@ -404,7 +404,7 @@ class TestConfigFiltering:
         initial_logs = _get_log_count(tmp_path)
 
         # Run commands command (human-oriented) - should not be logged
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "commands"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "commands"])
         assert result.exit_code == 0
 
         # Check that no new log was written for the commands list
@@ -418,7 +418,7 @@ class TestCommandsCommand:
     # specmason: req=REQ-0035 ac=AC-0384
     def test_commands_list_all(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "commands"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "commands"])
         assert result.exit_code == 0
         assert "view" in result.stdout
         assert "task create" in result.stdout
@@ -429,7 +429,7 @@ class TestCommandsCommand:
     def test_commands_filter_by_audience(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         result = runner.invoke(
-            app, ["--cwd", str(tmp_path), "commands", "--audience", "human-oriented"]
+            app, ["--root", str(tmp_path), "commands", "--audience", "human-oriented"]
         )
         assert result.exit_code == 0
         assert "task report" in result.stdout
@@ -439,7 +439,7 @@ class TestCommandsCommand:
     def test_commands_filter_by_effect(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
         result = runner.invoke(
-            app, ["--cwd", str(tmp_path), "commands", "--effect", "safe-read-only"]
+            app, ["--root", str(tmp_path), "commands", "--effect", "safe-read-only"]
         )
         assert result.exit_code == 0
         assert "view" in result.stdout
@@ -448,7 +448,7 @@ class TestCommandsCommand:
     # specmason: req=REQ-0035 ac=AC-0382
     def test_commands_json_output(self, tmp_path: Path) -> None:
         _init_project(tmp_path)
-        result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", "commands"])
+        result = runner.invoke(app, ["--root", str(tmp_path), "--json", "commands"])
         assert result.exit_code == 0
         payload = json.loads(result.stdout)
         # JSON is wrapped in response envelope
@@ -467,7 +467,7 @@ class TestCommandsCommand:
         result = runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "--json",
                 "commands",

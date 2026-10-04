@@ -59,7 +59,7 @@ def _prepare_task_with_plan(
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -71,10 +71,12 @@ def _prepare_task_with_plan(
         == 0
     )
     assert (
-        runner.invoke(app, ["--cwd", str(tmp_path), "task", "activate", slug]).exit_code
+        runner.invoke(
+            app, ["--root", str(tmp_path), "task", "activate", slug]
+        ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "plan", "start"]).exit_code == 0
     plan_text = """---
 goal: Verify canonical plan and run scans.
 acceptance_criteria:
@@ -92,7 +94,7 @@ Use task bundles instead of derived task, plan, and run indexes.
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "plan", "propose", "--text", plan_text],
+            ["--root", str(tmp_path), "plan", "propose", "--text", plan_text],
         ).exit_code
         == 0
     )
@@ -102,7 +104,7 @@ Use task bundles instead of derived task, plan, and run indexes.
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "approve",
@@ -120,7 +122,7 @@ Use task bundles instead of derived task, plan, and run indexes.
         assert (
             runner.invoke(
                 app,
-                ["--cwd", str(tmp_path), "implement", "start"],
+                ["--root", str(tmp_path), "implement", "start"],
             ).exit_code
             == 0
         )
@@ -148,7 +150,7 @@ def test_task_create_uses_task_bundle_layout(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -189,7 +191,7 @@ def test_task_list_scans_task_markdown_without_indexes(tmp_path: Path) -> None:
     runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -203,7 +205,7 @@ def test_task_list_scans_task_markdown_without_indexes(tmp_path: Path) -> None:
     for path in indexes_dir.glob("*.json"):
         path.unlink()
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "task", "list"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "task", "list"])
     assert result.exit_code == 0, result.stdout
     assert "scan-layout" in result.stdout
 
@@ -215,7 +217,7 @@ def test_task_list_ignores_removed_legacy_indexes(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -229,7 +231,7 @@ def test_task_list_ignores_removed_legacy_indexes(tmp_path: Path) -> None:
     for path in _removed_index_paths(tmp_path):
         path.write_text("{not valid json", encoding="utf-8")
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "task", "list"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "task", "list"])
     assert result.exit_code == 0, result.stdout
     assert "legacy-indexes" in result.stdout
 
@@ -248,7 +250,7 @@ def test_plan_list_does_not_need_removed_indexes(tmp_path: Path) -> None:
         path.unlink(missing_ok=True)
 
     payload = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "plan", "list"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "plan", "list"])
     )
     assert payload["result"]["plans"][0]["plan_version"] == 1
 
@@ -265,7 +267,7 @@ def test_implement_status_does_not_need_removed_indexes(tmp_path: Path) -> None:
         path.unlink(missing_ok=True)
 
     payload = _json(
-        runner.invoke(app, ["--cwd", str(tmp_path), "--json", "implement", "status"])
+        runner.invoke(app, ["--root", str(tmp_path), "--json", "implement", "status"])
     )
     assert payload["result"]["task_id"] == "task-0001"
     assert payload["result"]["total"] == 1
@@ -290,7 +292,7 @@ def test_task_create_no_orphan_slug_directory(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -316,7 +318,7 @@ def test_repair_task_dirs_removes_orphans(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -332,7 +334,7 @@ def test_repair_task_dirs_removes_orphans(tmp_path: Path) -> None:
     (tasks_dir / "orphan-parent").mkdir()
     assert (tasks_dir / "orphan-parent").exists()
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "repair", "task-dirs"])
+    result = runner.invoke(app, ["--root", str(tmp_path), "repair", "task-dirs"])
     assert result.exit_code == 0, result.stdout
     assert "1" in result.stdout
     assert not (tasks_dir / "orphan-parent").exists()
@@ -346,7 +348,7 @@ def test_list_plans_skips_malformed_plan_files(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -385,7 +387,7 @@ def test_list_plans_loads_valid_plan_with_malformed_sibling(tmp_path: Path) -> N
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -428,7 +430,7 @@ def test_rewrite_task_refs_updates_id_and_task_id(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -482,7 +484,7 @@ def test_rewrite_task_refs_adds_missing_task_id(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",
@@ -521,7 +523,7 @@ def test_rewrite_task_refs_noop_on_same_id(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "task",
             "create",

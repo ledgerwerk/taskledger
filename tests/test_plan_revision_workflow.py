@@ -88,7 +88,7 @@ def _setup_plan_review_task(tmp_path: Path) -> None:
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "task",
                 "create",
@@ -104,16 +104,16 @@ def _setup_plan_review_task(tmp_path: Path) -> None:
     assert (
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "task", "activate", "plan-revision"],
+            ["--root", str(tmp_path), "task", "activate", "plan-revision"],
         ).exit_code
         == 0
     )
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "start"]).exit_code == 0
+    assert runner.invoke(app, ["--root", str(tmp_path), "plan", "start"]).exit_code == 0
     assert (
         runner.invoke(
             app,
             [
-                "--cwd",
+                "--root",
                 str(tmp_path),
                 "plan",
                 "upsert",
@@ -139,7 +139,7 @@ def test_plan_upsert_rejects_taskledger_storage_file(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -168,11 +168,13 @@ def test_plan_propose_and_regenerate_reject_taskledger_storage_file(
     _setup_plan_review_task(tmp_path)
     plan_path = _internal_plan_path(tmp_path)
 
-    assert runner.invoke(app, ["--cwd", str(tmp_path), "plan", "revise"]).exit_code == 0
+    assert (
+        runner.invoke(app, ["--root", str(tmp_path), "plan", "revise"]).exit_code == 0
+    )
     propose = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -188,7 +190,7 @@ def test_plan_propose_and_regenerate_reject_taskledger_storage_file(
     regenerate = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -208,7 +210,7 @@ def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
     _setup_plan_review_task(tmp_path)
     review_v1 = runner.invoke(
         app,
-        ["--cwd", str(tmp_path), "plan", "review", "--version", "1"],
+        ["--root", str(tmp_path), "plan", "review", "--version", "1"],
     )
     assert review_v1.exit_code == 0, review_v1.stdout
     assert "| Approval readiness | Ready |" in review_v1.stdout
@@ -217,7 +219,7 @@ def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
     export_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "export",
@@ -237,7 +239,7 @@ def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
     check_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "plan",
             "check",
@@ -250,7 +252,7 @@ def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
     upsert_result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -267,13 +269,13 @@ def test_plan_export_round_trips_after_revision(tmp_path: Path) -> None:
     show_v1 = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "show", "--version", "1"],
+            ["--root", str(tmp_path), "--json", "plan", "show", "--version", "1"],
         )
     )
     show_v2 = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "show", "--version", "2"],
+            ["--root", str(tmp_path), "--json", "plan", "show", "--version", "2"],
         )
     )
     assert (
@@ -303,7 +305,7 @@ def test_plan_amend_drops_criteria_and_todos_and_records_event(tmp_path: Path) -
     amend = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -327,13 +329,13 @@ def test_plan_amend_drops_criteria_and_todos_and_records_event(tmp_path: Path) -
     show_v1 = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "show", "--version", "1"],
+            ["--root", str(tmp_path), "--json", "plan", "show", "--version", "1"],
         )
     )
     show_v2 = _json(
         runner.invoke(
             app,
-            ["--cwd", str(tmp_path), "--json", "plan", "show", "--version", "2"],
+            ["--root", str(tmp_path), "--json", "plan", "show", "--version", "2"],
         )
     )
     assert len(show_v1["result"]["plan"]["criteria"]) == 2
@@ -362,7 +364,7 @@ def test_plan_amend_unknown_criterion_fails_without_mutation(tmp_path: Path) -> 
     amend = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -390,7 +392,7 @@ def test_plan_upsert_auto_revise_from_plan_review(tmp_path: Path) -> None:
     upsert = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -419,7 +421,7 @@ def test_plan_upsert_without_active_planning_suggests_revision_workflow(
     upsert = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -443,7 +445,7 @@ def test_plan_upsert_without_active_planning_suggests_revision_workflow(
 def test_next_action_plan_review_mentions_revision_commands(tmp_path: Path) -> None:
     _setup_plan_review_task(tmp_path)
 
-    next_action = runner.invoke(app, ["--cwd", str(tmp_path), "next-action"])
+    next_action = runner.invoke(app, ["--root", str(tmp_path), "next-action"])
     assert next_action.exit_code == 0, next_action.stdout
     assert "Command: taskledger plan review --version 1" in next_action.stdout
     assert (
@@ -472,7 +474,7 @@ def test_plan_export_is_idempotent_without_overwriting_edits(tmp_path: Path) -> 
     _setup_plan_review_task(tmp_path)
     exported = tmp_path / "plan.revision.md"
     args = [
-        "--cwd",
+        "--root",
         str(tmp_path),
         "--json",
         "plan",
@@ -515,7 +517,7 @@ def test_auto_revise_rejects_invalid_candidate_before_starting_run(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -545,7 +547,7 @@ def test_auto_revise_failure_reports_run_specific_recovery(
     result = runner.invoke(
         app,
         [
-            "--cwd",
+            "--root",
             str(tmp_path),
             "--json",
             "plan",
@@ -615,7 +617,7 @@ def test_planning_run_entry_paths_preserve_harness_identity(
     elif entrypoint == "amend":
         command = ["plan", "amend", "--reason", "Verify harness identity."]
 
-    result = runner.invoke(app, ["--cwd", str(tmp_path), "--json", *command])
+    result = runner.invoke(app, ["--root", str(tmp_path), "--json", *command])
     assert result.exit_code == 0, result.stdout
 
     task = resolve_task(tmp_path, "plan-revision")

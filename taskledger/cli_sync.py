@@ -8,24 +8,14 @@ import typer
 from taskledger.api.storage import sync_commit, sync_preflight, sync_status
 from taskledger.api.sync import (
     sync_git_commit,
-    sync_git_export_local,
     sync_git_hooks_install,
     sync_git_hooks_status,
     sync_git_hooks_uninstall,
-    sync_git_import_local,
     sync_git_init,
     sync_git_paths,
     sync_git_pull,
     sync_git_push,
     sync_git_status,
-    sync_git_sync,
-)
-from taskledger.cli_archive import (
-    ArchiveExportRequest,
-    ArchiveImportRequest,
-    render_archive_export_human,
-    run_archive_export,
-    run_archive_import,
 )
 from taskledger.cli_common import (
     cli_state_from_context,
@@ -203,14 +193,6 @@ def _select_sync_git_path(payload: dict[str, object], kind: str) -> str:
     return selected
 
 
-def _is_json_content(path: Path) -> bool:
-    try:
-        with path.open("rb") as handle:
-            return handle.read(1) == b"{"
-    except OSError:
-        return False
-
-
 def register_sync_commands(app: typer.Typer) -> None:  # noqa: C901
     sync_git_app = typer.Typer(
         add_completion=False,
@@ -276,145 +258,6 @@ def register_sync_commands(app: typer.Typer) -> None:  # noqa: C901
             result_type="sync_commit",
             human=_render_sync_commit(payload),
         )
-
-    @app.command("export")
-    def export_command(
-        ctx: typer.Context,
-        target_or_output: Annotated[
-            str | None,
-            typer.Argument(
-                help="Task ref convenience selector or output archive path (.tar.gz)."
-            ),
-        ] = None,
-        task_ref: Annotated[
-            str | None,
-            typer.Option("--task", help="Task ref to export as task-scoped archive."),
-        ] = None,
-        output: Annotated[
-            Path | None,
-            typer.Option("--output", "-o", help="Output archive path (.tar.gz)."),
-        ] = None,
-        include_bodies: Annotated[
-            bool,
-            typer.Option(
-                "--include-bodies/--no-include-bodies",
-                help="Include Markdown bodies in the export.",
-            ),
-        ] = True,
-        include_run_artifacts: Annotated[
-            bool,
-            typer.Option(
-                "--include-run-artifacts",
-                help="Include run artifact files in the export payload.",
-            ),
-        ] = False,
-        overwrite: Annotated[
-            bool,
-            typer.Option(
-                "--overwrite",
-                help="Allow overwriting an existing output file.",
-            ),
-        ] = False,
-    ) -> None:
-        state = cli_state_from_context(ctx)
-        try:
-            payload = run_archive_export(
-                state,
-                ArchiveExportRequest(
-                    target_or_output=target_or_output,
-                    task_ref=task_ref,
-                    output=output,
-                    include_bodies=include_bodies,
-                    include_run_artifacts=include_run_artifacts,
-                    overwrite=overwrite,
-                    command_prefix="taskledger sync export",
-                ),
-            )
-        except LaunchError as exc:
-            emit_error(ctx, exc)
-            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-        emit_payload(ctx, payload, human=render_archive_export_human(payload))
-
-    @app.command("import")
-    def import_command(
-        ctx: typer.Context,
-        source: Annotated[Path, typer.Argument(..., exists=True, readable=True)],
-        replace: Annotated[
-            bool,
-            typer.Option("--replace", help="Replace existing taskledger state."),
-        ] = False,
-        dry_run: Annotated[
-            bool,
-            typer.Option("--dry-run", help="Validate archive without importing."),
-        ] = False,
-        lock_policy: Annotated[
-            str,
-            typer.Option(
-                "--lock-policy",
-                help="How imported live locks are handled: drop, quarantine, keep.",
-            ),
-        ] = "quarantine",
-        id_policy: Annotated[
-            str,
-            typer.Option(
-                "--id-policy",
-                help=(
-                    "Task ID conflict policy for task archives: "
-                    "preserve, renumber-on-conflict, fail-on-conflict."
-                ),
-            ),
-        ] = "preserve",
-    ) -> None:
-        state = cli_state_from_context(ctx)
-        try:
-            payload, import_kind = run_archive_import(
-                state,
-                ArchiveImportRequest(
-                    source=source,
-                    replace=replace,
-                    dry_run=dry_run,
-                    lock_policy=lock_policy,
-                    id_policy=id_policy,
-                ),
-                is_json_content=_is_json_content,
-            )
-        except LaunchError as exc:
-            emit_error(ctx, exc)
-            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-        if import_kind == "json":
-            if dry_run:
-                json_project = payload.get("project_name") or payload.get(
-                    "project_uuid", "(unknown)"
-                )
-                human = (
-                    f"dry-run JSON import: {source}\n"
-                    f"project: {json_project}\n"
-                    f"replace: {payload['replace']}\n"
-                    f"counts: {payload.get('counts', {})}"
-                )
-            else:
-                human = "imported taskledger state"
-            emit_payload(ctx, payload, human=human)
-            return
-        project_name = cast(str | None, payload.get("project_name"))
-        project_uuid = payload["project_uuid"]
-        project_label = (
-            f"{project_name} ({project_uuid})"
-            if isinstance(project_name, str) and project_name.strip()
-            else str(project_uuid)
-        )
-        human = (
-            ("validated archive import" if dry_run else "imported taskledger archive")
-            + f": {source}\n"
-            + f"project: {project_label}\n"
-            + f"ledger: {payload.get('ledger_ref', '(unknown)')}\n"
-            + f"scope: {payload.get('archive_scope', 'ledger')}\n"
-            + f"replace: {payload['replace']}\n"
-            + f"id policy: {payload.get('id_policy', id_policy)}\n"
-            + f"lock policy: {payload.get('lock_policy', lock_policy)}\n"
-            + f"summary: {payload.get('summary', '')}"
-        )
-        emit_payload(ctx, payload, human=human)
 
     @sync_git_app.command("init")
     def git_init_command(
@@ -554,47 +397,6 @@ def register_sync_commands(app: typer.Typer) -> None:  # noqa: C901
             human=selected_path,
         )
 
-    @sync_git_app.command(
-        "import-local",
-        help="Deprecated for canonical projects; use taskledger migrate.",
-    )
-    def git_import_local_command(
-        ctx: typer.Context,
-        repo: Annotated[Path | None, typer.Option("--repo")] = None,
-        project_path: Annotated[str | None, typer.Option("--project-path")] = None,
-        remote: Annotated[str | None, typer.Option("--remote")] = None,
-        branch: Annotated[str | None, typer.Option("--branch")] = None,
-        dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
-        quiet: Annotated[bool, typer.Option("--quiet")] = False,
-    ) -> None:
-        state = cli_state_from_context(ctx)
-        try:
-            payload = sync_git_import_local(
-                state.cwd,
-                repo=repo,
-                project_path=project_path,
-                remote=remote,
-                branch=branch,
-                dry_run=dry_run,
-            )
-        except LaunchError as exc:
-            emit_error(ctx, exc)
-            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-        human = (
-            "Local import:\n"
-            f"  repo: {payload['repo_path']}\n"
-            f"  project path: {payload['project_path']}\n"
-            "  taskledger_dir updated: "
-            f"{'yes' if payload['taskledger_dir_updated'] else 'no'}\n"
-            f"  doctor: {'healthy' if payload['doctor_healthy'] else 'issues'}"
-        )
-        emit_payload(
-            ctx,
-            payload,
-            result_type="sync_git_import_local",
-            human="" if quiet else human,
-        )
-
     @sync_git_app.command("commit")
     def git_commit_command(
         ctx: typer.Context,
@@ -627,50 +429,6 @@ def register_sync_commands(app: typer.Typer) -> None:  # noqa: C901
             payload,
             result_type="sync_git_commit",
             human="" if quiet else _render_git_sync_commit(payload),
-        )
-
-    @sync_git_app.command(
-        "export-local",
-        help="Deprecated for canonical projects; use taskledger migrate.",
-    )
-    def git_export_local_command(
-        ctx: typer.Context,
-        repo: Annotated[Path | None, typer.Option("--repo")] = None,
-        project_path: Annotated[str | None, typer.Option("--project-path")] = None,
-        remote: Annotated[str | None, typer.Option("--remote")] = None,
-        branch: Annotated[str | None, typer.Option("--branch")] = None,
-        message: Annotated[str | None, typer.Option("--message")] = None,
-        allow_dirty: Annotated[bool, typer.Option("--allow-dirty")] = False,
-        allow_active_locks: Annotated[
-            bool, typer.Option("--allow-active-locks")
-        ] = False,
-        quiet: Annotated[bool, typer.Option("--quiet")] = False,
-    ) -> None:
-        state = cli_state_from_context(ctx)
-        try:
-            payload = sync_git_export_local(
-                state.cwd,
-                repo=repo,
-                project_path=project_path,
-                remote=remote,
-                branch=branch,
-                message=message,
-                allow_dirty=allow_dirty,
-                allow_active_locks=allow_active_locks,
-            )
-        except LaunchError as exc:
-            emit_error(ctx, exc)
-            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-        emit_payload(
-            ctx,
-            payload,
-            result_type="sync_git_export_local",
-            human=""
-            if quiet
-            else _render_git_sync_commit(
-                payload,
-                label="Git sync export-local (compatibility alias)",
-            ),
         )
 
     @sync_git_app.command(
@@ -744,41 +502,6 @@ def register_sync_commands(app: typer.Typer) -> None:  # noqa: C901
             payload,
             result_type="sync_git_push",
             human=_render_git_sync_network(payload, label="Git sync push"),
-        )
-
-    @sync_git_app.command("sync", hidden=True)
-    def git_sync_command(
-        ctx: typer.Context,
-        repo: Annotated[Path | None, typer.Option("--repo")] = None,
-        project_path: Annotated[str | None, typer.Option("--project-path")] = None,
-        remote: Annotated[str | None, typer.Option("--remote")] = None,
-        branch: Annotated[str | None, typer.Option("--branch")] = None,
-        message: Annotated[str | None, typer.Option("--message")] = None,
-        allow_dirty: Annotated[bool, typer.Option("--allow-dirty")] = False,
-        allow_active_locks: Annotated[
-            bool, typer.Option("--allow-active-locks")
-        ] = False,
-    ) -> None:
-        state = cli_state_from_context(ctx)
-        try:
-            payload = sync_git_sync(
-                state.cwd,
-                repo=repo,
-                project_path=project_path,
-                remote=remote,
-                branch=branch,
-                message=message,
-                allow_dirty=allow_dirty,
-                allow_active_locks=allow_active_locks,
-            )
-        except LaunchError as exc:
-            emit_error(ctx, exc)
-            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-        emit_payload(
-            ctx,
-            payload,
-            result_type="sync_git_sync",
-            human=_render_git_sync_network(payload, label="Git sync"),
         )
 
     @sync_git_hooks_app.command("install")

@@ -37,8 +37,8 @@ smaller compatibility facade and move residual helpers into focused modules.
 
 - `taskledger/cli_sync.py::register_sync_commands`
 
-  - Current reason: Sync command registration currently co-locates legacy
-    sync, archive alias, git sync, and hook command wiring.
+  - Current reason: Git-sync and hook commands are registered together in the
+    sync group.
 
 - `taskledger/storage/layout_migration.py::_apply_migration_phases`
 
@@ -48,10 +48,6 @@ smaller compatibility facade and move residual helpers into focused modules.
 
   - Current reason: Migration inspect logic covers candidate discovery, config analysis, and issue assembly.
 
-- `taskledger/cli_misc.py::register_handoff_v2_commands`
-
-  - Current reason: Handoff v2 command registration covers create, claim, release, retarget, review, show, list, close, and cancel command wiring.
-
 ## CLI→services import whitelist
 
 CLI modules may import from `taskledger.services` only when listed in
@@ -59,65 +55,68 @@ CLI modules may import from `taskledger.services` only when listed in
 
 Current sanctioned imports:
 
-- `taskledger/cli.py:taskledger.services.dashboard` — Dashboard and view
-  rendering are currently service-level read models.
-- `taskledger/cli.py:taskledger.services.agent_logging` — Root CLI
-  initializes recorder and payload/error notes.
-- `taskledger/cli.py:taskledger.services.tree` — Tree rendering currently
-  lives in services/tree.py.
-- `taskledger/cli.py:taskledger.services.doctor` — Repair command uses
-  doctor cleanup helper pending API wrapper.
-- `taskledger/cli.py:taskledger.services.monitor` — Root monitor command
-  renders the terminal monitor read model.
-- `taskledger/cli.py:taskledger.services.usage` — Root usage command renders
-  the fresh-session startup read model.
+- `taskledger/cli_monitor.py:taskledger.services.dashboard` — Dashboard and view
+  rendering are service-level read models.
+- `taskledger/cli.py:taskledger.services.agent_logging` — Root CLI initializes
+  recorder and payload/error notes.
+- `taskledger/cli_project.py:taskledger.services.tree` — Tree rendering lives in
+  services/tree.py.
+- `taskledger/cli_monitor.py:taskledger.services.monitor` — Monitor commands
+  render the terminal monitor read model.
+- `taskledger/cli_navigation.py:taskledger.services.usage` — Navigation commands
+  render the fresh-session usage read model.
 - `taskledger/cli_actor.py:taskledger.services.actors` — Actor and harness
-  resolution currently lives in services/actors.py.
+  resolution lives in services/actors.py.
+- `taskledger/cli_common.py:taskledger.services.actors` — CLI common resolves
+  actor/harness context for event metadata.
 - `taskledger/cli_common.py:taskledger.services.agent_logging` — CLI common
   emits recorder task/payload/error notes.
-- `taskledger/cli_common.py:taskledger.services.actors` — CLI common
-  resolves actor/harness context for event metadata.
-- `taskledger/cli_implement.py:taskledger.services.agent_logging` —
-  Implement command wrapper records managed-shell command failures.
+- `taskledger/cli_implement.py:taskledger.services.agent_logging` — Implement
+  command wrapper records managed-shell command failures.
 - `taskledger/cli_validate.py:taskledger.services.agent_logging` — Validation
   command wrapper records managed-shell command failures.
-- `taskledger/cli_misc.py:taskledger.services.actors` — Todo updates resolve
-  current identity to persist completion actor and harness metadata.
-- `taskledger/cli_misc.py:taskledger.services.doctor` — Doctor commands
-  still consume doctor service inspectors directly.
-- `taskledger/cli_pipeline.py:taskledger.services.handoff` — Pipeline
-  context rendering currently reuses the handoff service payloads.
-- `taskledger/cli_pipeline.py:taskledger.services.worker_pipeline` —
-  Pipeline CLI commands read the worker pipeline service overlay directly.
-- `taskledger/cli_review.py:taskledger.services.actors` — Review commands
-  resolve reviewer/harness context.
-- `taskledger/cli_plan.py:taskledger.services.plan_editing` — Plan input
-  path validation currently lives in services/plan_editing.py.
-- `taskledger/cli_plan.py:taskledger.services.plan_lint` — Plan lint
-  payload model is still service-owned.
-- `taskledger/cli_question.py:taskledger.services.actors` — Question
-  commands resolve actor/harness context.
+- `taskledger/cli_repair.py:taskledger.services.doctor` — Doctor commands
+  consume doctor service inspectors directly.
+- `taskledger/cli_todo.py:taskledger.services.actors` — Todo updates resolve
+  identity for completion metadata.
+- `taskledger/cli_pipeline.py:taskledger.services.handoff` — Pipeline context
+  rendering reuses handoff service payloads.
+- `taskledger/cli_pipeline.py:taskledger.services.worker_pipeline` — Pipeline
+  commands read the worker pipeline service overlay directly.
+- `taskledger/cli_review.py:taskledger.services.actors` — Review commands resolve
+  reviewer/harness context.
+- `taskledger/cli_plan.py:taskledger.services.plan_editing` — Plan input path
+  validation lives in services/plan_editing.py.
+- `taskledger/cli_plan.py:taskledger.services.plan_lint` — Plan lint payload
+  model is service-owned.
+- `taskledger/cli_question.py:taskledger.services.actors` — Question commands
+  resolve actor/harness context.
 - `taskledger/cli_plan.py:taskledger.services.workflow_guidance` — Planning
   guidance profile read model is service-owned.
 - `taskledger/cli_plan.py:taskledger.services.agent_logging` — Plan command
   wrapper records managed-shell command failures.
-- `taskledger/cli_plan.py:taskledger.services.planning_flow` — Plan
-  guidance command marks guidance viewed via planning flow service.
-- `taskledger/cli_task.py:taskledger.services.actors` — Task record command
-  resolves completed-by actor metadata.
+- `taskledger/cli_plan.py:taskledger.services.planning_flow` — Plan guidance
+  marks guidance viewed via the planning flow service.
+- `taskledger/cli_task.py:taskledger.services.actors` — Task record commands
+  resolve completed-by actor metadata.
 - `taskledger/cli_task.py:taskledger.services.agent_transcripts` — Task
-  transcript rendering currently lives in services.
+  transcript rendering lives in services.
 - `taskledger/cli_task.py:taskledger.services.task_reports` — Task report
   rendering and options are service-owned.
-- `taskledger/cli_task.py:taskledger.services.task_export` — Task export
-  service for compiled LLM-ready Markdown.
-- `taskledger/cli_task.py:taskledger.services.tasks` — Task events read
-  model and lifecycle mutations.
-- `taskledger/cli_trace.py:taskledger.services.trace` — Trace CLI delegates
-  to the trace service.
-- `taskledger/cli_migrate.py:taskledger.services.storage_migration` — Migration CLI delegates to the storage migration service.
-
-- `taskledger/cli_runtime.py:taskledger.services.runtime_info` — Runtime CLI delegates provenance collection to the runtime service.
+- `taskledger/cli_task.py:taskledger.services.task_export` — Task export service
+  for compiled LLM-ready Markdown.
+- `taskledger/cli_task.py:taskledger.services.tasks` — Task events read model
+  and lifecycle mutations.
+- `taskledger/cli_trace.py:taskledger.services.trace` — Trace CLI delegates to
+  the trace service.
+- `taskledger/cli_migrate.py:taskledger.services.storage_migration` — Migration
+  CLI delegates to the storage migration service.
+- `taskledger/cli_runtime.py:taskledger.services.runtime_info` — Runtime CLI
+  delegates provenance collection to the runtime service.
+- `taskledger/cli_lock.py:taskledger.services.actors` — Lock commands resolve
+  actor and harness context for lock changes.
+- `taskledger/cli_navigation.py:taskledger.services.actors` — Navigation
+  commands resolve actor/harness context for usage metadata.
 
 ## Catch-all exception whitelist (`except Exception`)
 

@@ -162,7 +162,7 @@ def test_pipeline_commands_print_no_config_message(tmp_path: Path) -> None:
 
     runner = CliRunner(mix_stderr=False)
     for command in (["pipeline", "show"], ["pipeline", "list"], ["pipeline", "next"]):
-        result = runner.invoke(app, ["--cwd", str(tmp_path), *command])
+        result = runner.invoke(app, ["--root", str(tmp_path), *command])
         assert result.exit_code == 0, result.stdout
         assert result.stdout.strip() == "No worker pipeline configured."
 

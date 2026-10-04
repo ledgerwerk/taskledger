@@ -61,11 +61,10 @@ Start the planning stage and inspect planning context:
 ```bash
 taskledger can plan
 taskledger plan start
-taskledger context --for planning --format markdown
-taskledger handoff plan-context --format markdown
+taskledger context --for planner --format markdown
 ```
 
-`plan start` acquires a visible planning lock. The context commands render the
+`plan start` acquires a visible planning lock. The context command renders the
 current task, linked files, questions, requirements, and prior records.
 
 ## 4. Ask And Answer Questions
@@ -181,7 +180,7 @@ Begin implementation and keep durable notes as work progresses:
 
 ```bash
 taskledger can implement
-taskledger context --for implementation --format markdown
+taskledger context --for implementer --format markdown
 taskledger implement start
 taskledger implement checklist
 taskledger implement log --message "Started parser fix."
@@ -255,7 +254,7 @@ validation stage:
 
 ```bash
 taskledger can validate
-taskledger context --for validation --format markdown
+taskledger context --for validator --format markdown
 taskledger validate start
 taskledger validate status
 taskledger validate check --criterion ac-0001 --status pass --evidence "pytest tests/test_parser.py -q"
@@ -279,7 +278,7 @@ taskledger validate check --criterion ac-0001 --status pass --from-implementatio
 taskledger validate check --criterion ac-0002 --status fail --evidence "pytest tests/test_parser.py -q"
 taskledger validate finish --result failed --summary "ac-0002 failed."
 taskledger next-action
-taskledger context --for implementation --format markdown
+taskledger context --for implementer --format markdown
 taskledger implement restart --summary "Fix ac-0002 validation failure."
 ```
 
@@ -342,17 +341,16 @@ cycle:
 ```bash
 taskledger lock show
 taskledger doctor locks
-taskledger lock break --reason "Recover stale planning lock."
+taskledger repair lock --reason "Recover stale planning lock."
 taskledger implement resume --reason "Reacquire implementation lock for existing running run."
 taskledger task uncancel --task TASK_REF --reason "Restore the task to a safe durable stage."
 taskledger repair index
 taskledger repair task --reason "Inspect task record after manual edit."
-taskledger reindex
 taskledger --json export
 taskledger snapshot ./taskledger-snapshot --include-bodies --include-run-artifacts
 ```
 
-Locks are never cleared silently. Use `lock break` only after inspecting the
+Locks are never cleared silently. Use `repair lock` only after inspecting the
 lock and recording a reason. If a broken stale lock leaves an implementation run
 still marked `running`, continue with `implement resume` instead of starting a
 new implementation run. If a task is truly `cancelled`, use `task uncancel`
