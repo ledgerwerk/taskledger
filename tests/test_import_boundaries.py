@@ -123,3 +123,38 @@ class TestLedgercoreImportBoundary:
             + "\n\nUse taskledger.ids, taskledger.refs, taskledger.storage.*"
             + " facades instead."
         )
+
+
+LEGACY_NUMERIC_TASK_GLOB_ALLOWLIST = {
+    "taskledger/storage/layout_migration.py",
+    "taskledger/storage/migrations.py",
+}
+
+
+class TestTaskDirectoryIdentityBoundary:
+    def test_numeric_task_directory_globs_stay_in_legacy_migrations(self) -> None:
+        violations: list[str] = []
+        for path in _python_files():
+            rel = _relative(path)
+            if rel in LEGACY_NUMERIC_TASK_GLOB_ALLOWLIST:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or not isinstance(
+                    node.func, ast.Attribute
+                ):
+                    continue
+                if node.func.attr not in {"glob", "rglob"} or not node.args:
+                    continue
+                pattern = node.args[0]
+                if (
+                    isinstance(pattern, ast.Constant)
+                    and isinstance(pattern.value, str)
+                    and pattern.value.startswith("task-")
+                ):
+                    violations.append(f"{rel}:{node.lineno}")
+
+        assert not violations, (
+            "Numeric task-directory globs are reserved for legacy migrations:\n"
+            + "\n".join(f"  {item}" for item in sorted(violations))
+        )

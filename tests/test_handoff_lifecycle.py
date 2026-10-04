@@ -25,11 +25,12 @@ from taskledger.services.handoff_lifecycle import (
     retarget_handoff,
 )
 from taskledger.services.tasks import add_todo
-from taskledger.storage.project_context import load_project_context
 from taskledger.storage.task_store import (
     resolve_handoff,
+    resolve_v2_paths,
     save_actor_state,
     save_harness_state,
+    task_dir,
 )
 
 
@@ -199,14 +200,7 @@ def test_handoff_list_raises_for_malformed_record() -> None:
         workspace = Path(tmpdir)
         init_project(workspace)
         create_task(workspace, title="Test Task", description="Test", slug="task-0001")
-        handoff_dir = (
-            load_project_context(workspace).paths.data_root
-            / "ledgers"
-            / "main"
-            / "tasks"
-            / "task-0001"
-            / "handoffs"
-        )
+        handoff_dir = task_dir(resolve_v2_paths(workspace), "task-0001") / "handoffs"
         handoff_dir.mkdir(parents=True, exist_ok=True)
         (handoff_dir / "handoff-0001.md").write_text(
             "---\nobject_type: handoff\ncontext_hash: [\n---\n",

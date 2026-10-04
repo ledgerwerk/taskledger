@@ -91,16 +91,22 @@ def rebuild_v2_indexes(paths: V2Paths) -> dict[str, int]:
         for lock in load_lock_records_from_paths(paths)
         if not lock_is_expired(lock)
     ]
-    dependencies = [
-        {
-            "task_id": task.id,
-            "requirements": [
-                item.required_task_id or item.task_id
-                for item in load_requirements_from_paths(paths, task.id).requirements
-            ],
-        }
-        for task in tasks
-    ]
+    dependencies = []
+    for task in tasks:
+        requirements = load_requirements_from_paths(paths, task.id).requirements
+        dependencies.append(
+            {
+                "task_uuid": task.task_uuid,
+                "task_id": task.id,
+                "requirements": [
+                    {
+                        "task_uuid": item.required_task_uuid,
+                        "task_id": item.required_task_id or item.task_id,
+                    }
+                    for item in requirements
+                ],
+            }
+        )
     write_json(
         paths.introductions_index_path,
         [
@@ -125,7 +131,13 @@ def rebuild_v2_indexes(paths: V2Paths) -> dict[str, int]:
 
 
 def load_active_locks_from_index(paths: V2Paths) -> list[TaskLock]:
+    from dataclasses import replace
+
     from taskledger.storage.locks import lock_is_expired
+    from taskledger.storage.task_identity import (
+        AMBIGUOUS_LEGACY_TASK_REF,
+        task_identity_for_stored_ref,
+    )
     from taskledger.storage.task_store import load_lock_records_from_paths
 
     path = paths.active_locks_index_path
@@ -138,7 +150,27 @@ def load_active_locks_from_index(paths: V2Paths) -> list[TaskLock]:
         ]
     except LaunchError:
         return _rebuild_active_lock_index(paths, load_lock_records_from_paths)
-    return [lock for lock in locks if not lock_is_expired(lock)]
+
+    normalized: list[TaskLock] = []
+    needs_rebuild = False
+    for lock in locks:
+        try:
+            identity = task_identity_for_stored_ref(
+                paths, task_id=lock.task_id, task_uuid=lock.task_uuid
+            )
+        except LaunchError as exc:
+            if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+                raise
+            normalized.append(lock)
+            continue
+        updated = replace(
+            lock, task_id=identity.task_id, task_uuid=str(identity.task_uuid)
+        )
+        needs_rebuild = needs_rebuild or updated != lock
+        normalized.append(updated)
+    if needs_rebuild:
+        return _rebuild_active_lock_index(paths, load_lock_records_from_paths)
+    return [lock for lock in normalized if not lock_is_expired(lock)]
 
 
 def _rebuild_active_lock_index(
@@ -178,29 +210,71 @@ def update_dependency_index_entry(
     task_id: str,
     requirement_task_ids: list[str],
 ) -> None:
-    """Update one task entry in the dependency index without a global rebuild."""
+    """Update one dependency entry using UUID identities where resolvable."""
+    from taskledger.errors import LaunchError
+    from taskledger.storage.task_identity import task_identity_for_ref
+
+    try:
+        owner = task_identity_for_ref(paths, task_id)
+    except LaunchError:
+        mark_index_dirty(paths, "dependencies", task_id=task_id)
+        return
+    owner_uuid = str(owner.task_uuid)
+    requirement_entries: list[dict[str, object]] = []
+    for requirement_ref in requirement_task_ids:
+        try:
+            requirement = task_identity_for_ref(paths, requirement_ref)
+        except LaunchError:
+            requirement_entries.append({"task_uuid": None, "task_id": requirement_ref})
+        else:
+            requirement_entries.append(
+                {
+                    "task_uuid": str(requirement.task_uuid),
+                    "task_id": requirement.task_id,
+                }
+            )
+    entry_data: dict[str, object] = {
+        "task_uuid": owner_uuid,
+        "task_id": owner.task_id,
+        "requirements": requirement_entries,
+    }
 
     def update(entries: list[dict[str, object]]) -> None:
-        for entry in entries:
-            if entry.get("task_id") == task_id:
-                entry["requirements"] = list(requirement_task_ids)
+        for index, entry in enumerate(entries):
+            if entry.get("task_uuid") == owner_uuid:
+                entries[index] = entry_data
                 return
-        entries.append({"task_id": task_id, "requirements": list(requirement_task_ids)})
+        entries.append(entry_data)
 
     _best_effort_update_index(
         paths,
         "dependencies",
         paths.dependencies_index_path,
         update,
-        task_id=task_id,
+        task_id=owner.task_id,
     )
 
 
 def remove_dependency_index_entry(paths: V2Paths, task_id: str) -> None:
-    """Remove one task entry from the dependency index."""
+    """Remove one dependency entry by its stable task identity."""
+    from taskledger.errors import LaunchError
+    from taskledger.storage.task_identity import task_identity_for_ref
+
+    try:
+        task_uuid = str(task_identity_for_ref(paths, task_id).task_uuid)
+    except LaunchError:
+        task_uuid = None
 
     def update(entries: list[dict[str, object]]) -> None:
-        entries[:] = [entry for entry in entries if entry.get("task_id") != task_id]
+        entries[:] = [
+            entry
+            for entry in entries
+            if not (
+                entry.get("task_uuid") == task_uuid
+                if task_uuid is not None
+                else entry.get("task_id") == task_id
+            )
+        ]
 
     _best_effort_update_index(
         paths,
@@ -257,7 +331,7 @@ def update_active_lock_index_entry(paths: V2Paths, lock: TaskLock) -> None:
 
     def update(entries: list[dict[str, object]]) -> None:
         for index, entry in enumerate(entries):
-            if entry.get("task_id") == lock.task_id:
+            if entry.get("task_uuid") == lock.task_uuid:
                 entries[index] = entry_data
                 return
         entries.append(entry_data)
@@ -272,10 +346,25 @@ def update_active_lock_index_entry(paths: V2Paths, lock: TaskLock) -> None:
 
 
 def remove_active_lock_index_entry(paths: V2Paths, task_id: str) -> None:
-    """Remove one task entry from the active-lock index."""
+    """Remove an active-lock entry by stable UUID identity."""
+    from taskledger.errors import LaunchError
+    from taskledger.storage.task_identity import task_identity_for_ref
+
+    try:
+        task_uuid = str(task_identity_for_ref(paths, task_id).task_uuid)
+    except LaunchError:
+        task_uuid = None
 
     def update(entries: list[dict[str, object]]) -> None:
-        entries[:] = [entry for entry in entries if entry.get("task_id") != task_id]
+        entries[:] = [
+            entry
+            for entry in entries
+            if not (
+                entry.get("task_uuid") == task_uuid
+                if task_uuid is not None
+                else entry.get("task_id") == task_id
+            )
+        ]
 
     _best_effort_update_index(
         paths,

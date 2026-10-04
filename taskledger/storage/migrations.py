@@ -71,6 +71,14 @@ LAYOUT_MIGRATIONS: tuple[LayoutMigration, ...] = (
         name="canonical-storage-topology",
         apply=lambda workspace_root: None,
     ),
+    LayoutMigration(
+        from_version=5,
+        to_version=6,
+        name="uuidv7-task-directories",
+        apply=lambda workspace_root: _migrate_v5_task_directories_to_uuidv7(
+            workspace_root
+        ),
+    ),
 )
 
 RECORD_MIGRATIONS: tuple[RecordMigration, ...] = ()
@@ -526,3 +534,11 @@ def _migrate_v3_storage_metadata(workspace_root: Path) -> None:
             last_migrated_at=meta.last_migrated_at,
         ),
     )
+
+
+def _migrate_v5_task_directories_to_uuidv7(workspace_root: Path) -> None:
+    from taskledger.storage.task_directory_migration import (
+        migrate_v5_task_directories_to_uuidv7,
+    )
+
+    migrate_v5_task_directories_to_uuidv7(workspace_root)

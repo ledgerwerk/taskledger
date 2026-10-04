@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import io
 import json
-import re
 import shutil
 import tarfile
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+from dataclasses import replace as dataclass_replace
 from hashlib import sha256 as _sha256
 from pathlib import Path
 from typing import Literal, cast
@@ -37,7 +37,7 @@ from taskledger.domain.models import (
     TodoCollection,
 )
 from taskledger.errors import LaunchError
-from taskledger.ids import TASK_ID_FORMAT, slugify_project_ref
+from taskledger.ids import TASK_ID_FORMAT, parse_uuid7, slugify_project_ref
 from taskledger.storage.agent_logs import (
     append_agent_command_log,
     load_agent_command_logs,
@@ -208,10 +208,16 @@ def import_project_payload(
     raw_v2 = payload.get("v2")
     if not isinstance(raw_v2, dict):
         raise LaunchError("Import payload is missing v2 task state.")
+    incoming_task_records = _dict_list(raw_v2.get("tasks"))
+    uuid_task_ids = {
+        str(item["id"])
+        for item in incoming_task_records
+        if item.get("id") and item.get("task_uuid")
+    }
+    raw_v2 = _prepare_import_task_uuids(raw_v2, payload, workspace_root)
+    incoming_task_records = _dict_list(raw_v2.get("tasks"))
     incoming_task_ids = [
-        str(item.get("id"))
-        for item in _dict_list(raw_v2.get("tasks"))
-        if item.get("id")
+        str(item.get("id")) for item in incoming_task_records if item.get("id")
     ]
     effective_id_policy: ImportIdPolicy = (
         "preserve"
@@ -225,6 +231,7 @@ def import_project_payload(
     task_id_map = _build_import_task_id_map(
         workspace_root,
         incoming_task_ids,
+        uuid_task_ids=uuid_task_ids,
         id_policy=effective_id_policy,
     )
     rewritten_v2 = _rewrite_task_ids_in_payload(
@@ -232,10 +239,13 @@ def import_project_payload(
         task_id_map,
         include_active_task=archive_scope != "tasks",
     )
-    renumbered = sorted(
-        [incoming for incoming, target in task_id_map.items() if incoming != target]
-    )
-    imported_task_ids = [task_id_map[item] for item in incoming_task_ids]
+    (
+        task_id_map,
+        task_uuid_map,
+        imported_task_ids,
+        renumbered,
+        next_task_id,
+    ) = _derive_import_aliases(workspace_root, incoming_task_records)
     counts = _payload_counts(payload)
     if dry_run:
         return {
@@ -251,17 +261,17 @@ def import_project_payload(
             "ledger_ref": payload.get("ledger_ref"),
             "counts": counts,
             "task_id_map": task_id_map,
+            "task_uuid_map": task_uuid_map,
             "renumbered": renumbered,
             "imported_task_ids": imported_task_ids,
+            "next_task_id": next_task_id,
         }
     paths = require_v2_layout(workspace_root)
+    _assert_task_uuid_content_compatible(
+        workspace_root, incoming_task_records, check_existing=not replace
+    )
     if replace:
         _clear_v2_state(paths)
-    else:
-        _assert_import_will_not_overwrite_tasks(workspace_root, imported_task_ids)
-    from taskledger.storage.task_ids import reserve_task_directories
-
-    reserve_task_directories(paths, imported_task_ids)
     payload_for_import = dict(payload)
     payload_for_import["v2"] = rewritten_v2
     _import_v2_payload(
@@ -272,9 +282,13 @@ def import_project_payload(
     )
     rebuilt_counts = rebuild_v2_indexes(paths)
     counts = {key: value for key, value in rebuilt_counts.items()}
-    from taskledger.storage.task_ids import scan_task_id_inventory
-
-    next_task_id = scan_task_id_inventory(resolve_v2_paths(workspace_root)).next_task_id
+    (
+        task_id_map,
+        task_uuid_map,
+        imported_task_ids,
+        renumbered,
+        next_task_id,
+    ) = _derive_import_aliases(workspace_root, incoming_task_records)
     return {
         "kind": "taskledger_import",
         "replace": replace,
@@ -288,6 +302,7 @@ def import_project_payload(
         "ledger_ref": payload.get("ledger_ref"),
         "counts": counts,
         "task_id_map": task_id_map,
+        "task_uuid_map": task_uuid_map,
         "renumbered": renumbered,
         "imported_task_ids": imported_task_ids,
         "next_task_id": next_task_id,
@@ -390,12 +405,20 @@ def _export_v2_payload(
             for handoff in list_v2_handoffs(workspace_root, task.id)
         ],
         "todos": [
-            todo.to_dict()
+            {
+                **todo.to_dict(),
+                "task_id": task.id,
+                "task_uuid": task.task_uuid,
+            }
             for task in tasks
             for todo in load_v2_todos(workspace_root, task.id).todos
         ],
         "links": [
-            link.to_dict()
+            {
+                **link.to_dict(),
+                "task_id": task.id,
+                "task_uuid": task.task_uuid,
+            }
             for task in tasks
             for link in load_v2_links(workspace_root, task.id).links
         ],
@@ -463,17 +486,22 @@ def _build_import_task_id_map(
     workspace_root: Path,
     incoming_task_ids: Sequence[str],
     *,
+    uuid_task_ids: set[str],
     id_policy: ImportIdPolicy,
 ) -> dict[str, str]:
     existing_ids = {task.id for task in list_v2_tasks(workspace_root)}
     allocated_ids = set(existing_ids)
-    from taskledger.storage.task_ids import scan_task_id_inventory
+    from taskledger.storage.task_identity import task_identity_inventory
+    from taskledger.storage.task_store import resolve_v2_paths
 
-    inventory = scan_task_id_inventory(resolve_v2_paths(workspace_root))
-    next_number = inventory.highest_number + 1
+    inventory = task_identity_inventory(resolve_v2_paths(workspace_root))
+    next_number = max((entry.number for entry in inventory.entries), default=0) + 1
     id_map: dict[str, str] = {}
     for incoming in incoming_task_ids:
         if incoming in id_map:
+            continue
+        if incoming in uuid_task_ids:
+            id_map[incoming] = incoming
             continue
         if incoming not in allocated_ids:
             id_map[incoming] = incoming
@@ -557,39 +585,137 @@ def _rewrite_task_ids_in_payload(
     return rewritten
 
 
-def _assert_import_will_not_overwrite_tasks(
-    workspace_root: Path, target_task_ids: Iterable[str]
-) -> None:
-    existing = {task.id for task in list_v2_tasks(workspace_root)}
-    conflicts = sorted(existing & set(target_task_ids))
-    if conflicts:
+def _prepare_import_task_uuids(
+    raw_v2: dict[str, object],
+    payload: dict[str, object],
+    workspace_root: Path,
+) -> dict[str, object]:
+    from taskledger.storage.task_identity import deterministic_legacy_task_uuid
+
+    prepared = deepcopy(raw_v2)
+    legacy_tasks = [
+        item for item in _dict_list(prepared.get("tasks")) if not item.get("task_uuid")
+    ]
+    if not legacy_tasks:
+        return prepared
+    project_uuid = payload.get("project_uuid")
+    if not isinstance(project_uuid, str) or not project_uuid:
+        locator = load_project_locator(workspace_root)
+        project_uuid = load_project_uuid(locator.config_path) or ""
+    if not project_uuid:
         raise LaunchError(
-            "Import would overwrite existing tasks: " + ", ".join(conflicts)
+            "Import payload is missing the project UUID required for task identity."
         )
+    ledger_ref = payload.get("ledger_ref")
+    if not isinstance(ledger_ref, str) or not ledger_ref:
+        ledger_ref = "main"
+    for item in legacy_tasks:
+        task_id = item.get("id")
+        created_at = item.get("created_at")
+        if not isinstance(task_id, str) or not isinstance(created_at, str):
+            raise LaunchError("Legacy imported task is missing id or created_at.")
+        item["task_uuid"] = str(
+            deterministic_legacy_task_uuid(
+                project_uuid=project_uuid,
+                ledger_ref=ledger_ref,
+                legacy_task_id=task_id,
+                created_at=created_at,
+            )
+        )
+    return prepared
 
 
-def _max_numeric_task_number(tasks_dir: Path) -> int | None:
-    max_number: int | None = None
-    if not tasks_dir.exists():
-        return None
-    for child in tasks_dir.glob("task-*"):
-        if not child.is_dir():
+def _derive_import_aliases(
+    workspace_root: Path, incoming_tasks: Sequence[dict[str, object]]
+) -> tuple[dict[str, str], dict[str, str], list[str], list[str], str]:
+    from taskledger.storage.task_identity import task_identity_inventory
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    inventory = task_identity_inventory(resolve_v2_paths(workspace_root))
+    task_uuids = {str(entry.task_uuid) for entry in inventory.entries}
+    incoming_by_id: list[tuple[str, str]] = []
+    for item in incoming_tasks:
+        raw_uuid = item.get("task_uuid")
+        if not isinstance(raw_uuid, str):
+            raise LaunchError("Imported task is missing its UUID identity.")
+        task_uuid = str(parse_uuid7(raw_uuid))
+        task_uuids.add(task_uuid)
+        if isinstance(item.get("id"), str):
+            incoming_by_id.append((str(item["id"]), task_uuid))
+    alias_by_uuid = {
+        task_uuid: TASK_ID_FORMAT.format(number)
+        for number, task_uuid in enumerate(sorted(task_uuids), start=1)
+    }
+    task_id_map: dict[str, str] = {}
+    task_uuid_map: dict[str, str] = {}
+    imported_task_ids: list[str] = []
+    for incoming_id, task_uuid in incoming_by_id:
+        alias = alias_by_uuid[task_uuid]
+        task_id_map[incoming_id] = alias
+        task_uuid_map[task_uuid] = alias
+        imported_task_ids.append(alias)
+    renumbered = sorted(
+        incoming_id
+        for incoming_id, alias in task_id_map.items()
+        if incoming_id != alias
+    )
+    next_task_id = TASK_ID_FORMAT.format(len(task_uuids) + 1)
+    return task_id_map, task_uuid_map, imported_task_ids, renumbered, next_task_id
+
+
+def _assert_task_uuid_content_compatible(
+    workspace_root: Path,
+    tasks: Sequence[dict[str, object]],
+    *,
+    check_existing: bool = True,
+) -> None:
+    existing_by_uuid = (
+        {
+            task.task_uuid: task
+            for task in list_v2_tasks(workspace_root)
+            if task.task_uuid is not None
+        }
+        if check_existing
+        else {}
+    )
+    incoming_by_uuid: dict[str, dict[str, object]] = {}
+    for item in tasks:
+        task_uuid = item.get("task_uuid")
+        if not isinstance(task_uuid, str):
+            raise LaunchError("Imported task is missing its UUID identity.")
+        incoming = TaskRecord.from_dict(item).to_dict()
+        incoming.pop("id", None)
+        duplicate = incoming_by_uuid.get(task_uuid)
+        if duplicate is not None and duplicate != incoming:
+            raise LaunchError(f"Task UUID content conflict: {task_uuid}")
+        incoming_by_uuid[task_uuid] = incoming
+        existing_task = existing_by_uuid.get(task_uuid)
+        if existing_task is None:
             continue
-        match = re.fullmatch(r"task-(\d+)", child.name)
-        if match is None:
-            continue
-        number = int(match.group(1))
-        max_number = number if max_number is None else max(max_number, number)
-    return max_number
+        existing = existing_task.to_dict()
+        existing.pop("id", None)
+        if incoming != existing:
+            raise LaunchError(f"Task UUID content conflict: {task_uuid}")
 
 
 def _import_standalone_collections(
     raw_v2: dict[str, object], workspace_root: Path
 ) -> None:
     """Import per-record collections from newer exports."""
+    from taskledger.storage.task_identity import task_identity_for_ref
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    paths = resolve_v2_paths(workspace_root)
+
+    def owner_task_id(item: dict[str, object], fallback: object = None) -> str:
+        task_ref = item.get("task_uuid") or fallback or item.get("task_id")
+        if not isinstance(task_ref, str) or not task_ref:
+            raise LaunchError("Imported sidecar is missing its owning task reference.")
+        return task_identity_for_ref(paths, task_ref).task_id
+
     todos_by_task: dict[str, list] = {}
     for item in _dict_list(raw_v2.get("todos")):
-        tid = str(item.get("task_id") or "")
+        tid = owner_task_id(item)
         todos_by_task.setdefault(tid, []).append(item)
     for tid, items in todos_by_task.items():
         save_todos(
@@ -601,7 +727,7 @@ def _import_standalone_collections(
         )
     links_by_task: dict[str, list] = {}
     for item in _dict_list(raw_v2.get("links")):
-        tid = str(item.get("task_id") or "")
+        tid = owner_task_id(item)
         links_by_task.setdefault(tid, []).append(item)
     for tid, items in links_by_task.items():
         save_links(
@@ -613,7 +739,9 @@ def _import_standalone_collections(
         )
     reqs_by_task: dict[str, list] = {}
     for item in _dict_list(raw_v2.get("requirements")):
-        tid = str(item.get("task_id") or item.get("parent_task_id") or "")
+        tid = owner_task_id(
+            item, item.get("parent_task_uuid") or item.get("parent_task_id")
+        )
         reqs_by_task.setdefault(tid, []).append(item)
     for tid, items in reqs_by_task.items():
         save_requirements(
@@ -637,27 +765,32 @@ def _import_v2_payload(  # noqa: C901
     if not isinstance(raw_v2, dict):
         raise LaunchError("Import payload is missing v2 task state.")
     paths = resolve_v2_paths(workspace_root)
+    tasks_to_import: list[TaskRecord] = []
     for item in _dict_list(raw_v2.get("tasks")):
         task = TaskRecord.from_dict(item)
         save_task(workspace_root, task)
-        # Import per-record collections from embedded task data
+        tasks_to_import.append(task)
+    for task in tasks_to_import:
+        current_task = resolve_task(
+            workspace_root, task.task_uuid or task.id, include_archived=True
+        )
         if task.todos:
             save_todos(
                 workspace_root,
-                TodoCollection(task_id=task.id, todos=task.todos),
+                TodoCollection(task_id=current_task.id, todos=task.todos),
             )
         if task.file_links:
             save_links(
                 workspace_root,
-                LinkCollection(task_id=task.id, links=task.file_links),
+                LinkCollection(task_id=current_task.id, links=task.file_links),
             )
         if task.requirements:
             save_requirements(
                 workspace_root,
                 RequirementCollection(
-                    task_id=task.id,
+                    task_id=current_task.id,
                     requirements=tuple(
-                        DependencyRequirement(task_id=r) for r in task.requirements
+                        DependencyRequirement(task_id=ref) for ref in task.requirements
                     ),
                 ),
             )
@@ -666,10 +799,23 @@ def _import_v2_payload(  # noqa: C901
     active_task = raw_v2.get("active_task")
     if active_task is not None:
         state = ActiveTaskState.from_dict(active_task)
-        if not any(task.id == state.task_id for task in list_v2_tasks(workspace_root)):
+        from taskledger.storage.task_identity import AMBIGUOUS_LEGACY_TASK_REF
+
+        try:
+            imported_task = resolve_task(
+                workspace_root, state.task_uuid or state.task_id
+            )
+        except LaunchError as exc:
+            if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+                raise
             raise LaunchError(
                 f"Import active task points to missing task: {state.task_id}"
-            )
+            ) from exc
+        state = dataclass_replace(
+            state,
+            task_id=imported_task.id,
+            task_uuid=imported_task.task_uuid,
+        )
         save_active_task_state(workspace_root, state)
     for item in _dict_list(raw_v2.get("introductions")):
         save_introduction(workspace_root, IntroductionRecord.from_dict(item))
@@ -721,28 +867,39 @@ def _import_releases(raw_v2: dict[str, object], workspace_root: Path) -> None:
     raw_releases = _dict_list(raw_v2.get("releases"))
     if not raw_releases:
         return
-    task_ids_present = {task.id for task in list_v2_tasks(workspace_root)}
-    missing = sorted(
-        {
-            str(item.get("boundary_task_id") or "")
-            for item in raw_releases
-            if str(item.get("boundary_task_id") or "") not in task_ids_present
-        }
-    )
+    from taskledger.storage.task_identity import task_identity_for_stored_ref
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    paths = resolve_v2_paths(workspace_root)
+    missing: set[str] = set()
+    for item in raw_releases:
+        task_id = str(item.get("boundary_task_id") or "")
+        task_uuid = item.get("boundary_task_uuid")
+        try:
+            task_identity_for_stored_ref(
+                paths,
+                task_id=task_id,
+                task_uuid=task_uuid if isinstance(task_uuid, str) else None,
+            )
+        except LaunchError:
+            missing.add(task_uuid if isinstance(task_uuid, str) else task_id)
     if missing:
         raise LaunchError(
             "Import release records reference missing boundary tasks: "
-            + ", ".join(missing)
+            + ", ".join(sorted(missing))
         )
     for item in raw_releases:
         save_release(workspace_root, ReleaseRecord.from_dict(item))
 
 
 def _clear_v2_state(paths: V2Paths) -> None:
-    for directory in paths.tasks_dir.glob("task-*"):
-        if directory.is_dir():
-            shutil.rmtree(directory)
+    for entry in paths.tasks_dir.iterdir():
+        if entry.is_symlink() or not entry.is_dir():
+            entry.unlink()
+        else:
+            shutil.rmtree(entry)
     for directory in (
+        paths.ledger_dir / "tombstones",
         paths.introductions_dir,
         paths.releases_dir,
         paths.events_dir,
@@ -1048,8 +1205,10 @@ def import_project_archive(
             "imported": dry_run_result.get("counts", counts),
             "id_policy": dry_run_result.get("id_policy"),
             "task_id_map": dry_run_result.get("task_id_map", {}),
+            "task_uuid_map": dry_run_result.get("task_uuid_map", {}),
             "renumbered": dry_run_result.get("renumbered", []),
             "imported_task_ids": dry_run_result.get("imported_task_ids", []),
+            "next_task_id": dry_run_result.get("next_task_id"),
             "next_command": _archive_import_next_command(dry_run_result),
         }
 
@@ -1084,6 +1243,7 @@ def import_project_archive(
         "id_policy": result.get("id_policy"),
         "task_id_map": result.get("task_id_map", {}),
         "renumbered": result.get("renumbered", []),
+        "task_uuid_map": result.get("task_uuid_map", {}),
         "imported_task_ids": result.get("imported_task_ids", []),
         "next_task_id": result.get("next_task_id"),
         "imported_artifacts": imported_artifacts,
@@ -1142,11 +1302,23 @@ def _assert_payload_project_uuid(
     assert_same_project_uuid(payload_uuid, local_uuid)
 
 
+def _normalize_import_lock(paths: V2Paths, lock: TaskLock) -> TaskLock:
+    from taskledger.storage.task_identity import task_identity_for_stored_ref
+
+    identity = task_identity_for_stored_ref(
+        paths, task_id=lock.task_id, task_uuid=lock.task_uuid
+    )
+    return dataclass_replace(
+        lock, task_id=identity.task_id, task_uuid=str(identity.task_uuid)
+    )
+
+
 def _import_locks(
     paths: V2Paths, raw_v2: dict[str, object], *, lock_policy: ImportLockPolicy
 ) -> None:
     imported_locks = [
-        TaskLock.from_dict(item) for item in _dict_list(raw_v2.get("locks"))
+        _normalize_import_lock(paths, TaskLock.from_dict(item))
+        for item in _dict_list(raw_v2.get("locks"))
     ]
     if lock_policy == "drop":
         return
@@ -1277,15 +1449,23 @@ def _collect_artifact_members(
     selected_task_ids: set[str] | None = None,
     max_bytes: int = MAX_ARTIFACT_MEMBER_BYTES,
 ) -> list[tuple[str, Path]]:
-    artifact_roots = [paths.tasks_dir.glob("task-*/artifacts/**/*")]
-    if selected_task_ids is None:
-        artifact_roots.append(
-            (paths.events_dir.parent / "agent-logs" / "artifacts").glob("**/*")
-        )
+    from taskledger.storage.task_identity import task_identity_inventory
+
     members: list[tuple[str, Path]] = []
-    for iterator in artifact_roots:
-        for source_path in iterator:
-            if not source_path.is_file():
+    inventory = task_identity_inventory(paths)
+    sources = [
+        identity.path / "artifacts"
+        for identity in inventory.entries
+        if identity.state == "live"
+        and (selected_task_ids is None or identity.task_id in selected_task_ids)
+    ]
+    if selected_task_ids is None:
+        sources.append(paths.events_dir.parent / "agent-logs" / "artifacts")
+    for root in sources:
+        if not root.is_dir():
+            continue
+        for source_path in sorted(root.rglob("*")):
+            if not source_path.is_file() or source_path.is_symlink():
                 continue
             size_bytes = source_path.stat().st_size
             if size_bytes > max_bytes:
@@ -1296,12 +1476,6 @@ def _collect_artifact_members(
                     f"artifact_max_bytes={max_bytes}. "
                     "Run `taskledger doctor` and repair the artifact before exporting."
                 )
-            if selected_task_ids is not None:
-                match = re.search(
-                    r"/tasks/(task-\d+)/artifacts/", source_path.as_posix()
-                )
-                if match is None or match.group(1) not in selected_task_ids:
-                    continue
             try:
                 relative = source_path.relative_to(paths.project_dir)
                 archive_root = ""
@@ -1335,16 +1509,20 @@ def _extract_artifact_members(
             relative = Path(member_name[len(ARTIFACTS_PREFIX) :])
             if relative.is_absolute() or ".." in relative.parts:
                 raise LaunchError(f"Unsafe archive member path: {member_name!r}")
-            if task_id_map:
-                parts = list(relative.parts)
-                if "tasks" in parts:
-                    idx = parts.index("tasks")
-                    if idx + 1 < len(parts):
-                        old_task_id = parts[idx + 1]
-                        mapped_task_id = task_id_map.get(old_task_id)
-                        if mapped_task_id is not None:
-                            parts[idx + 1] = mapped_task_id
-                            relative = Path(*parts)
+            parts = list(relative.parts)
+            if "tasks" in parts:
+                idx = parts.index("tasks")
+                if idx + 1 < len(parts):
+                    task_ref = parts[idx + 1]
+                    if task_ref.startswith("task-"):
+                        from taskledger.storage.task_identity import (
+                            task_identity_for_ref,
+                        )
+
+                        mapped_task_id = (task_id_map or {}).get(task_ref, task_ref)
+                        identity = task_identity_for_ref(paths, mapped_task_id)
+                        parts[idx + 1] = str(identity.task_uuid)
+                        relative = Path(*parts)
             info = members[member_name]
             stream = tar.extractfile(info)
             if stream is None:

@@ -60,7 +60,7 @@ InitializationStatus = Literal[
 CANONICAL_LEDGER_NAME = "taskledger"
 CANONICAL_LEDGER_CODE = "tl"
 CANONICAL_CONFIG_VERSION = 3
-CANONICAL_STORAGE_LAYOUT_VERSION = 5
+CANONICAL_STORAGE_LAYOUT_VERSION = 6
 CANONICAL_MOUNT_NAMES = (DATA_MOUNT, RUNTIME_MOUNT, LOGS_MOUNT, INDEX_MOUNT)
 CANONICAL_DATA_RELATIVE_PATH = Path("data")
 CANONICAL_INDEX_RELATIVE_PATH = Path("indexes")
@@ -428,6 +428,19 @@ def require_mutable_project_context(
         require_initialized=False,
         allow_legacy=allow_legacy,
     )
+    if context.mode == "canonical":
+        from taskledger.storage.meta import read_storage_meta
+
+        meta = read_storage_meta(start)
+        if meta is not None and meta.storage_layout_version == 5:
+            from taskledger.storage.migrations import apply_layout_migrations
+
+            apply_layout_migrations(start, meta.storage_layout_version)
+            context = load_project_context(
+                start,
+                require_initialized=False,
+                allow_legacy=allow_legacy,
+            )
     cache_recovery = None
     if context.mode == "canonical":
         from taskledger.storage.index_cache import ensure_indexes_cache_for_mutation

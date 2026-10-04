@@ -38,6 +38,7 @@ from taskledger.storage.task_store import (
     save_run,
     save_task,
     save_todos,
+    task_dir,
 )
 
 
@@ -145,7 +146,7 @@ def test_inspect_project_with_active_task(tmp_path: Path) -> None:
 def test_inspect_project_reports_malformed_handoff_record(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     paths = ensure_v2_layout(tmp_path)
-    handoff_dir = paths.tasks_dir / "task-0001" / "handoffs"
+    handoff_dir = task_dir(paths, "task-0001") / "handoffs"
     handoff_dir.mkdir(parents=True, exist_ok=True)
     (handoff_dir / "handoff-0001.md").write_text(
         "---\nobject_type: handoff\ncontext_hash: [\n---\n",
@@ -162,7 +163,7 @@ def test_inspect_project_reports_malformed_handoff_record(tmp_path: Path) -> Non
 def test_inspect_project_warns_for_unsupported_legacy_sidecar(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     paths = ensure_v2_layout(tmp_path)
-    (paths.tasks_dir / "task-0001" / "todos.yaml").write_text(
+    (task_dir(paths, "task-0001") / "todos.yaml").write_text(
         "schema_version: 1\nobject_type: todos\ntask_id: task-0001\ntodos: []\n",
         encoding="utf-8",
     )
@@ -785,7 +786,7 @@ def test_doctor_reports_oversized_artifact_without_reading_content(
 ) -> None:
     paths = ensure_v2_layout(tmp_path)
     save_task(tmp_path, _task())
-    artifact = paths.tasks_dir / "task-0001" / "artifacts" / "run-0001-command-0001.log"
+    artifact = task_dir(paths, "task-0001") / "artifacts" / "run-0001-command-0001.log"
     artifact.parent.mkdir(parents=True, exist_ok=True)
     artifact.write_bytes(b"x" * 11)
     (tmp_path / "taskledger.toml").write_text(

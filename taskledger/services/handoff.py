@@ -283,13 +283,15 @@ def build_handoff_payload(
     )
 
     dependencies = []
-    for requirement in (
-        item.task_id for item in load_requirements(workspace_root, task.id).requirements
-    ):
-        dependency = resolve_task(workspace_root, requirement)
+    for requirement in load_requirements(workspace_root, task.id).requirements:
+        dependency = resolve_task(
+            workspace_root,
+            requirement.required_task_uuid or requirement.task_id,
+        )
         dependencies.append(
             {
                 "task_id": dependency.id,
+                "task_uuid": dependency.task_uuid,
                 "title": dependency.title,
                 "status_stage": dependency.status_stage,
             }
@@ -1041,13 +1043,19 @@ def build_task_relationship_payload(
     task: TaskRecord,
 ) -> dict[str, object]:
     parent_task = None
-    if task.parent_task_id is not None:
-        parent = resolve_task(workspace_root, task.parent_task_id)
+    if task.parent_task_uuid is not None or task.parent_task_id is not None:
+        parent = resolve_task(
+            workspace_root, task.parent_task_uuid or task.parent_task_id or ""
+        )
         parent_task = _relationship_task_summary(workspace_root, parent)
     follow_up_tasks = [
         _relationship_task_summary(workspace_root, child)
         for child in list_tasks(workspace_root)
-        if child.parent_task_id == task.id and child.parent_relation == "follow_up"
+        if child.parent_relation == "follow_up"
+        and (
+            child.parent_task_uuid == task.task_uuid
+            or (child.parent_task_uuid is None and child.parent_task_id == task.id)
+        )
     ]
     return {
         "parent_task": parent_task,

@@ -632,3 +632,9 @@ add the registration. Doctor reports orphan canonical configs, legacy shadow
 projects, and `TASKLEDGER_SPLIT_BRAIN` when both roots contain records. Back up
 and inspect both roots before explicit recovery; never auto-delete or auto-merge
 shadow histories.
+
+### UUID-backed task bundles and numeric aliases
+
+In storage layout 6, canonical task bundles live under `<data-root>/ledgers/<ledger_ref>/tasks/<uuidv7>/`. UUIDv7 is the stable physical storage identity and authoritative cross-task relationship key. The user-facing `task-####` reference remains the normal CLI/API alias; it is derived from the UUID identity inventory and is not a directory name. Use Taskledger commands and resolved references rather than constructing task paths from numeric aliases.
+
+Existing layout-5 numeric bundles migrate deterministically and recoverably to UUIDv7 directories before the first mutation. The migration preserves ordinal gaps and reserves tombstoned or incomplete allocations so aliases are not accidentally reused. Read-only commands do not migrate. Do not manually rename or copy task directories; let the migration preflight and recovery flow handle conversion.

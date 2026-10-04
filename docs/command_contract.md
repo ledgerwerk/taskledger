@@ -714,22 +714,23 @@ Commands keep `--root` scoped to the source workspace, not the storage root.
 
 Taskledger uses:
 
-- storage layout version 5 in the UUID-scoped data root's `storage.yaml`
+- storage layout version 6 in the UUID-scoped data root's `storage.yaml`
 - schema-2 canonical ledger state
 - per-record `schema_version`
 - per-record `object_type`
 - per-file `file_version` for durable Markdown/YAML/JSON record files
 
-Storage layout history is maintained by explicit migration receipts. The
-current layout keeps branch-scoped ledgers under
-`<data-root>/ledgers/<ledger_ref>/`.
+Storage layout history is maintained by migration receipts. The current layout keeps
+branch-scoped ledgers under `<data-root>/ledgers/<ledger_ref>/`.
 
-Taskledger does not silently rewrite storage during read-only commands.
+Within each ledger, canonical task bundles live at
+`tasks/<uuidv7>/task.md`. UUIDv7 is the stable storage identity and relationship
+key; `task-####` remains the derived user-facing alias and is never a directory
+name. Layout 5 to 6 migration deterministically converts legacy numeric task
+bundles before the first mutation, preserves ordinal gaps and reserved identities,
+and is recoverable. Read-only commands do not migrate.
 
-If the installed taskledger version can read but not write an older workspace,
-it reports that migration is required.
-
-To migrate:
+Other legacy storage-root or topology migrations remain explicit:
 
 ```bash
 taskledger storage validate
@@ -737,7 +738,7 @@ taskledger migrate plan
 taskledger migrate apply
 ```
 
-After migration to layout 5, verify health with:
+After migration to layout 6, verify health with:
 
 ```bash
 taskledger doctor

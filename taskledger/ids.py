@@ -1,9 +1,21 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from ledgercore.ids import LedgerIdFormat, slugify_ref
 from ledgercore.refs import LedgerResourceRef, parse_resource_ref
+from ledgercore.uuids import parse_uuid7 as _parse_uuid7
+from ledgercore.uuids import uuid7 as _uuid7
 
 TASK_ID_FORMAT = LedgerIdFormat(prefix="task", separator="-", width=4)
+
+
+def parse_uuid7(value: str | UUID) -> UUID:
+    return _parse_uuid7(value)
+
+
+def uuid7() -> UUID:
+    return _uuid7()
 
 
 def next_project_id(prefix: str, existing_ids: list[str]) -> str:

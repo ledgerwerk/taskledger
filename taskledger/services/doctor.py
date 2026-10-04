@@ -24,9 +24,9 @@ from taskledger.storage.paths import (
     load_project_locator,
     resolve_project_paths,
 )
+from taskledger.storage.task_identity import task_identity_inventory
 from taskledger.storage.task_ids import (
     IncompleteTaskAllocation,
-    inspect_task_id_inventory,
 )
 from taskledger.storage.task_store import (
     V2Paths,
@@ -68,7 +68,16 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
     locator = load_project_locator(workspace_root)
     paths = resolve_v2_paths(workspace_root)
 
-    task_id_inventory = inspect_task_id_inventory(paths)
+    identity_inventory = task_identity_inventory(paths)
+    incomplete_task_allocations = tuple(
+        IncompleteTaskAllocation(
+            identity.task_id,
+            identity.path,
+            tuple(sorted(path.name for path in identity.path.iterdir())),
+        )
+        for identity in identity_inventory.entries
+        if identity.state == "incomplete"
+    )
     from taskledger.storage.artifact_policy import ABSOLUTE_MAX_ARTIFACT_BYTES
     from taskledger.storage.project_config import (
         load_project_config_document,
@@ -110,7 +119,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         runs_by_task=runs_by_task,
         run_by_key=run_by_key,
         active_state=active_state,
-        incomplete_task_allocations=task_id_inventory.incomplete_allocations,
+        incomplete_task_allocations=incomplete_task_allocations,
         artifact_limit_bytes=artifact_limit_bytes,
     )
 
@@ -368,11 +377,12 @@ def _run_lock_mismatches(
     from taskledger.storage.task_store import list_runs_from_paths
 
     task_summaries = {
-        task.id: task for task in list_task_summaries(paths, visibility="all")
+        task.task_uuid or task.id: task
+        for task in list_task_summaries(paths, visibility="all")
     }
     sidecars = load_sidecar_index(paths)
     active_locks = {
-        entry.lock.task_id: entry.lock
+        entry.lock.task_uuid or entry.lock.task_id: entry.lock
         for entry in inventory.entries
         if entry.lock is not None and not lock_is_expired(entry.lock)
     }
@@ -385,16 +395,18 @@ def _run_lock_mismatches(
 
     mismatches: list[dict[str, object]] = []
     errors: list[str] = []
-    for task_id in sorted(candidate_task_ids):
-        runs = list_runs_from_paths(paths, task_id)
+    for task_ref in sorted(candidate_task_ids):
+        task = task_summaries.get(task_ref)
+        task_id = task.id if task is not None else task_ref
+        runs = list_runs_from_paths(paths, task_ref)
         running_runs = [run for run in runs if run.status == "running"]
-        lock = active_locks.get(task_id)
+        lock = active_locks.get(task_ref)
         active_stage = derive_active_stage(lock, running_runs)
         if running_runs and active_stage is None:
             errors.append(
                 f"Task {task_id} has a running run without a matching active lock."
             )
-            task = task_summaries.get(task_id)
+            task = task_summaries.get(task_ref)
             for run in running_runs:
                 next_command = f"taskledger task show --task {task_id}"
                 note = "Inspect task and run state before choosing repair."

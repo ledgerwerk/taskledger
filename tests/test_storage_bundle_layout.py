@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from typer.testing import CliRunner
@@ -158,7 +159,10 @@ def test_task_create_uses_task_bundle_layout(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout
 
-    task_dir = project_dir / "tasks" / "task-0001"
+    task_dirs = list((project_dir / "tasks").iterdir())
+    assert len(task_dirs) == 1
+    task_dir = task_dirs[0]
+    assert UUID(task_dir.name).version == 7
     assert (task_dir / "task.md").is_file()
     assert (task_dir / "todos").is_dir()
     assert (task_dir / "links").is_dir()
@@ -299,8 +303,9 @@ def test_task_create_no_orphan_slug_directory(tmp_path: Path) -> None:
 
     tasks_dir = tmp_path / ".taskledger" / "ledgers" / "main" / "tasks"
     child_names = [p.name for p in tasks_dir.iterdir()]
-    # Only the canonical task-NNNN directory should exist
-    assert child_names == ["task-0001"], f"unexpected directories: {child_names}"
+    # Only the canonical UUIDv7 task directory should exist.
+    assert len(child_names) == 1, f"unexpected directories: {child_names}"
+    assert UUID(child_names[0]).version == 7
     assert not (tasks_dir / "slug-orphan-check").exists()
 
 

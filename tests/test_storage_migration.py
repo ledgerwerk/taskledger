@@ -23,6 +23,15 @@ from taskledger.domain.states import (
 from taskledger.errors import LaunchError
 from taskledger.storage.meta import StorageMeta, read_storage_meta, write_storage_meta
 
+
+def _task_file_by_id(workspace_root: Path, task_id: str) -> Path:
+    from taskledger.storage.task_identity import task_identity_inventory
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    inventory = task_identity_inventory(resolve_v2_paths(workspace_root))
+    return inventory.by_task_id[task_id].path / "task.md"
+
+
 # ---------------------------------------------------------------------------
 # Phase 2: Storage version constants
 # ---------------------------------------------------------------------------
@@ -30,8 +39,8 @@ from taskledger.storage.meta import StorageMeta, read_storage_meta, write_storag
 
 class TestStorageVersionConstants:
     # specmason: req=REQ-0054 ac=AC-0590
-    def test_storage_layout_version_is_5(self) -> None:
-        assert TASKLEDGER_STORAGE_LAYOUT_VERSION == 5
+    def test_storage_layout_version_is_6(self) -> None:
+        assert TASKLEDGER_STORAGE_LAYOUT_VERSION == 6
 
     # specmason: req=REQ-0054 ac=AC-0583
     def test_record_schema_version_matches_schema_version(self) -> None:
@@ -556,15 +565,15 @@ Test Task
         assert not (root / "active-task.yaml").exists()
 
         # Verify task moved to ledger
-        assert (ledger_dir / "tasks" / "task-0021" / "task.md").exists()
+        assert _task_file_by_id(tmp_path, "task-0021").is_file()
         assert (ledger_dir / "active-task.yaml").exists()
 
-        # Verify storage updated to v5
+        # Verify storage updated to v6
         from taskledger.storage.meta import read_storage_meta
 
         meta = read_storage_meta(tmp_path)
         assert meta is not None
-        assert meta.storage_layout_version == 5
+        assert meta.storage_layout_version == 6
         assert meta.last_migrated_with_taskledger is not None
         assert meta.last_migrated_at is not None
 
@@ -647,17 +656,17 @@ Test Task
         assert "branch-scoped-ledgers" in applied
 
         # Verify task still exists
-        assert (task_dir / "task.md").exists()
+        assert _task_file_by_id(tmp_path, "task-0001").is_file()
 
-        # Verify layout updated to 5
+        # Verify layout updated to 6
         from taskledger.storage.meta import read_storage_meta
 
         meta = read_storage_meta(tmp_path)
         assert meta is not None
-        assert meta.storage_layout_version == 5
+        assert meta.storage_layout_version == 6
 
         # Second migration should be no-op
-        applied2 = apply_layout_migrations(tmp_path, 5, dry_run=False)
+        applied2 = apply_layout_migrations(tmp_path, 6, dry_run=False)
         assert len(applied2) == 0
 
     # specmason: req=REQ-0054 ac=AC-0580
@@ -719,14 +728,14 @@ Test Task
         apply_layout_migrations(tmp_path, 2, dry_run=False)
 
         # Root task-0001 (older) should remain at task-0001
-        assert (ledger_dir / "tasks" / "task-0001" / "task.md").exists()
-        root_content = (ledger_dir / "tasks" / "task-0001" / "task.md").read_text()
+        assert _task_file_by_id(tmp_path, "task-0001").is_file()
+        root_content = _task_file_by_id(tmp_path, "task-0001").read_text()
         assert "Root Task" in root_content
         assert "id: task-0001" in root_content
 
         # Ledger task (newer) should be renumbered to task-0002
-        assert (ledger_dir / "tasks" / "task-0002" / "task.md").exists()
-        ledger_content = (ledger_dir / "tasks" / "task-0002" / "task.md").read_text()
+        assert _task_file_by_id(tmp_path, "task-0002").is_file()
+        ledger_content = _task_file_by_id(tmp_path, "task-0002").read_text()
         assert "Ledger Task" in ledger_content
         assert "id: task-0002" in ledger_content
 
@@ -788,16 +797,14 @@ Test Task
 
         # All root tasks (older) should remain at task-0001-0003
         for i in [1, 2, 3]:
-            assert (ledger_dir / "tasks" / f"task-{i:04d}" / "task.md").exists()
-            content = (ledger_dir / "tasks" / f"task-{i:04d}" / "task.md").read_text()
+            assert _task_file_by_id(tmp_path, f"task-{i:04d}").is_file()
+            content = _task_file_by_id(tmp_path, f"task-{i:04d}").read_text()
             assert f"Root Task {i}" in content
 
         # All ledger tasks (newer) should be renumbered to task-0004-0006
         for i, new_id in [(1, 4), (2, 5), (3, 6)]:
-            assert (ledger_dir / "tasks" / f"task-{new_id:04d}" / "task.md").exists()
-            content = (
-                ledger_dir / "tasks" / f"task-{new_id:04d}" / "task.md"
-            ).read_text()
+            assert _task_file_by_id(tmp_path, f"task-{new_id:04d}").is_file()
+            content = (_task_file_by_id(tmp_path, f"task-{new_id:04d}")).read_text()
             assert f"Ledger Task {i}" in content
             assert f"id: task-{new_id:04d}" in content
 
@@ -862,13 +869,13 @@ Test Task
         apply_layout_migrations(tmp_path, 2, dry_run=False)
 
         # Root task (older) should remain at task-0001 with original timestamp
-        root_content = (ledger_dir / "tasks" / "task-0001" / "task.md").read_text()
+        root_content = _task_file_by_id(tmp_path, "task-0001").read_text()
         assert "2026-01-01 12:34:56" in root_content
         assert "id: task-0001" in root_content
         assert "Original Task" in root_content
 
         # Ledger task (newer) should be renumbered to task-0002
-        ledger_content = (ledger_dir / "tasks" / "task-0002" / "task.md").read_text()
+        ledger_content = _task_file_by_id(tmp_path, "task-0002").read_text()
         assert "id: task-0002" in ledger_content
         assert "Ledger Task" in ledger_content
 

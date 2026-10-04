@@ -113,8 +113,10 @@ def test_canonical_writers_update_requirement_and_introduction_indexes(
     save_introduction(tmp_path, introduction)
 
     dependencies = _read(paths.dependencies_index_path)
-    dependency = next(item for item in dependencies if item["task_id"] == task.id)
-    assert dependency["requirements"] == ["task-0099"]
+    dependency = next(
+        item for item in dependencies if item["task_uuid"] == task.task_uuid
+    )
+    assert dependency["requirements"] == [{"task_uuid": None, "task_id": "task-0099"}]
     assert _read(paths.introductions_index_path) == [
         {
             "id": introduction.id,
@@ -148,12 +150,14 @@ def test_lock_writers_update_active_lock_and_sidecar_indexes(tmp_path: Path) -> 
     )
 
     save_lock_from_paths(paths, task.id, lock, create_only=True)
-    assert _read(paths.active_locks_index_path) == [lock.to_dict()]
-    assert load_sidecar_index(paths)[task.id]["locks"]["has_lock"] is True
+    indexed_lock = _read(paths.active_locks_index_path)[0]
+    assert indexed_lock["task_uuid"] == task.task_uuid
+    assert indexed_lock["task_id"] == task.id
+    assert load_sidecar_index(paths)[task.task_uuid]["locks"]["has_lock"] is True
 
     remove_lock_from_paths(paths, task.id)
     assert _read(paths.active_locks_index_path) == []
-    assert load_sidecar_index(paths)[task.id]["locks"]["has_lock"] is False
+    assert load_sidecar_index(paths)[task.task_uuid]["locks"]["has_lock"] is False
 
     from dataclasses import replace
 

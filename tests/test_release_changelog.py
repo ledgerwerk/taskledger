@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from taskledger.cli import app
 from taskledger.storage.frontmatter import read_markdown_front_matter
+from taskledger.storage.task_store import resolve_task
 from tests.support.builders import (
     create_done_task as build_done_task,
 )
@@ -110,6 +111,7 @@ def test_release_tag_persists_release_record(tmp_path: Path) -> None:
     assert metadata["object_type"] == "release"
     assert metadata["version"] == "0.4.1"
     assert metadata["boundary_task_id"] == task_id
+    assert metadata["boundary_task_uuid"] == resolve_task(tmp_path, task_id).task_uuid
 
 
 # specmason: req=REQ-0046 ac=AC-0522

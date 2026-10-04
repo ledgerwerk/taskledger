@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,10 @@ from taskledger.storage.task_store import (
     ensure_v2_layout,
     load_active_task_state,
     resolve_active_task,
+    resolve_task,
+    resolve_v2_paths,
 )
+from taskledger.storage.yaml_store import write_yaml_object
 from tests.support.builders import init_workspace
 
 pytestmark = [pytest.mark.cli, pytest.mark.integration, pytest.mark.slow]
@@ -59,12 +63,25 @@ def _json(result) -> dict[str, object]:
 # specmason: req=REQ-0001 ac=AC-0004
 def test_active_task_state_round_trips(tmp_path: Path) -> None:
     ensure_v2_layout(tmp_path)
-    create_task(tmp_path, title="Active", description="desc", slug="active")
+    task = create_task(tmp_path, title="Active", description="desc", slug="active")
 
     activated = activate_task(tmp_path, "active", reason="work")
     assert activated["task_id"] == "task-0001"
-    assert load_active_task_state(tmp_path).task_id == "task-0001"  # type: ignore[union-attr]
-    assert resolve_active_task(tmp_path).slug == "active"
+    state = load_active_task_state(tmp_path)
+    assert state is not None
+    assert state.task_id == "task-0001"
+    assert state.task_uuid == task.task_uuid
+    assert "task_uuid" in state.to_dict()
+    stale_display_state = replace(state, task_id="task-9999")
+    write_yaml_object(
+        resolve_v2_paths(tmp_path).active_task_path, stale_display_state.to_dict()
+    )
+    normalized_state = load_active_task_state(tmp_path)
+    assert normalized_state is not None
+    assert normalized_state.task_id == task.id
+    assert normalized_state.task_uuid == task.task_uuid
+    assert resolve_active_task(tmp_path).task_uuid == task.task_uuid
+    assert resolve_task(tmp_path, task.task_uuid or "").id == task.id
 
     cleared = deactivate_task(tmp_path, reason="done")
     assert cleared["active"] is False
@@ -355,6 +372,7 @@ def test_export_import_preserves_active_task(tmp_path: Path) -> None:
     )
     active = _json(runner.invoke(app, ["--cwd", str(dest), "--json", "task", "active"]))
     assert active["result"]["task_id"] == "task-0001"
+    assert load_active_task_state(dest).task_uuid
 
 
 # specmason: req=REQ-0001 ac=AC-0006

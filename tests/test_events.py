@@ -130,3 +130,24 @@ def test_load_recent_events_returns_chronological_task_tail(tmp_path: Path) -> N
         "evt-20260424T084600Z-000003",
         "evt-20260424T084700Z-000004",
     ]
+
+
+def test_event_task_uuid_round_trips(tmp_path: Path) -> None:
+    events_dir = tmp_path / "events"
+    task_uuid = "019f0000-0000-7000-8000-000000000001"
+    event = TaskEvent(
+        ts="2026-04-24T08:48:00+00:00",
+        event="task.updated",
+        task_id="task-0001",
+        actor=ActorRef(actor_type="agent", actor_name="taskledger"),
+        event_id="evt-20260424T084800Z-000001",
+        task_uuid=task_uuid,
+    )
+    append_event(events_dir, event)
+
+    loaded = load_events(events_dir)
+
+    assert len(loaded) == 1
+    assert loaded[0].task_id == "task-0001"
+    assert loaded[0].task_uuid == task_uuid
+    assert loaded[0].to_dict()["task_uuid"] == task_uuid

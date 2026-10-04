@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -13,12 +13,15 @@ from taskledger.storage.frontmatter import read_markdown_front_matter
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.paths import load_project_locator
 from taskledger.storage.task_store import (
+    V2Paths,
     list_changes,
     list_plans,
     list_questions,
     list_releases,
+    list_releases_from_paths,
     list_runs,
     list_tasks,
+    list_tasks_from_paths,
     load_active_locks,
     load_active_task_state,
     load_todos,
@@ -44,6 +47,7 @@ class TreeOptions:
 
 def build_tree(workspace_root: Path, options: TreeOptions) -> dict[str, Any]:
     locator = load_project_locator(workspace_root)
+    v2 = resolve_v2_paths(workspace_root)
     active_state = load_active_task_state(workspace_root)
     active_task_id = active_state.task_id if active_state else None
 
@@ -68,14 +72,14 @@ def build_tree(workspace_root: Path, options: TreeOptions) -> dict[str, Any]:
     }
 
     if options.include_all_ledgers:
-        ledgers_dir = locator.taskledger_dir / "ledgers"
+        ledgers_dir = v2.ledger_dir.parent
         if ledgers_dir.exists():
             current_ref = _current_ledger_ref(locator.config_path)
             for ledger_path in sorted(ledgers_dir.iterdir()):
                 if ledger_path.is_dir():
                     ref = ledger_path.name
                     is_current = ref == current_ref
-                    tasks, releases = _ledger_records(ledger_path)
+                    tasks, releases = _ledger_records(ledger_path, v2)
                     ledger_data = _build_ledger(
                         workspace_root,
                         ref,
@@ -89,7 +93,6 @@ def build_tree(workspace_root: Path, options: TreeOptions) -> dict[str, Any]:
                     )
                     ledgers.append(ledger_data)
     else:
-        v2 = resolve_v2_paths(workspace_root)
         ledger_data = _build_ledger(
             workspace_root,
             v2.ledger_ref,
@@ -111,26 +114,26 @@ def _current_ledger_ref(config_path: Path) -> str:
     return config.ref
 
 
-def _ledger_records(ledger_dir: Path) -> tuple[list[TaskRecord], list[ReleaseRecord]]:
-    tasks_dir = ledger_dir / "tasks"
-    releases_dir = ledger_dir / "releases"
-
-    tasks: list[TaskRecord] = []
-    if tasks_dir.exists():
-        tasks = [_load_task_record(path) for path in tasks_dir.glob("task-*/task.md")]
-        tasks = sorted(tasks, key=lambda item: task_numeric_sort_key(item.id))
-
-    releases: list[ReleaseRecord] = []
-    if releases_dir.exists():
-        releases = [_load_release_record(path) for path in releases_dir.glob("*.md")]
-        releases = sorted(
-            releases,
-            key=lambda item: (
-                task_numeric_sort_key(item.boundary_task_id),
-                item.version,
-            ),
+def _ledger_records(
+    ledger_dir: Path, paths: V2Paths
+) -> tuple[list[TaskRecord], list[ReleaseRecord]]:
+    ledger_paths = replace(
+        paths,
+        ledger_ref=ledger_dir.name,
+        ledger_dir=ledger_dir,
+        project_dir=ledger_dir,
+        tasks_dir=ledger_dir / "tasks",
+        releases_dir=ledger_dir / "releases",
+    )
+    tasks = list_tasks_from_paths(ledger_paths)
+    tasks.sort(key=lambda item: task_numeric_sort_key(item.id))
+    releases = list_releases_from_paths(ledger_paths)
+    releases.sort(
+        key=lambda item: (
+            task_numeric_sort_key(item.boundary_task_id),
+            item.version,
         )
-
+    )
     return tasks, releases
 
 
@@ -238,15 +241,20 @@ def _build_task_nodes(
     task_ref: str | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     tasks_by_id = {t.id: t for t in tasks}
+    tasks_by_uuid = {t.task_uuid: t for t in tasks if t.task_uuid is not None}
     children_by_parent: dict[str, list[TaskRecord]] = {t.id: [] for t in tasks}
     roots: list[TaskRecord] = []
     orphans: list[TaskRecord] = []
 
     for task in tasks:
-        parent_id = task.parent_task_id
-        if parent_id and parent_id in tasks_by_id:
-            children_by_parent[parent_id].append(task)
-        elif parent_id:
+        parent = (
+            tasks_by_uuid.get(task.parent_task_uuid)
+            if task.parent_task_uuid is not None
+            else tasks_by_id.get(task.parent_task_id or "")
+        )
+        if parent is not None:
+            children_by_parent[parent.id].append(task)
+        elif task.parent_task_uuid or task.parent_task_id:
             orphans.append(task)
         else:
             roots.append(task)
@@ -262,7 +270,11 @@ def _build_task_nodes(
         subtree_ids.add(target.id)
         roots = [t for t in roots if t.id in subtree_ids]
         # Also check if the target is a child of some parent
-        if target.parent_task_id and target.parent_task_id in tasks_by_id:
+        if (
+            target.parent_task_uuid in tasks_by_uuid
+            if target.parent_task_uuid is not None
+            else target.parent_task_id in tasks_by_id
+        ):
             # Target is a child; make it a root in the subtree view
             roots = [target]
         filtered_orphans = [o for o in orphans if o.id in subtree_ids]

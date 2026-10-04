@@ -212,15 +212,10 @@ def test_task_record_keeps_local_id_without_global_ref_fields(tmp_path: Path) ->
         ],
     )
     assert create.exit_code == 0, create.stdout
-    task_md = (
-        tmp_path
-        / ".taskledger"
-        / "ledgers"
-        / "main"
-        / "tasks"
-        / "task-0001"
-        / "task.md"
-    )
+    paths = resolve_v2_paths(tmp_path)
+    task_dirs = list(paths.tasks_dir.iterdir())
+    assert len(task_dirs) == 1
+    task_md = task_dirs[0] / "task.md"
     metadata, _ = read_markdown_front_matter(task_md)
     assert metadata["id"] == "task-0001"
     assert "global_id" not in metadata

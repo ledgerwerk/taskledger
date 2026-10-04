@@ -25,7 +25,7 @@ from taskledger.exchange import (
     read_project_archive,
 )
 from taskledger.storage.agent_logs import load_agent_command_logs
-from taskledger.storage.task_store import resolve_v2_paths, task_lock_path
+from taskledger.storage.task_store import resolve_v2_paths, task_dir, task_lock_path
 from tests.support.builders import init_workspace
 
 pytestmark = [pytest.mark.cli, pytest.mark.integration, pytest.mark.slow]
@@ -1012,8 +1012,8 @@ def test_import_replace_quarantines_lock_and_allows_resume(tmp_path: Path) -> No
 
     assert not _task_lock_paths(dest_root, "task-0001")
     imported_lock_audits = sorted(
-        (dest_root / ".taskledger" / "ledgers").glob(
-            "*/tasks/task-0001/audit/imported-lock-*.yaml"
+        (task_dir(resolve_v2_paths(dest_root), "task-0001") / "audit").glob(
+            "imported-lock-*.yaml"
         )
     )
     assert imported_lock_audits
@@ -1169,7 +1169,7 @@ def test_import_single_task_preserves_id_when_free(tmp_path: Path) -> None:
 
 
 # specmason: req=REQ-0065 ac=AC-0744
-def test_import_single_task_renumbers_on_conflict_without_overwrite(
+def test_import_single_task_derives_alias_without_overwrite(
     tmp_path: Path,
 ) -> None:
     source_root = tmp_path / "source"
@@ -1222,22 +1222,36 @@ def test_import_single_task_renumbers_on_conflict_without_overwrite(
         )
     )
     result = cast(dict[str, Any], import_payload["result"])
-    assert result["task_id_map"] == {"task-0001": "task-0002"}
-    assert result["renumbered"] == ["task-0001"]
-    dest_show = _json(
+    _, archive_payload, _ = _read_manifest_payload(archive_path)
+    archived_v2 = cast(dict[str, Any], archive_payload["v2"])
+    source_uuid = str(cast(dict[str, Any], archived_v2["tasks"][0])["task_uuid"])
+    result = cast(dict[str, Any], import_payload["result"])
+    source_id = result["task_uuid_map"][source_uuid]
+    destination_id = "task-0002" if source_id == "task-0001" else "task-0001"
+    assert result["task_id_map"] == {"task-0001": source_id}
+    assert result["renumbered"] == ([] if source_id == "task-0001" else ["task-0001"])
+    source_show = _json(
         runner.invoke(
             app,
-            ["--cwd", str(dest_root), "--json", "task", "show", "--task", "task-0001"],
+            ["--cwd", str(dest_root), "--json", "task", "show", "--task", source_id],
         )
     )
-    imported_show = _json(
+    destination_show = _json(
         runner.invoke(
             app,
-            ["--cwd", str(dest_root), "--json", "task", "show", "--task", "task-0002"],
+            [
+                "--cwd",
+                str(dest_root),
+                "--json",
+                "task",
+                "show",
+                "--task",
+                destination_id,
+            ],
         )
     )
-    assert dest_show["result"]["task"]["slug"] == "dest-task"
-    assert imported_show["result"]["task"]["slug"] == "source-task"
+    assert source_show["result"]["task"]["slug"] == "source-task"
+    assert destination_show["result"]["task"]["slug"] == "dest-task"
 
 
 # specmason: req=REQ-0065 ac=AC-0739
@@ -1303,7 +1317,12 @@ def test_import_single_task_dry_run_reports_id_map_without_mutation(
     )
     result = cast(dict[str, Any], dry_run_payload["result"])
     assert result["dry_run"] is True
-    assert result["task_id_map"] == {"task-0001": "task-0002"}
+    _, archive_payload, _ = _read_manifest_payload(archive_path)
+    archived_v2 = cast(dict[str, Any], archive_payload["v2"])
+    source_uuid = str(cast(dict[str, Any], archived_v2["tasks"][0])["task_uuid"])
+    source_id = result["task_uuid_map"][source_uuid]
+    assert result["task_id_map"] == {"task-0001": source_id}
+    assert result["renumbered"] == ([] if source_id == "task-0001" else ["task-0001"])
     tasks = _json(
         runner.invoke(app, ["--cwd", str(dest_root), "--json", "task", "list"])
     )
@@ -1311,7 +1330,7 @@ def test_import_single_task_dry_run_reports_id_map_without_mutation(
 
 
 # specmason: req=REQ-0065 ac=AC-0742
-def test_import_single_task_id_policy_fail_on_conflict(tmp_path: Path) -> None:
+def test_import_single_task_uuid_ignores_numeric_alias_conflict(tmp_path: Path) -> None:
     source_root = tmp_path / "source"
     dest_root = tmp_path / "dest"
     source_root.mkdir()
@@ -1367,11 +1386,65 @@ def test_import_single_task_id_policy_fail_on_conflict(tmp_path: Path) -> None:
             "fail-on-conflict",
         ],
     )
-    assert import_result.exit_code != 0
+    assert import_result.exit_code == 0, import_result.output
     tasks = _json(
         runner.invoke(app, ["--cwd", str(dest_root), "--json", "task", "list"])
     )
-    assert len(cast(list[dict[str, Any]], tasks["result"]["tasks"])) == 1
+    assert len(cast(list[dict[str, Any]], tasks["result"]["tasks"])) == 2
+
+
+# specmason: req=REQ-0065 ac=AC-0741
+def test_import_blocks_conflicting_content_for_existing_task_uuid(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "source"
+    dest_root = tmp_path / "dest"
+    source_root.mkdir()
+    dest_root.mkdir()
+    _init_project(source_root)
+    _init_project(dest_root)
+    _copy_project_uuid(source_root, dest_root)
+    assert (
+        runner.invoke(
+            app,
+            [
+                "--cwd",
+                str(source_root),
+                "task",
+                "create",
+                "uuid-conflict",
+                "--description",
+                "Original task content.",
+            ],
+        ).exit_code
+        == 0
+    )
+    export = _json(
+        runner.invoke(
+            app,
+            ["--cwd", str(source_root), "--json", "export", "task-0001", "--overwrite"],
+        )
+    )
+    archive_path = Path(cast(str, export["result"]["path"]))
+    imported = runner.invoke(
+        app, ["--cwd", str(dest_root), "import", str(archive_path)]
+    )
+    assert imported.exit_code == 0, imported.output
+
+    _, payload, _ = _read_manifest_payload(archive_path)
+    conflicted_payload = json.loads(json.dumps(payload))
+    raw_v2 = cast(dict[str, Any], conflicted_payload["v2"])
+    task = cast(dict[str, Any], raw_v2["tasks"][0])
+    task["slug"] = "different-content"
+    from taskledger.exchange import import_project_payload
+
+    with pytest.raises(LaunchError, match="Task UUID content conflict"):
+        import_project_payload(
+            dest_root,
+            payload=conflicted_payload,
+            replace=False,
+            archive_scope="tasks",
+        )
 
 
 # specmason: req=REQ-0065 ac=AC-0737
@@ -1412,7 +1485,7 @@ def test_import_single_task_updates_ledger_next_task_number(tmp_path: Path) -> N
             ["--cwd", str(dest_root), "--json", "import", str(archive_path)],
         )
     )
-    # After importing task-0003, the next task should be task-0004.
+    # Imported aliases are derived from UUID order; the next ID is task-0002.
     _json(
         runner.invoke(
             app,
@@ -1425,7 +1498,7 @@ def test_import_single_task_updates_ledger_next_task_number(tmp_path: Path) -> N
             ["--cwd", str(dest_root), "--json", "task", "show", "after-import"],
         )
     )
-    assert show["result"]["task"]["id"] == "task-0004"
+    assert show["result"]["task"]["id"] == "task-0002"
 
 
 # specmason: req=REQ-0065 ac=AC-0743
@@ -1467,17 +1540,8 @@ def test_import_single_task_artifacts_follow_renumbered_task_id(tmp_path: Path) 
         ).exit_code
         == 0
     )
-    source_artifact = (
-        source_root
-        / ".taskledger"
-        / "ledgers"
-        / "main"
-        / "tasks"
-        / "task-0001"
-        / "artifacts"
-        / "run-0001"
-        / "out.txt"
-    )
+    source_task_dir = task_dir(resolve_v2_paths(source_root), "task-0001")
+    source_artifact = source_task_dir / "artifacts" / "run-0001" / "out.txt"
     source_artifact.parent.mkdir(parents=True, exist_ok=True)
     source_artifact.write_text("artifact-output\n", encoding="utf-8")
     export_payload = _json(
@@ -1501,12 +1565,7 @@ def test_import_single_task_artifacts_follow_renumbered_task_id(tmp_path: Path) 
         )
     )
     imported_artifact = (
-        dest_root
-        / ".taskledger"
-        / "ledgers"
-        / "main"
-        / "tasks"
-        / "task-0002"
+        task_dir(resolve_v2_paths(dest_root), source_task_dir.name)
         / "artifacts"
         / "run-0001"
         / "out.txt"
@@ -1918,16 +1977,8 @@ def test_export_with_run_artifacts_includes_artifact_members(tmp_path: Path) -> 
         ).exit_code
         == 0
     )
-    artifact_path = (
-        source_root
-        / ".taskledger"
-        / "ledgers"
-        / "main"
-        / "tasks"
-        / "task-0001"
-        / "artifacts"
-        / "run.log"
-    )
+    task_path = task_dir(resolve_v2_paths(source_root), "task-0001")
+    artifact_path = task_path / "artifacts" / "run.log"
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     artifact_path.write_text("artifact-output\n", encoding="utf-8")
 
@@ -1945,7 +1996,7 @@ def test_export_with_run_artifacts_includes_artifact_members(tmp_path: Path) -> 
     assert export_result.exit_code == 0, export_result.output
     with tarfile.open(archive_path, "r:gz") as tar:
         names = {member.name for member in tar.getmembers()}
-    assert "artifacts/tasks/task-0001/artifacts/run.log" in names
+    assert f"artifacts/tasks/{task_path.name}/artifacts/run.log" in names
 
     import_result = runner.invoke(
         app,
@@ -1953,14 +2004,7 @@ def test_export_with_run_artifacts_includes_artifact_members(tmp_path: Path) -> 
     )
     assert import_result.exit_code == 0, import_result.output
     imported_artifact = (
-        dest_root
-        / ".taskledger"
-        / "ledgers"
-        / "main"
-        / "tasks"
-        / "task-0001"
-        / "artifacts"
-        / "run.log"
+        task_dir(resolve_v2_paths(dest_root), task_path.name) / "artifacts" / "run.log"
     )
     assert imported_artifact.read_text(encoding="utf-8") == "artifact-output\n"
 

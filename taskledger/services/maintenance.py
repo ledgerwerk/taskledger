@@ -564,7 +564,7 @@ def garbage_collect(
         )
 
     if {"runtime", "artifacts"} & selected_scopes:
-        from taskledger.storage.task_ids import inspect_task_id_inventory
+        from taskledger.storage.task_identity import task_identity_inventory
         from taskledger.storage.task_store import (
             list_runs_from_paths,
             list_tasks_from_paths,
@@ -583,8 +583,9 @@ def garbage_collect(
         active_task_id = active_state.task_id if active_state is not None else None
         lock_task_ids = {lock.task_id for lock in load_lock_records_from_paths(paths)}
         incomplete_task_ids = {
-            allocation.task_id
-            for allocation in inspect_task_id_inventory(paths).incomplete_allocations
+            identity.task_id
+            for identity in task_identity_inventory(paths).entries
+            if identity.state == "incomplete"
         }
         if "runtime" in selected_scopes:
             candidates.extend(

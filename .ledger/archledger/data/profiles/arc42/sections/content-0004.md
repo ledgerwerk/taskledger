@@ -8,7 +8,7 @@ order: 40
 status: accepted
 body_format: markdown
 kind: content
-version: 5
+version: 6
 ---
 
 Taskledger uses a layered architecture with clear dependency direction: upper layers depend on lower layers, never the reverse.
@@ -22,7 +22,8 @@ Taskledger uses a layered architecture with clear dependency direction: upper la
 Key architectural choices:
 
 - **Markdown and YAML front matter as canonical format** — Each record (task, plan, run, lock, handoff, code review, etc.) is stored as a `.md` file with YAML front matter metadata and a Markdown body. This makes state human-readable and Git-friendly.
-- **Sidecar indexes as derived caches** — A `task_sidecars.json` summary index lives under `.taskledger/ledgers/<ledger_ref>/` and is rebuilt from canonical records. Per-task sidecar writes update the index in place.
+- **UUID-backed task bundles with numeric aliases** — Canonical task bundles live in UUIDv7-named directories under the Ledgercore data mount. UUIDs anchor storage identity and cross-task relationships; `task-####` remains the user-facing alias derived from the identity inventory.
+- **Sidecar indexes as derived caches** — The `task_sidecars.json` summary index lives in the configured rebuildable indexes mount and is rebuilt from canonical Markdown records. Per-task sidecar writes update the index in place.
 - **Policy-based gate decisions** — All lifecycle transitions go through functions in `taskledger/domain/policies.py` that return `Decision` objects with `allowed`, `code`, `message`, and `exit_code`. This keeps gate logic testable and separate from I/O.
 - **Atomic file writes** — All writes use `atomic_write_text` (write to temp, fsync, `os.replace`) from `ledgercore`.
 - **Editable plan input with preflight** — `taskledger plan check` parses editable plan input through `taskledger/services/plan_input.py`, applies worker-pipeline validation, and returns indexed issues before any plan upsert.

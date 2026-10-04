@@ -8,7 +8,7 @@ order: 50
 status: accepted
 body_format: markdown
 kind: content
-version: 2
+version: 3
 ---
 
 The top-level building block is the **taskledger system**, decomposed into five black-box components:
@@ -21,4 +21,4 @@ The top-level building block is the **taskledger system**, decomposed into five 
 
 Data flows strictly downward: CLI -> Services -> Domain + Storage. The API layer calls Services directly. The Domain layer has no dependencies on Storage or Services.
 
-Each task is stored as a **task bundle directory** under `.taskledger/ledgers/<ledger_ref>/` containing the task record (Markdown) and sidecar collections for plans, runs, locks, todos, questions, changes, checks, handoffs, links, and code reviews. Mutations append immutable `TaskEvent` records to the ledger-level `events/` directory. Action and event logging is enabled by default; set `[event_logging] enabled = false` in `taskledger.toml` to disable new event records. Existing records remain readable regardless. A `task_sidecars.json` summary index under the same ledger path is maintained as a derived cache of sidecar counts and lock summaries.
+Each task is stored as a **task bundle directory** at `<data-root>/ledgers/<ledger_ref>/tasks/<uuidv7>/`, containing `task.md` and its sidecar collections. The UUIDv7 is the stable storage identity; `task-####` remains the derived user-facing task alias. Mutations append immutable `TaskEvent` records to the ledger-level `events/` directory. Action and event logging is enabled by default; set the project event-logging configuration to disable new event records. Existing records remain readable regardless. Task and sidecar indexes are derived caches in the configured rebuildable indexes mount.

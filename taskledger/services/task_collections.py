@@ -133,21 +133,35 @@ def add_requirement(
     )
     _tasks._ensure_not_archived(task, operation="add requirement to")
     required = resolve_task(workspace_root, required_task_ref)
-    requirements = list(task.requirements)
-    if required.id not in requirements:
-        requirements.append(required.id)
+    requirement_records = list(load_requirements(workspace_root, task.id).requirements)
+    if not any(
+        item.required_task_uuid == required.task_uuid
+        or (
+            item.required_task_uuid is None
+            and (item.required_task_id or item.task_id) == required.id
+        )
+        for item in requirement_records
+    ):
+        requirement_records.append(
+            DependencyRequirement(
+                task_id=required.id,
+                required_task_id=required.id,
+                parent_task_id=task.id,
+                required_task_uuid=required.task_uuid,
+                parent_task_uuid=task.task_uuid,
+            )
+        )
     updated = replace(
         task,
-        requirements=tuple(requirements),
+        requirements=tuple(
+            item.required_task_id or item.task_id for item in requirement_records
+        ),
         updated_at=utc_now_iso(),
     )
     save_requirements(
         workspace_root,
         RequirementCollection(
-            task_id=updated.id,
-            requirements=tuple(
-                DependencyRequirement(task_id=item) for item in requirements
-            ),
+            task_id=updated.id, requirements=tuple(requirement_records)
         ),
     )
     save_task(workspace_root, updated)
@@ -162,20 +176,27 @@ def remove_requirement(
     )
     _tasks._ensure_not_archived(task, operation="remove requirement from")
     required = resolve_task(workspace_root, required_task_ref)
-    remaining = tuple(item for item in task.requirements if item != required.id)
+    requirement_records = tuple(
+        item
+        for item in load_requirements(workspace_root, task.id).requirements
+        if not (
+            item.required_task_uuid == required.task_uuid
+            or (
+                item.required_task_uuid is None
+                and (item.required_task_id or item.task_id) == required.id
+            )
+        )
+    )
     updated = replace(
         task,
-        requirements=remaining,
+        requirements=tuple(
+            item.required_task_id or item.task_id for item in requirement_records
+        ),
         updated_at=utc_now_iso(),
     )
     save_requirements(
         workspace_root,
-        RequirementCollection(
-            task_id=updated.id,
-            requirements=tuple(
-                DependencyRequirement(task_id=item) for item in remaining
-            ),
-        ),
+        RequirementCollection(task_id=updated.id, requirements=requirement_records),
     )
     save_task(workspace_root, updated)
     return updated
@@ -206,9 +227,16 @@ def waive_requirement(
     sidecar = load_requirements(workspace_root, task.id)
     requirements = list(sidecar.requirements)
     for index, item in enumerate(requirements):
-        if item.task_id == required.id:
+        if item.required_task_uuid == required.task_uuid or (
+            item.required_task_uuid is None
+            and (item.required_task_id or item.task_id) == required.id
+        ):
             requirements[index] = replace(
                 item,
+                required_task_id=required.id,
+                parent_task_id=task.id,
+                required_task_uuid=required.task_uuid,
+                parent_task_uuid=task.task_uuid,
                 waiver=DependencyWaiver(
                     actor=ActorRef(
                         actor_type="user",
@@ -223,6 +251,10 @@ def waive_requirement(
         requirements.append(
             DependencyRequirement(
                 task_id=required.id,
+                required_task_id=required.id,
+                parent_task_id=task.id,
+                required_task_uuid=required.task_uuid,
+                parent_task_uuid=task.task_uuid,
                 waiver=DependencyWaiver(
                     actor=ActorRef(
                         actor_type="user",
@@ -239,7 +271,9 @@ def waive_requirement(
     )
     updated = replace(
         task,
-        requirements=tuple(item.task_id for item in requirements),
+        requirements=tuple(
+            item.required_task_id or item.task_id for item in requirements
+        ),
         updated_at=utc_now_iso(),
     )
     save_task(workspace_root, updated)
@@ -247,7 +281,11 @@ def waive_requirement(
         workspace_root,
         updated.id,
         "requirement.waived",
-        {"required_task_id": required.id, "reason": reason.strip()},
+        {
+            "required_task_id": required.id,
+            "required_task_uuid": required.task_uuid,
+            "reason": reason.strip(),
+        },
     )
     return updated
 

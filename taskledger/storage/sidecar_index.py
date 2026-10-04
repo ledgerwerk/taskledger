@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 SIDECAR_INDEX_FILENAME = "task_sidecars.json"
-SIDECAR_INDEX_SCHEMA_VERSION = 1
+SIDECAR_INDEX_SCHEMA_VERSION = 2
 _UNSET: object = object()
 
 
@@ -116,6 +116,7 @@ class LockSummary:
 
 @dataclass(frozen=True, slots=True)
 class TaskSidecarSummary:
+    task_uuid: str | None
     task_id: str
     todos: TodoSummary = field(default_factory=TodoSummary)
     questions: QuestionSummary = field(default_factory=QuestionSummary)
@@ -126,6 +127,8 @@ class TaskSidecarSummary:
 
     def to_dict(self) -> dict[str, object]:
         return {
+            "task_id": self.task_id,
+            "task_uuid": self.task_uuid,
             "todos": {
                 "total": self.todos.total,
                 "done": self.todos.done,
@@ -249,7 +252,7 @@ def rebuild_sidecar_index(paths: V2Paths) -> dict[str, int]:
 
     tasks = list_tasks_from_paths(paths)
     lock_by_task = {
-        lock.task_id: lock
+        lock.task_uuid or lock.task_id: lock
         for lock in load_lock_records_from_paths(paths)
         if not lock_is_expired(lock)
     }
@@ -262,9 +265,11 @@ def rebuild_sidecar_index(paths: V2Paths) -> dict[str, int]:
             handoffs = list_handoffs_from_paths(paths, task.id)
             reviews = list_code_reviews_from_paths(paths, task.id)
             runs = list_runs_from_paths(paths, task.id)
-            task_lock = lock_by_task.get(task.id)
+            task_key = task.task_uuid or task.id
+            task_lock = lock_by_task.get(task_key)
 
             summary = TaskSidecarSummary(
+                task_uuid=task.task_uuid,
                 task_id=task.id,
                 todos=_compute_todos_summary(list(todos)),
                 questions=_compute_questions_summary(questions),
@@ -275,7 +280,7 @@ def rebuild_sidecar_index(paths: V2Paths) -> dict[str, int]:
                 runs=_compute_runs_summary(runs),
                 locks=_compute_lock_summary(task_lock),
             )
-            entries[task.id] = summary.to_dict()
+            entries[task_key] = summary.to_dict()
         except Exception:
             logger.warning("Skipping sidecar summary for %s", task.id, exc_info=True)
 
@@ -306,7 +311,7 @@ def load_sidecar_index(
         rebuild_sidecar_index(paths)
 
     data = try_load_json_object(path, "sidecar index")
-    if data is None:
+    if data is None or data.get("schema_version") != SIDECAR_INDEX_SCHEMA_VERSION:
         rebuild_sidecar_index(paths)
         data = try_load_json_object(path, "sidecar index")
     if data is None:
@@ -322,10 +327,17 @@ def load_sidecar_index(
     return {key: value for key, value in entries.items() if isinstance(value, dict)}
 
 
-def get_sidecar_summary(paths: V2Paths, task_id: str) -> dict[str, object] | None:
-    """Get the sidecar summary for one task."""
+def get_sidecar_summary(paths: V2Paths, task_ref: str) -> dict[str, object] | None:
+    """Get a task's sidecar summary by UUID or current display reference."""
+    from taskledger.errors import LaunchError
+    from taskledger.storage.task_identity import task_identity_for_ref
+
     entries = load_sidecar_index(paths)
-    return entries.get(task_id)
+    try:
+        identity = task_identity_for_ref(paths, task_ref)
+    except LaunchError:
+        return entries.get(task_ref)
+    return entries.get(str(identity.task_uuid))
 
 
 def update_sidecar_summary(
@@ -343,10 +355,19 @@ def update_sidecar_summary(
     """Write through one task's summary without triggering a project rebuild."""
     from filelock import FileLock
 
+    from taskledger.errors import LaunchError
     from taskledger.storage.common import try_load_json_object
     from taskledger.storage.indexes import index_is_dirty, mark_index_dirty
+    from taskledger.storage.task_identity import task_identity_for_ref
     from taskledger.timeutils import utc_now_iso
 
+    try:
+        identity = task_identity_for_ref(paths, task_id)
+    except LaunchError:
+        mark_index_dirty(paths, "sidecar_index", task_id=task_id)
+        return
+    task_uuid = str(identity.task_uuid)
+    task_id = identity.task_id
     path = _sidecar_index_path(paths)
     if index_is_dirty(paths, "sidecar_index") or not path.is_file():
         mark_index_dirty(paths, "sidecar_index", task_id=task_id)
@@ -355,13 +376,19 @@ def update_sidecar_summary(
     try:
         with FileLock(f"{path}.lock"):
             existing = try_load_json_object(path, "sidecar index")
-            if existing is None or not isinstance(existing.get("entries"), dict):
+            if (
+                existing is None
+                or existing.get("schema_version") != SIDECAR_INDEX_SCHEMA_VERSION
+                or not isinstance(existing.get("entries"), dict)
+            ):
                 mark_index_dirty(paths, "sidecar_index", task_id=task_id)
                 return
             entries = existing["entries"]
             assert isinstance(entries, dict)
-            current_raw = entries.get(task_id)
+            current_raw = entries.get(task_uuid)
             current = dict(current_raw) if isinstance(current_raw, dict) else {}
+            current["task_id"] = task_id
+            current["task_uuid"] = task_uuid
 
             if todos is not None:
                 current["todos"] = _compute_todos_summary(todos).to_dict()
@@ -380,7 +407,7 @@ def update_sidecar_summary(
                     lock if isinstance(lock, TaskLock) else None
                 ).to_dict()
 
-            entries[task_id] = current
+            entries[task_uuid] = current
             existing["generated_at"] = utc_now_iso()
             write_json(path, existing)
     except Exception:

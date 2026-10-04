@@ -1,6 +1,6 @@
 """Unified lock inventory: enumerate, read, diagnose, classify.
 
-The inventory reads every ``task-*/lock.yaml`` once, preserves parse errors
+The inventory reads runtime and bundle-local locks once, preserving parse errors
 per file, and diagnoses each readable lock.  Callers no longer need to
 catch ``LaunchError`` and silently return zero.
 """
@@ -60,6 +60,7 @@ class LockInventoryEntry:
     lock: TaskLock | None
     diagnostics: LockDiagnostics | None
     parse_error: str | None
+    task_uuid: str | None = None
 
     orphan_missing_task: bool = False
 
@@ -95,6 +96,7 @@ class LockInventoryEntry:
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
             "task_id": self.task_id,
+            "task_uuid": self.task_uuid,
             "path": str(self.path),
             "classification": self.classification,
         }
@@ -203,22 +205,31 @@ def build_lock_inventory(
     *,
     current_actor: ActorRef | None = None,
 ) -> LockInventory:
-    """Build a lock inventory by reading every ``task-*/lock.yaml``.
+    """Build a lock inventory across runtime and bundle-local lock files."""
+    from dataclasses import replace
 
-    Parse errors are preserved per-file and never silenced.
-    """
+    from taskledger.storage.task_identity import (
+        AMBIGUOUS_LEGACY_TASK_REF,
+        task_identity_for_ref,
+        task_identity_for_stored_ref,
+    )
+
     entries: list[LockInventoryEntry] = []
     lock_paths = list(
         (paths.runtime_root / "checkouts" / paths.ledger_ref / "locks").glob("*.yaml")
     )
-    lock_paths.extend(paths.tasks_dir.glob("task-*/lock.yaml"))
+    lock_paths.extend(paths.tasks_dir.glob("*/lock.yaml"))
     for lock_path in sorted(lock_paths):
-        parent_name = (
+        path_ref = (
             lock_path.stem
             if lock_path.parent.name == "locks"
             else lock_path.parent.name
         )
-        task_id = parent_name if parent_name.startswith("task-") else None
+        path_uuid = (
+            path_ref if len(path_ref) == 36 and path_ref.count("-") == 4 else None
+        )
+        task_id = path_ref if path_ref.startswith("task-") else None
+        task_uuid = path_uuid
         lock: TaskLock | None = None
         parse_error: str | None = None
         try:
@@ -226,6 +237,36 @@ def build_lock_inventory(
         except Exception as exc:  # noqa: BLE001
             parse_error = f"Failed to read lock {lock_path}: {exc}"
             logger.warning("Malformed lock file %s: %s", lock_path, exc)
+
+        identity = None
+        if lock is not None:
+            try:
+                candidate = task_identity_for_stored_ref(
+                    paths,
+                    task_id=lock.task_id or task_id or "",
+                    task_uuid=lock.task_uuid or path_uuid,
+                )
+                if candidate.state == "live":
+                    identity = candidate
+            except LaunchError as exc:
+                if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+                    parse_error = str(exc)
+        elif path_uuid is not None:
+            try:
+                candidate = task_identity_for_ref(paths, path_uuid)
+                if candidate.state == "live":
+                    identity = candidate
+            except LaunchError:
+                pass
+
+        if identity is not None:
+            task_id = identity.task_id
+            task_uuid = str(identity.task_uuid)
+            if lock is not None:
+                lock = replace(lock, task_id=task_id, task_uuid=task_uuid)
+        elif lock is not None:
+            task_id = task_id or lock.task_id
+            task_uuid = task_uuid or lock.task_uuid
 
         diagnostics: LockDiagnostics | None = None
         if lock is not None:
@@ -240,14 +281,11 @@ def build_lock_inventory(
                 logger.warning("Lock diagnosis failed %s: %s", lock_path, exc)
 
         orphan_missing_task = (
-            lock is not None
-            and lock_path.parent.name == "locks"
-            and task_id is not None
-            and lock.task_id == task_id
-            and not (paths.tasks_dir / task_id / "task.md").is_file()
+            lock is not None and lock_path.parent.name == "locks" and identity is None
         )
         entries.append(
             LockInventoryEntry(
+                task_uuid=task_uuid,
                 task_id=task_id,
                 path=lock_path,
                 lock=lock,

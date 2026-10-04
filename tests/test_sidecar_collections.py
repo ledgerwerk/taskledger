@@ -5,7 +5,11 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from taskledger.cli import app
-from taskledger.storage.project_context import load_project_context
+from taskledger.storage.task_store import (
+    load_requirements,
+    resolve_task,
+    resolve_v2_paths,
+)
 
 
 def _make_runner() -> CliRunner:
@@ -93,8 +97,14 @@ def test_todos_links_and_requirements_use_per_record_markdown(tmp_path: Path) ->
         ],
     )
 
-    data_root = load_project_context(tmp_path).paths.data_root
-    task_dir = data_root / "ledgers" / "main" / "tasks" / "task-0002"
+    task = resolve_task(tmp_path, "sidecar-task")
+    dependency = resolve_task(tmp_path, "dependency-task")
+    requirement = load_requirements(tmp_path, task.id).requirements[0]
+    assert requirement.required_task_id == dependency.id
+    assert requirement.required_task_uuid == dependency.task_uuid
+    assert requirement.parent_task_id == task.id
+    assert requirement.parent_task_uuid == task.task_uuid
+    task_dir = resolve_v2_paths(tmp_path).tasks_dir / (task.task_uuid or "")
     task_markdown = (task_dir / "task.md").read_text(encoding="utf-8")
     assert "todos:" not in task_markdown
     assert "file_links:" not in task_markdown

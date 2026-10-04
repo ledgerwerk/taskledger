@@ -57,7 +57,10 @@ def dependency_blockers(
     for requirement in load_requirements(workspace_root, task.id).requirements:
         if _has_user_waiver(requirement.waiver):
             continue
-        required = resolve_task(workspace_root, requirement.task_id)
+        required = resolve_task(
+            workspace_root,
+            requirement.required_task_uuid or requirement.task_id,
+        )
         if required.status_stage != "done":
             blockers.append(
                 {

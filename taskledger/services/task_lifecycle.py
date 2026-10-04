@@ -36,6 +36,7 @@ from taskledger.errors import LaunchError, LockConflict
 from taskledger.ids import next_project_id
 from taskledger.services import tasks as _tasks
 from taskledger.storage.locks import lock_is_expired
+from taskledger.storage.task_identity import TaskAllocation
 from taskledger.storage.task_index import list_task_summaries
 from taskledger.storage.task_store import (
     V2Paths,
@@ -61,12 +62,11 @@ from taskledger.timeutils import utc_now_iso
 # ---------------------------------------------------------------------------
 
 
-def _allocate_task_id_and_advance(paths: V2Paths) -> str:
-    """Reserve the next task bundle directory using authoritative allocations."""
-    from taskledger.storage.task_ids import allocate_task_directory_from_paths
+def _allocate_task_identity(paths: V2Paths) -> TaskAllocation:
+    """Reserve a UUIDv7 task bundle and return its current display alias."""
+    from taskledger.storage.task_identity import allocate_task_identity
 
-    task_id, _ = allocate_task_directory_from_paths(paths)
-    return task_id
+    return allocate_task_identity(paths)
 
 
 def _actor_for_active_task(actor_type: str) -> ActorRef:
@@ -293,8 +293,10 @@ def create_task(
     require_mutable_project_context(workspace_root)
     paths = require_v2_layout(workspace_root)
     task_slug = _tasks._unique_slug(list_task_summaries(paths), slug or title)
+    allocation = _allocate_task_identity(paths)
     task = TaskRecord(
-        id=_allocate_task_id_and_advance(paths),
+        id=allocation.task_id,
+        task_uuid=str(allocation.task_uuid),
         slug=task_slug,
         title=title,
         body=description.strip(),
@@ -347,8 +349,10 @@ def create_follow_up_task(
         copy_files=copy_files,
         copy_links=copy_links,
     )
+    allocation = _allocate_task_identity(paths)
     child = TaskRecord(
-        id=_allocate_task_id_and_advance(paths),
+        id=allocation.task_id,
+        task_uuid=str(allocation.task_uuid),
         slug=task_slug,
         title=title,
         body=body,
@@ -356,6 +360,7 @@ def create_follow_up_task(
         labels=tuple(dict.fromkeys((*labels, "follow-up"))),
         file_links=copied_links,
         parent_task_id=parent.id,
+        parent_task_uuid=parent.task_uuid,
         parent_relation="follow_up",
     )
     save_task_from_paths(paths, child)
@@ -367,6 +372,7 @@ def create_follow_up_task(
         "task.follow_up.created",
         {
             "child_task_id": child.id,
+            "child_task_uuid": child.task_uuid,
             "child_slug": child.slug,
             "reason": reason,
         },
@@ -380,6 +386,7 @@ def create_follow_up_task(
             "title": child.title,
             "parent_task_id": parent.id,
             "parent_relation": "follow_up",
+            "parent_task_uuid": parent.task_uuid,
         },
     )
     if activate:
@@ -404,7 +411,13 @@ def list_follow_up_tasks(workspace_root: Path, parent_ref: str) -> list[TaskReco
     return [
         task
         for task in list_tasks(workspace_root)
-        if task.parent_task_id == parent.id and task.parent_relation == "follow_up"
+        if (
+            task.parent_relation == "follow_up"
+            and (
+                task.parent_task_uuid == parent.task_uuid
+                or (task.parent_task_uuid is None and task.parent_task_id == parent.id)
+            )
+        )
     ]
 
 
@@ -472,8 +485,10 @@ def record_completed_task(
     resolved_completed_by = completed_by or _tasks._default_actor()
     resolved_recorded_by = recorded_by or _tasks._default_actor()
 
+    allocation = _allocate_task_identity(paths)
     task = TaskRecord(
-        id=_allocate_task_id_and_advance(paths),
+        id=allocation.task_id,
+        task_uuid=str(allocation.task_uuid),
         slug=task_slug,
         title=title.strip(),
         body=(description or "").strip(),
@@ -626,6 +641,7 @@ def activate_task(
     _tasks._ensure_not_archived(task, operation="activate")
     previous = load_active_task_state(workspace_root)
     previous_task_id = previous.task_id if previous is not None else None
+    previous_task_uuid = previous.task_uuid if previous is not None else None
     if previous_task_id == task.id and previous is not None:
         return _tasks._active_task_payload(
             workspace_root,
@@ -643,6 +659,8 @@ def activate_task(
         )
     state = ActiveTaskState(
         task_id=task.id,
+        task_uuid=task.task_uuid,
+        previous_task_uuid=previous_task_uuid,
         activated_by=_actor_for_active_task(actor_type),
         reason=reason,
         previous_task_id=previous_task_id,
@@ -653,13 +671,23 @@ def activate_task(
             workspace_root,
             previous_task_id,
             "task.deactivated",
-            {"reason": reason, "next_task_id": task.id, "forced": force},
+            {
+                "reason": reason,
+                "next_task_id": task.id,
+                "next_task_uuid": task.task_uuid,
+                "forced": force,
+            },
         )
     _tasks._append_event(
         workspace_root,
         task.id,
         "task.activated",
-        {"reason": reason, "previous_task_id": previous_task_id, "forced": force},
+        {
+            "reason": reason,
+            "previous_task_id": previous_task_id,
+            "previous_task_uuid": previous_task_uuid,
+            "forced": force,
+        },
     )
     return _tasks._active_task_payload(
         workspace_root,

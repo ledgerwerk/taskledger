@@ -14,6 +14,7 @@ from taskledger.services.tasks import (
     start_implementation,
     start_validation,
 )
+from taskledger.storage.task_store import resolve_v2_paths, task_lock_path
 from tests.support.builders import (
     create_approved_task,
     create_done_task,
@@ -885,10 +886,9 @@ def test_next_action_with_expired_lock_returns_repair_hint(tmp_path: Path) -> No
         == 0
     )
 
-    lock_path = (
-        tmp_path / ".taskledger" / "checkouts" / "main" / "locks" / "task-0001.yaml"
-    )
+    lock_path = task_lock_path(resolve_v2_paths(tmp_path), "task-0001")
     lock_payload = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+    assert lock_path.stem == lock_payload["task_uuid"]
     lock_payload["expires_at"] = "2000-01-01T00:00:00+00:00"
     lock_path.write_text(
         yaml.safe_dump(lock_payload, sort_keys=False), encoding="utf-8"
@@ -1031,6 +1031,8 @@ def test_task_follow_up_creates_linked_child_and_copies_lightweight_links(
         )
     )["result"]
     assert parent_show["follow_up_tasks"][0]["task_id"] == "task-0002"
+
+    assert child["parent_task_uuid"] == parent_show["task"]["task_uuid"]
 
 
 # specmason: req=REQ-0015 ac=AC-0147

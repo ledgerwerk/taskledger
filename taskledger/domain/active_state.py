@@ -32,8 +32,11 @@ class ActiveTaskState:
     object_type: str = "active_task"
     file_version: str = TASKLEDGER_V2_FILE_VERSION
 
+    task_uuid: str | None = None
+    previous_task_uuid: str | None = None
+
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "object_type": self.object_type,
             "file_version": self.file_version,
@@ -43,6 +46,11 @@ class ActiveTaskState:
             "reason": self.reason,
             "previous_task_id": self.previous_task_id,
         }
+        if self.task_uuid is not None:
+            payload["task_uuid"] = self.task_uuid
+        if self.previous_task_uuid is not None:
+            payload["previous_task_uuid"] = self.previous_task_uuid
+        return payload
 
     @classmethod
     def from_dict(cls, data: object) -> ActiveTaskState:
@@ -59,6 +67,8 @@ class ActiveTaskState:
             object_type=_string_value(data, "object_type"),
             file_version=_optional_string(data.get("file_version"))
             or TASKLEDGER_V2_FILE_VERSION,
+            task_uuid=_optional_string(data.get("task_uuid")),
+            previous_task_uuid=_optional_string(data.get("previous_task_uuid")),
         )
 
 

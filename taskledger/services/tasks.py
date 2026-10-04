@@ -286,7 +286,10 @@ def list_task_summaries(
 
     paths = resolve_v2_paths(workspace_root)
     tasks = list_task_summary_records(paths, visibility=visibility)
-    active_locks = {lock.task_id: lock for lock in load_active_locks_from_index(paths)}
+    active_locks = {
+        lock.task_uuid or lock.task_id: lock
+        for lock in load_active_locks_from_index(paths)
+    }
     sidecars = load_sidecar_index(paths)
     active_state = load_active_task_state_from_paths(paths)
     active_task_id = active_state.task_id if active_state is not None else None
@@ -311,7 +314,9 @@ def list_task_summaries(
                 "status_stage": task.status_stage,
                 "is_active": task.id == active_task_id,
                 "active_stage": _summary_active_stage(
-                    task, sidecars.get(task.id), active_locks.get(task.id)
+                    task,
+                    sidecars.get(task.task_uuid or task.id),
+                    active_locks.get(task.task_uuid or task.id),
                 ),
                 "accepted_plan_version": task.accepted_plan_version,
                 "archived": task.archived_at is not None,
@@ -1870,6 +1875,7 @@ def _acquire_lock(
     lock = TaskLock(
         lock_id=_next_lock_id(workspace_root, now),
         task_id=task.id,
+        task_uuid=task.task_uuid,
         stage=cast(Literal["planning", "implementing", "validating"], stage),
         run_id=run.run_id,
         created_at=now.isoformat(),
@@ -2048,7 +2054,9 @@ def _require_running_run(
 
 
 def _current_lock(workspace_root: Path, task_id: str) -> TaskLock | None:
-    return read_lock(task_lock_path(resolve_v2_paths(workspace_root), task_id))
+    from taskledger.storage.task_store import resolve_lock
+
+    return resolve_lock(workspace_root, task_id)
 
 
 def renew_lock_lease(
@@ -2702,7 +2710,7 @@ def _next_lock_id(workspace_root: Path, now: datetime) -> str:
     existing = [item.lock_id for item in load_active_locks(workspace_root)]
     existing.extend(
         path.stem.removeprefix("broken-")
-        for path in paths.tasks_dir.glob("task-*/audit/broken-lock-*.yaml")
+        for path in paths.tasks_dir.glob("*/audit/broken-lock-*.yaml")
     )
     sequence = sum(1 for item in existing if item.startswith(prefix)) + 1
     return f"{prefix}-{sequence:04d}"

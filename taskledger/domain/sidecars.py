@@ -336,9 +336,11 @@ class DependencyRequirement:
     object_type: str = "requirement"
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
+    required_task_uuid: str | None = None
+    parent_task_uuid: str | None = None
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "id": self.id,
             "task_id": self.required_task_id or self.task_id,
             "required_task_id": self.required_task_id or self.task_id,
@@ -351,6 +353,11 @@ class DependencyRequirement:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
+        if self.required_task_uuid is not None:
+            payload["required_task_uuid"] = self.required_task_uuid
+        if self.parent_task_uuid is not None:
+            payload["parent_task_uuid"] = self.parent_task_uuid
+        return payload
 
     @classmethod
     def from_dict(cls, data: object) -> DependencyRequirement:
@@ -375,6 +382,8 @@ class DependencyRequirement:
             object_type=_optional_string(data.get("object_type")) or "requirement",
             created_at=_optional_string(data.get("created_at")) or utc_now_iso(),
             updated_at=_optional_string(data.get("updated_at")) or utc_now_iso(),
+            required_task_uuid=_optional_string(data.get("required_task_uuid")),
+            parent_task_uuid=_optional_string(data.get("parent_task_uuid")),
         )
 
 

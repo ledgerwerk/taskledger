@@ -43,6 +43,19 @@ def append_task_event(
         return None
 
     paths = resolve_v2_paths(workspace_root)
+    event_task_id = task_id
+    event_task_uuid: str | None = None
+    if task_id != "*":
+        from taskledger.errors import LaunchError
+        from taskledger.storage.task_identity import task_identity_for_ref
+
+        try:
+            identity = task_identity_for_ref(paths, task_id)
+        except LaunchError:
+            pass
+        else:
+            event_task_id = identity.task_id
+            event_task_uuid = str(identity.task_uuid)
     timestamp = utc_now_iso()
     event_id = next_event_id(paths.events_dir, timestamp)
     append_event(
@@ -50,11 +63,12 @@ def append_task_event(
         TaskEvent(
             ts=timestamp,
             event=event_name,
-            task_id=task_id,
+            task_id=event_task_id,
             actor=default_actor(),
             harness=default_harness(),
             event_id=event_id,
             data=data,
+            task_uuid=event_task_uuid,
         ),
     )
     return event_id

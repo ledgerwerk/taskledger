@@ -207,7 +207,7 @@ def usage_payload(
     open_questions: list[dict[str, object]] = []
 
     for task in visible_tasks:
-        sidecar = sidecars.get(task.id, {})
+        sidecar = sidecars.get(task.task_uuid or task.id, {})
         handoffs_summary = sidecar.get("handoffs")
         if (
             isinstance(handoffs_summary, dict)

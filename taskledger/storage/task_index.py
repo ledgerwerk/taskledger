@@ -24,7 +24,7 @@ from taskledger.domain.task import TaskRecord
 from taskledger.storage.common import write_json
 from taskledger.storage.task_store import (
     V2Paths,
-    _load_task,
+    list_tasks_from_paths,
     task_markdown_path,
 )
 
@@ -33,12 +33,13 @@ logger = logging.getLogger(__name__)
 TaskVisibility = Literal["visible", "archived", "all"]
 
 TASK_INDEX_FILENAME = "tasks.json"
-TASK_INDEX_SCHEMA_VERSION = 1
+TASK_INDEX_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
 class TaskSummaryRecord:
     id: str
+    task_uuid: str | None
     slug: str
     title: str
     status_stage: TaskStatusStage
@@ -62,6 +63,7 @@ class TaskSummaryRecord:
     def to_dict(self) -> dict[str, object]:
         return {
             "id": self.id,
+            "task_uuid": self.task_uuid,
             "slug": self.slug,
             "title": self.title,
             "status_stage": self.status_stage,
@@ -89,6 +91,7 @@ class TaskSummaryRecord:
         mtime_raw = data.get("mtime_ns")
         return cls(
             id=str(data.get("id", "")),
+            task_uuid=_optional_string(data.get("task_uuid")),
             slug=str(data.get("slug", "")),
             title=str(data.get("title", "")),
             status_stage=str(data.get("status_stage", "draft")),  # type: ignore[arg-type]
@@ -122,6 +125,7 @@ def _task_summary_from_record(
 ) -> TaskSummaryRecord:
     return TaskSummaryRecord(
         id=task.id,
+        task_uuid=task.task_uuid,
         slug=task.slug,
         title=task.title,
         status_stage=task.status_stage,
@@ -161,10 +165,10 @@ def rebuild_task_index(paths: V2Paths) -> dict[str, int]:
     from taskledger.timeutils import utc_now_iso
 
     entries: list[dict[str, object]] = []
-    task_paths = sorted(paths.tasks_dir.glob("task-*/task.md"))
-    for path in task_paths:
+    tasks = list_tasks_from_paths(paths)
+    for task in tasks:
+        path = task_markdown_path(paths, task.task_uuid or task.id)
         try:
-            task = _load_task(path)
             stat = path.stat()
             rel = path.relative_to(paths.ledger_dir).as_posix()
             summary = _task_summary_from_record(
@@ -173,7 +177,6 @@ def rebuild_task_index(paths: V2Paths) -> dict[str, int]:
             entries.append(summary.to_dict())
         except Exception:
             logger.warning("Skipping unparseable task file: %s", path, exc_info=True)
-
     envelope = _index_envelope(entries, paths.ledger_ref, utc_now_iso())
     write_json(_task_index_path(paths), envelope)
     from taskledger.storage.indexes import clear_index_dirty
@@ -201,7 +204,7 @@ def list_task_summaries(
     if index_is_dirty(paths, "task_index"):
         rebuild_task_index(paths)
     index = _read_index(paths)
-    if index is None:
+    if index is None or index.get("schema_version") != TASK_INDEX_SCHEMA_VERSION:
         rebuild_task_index(paths)
         index = _read_index(paths)
         if index is None:
@@ -254,7 +257,7 @@ def resolve_task_summary(
 
     # ID lookup
     for s in summaries:
-        if s.id == ref or s.id == normalized_id:
+        if s.id == ref or s.id == normalized_id or s.task_uuid == ref:
             if not include_archived and s.archived_at is not None:
                 continue
             return s
@@ -317,7 +320,7 @@ def _best_effort_update_task_index(
 def update_task_index_entry(paths: V2Paths, task: TaskRecord) -> None:
     """Write through one task summary without a synchronous index rebuild."""
 
-    path = task_markdown_path(paths, task.id)
+    path = task_markdown_path(paths, task.task_uuid or task.id)
     if not path.is_file():
         from taskledger.storage.indexes import mark_index_dirty
 
@@ -338,7 +341,7 @@ def update_task_index_entry(paths: V2Paths, task: TaskRecord) -> None:
 
     def update(entries: list[dict[str, object]]) -> None:
         for index, entry in enumerate(entries):
-            if isinstance(entry, dict) and entry.get("id") == task.id:
+            if isinstance(entry, dict) and entry.get("task_uuid") == task.task_uuid:
                 entries[index] = new_entry
                 return
         entries.append(new_entry)
@@ -347,13 +350,27 @@ def update_task_index_entry(paths: V2Paths, task: TaskRecord) -> None:
 
 
 def remove_task_index_entry(paths: V2Paths, task_id: str) -> None:
-    """Remove one task summary without a synchronous index rebuild."""
+    """Remove one task summary by stable identity when it is resolvable."""
+    from taskledger.errors import LaunchError
+    from taskledger.storage.task_identity import task_identity_for_ref
+
+    try:
+        task_uuid = str(task_identity_for_ref(paths, task_id).task_uuid)
+    except LaunchError:
+        task_uuid = None
 
     def update(entries: list[dict[str, object]]) -> None:
         entries[:] = [
             entry
             for entry in entries
-            if not (isinstance(entry, dict) and entry.get("id") == task_id)
+            if not (
+                isinstance(entry, dict)
+                and (
+                    entry.get("task_uuid") == task_uuid
+                    if task_uuid is not None
+                    else entry.get("id") == task_id
+                )
+            )
         ]
 
     _best_effort_update_task_index(paths, task_id, update)

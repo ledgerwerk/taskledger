@@ -171,7 +171,11 @@ def _count_legacy_tasks(taskledger_dir: Path) -> int:
     for ledger_dir in (taskledger_dir / "ledgers").glob("*"):
         tasks_dir = ledger_dir / "tasks"
         if tasks_dir.is_dir():
-            count += len(list(tasks_dir.glob("task-*")))
+            count += sum(
+                1
+                for child in tasks_dir.iterdir()
+                if child.is_dir() and (child / "task.md").is_file()
+            )
     return count
 
 

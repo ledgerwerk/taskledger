@@ -66,6 +66,8 @@ class TaskRecord:
     task_type: TaskType = "managed"
     recorded_at: str | None = None
     recorded_by: ActorRef | None = None
+    task_uuid: str | None = None
+    parent_task_uuid: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -120,6 +122,10 @@ class TaskRecord:
             payload["recorded_at"] = self.recorded_at
         if self.recorded_by is not None:
             payload["recorded_by"] = self.recorded_by.to_dict()
+        if self.task_uuid is not None:
+            payload["task_uuid"] = self.task_uuid
+        if self.parent_task_uuid is not None:
+            payload["parent_task_uuid"] = self.parent_task_uuid
         return payload
 
     @classmethod
@@ -183,6 +189,8 @@ class TaskRecord:
             recorded_by=ActorRef.from_dict(data.get("recorded_by"))
             if data.get("recorded_by") is not None
             else None,
+            task_uuid=_optional_string(data.get("task_uuid")),
+            parent_task_uuid=_optional_string(data.get("parent_task_uuid")),
         )
 
     @property

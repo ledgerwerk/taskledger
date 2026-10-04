@@ -30,8 +30,10 @@ class ReleaseRecord:
     schema_version: int = TASKLEDGER_SCHEMA_VERSION
     object_type: str = "release"
 
+    boundary_task_uuid: str | None = None
+
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "object_type": self.object_type,
             "file_version": self.file_version,
@@ -43,6 +45,9 @@ class ReleaseRecord:
             "task_count": self.task_count,
             "previous_version": self.previous_version,
         }
+        if self.boundary_task_uuid is not None:
+            payload["boundary_task_uuid"] = self.boundary_task_uuid
+        return payload
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> ReleaseRecord:
@@ -59,4 +64,5 @@ class ReleaseRecord:
             or TASKLEDGER_V2_FILE_VERSION,
             schema_version=_int_value(data, "schema_version"),
             object_type=_string_value(data, "object_type"),
+            boundary_task_uuid=_optional_string(data.get("boundary_task_uuid")),
         )

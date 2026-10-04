@@ -13,13 +13,13 @@ drivers:
 constraints:
   - strict front matter validation
   - ledgercore front matter parsing
-  - storage layout v3
+  - storage layout 6
 related_adrs:
   - adr-0046
   - adr-0050
 body_format: markdown
 kind: strategy
-version: 4
+version: 5
 ---
 
 ## Strategy

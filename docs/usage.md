@@ -831,3 +831,5 @@ Evidence import is explicit and auditable through
 ## Canonical project layout
 
 Taskledger uses a schema-3 `.ledger/ledger.toml` manifest and `.ledger/taskledger/config.toml`. The canonical mounts are durable `data` (external storage rooted at `../ledger`), checkout-local `runtime` (user-data), diagnostic `logs` (user-data), and rebuildable `indexes` (cache). A machine-local `.ledger/ledger.local.toml` may select `user-data` for `data`. Use `taskledger storage where`, `taskledger storage path data|runtime|logs|indexes`, `taskledger storage set`, and `taskledger storage clear-override` to inspect or change mounts.
+
+Canonical task bundles live under `<data-root>/ledgers/<ledger_ref>/tasks/<uuidv7>/`. UUIDv7 is the stable storage and relationship identity; `task-####` remains the derived CLI/display alias and is not a directory name. Existing layout-5 numeric bundles migrate deterministically and recoverably to layout 6 before the first mutation. Read-only commands do not migrate.

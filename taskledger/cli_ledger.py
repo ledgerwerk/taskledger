@@ -106,7 +106,11 @@ def ledger_list_command(ctx: typer.Context) -> None:
         for d in sorted(ledgers_dir.iterdir()):
             if d.is_dir():
                 tasks = (
-                    list((d / "tasks").glob("task-*/task.md"))
+                    [
+                        child / "task.md"
+                        for child in (d / "tasks").iterdir()
+                        if child.is_dir() and (child / "task.md").is_file()
+                    ]
                     if (d / "tasks").exists()
                     else []
                 )

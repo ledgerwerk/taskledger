@@ -1,6 +1,6 @@
 ---
 title: "Architecture Documentation"
-version: 5
+version: 6
 generator: "archledger 0.4.0"
 arc42_template_version: "9.0-EN"
 ---
@@ -110,7 +110,8 @@ Taskledger uses a layered architecture with clear dependency direction: upper la
 Key architectural choices:
 
 - **Markdown and YAML front matter as canonical format** — Each record (task, plan, run, lock, handoff, code review, etc.) is stored as a `.md` file with YAML front matter metadata and a Markdown body. This makes state human-readable and Git-friendly.
-- **Sidecar indexes as derived caches** — A `task_sidecars.json` summary index lives under `.taskledger/ledgers/<ledger_ref>/` and is rebuilt from canonical records. Per-task sidecar writes update the index in place.
+- **UUID-backed task bundles with numeric aliases** — Canonical task bundles live in UUIDv7-named directories under the Ledgercore data mount. UUIDs anchor storage identity and cross-task relationships; `task-####` remains the user-facing alias derived from the identity inventory.
+- **Sidecar indexes as derived caches** — The `task_sidecars.json` summary index lives in the configured rebuildable indexes mount and is rebuilt from canonical Markdown records. Per-task sidecar writes update the index in place.
 - **Policy-based gate decisions** — All lifecycle transitions go through functions in `taskledger/domain/policies.py` that return `Decision` objects with `allowed`, `code`, `message`, and `exit_code`. This keeps gate logic testable and separate from I/O.
 - **Atomic file writes** — All writes use `atomic_write_text` (write to temp, fsync, `os.replace`) from `ledgercore`.
 - **Editable plan input with preflight** — `taskledger plan check` parses editable plan input through `taskledger/services/plan_input.py`, applies worker-pipeline validation, and returns indexed issues before any plan upsert.
@@ -148,7 +149,7 @@ The codebase is organized into five layers with target dependency direction: CLI
 ## Markdown/YAML front matter as canonical records
 
 **Drivers:** human readable state, git diffable records, no database dependency
-**Constraints:** strict front matter validation, ledgercore front matter parsing, storage layout v3
+**Constraints:** strict front matter validation, ledgercore front matter parsing, storage layout 6
 **Related ADRs:** adr-0046, adr-0050
 
 ## Strategy
@@ -169,7 +170,7 @@ Each persistent record (task, plan, run, lock, handoff, event, etc.) is stored a
 
 ## Strategy
 
-A `task_sidecars.json` summary index under `.taskledger/ledgers/<ledger_ref>/` is a derived cache rebuilt from canonical Markdown records by `taskledger reindex`. Per-task sidecar writes call `update_sidecar_summary` in `taskledger/storage/sidecar_index.py` so the index stays current. The index speeds up list and query operations but is never authoritative. `taskledger doctor indexes` checks for staleness.
+The task sidecar summary index is a derived cache stored in the configured rebuildable indexes mount, not alongside canonical task data. It is keyed by stable UUID identity and rebuilt from canonical Markdown records by `taskledger reindex`; human-readable task aliases remain available in the read models. Per-task sidecar writes update the summary through `update_sidecar_summary` in `taskledger/storage/sidecar_index.py`. `taskledger doctor indexes` checks for staleness.
 
 ## Trade-offs
 
@@ -221,7 +222,7 @@ The top-level building block is the **taskledger system**, decomposed into five 
 
 Data flows strictly downward: CLI -> Services -> Domain + Storage. The API layer calls Services directly. The Domain layer has no dependencies on Storage or Services.
 
-Each task is stored as a **task bundle directory** under `.taskledger/ledgers/<ledger_ref>/` containing the task record (Markdown) and sidecar collections for plans, runs, locks, todos, questions, changes, checks, handoffs, links, and code reviews. Mutations append immutable `TaskEvent` records to the ledger-level `events/` directory. Action and event logging is enabled by default; set `[event_logging] enabled = false` in `taskledger.toml` to disable new event records. Existing records remain readable regardless. A `task_sidecars.json` summary index under the same ledger path is maintained as a derived cache of sidecar counts and lock summaries.
+Each task is stored as a **task bundle directory** at `<data-root>/ledgers/<ledger_ref>/tasks/<uuidv7>/`, containing `task.md` and its sidecar collections. The UUIDv7 is the stable storage identity; `task-####` remains the derived user-facing task alias. Mutations append immutable `TaskEvent` records to the ledger-level `events/` directory. Action and event logging is enabled by default; set the project event-logging configuration to disable new event records. Existing records remain readable regardless. Task and sidecar indexes are derived caches in the configured rebuildable indexes mount.
 
 ## Whitebox taskledger system
 
@@ -287,7 +288,7 @@ Data models, state enums, normalization, and policy decisions without storage I/
 **Interfaces:**
 **Location:**
 
-File system persistence for canonical records. Storage layout keeps each task in `.taskledger/ledgers/<ledger_ref>/tasks/<task-id>/`, with independently addressable sidecars including plans, runs, locks, todos, questions, changes, checks, handoffs, links, and code reviews. Ledger-level collections hold events, introductions, releases, and rebuildable indexes. A `task_sidecars.json` summary index is maintained as a derived cache; per-task sidecar writes call `update_sidecar_summary` from `taskledger/storage/sidecar_index.py` so the read path does not need a full rescan. Atomic write primitives, YAML I/O, front matter parsing, and ref parsing are delegated to `ledgercore`. Action and event logging is enabled by default and can be disabled in project config. Project config edits use structured TOML handling rather than ad hoc text replacement.
+File system persistence for canonical records. Each task lives in the current Ledgercore data mount at `ledgers/<ledger_ref>/tasks/<uuidv7>/`, with `task.md` and independently addressable sidecars including plans, runs, locks, todos, questions, changes, checks, handoffs, links, and code reviews. UUIDv7 is the stable storage identity; `task-####` is a derived user-facing alias resolved through the identity inventory. Layout-5 numeric bundles migrate deterministically to layout 6 before mutation; read-only access does not migrate. Ledger-level collections hold events, introductions, releases, and other shared records. Task and sidecar indexes are derived caches in the configured rebuildable indexes mount. Atomic write primitives, YAML I/O, front matter parsing, and ref parsing are delegated to `ledgercore`. Project configuration edits use structured TOML handling rather than ad hoc text replacement.
 
 # Runtime View
 
@@ -441,21 +442,20 @@ The runtime view traces the main operational scenarios through the system:
 
 ## Migration, reindex, and doctor interaction
 
-**Trigger**: Developer upgrades taskledger and runs `taskledger doctor`, which reports a storage version mismatch.
+**Trigger**: A developer updates a project using layout-5 numeric task bundles and a mutating Taskledger command needs canonical layout 6.
 
 **Flow**:
 
-1. `doctor` → Scans project config, storage layout version, task records, indexes, locks, and runs
-2. Detects that storage layout version (e.g., v2) is behind current version (v3)
-3. Reports diagnostic with severity, code, and repair hint
-4. `migrate` → Applies storage layout migrations to upgrade records to current schema
-5. Migration code in `taskledger/storage/migrations.py` handles version-to-version upgrades
-6. `reindex` → Rebuilds JSON index caches from migrated canonical records
-7. `doctor` → Re-run confirms all checks pass
+1. Before mutation, storage checks the project layout and inventories task identities. Read-only commands continue to read without migrating.
+2. The migration maps legacy task aliases to deterministic UUIDv7 identities while preserving ordering, ordinal gaps, and reserved or incomplete allocations.
+3. The migration verifies that the source is safe to transform; mixed layouts, active locks, and unresolved repository conflicts block automatic migration rather than being guessed through.
+4. Canonical task records and sidecars are moved into UUID-named task bundle directories with recovery information retained.
+5. Layout metadata is advanced to version 6 and UUID-keyed derived indexes are rebuilt.
+6. `doctor` verifies canonical records, indexes, locks, and runs after migration.
 
-**Result**: Storage layout is upgraded to the current version. Indexes are rebuilt. Doctor passes cleanly.
+**Result**: The first mutation uses UUIDv7 task directories while numeric task aliases remain available to users. Read-only access does not change the legacy layout.
 
-**Key source**: `taskledger/storage/migrations.py`, `taskledger/services/doctor.py`, `taskledger/services/doctor_checks/migration_checks.py`, `taskledger/domain/states.py`.
+**Key source**: `taskledger/storage/task_directory_migration.py`, `taskledger/storage/task_identity.py`, `taskledger/storage/task_store.py`, `taskledger/services/doctor.py`.
 
 ## Worker pipeline guided handoff
 
@@ -567,7 +567,7 @@ Key architecture decisions documented as ADR records:
 
 ## Markdown/YAML front matter as canonical format
 
-**Document version:** 5
+**Document version:** 6
 
 ## Context
 
@@ -592,7 +592,7 @@ Store all records as Markdown files with YAML front matter (`---` delimited). Me
 
 ## Sidecar summary index as derived rebuildable cache
 
-**Document version:** 5
+**Document version:** 6
 
 ## Context
 
@@ -617,7 +617,7 @@ Maintain JSON index files under `.taskledger/indexes/` as derived caches. They a
 
 ## Explicit lifecycle gates with policy decisions
 
-**Document version:** 5
+**Document version:** 6
 
 ## Context
 
@@ -641,7 +641,7 @@ Implement lifecycle gates as pure policy functions in `taskledger/domain/policie
 
 ## Typer CLI framework
 
-**Document version:** 5
+**Document version:** 6
 
 ## Context
 
@@ -665,31 +665,37 @@ Use Typer (built on Click) for the CLI. Typer provides type-annotated parameters
 
 ## Task bundle directory layout
 
-**Document version:** 5
+**Document version:** 6
 
 ## Context
 
-Need a storage layout that scales to many sidecar collections per task (plans, runs, locks, todos, questions, changes, checks, handoffs, links, code reviews) while keeping each record individually addressable. Events are stored at ledger level, not per-task, and are enabled by default.
+Tasks need individually addressable Markdown records and sidecar collections for plans, runs, locks, todos, questions, changes, checks, handoffs, links, reviews, artifacts, and audit data. Task directories are canonical storage keys, while task references and relationships must survive branches, imports, and changing display numbers.
 
 ## Decision
 
-Use a directory-per-task layout (v2 bundle) under `.taskledger/ledgers/<ledger_ref>/`. Each task gets a directory containing the task record (Markdown) and subdirectories for sidecar collections. JSON indexes, including the `task_sidecars.json` summary, are derived caches at the ledger level. Event records are stored in the ledger-level `events/` directory (not per-task) and are written by default; set `[event_logging] enabled = false` to disable. The current storage layout version is `TASKLEDGER_STORAGE_LAYOUT_VERSION = 3`.
+Use a UUIDv7 directory for each task bundle under the current Ledgercore data mount: `<data-root>/ledgers/<ledger_ref>/tasks/<uuidv7>/`. Each bundle contains `task.md` and its task-local sidecar collections. UUID is the immutable storage identity and the authoritative cross-task reference.
+
+Keep `task-####` as the user-facing CLI reference and display alias. Derive aliases from UUID order across live identities, tombstones, and reserved or incomplete allocations; aliases can change after a merge or import. Tombstones remain in the inventory so deleting or quarantining a task does not collapse later aliases. JSON task, dependency, sidecar, and lock indexes are derived caches and can be rebuilt from canonical records.
+
+Storage layout 6 migrates layout-5 numeric task bundles to deterministic UUIDv7 directories before the first mutation. Read-only commands do not migrate. Migration preserves legacy ordering and reservations, is recoverable, and blocks mixed layouts or unresolved repository conflicts rather than guessing.
 
 ## Consequences
 
-- Positive: Each record is a single file - easy to read, edit, and version-control.
-- Positive: Sidecar collections are independently addressable.
-- Positive: The sidecar summary index keeps common read paths fast.
-- Negative: Many small files create directory overhead on very large projects.
+- Positive: Independent branch task creation uses distinct filesystem paths and avoids numeric-directory merge conflicts.
+- Positive: Task relationships retain stable UUID identity while commands continue accepting numeric aliases.
+- Positive: Sidecar records remain independently addressable and indexes remain rebuildable.
+- Negative: Numeric display aliases are derived and can change after merge or import.
+- Negative: Layout migration requires preflight and recovery handling.
 
 ## Alternatives considered
 
-- Single JSON index file: Merge conflicts, scalability, not human-readable.
-- Database (SQLite): Opaque, harder to inspect and version-control.
+- Keep numeric task directory names: Independent branches can create colliding paths.
+- Use UUIDs as the user-facing CLI IDs: Stable, but unnecessarily discards the established short numeric task-reference UX.
+- Store all task state in one JSON index or a database: Harder to inspect, version-control, and merge.
 
 ## External skill packaging
 
-**Document version:** 5
+**Document version:** 6
 
 ## Context
 
@@ -749,12 +755,12 @@ Known risks and areas of technical debt:
 
 ## Risk Overview
 
-| Title                                      | Severity | Probability | Mitigation                                                                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------ | -------- | ----------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Storage scaling with many tasks            | medium   | medium      | Run reindex after bulk changes; consider task archival for completed work.                        | Each task is a directory with multiple sidecar files. Projects with hundreds of tasks may see slowdowns in list and query operations due to file system scanning. The `task_sidecars.json` summary index is updated in place by per-task sidecar writes and is rebuilt on miss, which keeps the common read path fast. Mitigation: run `taskledger reindex` after bulk changes; consider task archival for completed work; rely on the sidecar summary index for navigation.     |
-| Migration surface between storage versions | medium   | medium      | Doctor checks detect version mismatches; migration checks flag incompatible records.              | The storage layout is currently v3 (`TASKLEDGER_STORAGE_LAYOUT_VERSION` in `taskledger/domain/states.py`). Migration code in `taskledger/storage/migrations.py` adds complexity. Future format changes must maintain backward compatibility or provide migration steps. Mitigation: `taskledger doctor` checks detect version mismatches; migration checks in `taskledger/services/doctor_checks/migration_checks.py` flag incompatible records.                                 |
-| Service boundary erosion                   | medium   | medium      | test_service_boundaries.py whitelist tracks allowed cross-module imports and fails on violations. | Some service modules (notably `taskledger/services/tasks.py`) have grown large. The current long-function whitelist includes entries such as `taskledger/cli_sync.py::register_sync_commands` and `taskledger/services/doctor_checks/task_checks.py::scan_task_integrity`. The service layer has no formal interface contracts; boundaries are enforced by convention and the whitelist in `docs/service_boundary_whitelist.md` exercised by `tests/test_service_boundaries.py`. |
-| Growing dependency count                   | medium   | medium      | Small dependency set (typer, PyYAML, tomli); each justified by a core feature.                    | The runtime dependency set is small (`typer`, `click`, `PyYAML`, `tomli` on Python <3.11, and `ledgercore` for atomic I/O, JSON I/O, YAML I/O, front matter parsing, and cross-ledger ref parsing). Each dependency is justified by a core feature. Risk is low as long as new dependencies are not introduced without explicit justification, and as long as `ledgercore` remains the boundary for low-level primitives.                                                        |
+| Title                                      | Severity | Probability | Mitigation                                                                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------ | -------- | ----------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Storage scaling with many tasks            | medium   | medium      | Run reindex after bulk changes; consider task archival for completed work.                        | Each task is a directory with multiple sidecar files. Projects with hundreds of tasks may see slowdowns in list and query operations due to file system scanning. The `task_sidecars.json` summary index is updated in place by per-task sidecar writes and is rebuilt on miss, which keeps the common read path fast. Mitigation: run `taskledger reindex` after bulk changes; consider task archival for completed work; rely on the sidecar summary index for navigation.                                                                                                                                  |
+| Migration surface between storage versions | medium   | medium      | Doctor checks detect version mismatches; migration checks flag incompatible records.              | The current storage layout is v6 (`TASKLEDGER_STORAGE_LAYOUT_VERSION` in `taskledger/domain/states.py`). Layout-5-to-6 migration introduces a UUIDv7 identity inventory, deterministic conversion of numeric task bundles, and derived aliases; incomplete or mixed states must remain recoverable and must not reuse identities. Mitigation: migration performs safety preflight and preserves recovery data, read-only access does not migrate, and doctor checks validate layout and identity consistency. Future format changes must maintain backward compatibility or provide explicit migration steps. |
+| Service boundary erosion                   | medium   | medium      | test_service_boundaries.py whitelist tracks allowed cross-module imports and fails on violations. | Some service modules (notably `taskledger/services/tasks.py`) have grown large. The current long-function whitelist includes entries such as `taskledger/cli_sync.py::register_sync_commands` and `taskledger/services/doctor_checks/task_checks.py::scan_task_integrity`. The service layer has no formal interface contracts; boundaries are enforced by convention and the whitelist in `docs/service_boundary_whitelist.md` exercised by `tests/test_service_boundaries.py`.                                                                                                                              |
+| Growing dependency count                   | medium   | medium      | Small dependency set (typer, PyYAML, tomli); each justified by a core feature.                    | The runtime dependency set is small (`typer`, `click`, `PyYAML`, `tomli` on Python <3.11, and `ledgercore` for atomic I/O, JSON I/O, YAML I/O, front matter parsing, and cross-ledger ref parsing). Each dependency is justified by a core feature. Risk is low as long as new dependencies are not introduced without explicit justification, and as long as `ledgercore` remains the boundary for low-level primitives.                                                                                                                                                                                     |
 
 # Glossary
 

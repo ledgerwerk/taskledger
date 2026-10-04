@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -291,10 +291,20 @@ def list_tasks(workspace_root: Path) -> list[TaskRecord]:
 
 
 def list_tasks_from_paths(paths: V2Paths) -> list[TaskRecord]:
-    return sorted(
-        [_load_task(path) for path in paths.tasks_dir.glob("task-*/task.md")],
-        key=lambda item: item.id,
-    )
+    from taskledger.storage.task_identity import task_identity_inventory
+
+    inventory = task_identity_inventory(paths)
+    tasks = [
+        _load_task(
+            identity.path / "task.md",
+            paths=paths,
+            task_id=identity.task_id,
+            task_uuid=str(identity.task_uuid),
+        )
+        for identity in inventory.entries
+        if (identity.path / "task.md").is_file()
+    ]
+    return sorted(tasks, key=lambda item: item.id)
 
 
 def list_tasks_by_visibility(
@@ -327,17 +337,33 @@ def resolve_task(
     include_archived: bool = False,
 ) -> TaskRecord:
     normalized_ref = ref.strip().lower()
-    normalized_id = _normalize_resource_ref(workspace_root, normalized_ref, "task")
+    normalized_id = (
+        normalized_ref
+        if len(normalized_ref) == 36 and normalized_ref.count("-") == 4
+        else _normalize_resource_ref(workspace_root, normalized_ref, "task")
+    )
 
     # Direct-path: if the normalized ref is a task ID, try reading just that file.
-    if normalized_id.startswith("task-"):
+    if normalized_id.startswith("task-") or (
+        len(normalized_ref) == 36 and normalized_ref.count("-") == 4
+    ):
         paths = resolve_v2_paths(workspace_root)
-        path = task_markdown_path(paths, normalized_id)
-        if path.exists():
-            task = _load_task(path)
-            if include_archived or not is_archived_task(task):
-                return task
+        from taskledger.storage.task_identity import task_identity_for_ref
 
+        try:
+            identity = task_identity_for_ref(paths, normalized_id)
+        except LaunchError:
+            identity = None
+        if identity is not None:
+            path = identity.path / "task.md"
+            if path.exists():
+                task = _load_task(
+                    path,
+                    task_id=identity.task_id,
+                    task_uuid=str(identity.task_uuid),
+                )
+                if include_archived or not is_archived_task(task):
+                    return task
     # If this input looks like a global/file ref and parsing failed, surface that error.
     if _looks_like_global_ref(normalized_ref) and not normalized_id.startswith("task-"):
         raise LaunchError(f"Task not found: {ref}")
@@ -381,7 +407,42 @@ def load_active_task_state_from_paths(
     payload = load_yaml_object(
         paths.active_task_path, "active task state", missing="empty"
     )
-    return ActiveTaskState.from_dict(payload)
+    state = ActiveTaskState.from_dict(payload)
+    from taskledger.storage.task_identity import (
+        AMBIGUOUS_LEGACY_TASK_REF,
+        task_identity_for_stored_ref,
+    )
+
+    try:
+        identity = task_identity_for_stored_ref(
+            paths, task_id=state.task_id, task_uuid=state.task_uuid
+        )
+    except LaunchError as exc:
+        if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+            raise
+        identity = None
+    if identity is not None:
+        state = replace(
+            state, task_id=identity.task_id, task_uuid=str(identity.task_uuid)
+        )
+    if state.previous_task_uuid or state.previous_task_id:
+        try:
+            previous = task_identity_for_stored_ref(
+                paths,
+                task_id=state.previous_task_id or "",
+                task_uuid=state.previous_task_uuid,
+            )
+        except LaunchError as exc:
+            if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+                raise
+            previous = None
+        if previous is not None:
+            state = replace(
+                state,
+                previous_task_id=previous.task_id,
+                previous_task_uuid=str(previous.task_uuid),
+            )
+    return state
 
 
 def save_active_task_state(
@@ -389,6 +450,41 @@ def save_active_task_state(
     state: ActiveTaskState,
 ) -> ActiveTaskState:
     paths = require_v2_layout(workspace_root)
+    from taskledger.storage.task_identity import (
+        AMBIGUOUS_LEGACY_TASK_REF,
+        task_identity_for_stored_ref,
+    )
+
+    try:
+        identity = task_identity_for_stored_ref(
+            paths, task_id=state.task_id, task_uuid=state.task_uuid
+        )
+    except LaunchError as exc:
+        if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+            raise
+    else:
+        state = replace(
+            state, task_id=identity.task_id, task_uuid=str(identity.task_uuid)
+        )
+    if state.previous_task_uuid or state.previous_task_id:
+        try:
+            previous = task_identity_for_stored_ref(
+                paths,
+                task_id=state.previous_task_id or "",
+                task_uuid=state.previous_task_uuid,
+            )
+        except LaunchError as exc:
+            from taskledger.storage.task_identity import AMBIGUOUS_LEGACY_TASK_REF
+
+            if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+                raise
+            previous = None
+        if previous is not None:
+            state = replace(
+                state,
+                previous_task_id=previous.task_id,
+                previous_task_uuid=str(previous.task_uuid),
+            )
     write_yaml_object(paths.active_task_path, state.to_dict())
     return state
 
@@ -456,7 +552,7 @@ def resolve_active_task(workspace_root: Path) -> TaskRecord:
     if state is None:
         raise NoActiveTask()
     try:
-        return resolve_task(workspace_root, state.task_id)
+        return resolve_task(workspace_root, state.task_uuid or state.task_id)
     except LaunchError as exc:
         raise ActiveTaskNotFound(
             f"Active task points to missing task: {state.task_id}",
@@ -485,15 +581,45 @@ def save_task(workspace_root: Path, task: TaskRecord) -> TaskRecord:
 
 
 def save_task_from_paths(paths: V2Paths, task: TaskRecord) -> TaskRecord:
-    _ensure_task_bundle(paths, task.id)
-    path = task_markdown_path(paths, task.id)
-    if path.parent.name != task.id:
-        raise LaunchError(f"Task id/path mismatch for {task.id}")
+    if task.task_uuid is None:
+        from taskledger.storage.task_identity import (
+            allocate_task_identity,
+            task_identity_for_ref,
+        )
+
+        try:
+            identity = task_identity_for_ref(paths, task.id)
+        except LaunchError:
+            allocation = allocate_task_identity(paths)
+            task = replace(
+                task,
+                id=allocation.task_id,
+                task_uuid=str(allocation.task_uuid),
+            )
+        else:
+            task = replace(
+                task,
+                id=identity.task_id,
+                task_uuid=str(identity.task_uuid),
+            )
+    from taskledger.storage.task_identity import (
+        invalidate_task_identity_inventory,
+        task_path_for_uuid,
+    )
+
+    bundle_dir = (
+        task_path_for_uuid(paths, task.task_uuid)
+        if task.task_uuid is not None
+        else task_dir(paths, task.id)
+    )
+    _ensure_task_bundle(paths, task.id, bundle_dir=bundle_dir)
+    path = bundle_dir / "task.md"
     metadata = task.to_dict()
     metadata.pop("todos", None)
     metadata.pop("file_links", None)
     metadata.pop("requirements", None)
     _write_markdown_record(path, metadata, task.body)
+    invalidate_task_identity_inventory()
     with _timing.stage("derived_index_update"):
         try:
             from taskledger.storage.task_index import update_task_index_entry
@@ -517,10 +643,39 @@ def list_introductions_from_paths(paths: V2Paths) -> list[IntroductionRecord]:
     )
 
 
+def _normalize_release(paths: V2Paths, release: ReleaseRecord) -> ReleaseRecord:
+    from taskledger.storage.task_identity import (
+        AMBIGUOUS_LEGACY_TASK_REF,
+        task_identity_for_stored_ref,
+    )
+
+    try:
+        identity = task_identity_for_stored_ref(
+            paths,
+            task_id=release.boundary_task_id,
+            task_uuid=release.boundary_task_uuid,
+        )
+    except LaunchError as exc:
+        if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+            raise
+        return release
+    return replace(
+        release,
+        boundary_task_id=identity.task_id,
+        boundary_task_uuid=str(identity.task_uuid),
+    )
+
+
 def list_releases(workspace_root: Path) -> list[ReleaseRecord]:
-    paths = resolve_v2_paths(workspace_root)
+    return list_releases_from_paths(resolve_v2_paths(workspace_root))
+
+
+def list_releases_from_paths(paths: V2Paths) -> list[ReleaseRecord]:
     return sorted(
-        [_load_release(path) for path in paths.releases_dir.glob("*.md")],
+        [
+            _normalize_release(paths, _load_release(path))
+            for path in paths.releases_dir.glob("*.md")
+        ],
         key=lambda item: (task_numeric_sort_key(item.boundary_task_id), item.version),
     )
 
@@ -530,11 +685,12 @@ def resolve_release(workspace_root: Path, version: str) -> ReleaseRecord:
     path = release_markdown_path(paths, version)
     if not path.exists():
         raise LaunchError(f"Release not found: {version}")
-    return _load_release(path)
+    return _normalize_release(paths, _load_release(path))
 
 
 def save_release(workspace_root: Path, release: ReleaseRecord) -> ReleaseRecord:
     paths = require_v2_layout(workspace_root)
+    release = _normalize_release(paths, release)
     path = release_markdown_path(paths, release.version)
     if path.exists():
         raise LaunchError(f"Release version already exists: {release.version}")
@@ -878,16 +1034,42 @@ def load_lock_records(workspace_root: Path) -> list[TaskLock]:
 
 def load_lock_records_from_paths(paths: V2Paths) -> list[TaskLock]:
     """Load all readable lock files from resolved paths (no expiry filter)."""
-    locks: list[TaskLock] = []
-    lock_paths = list(
-        (paths.runtime_root / "checkouts" / paths.ledger_ref / "locks").glob("*.yaml")
+    from taskledger.storage.task_identity import (
+        AMBIGUOUS_LEGACY_TASK_REF,
+        task_identity_for_stored_ref,
     )
-    # Read legacy task-bundle locks during the compatibility window.
-    lock_paths.extend(paths.tasks_dir.glob("task-*/lock.yaml"))
+
+    locks: list[TaskLock] = []
+    lock_dir = paths.runtime_root / "checkouts" / paths.ledger_ref / "locks"
+    lock_paths = list(lock_dir.glob("*.yaml"))
+    # Read bundle-local locks during the compatibility window.
+    lock_paths.extend(paths.tasks_dir.glob("*/lock.yaml"))
     for path in sorted(lock_paths):
         lock = read_lock(path)
-        if lock is not None:
+        if lock is None:
+            continue
+        path_ref = path.parent.name if path.name == "lock.yaml" else path.stem
+        path_uuid = (
+            path_ref if len(path_ref) == 36 and path_ref.count("-") == 4 else None
+        )
+        try:
+            identity = task_identity_for_stored_ref(
+                paths,
+                task_id=lock.task_id,
+                task_uuid=lock.task_uuid or path_uuid,
+            )
+        except LaunchError as exc:
+            if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+                raise
             locks.append(lock)
+            continue
+        locks.append(
+            replace(
+                lock,
+                task_id=identity.task_id,
+                task_uuid=str(identity.task_uuid),
+            )
+        )
     return locks
 
 
@@ -1011,7 +1193,51 @@ def load_requirements_from_paths(paths: V2Paths, task_id: str) -> RequirementCol
         ],
         key=lambda r: r.id or "",
     )
-    return RequirementCollection(task_id=task_id, requirements=tuple(records))
+    from taskledger.storage.task_identity import (
+        AMBIGUOUS_LEGACY_TASK_REF,
+        task_identity_for_stored_ref,
+    )
+
+    normalized: list[DependencyRequirement] = []
+    for requirement in records:
+        try:
+            required = task_identity_for_stored_ref(
+                paths,
+                task_id=requirement.required_task_id or requirement.task_id,
+                task_uuid=requirement.required_task_uuid,
+            )
+        except LaunchError as exc:
+            if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+                raise
+            normalized_requirement = requirement
+        else:
+            normalized_requirement = replace(
+                requirement,
+                task_id=required.task_id,
+                required_task_id=required.task_id,
+                required_task_uuid=str(required.task_uuid),
+            )
+        if (
+            normalized_requirement.parent_task_uuid
+            or normalized_requirement.parent_task_id
+        ):
+            try:
+                parent = task_identity_for_stored_ref(
+                    paths,
+                    task_id=normalized_requirement.parent_task_id or "",
+                    task_uuid=normalized_requirement.parent_task_uuid,
+                )
+            except LaunchError as exc:
+                if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+                    raise
+            else:
+                normalized_requirement = replace(
+                    normalized_requirement,
+                    parent_task_id=parent.task_id,
+                    parent_task_uuid=str(parent.task_uuid),
+                )
+        normalized.append(normalized_requirement)
+    return RequirementCollection(task_id=task_id, requirements=tuple(normalized))
 
 
 def save_requirements(
@@ -1074,7 +1300,9 @@ def save_requirements_from_paths(
 
 
 def task_dir(paths: V2Paths, task_id: str) -> Path:
-    return paths.tasks_dir / task_id
+    from taskledger.storage.task_identity import task_identity_for_ref
+
+    return task_identity_for_ref(paths, task_id).path
 
 
 def task_markdown_path(paths: V2Paths, task_id: str) -> Path:
@@ -1082,13 +1310,18 @@ def task_markdown_path(paths: V2Paths, task_id: str) -> Path:
 
 
 def task_lock_path(paths: V2Paths, task_id: str) -> Path:
-    return (
-        paths.runtime_root
-        / "checkouts"
-        / paths.ledger_ref
-        / "locks"
-        / f"{task_id}.yaml"
-    )
+    from taskledger.storage.task_identity import task_uuid_from_ref
+
+    lock_dir = paths.runtime_root / "checkouts" / paths.ledger_ref / "locks"
+    try:
+        lock_name = str(task_uuid_from_ref(paths, task_id))
+    except LaunchError:
+        lock_name = task_id
+    uuid_path = lock_dir / f"{lock_name}.yaml"
+    legacy_path = lock_dir / f"{task_id}.yaml"
+    if not uuid_path.exists() and task_id.startswith("task-") and legacy_path.exists():
+        return legacy_path
+    return uuid_path
 
 
 def task_todos_dir(paths: V2Paths, task_id: str) -> Path:
@@ -1210,8 +1443,67 @@ def code_review_markdown_path(paths: V2Paths, task_id: str, review_id: str) -> P
     return task_reviews_dir(paths, task_id) / f"{review_id}.md"
 
 
-def _load_task(path: Path) -> TaskRecord:
-    return _load_record(path, TaskRecord.from_dict)
+def _load_task(
+    path: Path,
+    *,
+    paths: V2Paths | None = None,
+    task_id: str | None = None,
+    task_uuid: str | None = None,
+) -> TaskRecord:
+    task = _load_record(path, TaskRecord.from_dict)
+    from taskledger.ids import parse_uuid7
+
+    if paths is not None and (task_id is None or task_uuid is None):
+        from taskledger.storage.task_identity import task_identity_inventory
+
+        resolved_path = path.parent.resolve()
+        identity = next(
+            (
+                item
+                for item in task_identity_inventory(paths).entries
+                if item.path.resolve() == resolved_path
+            ),
+            None,
+        )
+        if identity is not None:
+            task_id = task_id or identity.task_id
+            task_uuid = task_uuid or str(identity.task_uuid)
+    if task_uuid is None:
+        try:
+            task_uuid = str(parse_uuid7(path.parent.name))
+        except ValueError:
+            task_uuid = task.task_uuid
+    if task_id is None and task_uuid is not None and paths is not None:
+        from taskledger.storage.task_identity import task_id_for_uuid
+
+        task_id = task_id_for_uuid(paths, task_uuid)
+    task = replace(
+        task,
+        id=task_id or task.id,
+        task_uuid=task_uuid or task.task_uuid,
+    )
+    if paths is not None and (task.parent_task_uuid or task.parent_task_id):
+        from taskledger.storage.task_identity import (
+            AMBIGUOUS_LEGACY_TASK_REF,
+            task_identity_for_stored_ref,
+        )
+
+        try:
+            parent = task_identity_for_stored_ref(
+                paths,
+                task_id=task.parent_task_id or "",
+                task_uuid=task.parent_task_uuid,
+            )
+        except LaunchError as exc:
+            if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+                raise
+        else:
+            task = replace(
+                task,
+                parent_task_id=parent.task_id,
+                parent_task_uuid=str(parent.task_uuid),
+            )
+    return task
 
 
 def _load_intro(path: Path) -> IntroductionRecord:
@@ -1279,26 +1571,30 @@ def _task_latest_impl_run(workspace_root: Path, task_id: str) -> str | None:
 
 def _task_latest_impl_run_from_paths(paths: V2Paths, task_id: str) -> str | None:
     try:
-        task = _load_task(task_markdown_path(paths, task_id))
+        task = _load_task(task_markdown_path(paths, task_id), paths=paths)
         return task.latest_implementation_run
     except Exception:  # noqa: BLE001
         return None
 
 
-def _ensure_task_bundle(paths: V2Paths, task_id: str) -> None:
+def _ensure_task_bundle(
+    paths: V2Paths, task_id: str, *, bundle_dir: Path | None = None
+) -> None:
+    root = bundle_dir if bundle_dir is not None else task_dir(paths, task_id)
     for directory in (
-        task_dir(paths, task_id),
-        task_plans_dir(paths, task_id),
-        task_questions_dir(paths, task_id),
-        task_todos_dir(paths, task_id),
-        task_links_dir(paths, task_id),
-        task_requirements_dir(paths, task_id),
-        task_runs_dir(paths, task_id),
-        task_changes_dir(paths, task_id),
-        task_reviews_dir(paths, task_id),
-        task_artifacts_dir(paths, task_id),
-        task_audit_dir(paths, task_id),
-        task_handoffs_dir(paths, task_id),
+        root,
+        root / "plans",
+        root / "questions",
+        root / "todos",
+        root / "links",
+        root / "requirements",
+        root / "runs",
+        root / "changes",
+        root / "checks",
+        root / "reviews",
+        root / "artifacts",
+        root / "audit",
+        root / "handoffs",
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
@@ -1454,7 +1750,23 @@ def resolve_lock(workspace_root: Path, task_id: str) -> TaskLock | None:
     """Resolve a lock by task ID."""
     paths = resolve_v2_paths(workspace_root)
     lock_path = task_lock_path(paths, task_id)
-    return read_lock(lock_path)
+    lock = read_lock(lock_path)
+    if lock is None:
+        return None
+    try:
+        from taskledger.storage.task_identity import (
+            AMBIGUOUS_LEGACY_TASK_REF,
+            task_identity_for_stored_ref,
+        )
+
+        identity = task_identity_for_stored_ref(
+            paths, task_id=lock.task_id, task_uuid=lock.task_uuid
+        )
+    except LaunchError as exc:
+        if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+            raise
+        return lock
+    return replace(lock, task_id=identity.task_id, task_uuid=str(identity.task_uuid))
 
 
 def save_lock(workspace_root: Path, task_id: str, lock: TaskLock) -> Path:
@@ -1469,6 +1781,17 @@ def save_lock_from_paths(
     *,
     create_only: bool = False,
 ) -> Path:
+    try:
+        from taskledger.storage.task_identity import task_identity_for_ref
+
+        identity = task_identity_for_ref(paths, lock.task_uuid or task_id)
+    except LaunchError:
+        pass
+    else:
+        task_id = identity.task_id
+        lock = replace(
+            lock, task_id=identity.task_id, task_uuid=str(identity.task_uuid)
+        )
     lock_path = task_lock_path(paths, task_id)
     if create_only:
         lock_path.parent.mkdir(parents=True, exist_ok=True)

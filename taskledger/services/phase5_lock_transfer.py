@@ -36,6 +36,7 @@ def transfer_lock(
     updated = TaskLock(
         lock_id=lock.lock_id,
         task_id=lock.task_id,
+        task_uuid=lock.task_uuid,
         stage=lock.stage,
         run_id=lock.run_id,
         created_at=lock.created_at,
@@ -75,6 +76,7 @@ def release_lock(
     updated = TaskLock(
         lock_id=lock.lock_id,
         task_id=lock.task_id,
+        task_uuid=lock.task_uuid,
         stage=lock.stage,
         run_id=lock.run_id,
         created_at=lock.created_at,

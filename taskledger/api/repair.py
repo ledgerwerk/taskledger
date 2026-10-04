@@ -205,14 +205,26 @@ def repair_allocations(
 ) -> dict[str, object]:
     """Inspect or quarantine incomplete non-empty task allocations."""
     from taskledger.services.task_events import append_task_event
+    from taskledger.storage.task_identity import (
+        task_identity_inventory,
+        write_task_identity_tombstone,
+    )
     from taskledger.storage.task_ids import (
-        inspect_task_id_inventory,
+        IncompleteTaskAllocation,
         write_task_id_tombstone,
     )
     from taskledger.storage.task_store import resolve_v2_paths
 
     paths = resolve_v2_paths(workspace_root)
-    allocations = inspect_task_id_inventory(paths).incomplete_allocations
+    allocations = tuple(
+        IncompleteTaskAllocation(
+            identity.task_id,
+            identity.path,
+            tuple(sorted(path.name for path in identity.path.iterdir())),
+        )
+        for identity in task_identity_inventory(paths).entries
+        if identity.state == "incomplete"
+    )
     entries = [
         {
             "task_id": allocation.task_id,
@@ -247,11 +259,15 @@ def repair_allocations(
     repaired: list[dict[str, str]] = []
     failed: list[dict[str, str]] = []
     for allocation in allocations:
+        is_legacy_allocation = allocation.path.name.startswith("task-")
+        identity_name = (
+            allocation.task_id if is_legacy_allocation else allocation.path.name
+        )
         quarantine_path = (
             paths.tasks_dir.parent
             / "_recovery"
             / "incomplete-task-allocations"
-            / allocation.task_id
+            / identity_name
         )
         if quarantine_path.exists():
             failed.append(
@@ -264,20 +280,33 @@ def repair_allocations(
             )
             continue
         try:
-            write_task_id_tombstone(
-                paths,
-                allocation.task_id,
-                reason=reason,
-                quarantined_path=quarantine_path,
-            )
             quarantine_path.parent.mkdir(parents=True, exist_ok=True)
+            if is_legacy_allocation:
+                write_task_id_tombstone(
+                    paths,
+                    allocation.task_id,
+                    reason=reason,
+                    quarantined_path=quarantine_path,
+                )
             allocation.path.rename(quarantine_path)
-            tombstone_path = (
-                paths.ledger_dir / "tombstones" / f"{allocation.task_id}.toml"
-            )
             relative_quarantine = quarantine_path.relative_to(
-                paths.tasks_dir.parent
+                paths.ledger_dir
             ).as_posix()
+            if is_legacy_allocation:
+                tombstone_path = (
+                    paths.ledger_dir / "tombstones" / f"{allocation.task_id}.toml"
+                )
+            else:
+                try:
+                    tombstone_path = write_task_identity_tombstone(
+                        paths,
+                        allocation.path.name,
+                        reason=reason,
+                        quarantined_path=relative_quarantine,
+                    )
+                except Exception:
+                    quarantine_path.rename(allocation.path)
+                    raise
             append_task_event(
                 workspace_root,
                 "*",
@@ -300,7 +329,6 @@ def repair_allocations(
             )
         except Exception as exc:  # noqa: BLE001
             failed.append({"task_id": allocation.task_id, "error": str(exc)})
-
     return {
         "kind": "task_allocation_repair",
         "status": "applied",

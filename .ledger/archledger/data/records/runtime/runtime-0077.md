@@ -18,21 +18,20 @@ result:
   indexes are rebuilt; doctor passes cleanly.
 body_format: markdown
 kind: runtime
-version: 5
+version: 6
 ---
 
-**Trigger**: Developer upgrades taskledger and runs `taskledger doctor`, which reports a storage version mismatch.
+**Trigger**: A developer updates a project using layout-5 numeric task bundles and a mutating Taskledger command needs canonical layout 6.
 
 **Flow**:
 
-1. `doctor` → Scans project config, storage layout version, task records, indexes, locks, and runs
-2. Detects that storage layout version (e.g., v2) is behind current version (v3)
-3. Reports diagnostic with severity, code, and repair hint
-4. `migrate` → Applies storage layout migrations to upgrade records to current schema
-5. Migration code in `taskledger/storage/migrations.py` handles version-to-version upgrades
-6. `reindex` → Rebuilds JSON index caches from migrated canonical records
-7. `doctor` → Re-run confirms all checks pass
+1. Before mutation, storage checks the project layout and inventories task identities. Read-only commands continue to read without migrating.
+2. The migration maps legacy task aliases to deterministic UUIDv7 identities while preserving ordering, ordinal gaps, and reserved or incomplete allocations.
+3. The migration verifies that the source is safe to transform; mixed layouts, active locks, and unresolved repository conflicts block automatic migration rather than being guessed through.
+4. Canonical task records and sidecars are moved into UUID-named task bundle directories with recovery information retained.
+5. Layout metadata is advanced to version 6 and UUID-keyed derived indexes are rebuilt.
+6. `doctor` verifies canonical records, indexes, locks, and runs after migration.
 
-**Result**: Storage layout is upgraded to the current version. Indexes are rebuilt. Doctor passes cleanly.
+**Result**: The first mutation uses UUIDv7 task directories while numeric task aliases remain available to users. Read-only access does not change the legacy layout.
 
-**Key source**: `taskledger/storage/migrations.py`, `taskledger/services/doctor.py`, `taskledger/services/doctor_checks/migration_checks.py`, `taskledger/domain/states.py`.
+**Key source**: `taskledger/storage/task_directory_migration.py`, `taskledger/storage/task_identity.py`, `taskledger/storage/task_store.py`, `taskledger/services/doctor.py`.

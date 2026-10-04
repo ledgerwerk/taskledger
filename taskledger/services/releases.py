@@ -44,6 +44,7 @@ def tag_release(
 
     boundary_number = _task_number(boundary_task.id)
     previous = _resolve_previous_release(
+        workspace_root,
         existing,
         boundary_number,
         explicit=previous_version,
@@ -51,12 +52,20 @@ def tag_release(
     release_actor = actor or resolve_actor(workspace_root=workspace_root)
     task_count = _count_done_tasks_between(
         workspace_root,
-        lower_task_id=previous.boundary_task_id if previous is not None else None,
+        lower_task_id=(
+            resolve_task(
+                workspace_root,
+                previous.boundary_task_uuid or previous.boundary_task_id,
+            ).id
+            if previous is not None
+            else None
+        ),
         upper_task_id=boundary_task.id,
     )
     release = ReleaseRecord(
         version=version,
         boundary_task_id=boundary_task.id,
+        boundary_task_uuid=boundary_task.task_uuid,
         created_by=release_actor,
         note=note,
         task_count=task_count if previous is not None else None,
@@ -70,6 +79,7 @@ def tag_release(
         data={
             "version": release.version,
             "boundary_task_id": release.boundary_task_id,
+            "boundary_task_uuid": release.boundary_task_uuid,
             "note": release.note,
             "previous_version": release.previous_version,
         },
@@ -90,7 +100,9 @@ def list_release_records(workspace_root: Path) -> list[dict[str, object]]:
 
 def show_release(workspace_root: Path, version: str) -> dict[str, object]:
     release = resolve_release(workspace_root, version)
-    boundary_task = resolve_task(workspace_root, release.boundary_task_id)
+    boundary_task = resolve_task(
+        workspace_root, release.boundary_task_uuid or release.boundary_task_id
+    )
     paths = resolve_v2_paths(workspace_root)
     return {
         "kind": "release",
@@ -101,16 +113,23 @@ def show_release(workspace_root: Path, version: str) -> dict[str, object]:
 
 
 def _resolve_previous_release(
+    workspace_root: Path,
     releases: list[ReleaseRecord],
     boundary_number: int,
     *,
     explicit: str | None,
 ) -> ReleaseRecord | None:
+    def boundary_number_for(release: ReleaseRecord) -> int:
+        task = resolve_task(
+            workspace_root, release.boundary_task_uuid or release.boundary_task_id
+        )
+        return _task_number(task.id)
+
     if explicit is not None:
         for release in releases:
             if release.version != explicit:
                 continue
-            if _task_number(release.boundary_task_id) >= boundary_number:
+            if boundary_number_for(release) >= boundary_number:
                 raise LaunchError(
                     f"Previous release {explicit} must be before the new boundary task."
                 )
@@ -119,11 +138,11 @@ def _resolve_previous_release(
     candidates = [
         release
         for release in releases
-        if _task_number(release.boundary_task_id) < boundary_number
+        if boundary_number_for(release) < boundary_number
     ]
     if not candidates:
         return None
-    return max(candidates, key=lambda item: _task_number(item.boundary_task_id))
+    return max(candidates, key=boundary_number_for)
 
 
 def _append_release_event(
@@ -139,6 +158,7 @@ def _append_release_event(
         return None
 
     paths = resolve_v2_paths(workspace_root)
+    event_task = resolve_task(workspace_root, task_id)
     timestamp = utc_now_iso()
     event_id = next_event_id(paths.events_dir, timestamp)
     append_event(
@@ -146,7 +166,8 @@ def _append_release_event(
         TaskEvent(
             ts=timestamp,
             event=event_name,
-            task_id=task_id,
+            task_id=event_task.id,
+            task_uuid=event_task.task_uuid,
             actor=resolve_actor(workspace_root=workspace_root),
             harness=resolve_harness(
                 workspace_root=workspace_root,

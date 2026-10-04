@@ -16,6 +16,7 @@ from taskledger.domain.policies import (
     plan_command_decision,
 )
 from taskledger.domain.states import EXIT_CODE_BAD_INPUT, EXIT_CODE_INVALID_TRANSITION
+from taskledger.errors import LaunchError
 from taskledger.ids import next_project_id
 from taskledger.services import command_runner
 from taskledger.services import tasks as _tasks
@@ -266,5 +267,31 @@ def show_task_run(
 
 
 def list_events(workspace_root: Path) -> list[dict[str, object]]:
-    events_dir = resolve_v2_paths(workspace_root).events_dir
-    return [item.to_dict() for item in load_events(events_dir)]
+    paths = resolve_v2_paths(workspace_root)
+    from taskledger.storage.task_identity import (
+        AMBIGUOUS_LEGACY_TASK_REF,
+        task_identity_for_stored_ref,
+    )
+
+    normalized = []
+    for event in load_events(paths.events_dir):
+        if event.task_id == "*":
+            normalized.append(event)
+            continue
+        try:
+            identity = task_identity_for_stored_ref(
+                paths, task_id=event.task_id, task_uuid=event.task_uuid
+            )
+        except LaunchError as exc:
+            if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
+                raise
+            normalized.append(event)
+            continue
+        normalized.append(
+            replace(
+                event,
+                task_id=identity.task_id,
+                task_uuid=str(identity.task_uuid),
+            )
+        )
+    return [item.to_dict() for item in normalized]

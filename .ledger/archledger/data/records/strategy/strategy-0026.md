@@ -16,12 +16,12 @@ related_adrs:
   - adr-0047
 body_format: markdown
 kind: strategy
-version: 5
+version: 6
 ---
 
 ## Strategy
 
-A `task_sidecars.json` summary index under `.taskledger/ledgers/<ledger_ref>/` is a derived cache rebuilt from canonical Markdown records by `taskledger reindex`. Per-task sidecar writes call `update_sidecar_summary` in `taskledger/storage/sidecar_index.py` so the index stays current. The index speeds up list and query operations but is never authoritative. `taskledger doctor indexes` checks for staleness.
+The task sidecar summary index is a derived cache stored in the configured rebuildable indexes mount, not alongside canonical task data. It is keyed by stable UUID identity and rebuilt from canonical Markdown records by `taskledger reindex`; human-readable task aliases remain available in the read models. Per-task sidecar writes update the summary through `update_sidecar_summary` in `taskledger/storage/sidecar_index.py`. `taskledger doctor indexes` checks for staleness.
 
 ## Trade-offs
 

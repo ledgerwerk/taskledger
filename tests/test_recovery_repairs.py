@@ -13,7 +13,7 @@ from taskledger.storage.events import load_events
 from taskledger.storage.init import init_canonical_project_state
 from taskledger.storage.locks import read_lock
 from taskledger.storage.sidecar_index import load_sidecar_index
-from taskledger.storage.task_ids import scan_task_id_inventory
+from taskledger.storage.task_identity import task_identity_inventory
 from taskledger.storage.task_store import (
     load_active_task_state,
     resolve_v2_paths,
@@ -79,7 +79,7 @@ def test_recovery_repairs_dangling_active_task_orphan_lock_and_partial_allocatio
     assert lock_repair["orphan_missing_task_repaired"] == [task.id]
     assert read_lock(lock_path) is None
     sidecar_index = load_sidecar_index(paths)
-    assert sidecar_index[task.id]["locks"]["has_lock"] is False
+    assert sidecar_index[task.task_uuid]["locks"]["has_lock"] is False
     recovery_locks = paths.ledger_dir / "recovery" / "orphan-locks" / task.id
     audit_files = list(recovery_locks.glob("broken-lock-*.yaml"))
     assert len(audit_files) == 1
@@ -91,8 +91,10 @@ def test_recovery_repairs_dangling_active_task_orphan_lock_and_partial_allocatio
     allocation_entries = allocation_dry_run["incomplete_allocations"]
     assert isinstance(allocation_entries, list)
     assert allocation_entries[0]["task_id"] == task.id
-    with pytest.raises(LaunchError, match="missing task.md"):
-        scan_task_id_inventory(paths)
+    assert any(
+        str(identity.task_uuid) == task.task_uuid and identity.state == "incomplete"
+        for identity in task_identity_inventory(paths).entries
+    )
 
     allocation_repair = repair_allocations(
         workspace,
@@ -104,8 +106,14 @@ def test_recovery_repairs_dangling_active_task_orphan_lock_and_partial_allocatio
     assert repaired[0]["task_id"] == task.id
     quarantined = Path(repaired[0]["quarantined_path"])
     assert (quarantined / "runs").is_dir()
-    assert not (paths.tasks_dir / task.id).exists()
-    assert (paths.ledger_dir / "tombstones" / f"{task.id}.toml").is_file()
-    assert scan_task_id_inventory(paths).next_task_id == "task-0002"
+    assert not (paths.tasks_dir / task.task_uuid).exists()
+    assert (paths.ledger_dir / "tombstones" / f"{task.task_uuid}.toml").is_file()
+    tombstone = next(
+        identity
+        for identity in task_identity_inventory(paths).entries
+        if str(identity.task_uuid) == task.task_uuid
+    )
+    assert tombstone.state == "tombstone"
+    assert tombstone.task_id == task.id
     events = load_events(paths.events_dir)
     assert any(event.event == "repair.task_allocation_quarantined" for event in events)
