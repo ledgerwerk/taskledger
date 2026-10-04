@@ -2,14 +2,14 @@ schema_version: 1
 object_type: commit_audit_sheet
 versioning:
   schema_version: 1
-  revision: 1
+  revision: 3
 release_version: v0.7.0
 git_base_ref: v0.6.11
 git_base_sha: 02c6447b971fff7bca28feead10675602bea3772
 git_head_ref: HEAD
-git_head_sha: 1d340258f86769df45d474e7e9139467fe5305a9
-git_range: 02c6447b971fff7bca28feead10675602bea3772..1d340258f86769df45d474e7e9139467fe5305a9
-commit_count: 1
+git_head_sha: 2f54a2ee92725f941fb403fcd0b8f3e801db1dff
+git_range: 02c6447b971fff7bca28feead10675602bea3772..2f54a2ee92725f941fb403fcd0b8f3e801db1dff
+commit_count: 3
 rows:
 - sha: 1d340258f86769df45d474e7e9139467fe5305a9
   source_ref: git:1d340258f86769df45d474e7e9139467fe5305a9
@@ -85,10 +85,355 @@ rows:
     files_changed: 66
     insertions: 3687
     deletions: 540
-  inspected: false
-  inspected_paths: []
-  observed_behavior: ''
-  public_impact: unknown
-  decision: needs_review
+  inspected: true
+  inspected_paths:
+  - .ledger/archledger/data/document-state.json
+  - .ledger/archledger/data/profiles/arc42/sections/content-0004.md
+  - .ledger/archledger/data/profiles/arc42/sections/content-0005.md
+  - .ledger/archledger/data/records/building_blocks/block-0034.md
+  - .ledger/archledger/data/records/decisions/adr-0050.md
+  - .ledger/archledger/data/records/risks/risk-0058.md
+  - .ledger/archledger/data/records/runtime/runtime-0077.md
+  - .ledger/archledger/data/records/strategy/strategy-0025.md
+  - .ledger/archledger/data/records/strategy/strategy-0026.md
+  - README.md
+  - docs/architecture.md
+  - docs/command_contract.md
+  - docs/usage.md
+  - skills/taskledger/SKILL.md
+  - taskledger/api/repair.py
+  - taskledger/cli_ledger.py
+  - taskledger/domain/active_state.py
+  - taskledger/domain/event.py
+  - taskledger/domain/lock.py
+  - taskledger/domain/release.py
+  - taskledger/domain/sidecars.py
+  - taskledger/domain/states.py
+  - taskledger/domain/task.py
+  - taskledger/exchange.py
+  - taskledger/ids.py
+  - taskledger/services/change_tracking.py
+  - taskledger/services/doctor.py
+  - taskledger/services/doctor_checks/artifact_checks.py
+  - taskledger/services/handoff.py
+  - taskledger/services/lock_inventory.py
+  - taskledger/services/maintenance.py
+  - taskledger/services/phase5_lock_transfer.py
+  - taskledger/services/releases.py
+  - taskledger/services/task_collections.py
+  - taskledger/services/task_events.py
+  - taskledger/services/task_lifecycle.py
+  - taskledger/services/task_queries.py
+  - taskledger/services/tasks.py
+  - taskledger/services/tree.py
+  - taskledger/services/usage.py
+  - taskledger/storage/indexes.py
+  - taskledger/storage/init.py
+  - taskledger/storage/migrations.py
+  - taskledger/storage/project_context.py
+  - taskledger/storage/sidecar_index.py
+  - taskledger/storage/task_directory_migration.py
+  - taskledger/storage/task_identity.py
+  - taskledger/storage/task_index.py
+  - taskledger/storage/task_store.py
+  - tests/test_active_task.py
+  - tests/test_delta_remaining_contracts.py
+  - tests/test_doctor.py
+  - tests/test_events.py
+  - tests/test_handoff_lifecycle.py
+  - tests/test_import_boundaries.py
+  - tests/test_indexes.py
+  - tests/test_recovery_repairs.py
+  - tests/test_release_changelog.py
+  - tests/test_sidecar_collections.py
+  - tests/test_storage_bundle_layout.py
+  - tests/test_storage_migration.py
+  - tests/test_task_directory_migration.py
+  - tests/test_task_identity.py
+  - tests/test_taskledger_v2_cli.py
+  - tests/test_taskledger_v2_exchange.py
+  - tests/test_uuid_relationships.py
+  observed_behavior: Introduced UUIDv7 as the stable task storage and relationship
+    identity, added deterministic layout-5 to layout-6 migration, and preserved task-####
+    as a derived display alias across import/export and lifecycle data.
+  public_impact: public
+  decision: accepted
   stale: false
   evidence_subject: 'feat: switch to uuidv7 internal task names'
+  target_entry_id: entry-0002
+  notes: ''
+- sha: 58cdf45f831f4966d9bafe20f61fdcc5e820e50e
+  source_ref: git:58cdf45f831f4966d9bafe20f61fdcc5e820e50e
+  short_sha: 58cdf45
+  changed_paths:
+  - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+  - .ledger/releaseledger/data/ledgers/main/releases/v0.7.0/audit/commit-audit.yaml
+  - .ledger/releaseledger/data/ledgers/main/releases/v0.7.0/entries/entry-0001.md
+  - .ledger/releaseledger/data/ledgers/main/releases/v0.7.0/release.md
+  - .ledger/releaseledger/work/v0.7.0/audit-decisions.yaml
+  - .ledger/releaseledger/work/v0.7.0/audit.yaml
+  - .ledger/releaseledger/work/v0.7.0/entries.yaml
+  - .ledger/releaseledger/work/v0.7.0/evidence/1d34025.patch
+  - .ledger/releaseledger/work/v0.7.0/evidence/manifest.json
+  - .ledger/releaseledger/work/v0.7.0/range.json
+  - README.md
+  - docs/architecture.md
+  - docs/architecture_taskledger_split.md
+  - docs/command_contract.md
+  - docs/full_task_cycle.md
+  - docs/multi_repo.md
+  - docs/public_surface.md
+  - docs/release_checklist.md
+  - docs/service_boundary_whitelist.md
+  - docs/sync.md
+  - docs/transfer.md
+  - docs/usage.md
+  - skills/taskledger/SKILL.md
+  - taskledger/cli.py
+  - taskledger/cli_archive.py
+  - taskledger/cli_commands.py
+  - taskledger/cli_entrypoint.py
+  - taskledger/cli_file.py
+  - taskledger/cli_handoff.py
+  - taskledger/cli_intro.py
+  - taskledger/cli_link.py
+  - taskledger/cli_lock.py
+  - taskledger/cli_migrate.py
+  - taskledger/cli_misc.py
+  - taskledger/cli_monitor.py
+  - taskledger/cli_navigation.py
+  - taskledger/cli_project.py
+  - taskledger/cli_repair.py
+  - taskledger/cli_require.py
+  - taskledger/cli_search.py
+  - taskledger/cli_storage.py
+  - taskledger/cli_sync.py
+  - taskledger/cli_todo.py
+  - taskledger/command_inventory.py
+  - taskledger/domain/handoff.py
+  - taskledger/domain/states.py
+  - taskledger/migrations/hooks.py
+  - taskledger/services/agent_logging.py
+  - taskledger/services/git_sync.py
+  - taskledger/services/handoff.py
+  - taskledger/services/run_store.py
+  - taskledger/storage/task_directory_migration.py
+  - taskledger/storage/task_store.py
+  - tests/test_active_task.py
+  - tests/test_actor_harness_state.py
+  - tests/test_agent_command_logging.py
+  - tests/test_agent_session_protocol.py
+  - tests/test_cli_command_contract.py
+  - tests/test_cli_import_resilience.py
+  - tests/test_cli_runner_compatibility.py
+  - tests/test_code_reviews.py
+  - tests/test_command_example_linter.py
+  - tests/test_command_inventory.py
+  - tests/test_compact_mutation_output.py
+  - tests/test_config_cli.py
+  - tests/test_delta_remaining_contracts.py
+  - tests/test_docs_and_skill.py
+  - tests/test_error_contracts.py
+  - tests/test_event_logging_config.py
+  - tests/test_file_link_snapshots.py
+  - tests/test_implementation_change_scan.py
+  - tests/test_indexes.py
+  - tests/test_indexes_cache_recovery.py
+  - tests/test_json_contracts.py
+  - tests/test_lock_lease_renewal.py
+  - tests/test_locks_audit.py
+  - tests/test_monitor.py
+  - tests/test_next_action_expired_lock.py
+  - tests/test_no_log_feature.py
+  - tests/test_performance_caching.py
+  - tests/test_plan_approval_contract.py
+  - tests/test_plan_input_cli.py
+  - tests/test_plan_lint.py
+  - tests/test_plan_review.py
+  - tests/test_plan_revision_workflow.py
+  - tests/test_plan_todo_materialization.py
+  - tests/test_project_root_config.py
+  - tests/test_question_add_many.py
+  - tests/test_question_filter_answers.py
+  - tests/test_question_plan_regeneration.py
+  - tests/test_release_changelog.py
+  - tests/test_service_boundaries.py
+  - tests/test_shared_tool_ledger_storage.py
+  - tests/test_sidecar_collections.py
+  - tests/test_storage_bundle_layout.py
+  - tests/test_storage_sync.py
+  - tests/test_sync_git.py
+  - tests/test_task_archive.py
+  - tests/test_task_directory_migration.py
+  - tests/test_task_events.py
+  - tests/test_task_markdown_export.py
+  - tests/test_task_report.py
+  - tests/test_taskledger_branch_scoped_ledgers.py
+  - tests/test_taskledger_canonical_sync.py
+  - tests/test_taskledger_cli_api_parity.py
+  - tests/test_taskledger_sibling_migration.py
+  - tests/test_taskledger_v2_cli.py
+  - tests/test_taskledger_v2_exchange.py
+  - tests/test_todo_implementation_gate.py
+  - tests/test_tree_command.py
+  - tests/test_usage_cli.py
+  - tests/test_validation_command.py
+  - tests/test_validation_git_snapshot_recovery.py
+  - tests/test_worker_pipeline_cli.py
+  - tests/test_worker_pipeline_context.py
+  - tests/test_worker_pipeline_handoff.py
+  - tests/test_worker_pipeline_plan_template.py
+  - tests/test_worker_pipeline_todos.py
+  stats:
+    files_changed: 118
+    insertions: 12051
+    deletions: 5092
+  inspected: true
+  inspected_paths:
+  - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+  - .ledger/releaseledger/data/ledgers/main/releases/v0.7.0/audit/commit-audit.yaml
+  - .ledger/releaseledger/data/ledgers/main/releases/v0.7.0/entries/entry-0001.md
+  - .ledger/releaseledger/data/ledgers/main/releases/v0.7.0/release.md
+  - .ledger/releaseledger/work/v0.7.0/audit-decisions.yaml
+  - .ledger/releaseledger/work/v0.7.0/audit.yaml
+  - .ledger/releaseledger/work/v0.7.0/entries.yaml
+  - .ledger/releaseledger/work/v0.7.0/evidence/1d34025.patch
+  - .ledger/releaseledger/work/v0.7.0/evidence/manifest.json
+  - .ledger/releaseledger/work/v0.7.0/range.json
+  - README.md
+  - docs/architecture.md
+  - docs/architecture_taskledger_split.md
+  - docs/command_contract.md
+  - docs/full_task_cycle.md
+  - docs/multi_repo.md
+  - docs/public_surface.md
+  - docs/release_checklist.md
+  - docs/service_boundary_whitelist.md
+  - docs/sync.md
+  - docs/transfer.md
+  - docs/usage.md
+  - skills/taskledger/SKILL.md
+  - taskledger/cli.py
+  - taskledger/cli_archive.py
+  - taskledger/cli_commands.py
+  - taskledger/cli_entrypoint.py
+  - taskledger/cli_file.py
+  - taskledger/cli_handoff.py
+  - taskledger/cli_intro.py
+  - taskledger/cli_link.py
+  - taskledger/cli_lock.py
+  - taskledger/cli_migrate.py
+  - taskledger/cli_misc.py
+  - taskledger/cli_monitor.py
+  - taskledger/cli_navigation.py
+  - taskledger/cli_project.py
+  - taskledger/cli_repair.py
+  - taskledger/cli_require.py
+  - taskledger/cli_search.py
+  - taskledger/cli_storage.py
+  - taskledger/cli_sync.py
+  - taskledger/cli_todo.py
+  - taskledger/command_inventory.py
+  - taskledger/domain/handoff.py
+  - taskledger/domain/states.py
+  - taskledger/migrations/hooks.py
+  - taskledger/services/agent_logging.py
+  - taskledger/services/git_sync.py
+  - taskledger/services/handoff.py
+  - taskledger/services/run_store.py
+  - taskledger/storage/task_directory_migration.py
+  - taskledger/storage/task_store.py
+  - tests/test_active_task.py
+  - tests/test_actor_harness_state.py
+  - tests/test_agent_command_logging.py
+  - tests/test_agent_session_protocol.py
+  - tests/test_cli_command_contract.py
+  - tests/test_cli_import_resilience.py
+  - tests/test_cli_runner_compatibility.py
+  - tests/test_code_reviews.py
+  - tests/test_command_example_linter.py
+  - tests/test_command_inventory.py
+  - tests/test_compact_mutation_output.py
+  - tests/test_config_cli.py
+  - tests/test_delta_remaining_contracts.py
+  - tests/test_docs_and_skill.py
+  - tests/test_error_contracts.py
+  - tests/test_event_logging_config.py
+  - tests/test_file_link_snapshots.py
+  - tests/test_implementation_change_scan.py
+  - tests/test_indexes.py
+  - tests/test_indexes_cache_recovery.py
+  - tests/test_json_contracts.py
+  - tests/test_lock_lease_renewal.py
+  - tests/test_locks_audit.py
+  - tests/test_monitor.py
+  - tests/test_next_action_expired_lock.py
+  - tests/test_no_log_feature.py
+  - tests/test_performance_caching.py
+  - tests/test_plan_approval_contract.py
+  - tests/test_plan_input_cli.py
+  - tests/test_plan_lint.py
+  - tests/test_plan_review.py
+  - tests/test_plan_revision_workflow.py
+  - tests/test_plan_todo_materialization.py
+  - tests/test_project_root_config.py
+  - tests/test_question_add_many.py
+  - tests/test_question_filter_answers.py
+  - tests/test_question_plan_regeneration.py
+  - tests/test_release_changelog.py
+  - tests/test_service_boundaries.py
+  - tests/test_shared_tool_ledger_storage.py
+  - tests/test_sidecar_collections.py
+  - tests/test_storage_bundle_layout.py
+  - tests/test_storage_sync.py
+  - tests/test_sync_git.py
+  - tests/test_task_archive.py
+  - tests/test_task_directory_migration.py
+  - tests/test_task_events.py
+  - tests/test_task_markdown_export.py
+  - tests/test_task_report.py
+  - tests/test_taskledger_branch_scoped_ledgers.py
+  - tests/test_taskledger_canonical_sync.py
+  - tests/test_taskledger_cli_api_parity.py
+  - tests/test_taskledger_sibling_migration.py
+  - tests/test_taskledger_v2_cli.py
+  - tests/test_taskledger_v2_exchange.py
+  - tests/test_todo_implementation_gate.py
+  - tests/test_tree_command.py
+  - tests/test_usage_cli.py
+  - tests/test_validation_command.py
+  - tests/test_validation_git_snapshot_recovery.py
+  - tests/test_worker_pipeline_cli.py
+  - tests/test_worker_pipeline_context.py
+  - tests/test_worker_pipeline_handoff.py
+  - tests/test_worker_pipeline_plan_template.py
+  - tests/test_worker_pipeline_todos.py
+  observed_behavior: 'Reviewed the CLI cleanup and module split: deprecated aliases
+    and legacy option spellings were removed in favor of canonical task-first commands
+    while migration and persisted compatibility paths remained explicit.'
+  public_impact: public
+  decision: accepted
+  stale: false
+  evidence_subject: 'feat: cleanup for v0.7.0 release'
+  target_entry_id: entry-0001
+  notes: ''
+- sha: 2f54a2ee92725f941fb403fcd0b8f3e801db1dff
+  source_ref: git:2f54a2ee92725f941fb403fcd0b8f3e801db1dff
+  short_sha: 2f54a2e
+  changed_paths:
+  - taskledger/cli_ledger.py
+  stats:
+    files_changed: 1
+    insertions: 2
+    deletions: 2
+  inspected: true
+  inspected_paths:
+  - taskledger/cli_ledger.py
+  observed_behavior: Reviewed the one-line CLI ledger import-path correction; it restores
+    the task identity inventory import used by ledger status and contains no standalone
+    user-facing release behavior.
+  public_impact: internal
+  decision: internal
+  stale: false
+  evidence_subject: 'fix: pytest'
+  notes: Internal compatibility fix; omit from public changelog.
