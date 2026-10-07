@@ -251,7 +251,7 @@ def _allocation_repair_plan_entry(
     tombstone_path = paths.ledger_dir / "tombstones" / f"{tombstone_name}.toml"
     return {
         "physical_source": allocation.path.relative_to(paths.ledger_dir).as_posix(),
-        "source_path": str(allocation.path),
+        "source_path": allocation.path.as_posix(),
         "source_kind": allocation.source_kind,
         "legacy_source_id": allocation.legacy_task_id,
         "task_uuid": allocation.task_uuid,
@@ -259,8 +259,8 @@ def _allocation_repair_plan_entry(
         "source_id": source_id,
         "entries": list(allocation.files),
         "source_fingerprint": allocation.source_fingerprint,
-        "planned_quarantine": str(quarantine_path),
-        "planned_tombstone": str(tombstone_path),
+        "planned_quarantine": quarantine_path.as_posix(),
+        "planned_tombstone": tombstone_path.as_posix(),
         "warnings": warnings,
     }
 

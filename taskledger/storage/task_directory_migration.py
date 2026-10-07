@@ -440,7 +440,7 @@ def _resolve_live_relation(
             f"Cannot safely resolve relation {field} in {source_path}: {exc}",
             code="TASKLEDGER_RELATION_RESOLUTION_FAILED",
             details={
-                "source": str(source_path),
+                "source": source_path.as_posix(),
                 "field": field,
                 "task_id": task_id,
                 "task_uuid": task_uuid,
@@ -454,7 +454,7 @@ def _resolve_live_relation(
             f"{task_id!r} ({identity.state}).",
             code="TASKLEDGER_RELATION_RESOLUTION_FAILED",
             details={
-                "source": str(source_path),
+                "source": source_path.as_posix(),
                 "field": field,
                 "task_id": task_id,
                 "task_uuid": str(identity.task_uuid),
