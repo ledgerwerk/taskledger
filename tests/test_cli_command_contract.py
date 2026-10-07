@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from click import unstyle
 from typer.testing import CliRunner
 
 from taskledger.cli import app
@@ -427,7 +428,7 @@ def test_repair_allocation_audit_cli_json_contract(tmp_path: Path) -> None:
     assert payload["result"]["entries"] == []
     help_result = runner.invoke(app, ["repair", "allocations", "--help"])
     assert help_result.exit_code == 0
-    assert "--reconcile-source-id" in help_result.output
+    assert "--reconcile-source-id" in unstyle(help_result.output)
 
 
 def test_removed_v07_compatibility_syntax_is_rejected(tmp_path: Path) -> None:
