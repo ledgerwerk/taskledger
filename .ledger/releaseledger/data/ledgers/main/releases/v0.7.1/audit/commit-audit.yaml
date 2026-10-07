@@ -1,0 +1,84 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.7.1
+git_base_ref: v0.7.0
+git_base_sha: c0804535fe3490142decc1cc641dc1ee07224ac7
+git_head_ref: HEAD
+git_head_sha: c9d75c2df1b9bd73c9c2220f76d6de7eb0d5f79a
+git_range: c0804535fe3490142decc1cc641dc1ee07224ac7..c9d75c2df1b9bd73c9c2220f76d6de7eb0d5f79a
+commit_count: 1
+rows:
+- sha: c9d75c2df1b9bd73c9c2220f76d6de7eb0d5f79a
+  source_ref: git:c9d75c2df1b9bd73c9c2220f76d6de7eb0d5f79a
+  short_sha: c9d75c2
+  changed_paths:
+  - README.md
+  - docs/command_contract.md
+  - docs/index.md
+  - docs/recovery_identity.md
+  - docs/service_boundary_whitelist.md
+  - docs/usage.md
+  - skills/taskledger/SKILL.md
+  - taskledger/api/repair.py
+  - taskledger/cli_repair.py
+  - taskledger/cli_task.py
+  - taskledger/command_inventory.py
+  - taskledger/services/doctor.py
+  - taskledger/services/lock_inventory.py
+  - taskledger/services/tasks.py
+  - taskledger/storage/task_directory_migration.py
+  - taskledger/storage/task_identity.py
+  - taskledger/storage/task_ids.py
+  - taskledger/storage/task_store.py
+  - tests/test_cli_command_contract.py
+  - tests/test_docs_and_skill.py
+  - tests/test_doctor.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  - tests/test_task_directory_migration.py
+  - tests/test_task_identity.py
+  - tests/test_uuid_relationships.py
+  stats:
+    files_changed: 26
+    insertions: 3979
+    deletions: 274
+  inspected: true
+  inspected_paths:
+  - README.md
+  - docs/command_contract.md
+  - docs/index.md
+  - docs/recovery_identity.md
+  - docs/service_boundary_whitelist.md
+  - docs/usage.md
+  - skills/taskledger/SKILL.md
+  - taskledger/api/repair.py
+  - taskledger/cli_repair.py
+  - taskledger/cli_task.py
+  - taskledger/command_inventory.py
+  - taskledger/services/doctor.py
+  - taskledger/services/lock_inventory.py
+  - taskledger/services/tasks.py
+  - taskledger/storage/task_directory_migration.py
+  - taskledger/storage/task_identity.py
+  - taskledger/storage/task_ids.py
+  - taskledger/storage/task_store.py
+  - tests/test_cli_command_contract.py
+  - tests/test_docs_and_skill.py
+  - tests/test_doctor.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  - tests/test_task_directory_migration.py
+  - tests/test_task_identity.py
+  - tests/test_uuid_relationships.py
+  observed_behavior: Added transactional task-allocation and relationship repair flows
+    with reviewed dry-run plans, rollback protection, UUID backfilling during migration,
+    and corruption-tolerant doctor/direct-task diagnostics.
+  public_impact: public
+  decision: accepted
+  stale: false
+  evidence_subject: 'feat: fix corrupt uuid'
+  target_entry_id: entry-0001
+  notes: ''
