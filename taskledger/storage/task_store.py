@@ -330,6 +330,88 @@ def list_tasks_by_visibility_from_paths(
     return [task for task in tasks if not is_archived_task(task)]
 
 
+def load_task_bundle_by_uuid(paths: V2Paths, task_uuid: str) -> TaskRecord:
+    """Load one UUID bundle without resolving aliases or scanning other tasks."""
+    from taskledger.ids import parse_uuid7
+
+    try:
+        canonical_uuid = str(parse_uuid7(task_uuid))
+    except ValueError as exc:
+        raise LaunchError(f"Invalid UUIDv7 task reference: {task_uuid!r}.") from exc
+    if canonical_uuid != task_uuid:
+        raise LaunchError(f"Non-canonical UUIDv7 task reference: {task_uuid!r}.")
+    bundle_dir = paths.tasks_dir / canonical_uuid
+    task_path = bundle_dir / "task.md"
+    if bundle_dir.is_symlink() or task_path.is_symlink():
+        raise LaunchError(f"Direct UUID task loading refuses symlink path: {task_path}")
+    if not task_path.is_file():
+        raise LaunchError(f"Task not found: {task_uuid}")
+    return _load_task(task_path, task_uuid=canonical_uuid)
+
+
+def load_task_bundle_details_by_uuid(
+    paths: V2Paths, task_uuid: str
+) -> tuple[
+    TaskRecord,
+    list[PlanRecord],
+    list[QuestionRecord],
+    list[TaskRunRecord],
+    list[CodeChangeRecord],
+]:
+    """Load one bundle and its display sidecars without identity resolution."""
+    task = load_task_bundle_by_uuid(paths, task_uuid)
+    bundle_dir = paths.tasks_dir / task_uuid
+    todos = _list_records(
+        bundle_dir / "todos",
+        pattern="todo-*.md",
+        loader=lambda path: _load_record(path, TaskTodo.from_dict),
+        sort_key=lambda item: item.id,
+    )
+    links = _list_records(
+        bundle_dir / "links",
+        pattern="link-*.md",
+        loader=lambda path: _load_record(path, FileLink.from_dict),
+        sort_key=lambda item: item.id or "",
+    )
+    requirements = _list_records(
+        bundle_dir / "requirements",
+        pattern="req-*.md",
+        loader=lambda path: _load_record(path, DependencyRequirement.from_dict),
+        sort_key=lambda item: item.id or "",
+    )
+    task = replace(
+        task,
+        todos=tuple(todos),
+        file_links=tuple(links),
+        requirements=tuple(item.task_id for item in requirements),
+    )
+    plans = _list_records(
+        bundle_dir / "plans",
+        pattern="plan-*.md",
+        loader=_load_plan,
+        sort_key=lambda item: item.plan_version,
+    )
+    questions = _list_records(
+        bundle_dir / "questions",
+        pattern="q-*.md",
+        loader=_load_question,
+        sort_key=lambda item: item.id,
+    )
+    runs = _list_records(
+        bundle_dir / "runs",
+        pattern="*.md",
+        loader=_load_run,
+        sort_key=lambda item: item.run_id,
+    )
+    changes = _list_records(
+        bundle_dir / "changes",
+        pattern="change-*.md",
+        loader=_load_change,
+        sort_key=lambda item: item.change_id,
+    )
+    return task, plans, questions, runs, changes
+
+
 def resolve_task(
     workspace_root: Path,
     ref: str,
@@ -1321,6 +1403,13 @@ def task_lock_path(paths: V2Paths, task_id: str) -> Path:
     legacy_path = lock_dir / f"{task_id}.yaml"
     if not uuid_path.exists() and task_id.startswith("task-") and legacy_path.exists():
         return legacy_path
+    if not uuid_path.exists() and not legacy_path.exists():
+        # Layout-5/task-directory migration can leave a lock beside the task
+        # record.  Read and repair paths must continue to see that lock until
+        # it is explicitly released; new locks still use the runtime location.
+        bundle_path = paths.tasks_dir / lock_name / "lock.yaml"
+        if bundle_path.exists():
+            return bundle_path
     return uuid_path
 
 

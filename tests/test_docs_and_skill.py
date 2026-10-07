@@ -562,3 +562,22 @@ def test_current_execution_lock_guidance_is_documented() -> None:
     assert "changed=false" in contract
     assert "Successful `todo done` renews the active implementation lease" in contract
     assert "Read-only commands and other sessions do not renew it." in skill
+
+
+def test_identity_recovery_runbook_is_backup_first_and_readio_scoped() -> None:
+    runbook = (ROOT / "docs" / "recovery_identity.md").read_text(encoding="utf-8")
+    skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
+
+    assert (
+        "Before any mutation, create and verify a complete backup/snapshot" in runbook
+    )
+    assert "--reconcile-source-id task-0019 --tombstone-id task-0037" in runbook
+    assert (
+        "rebuild indexes while canonical identity/schema findings remain unresolved."
+        in runbook
+    )
+    assert (
+        "Readio checkout, ledger, backup, or external data mount "
+        "was accessed or changed" in runbook
+    )
+    assert "do not discover, access, or mutate that external ledger" in skill

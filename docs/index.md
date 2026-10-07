@@ -16,6 +16,7 @@ multi_repo
 api
 public_surface
 command_contract
+recovery_identity
 transfer
 sync
 service_boundary_whitelist

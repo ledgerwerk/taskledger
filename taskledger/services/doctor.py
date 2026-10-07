@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from taskledger import timing as _timing
 from taskledger.domain.models import (
@@ -17,14 +17,16 @@ from taskledger.errors import LaunchError
 from taskledger.services.lock_inventory import LockInventory
 from taskledger.storage.events import load_events
 from taskledger.storage.locks import lock_is_expired
-from taskledger.storage.migrations import inspect_records_for_migration
+from taskledger.storage.migrations import (
+    MigrationNeeded,
+    inspect_records_for_migration,
+)
 from taskledger.storage.paths import (
     ProjectLocator,
     ProjectPaths,
     load_project_locator,
     resolve_project_paths,
 )
-from taskledger.storage.task_identity import task_identity_inventory
 from taskledger.storage.task_ids import (
     IncompleteTaskAllocation,
 )
@@ -35,8 +37,6 @@ from taskledger.storage.task_store import (
     list_questions_from_paths,
     list_runs_from_paths,
     list_tasks,
-    list_tasks_from_paths,
-    load_active_locks_from_paths,
     load_active_task_state_from_paths,
     require_v2_layout,
     resolve_v2_paths,
@@ -58,55 +58,309 @@ class DoctorScanContext:
     run_by_key: Mapping[tuple[str, str], TaskRunRecord]
     active_state: ActiveTaskState | None
     incomplete_task_allocations: tuple[IncompleteTaskAllocation, ...]
+    scan_errors: tuple[str, ...]
+    scan_diagnostics: tuple[dict[str, object], ...]
 
     artifact_limit_bytes: int
 
 
-def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
-    """Build the immutable scan context once at the start of a doctor invocation."""
-    resolved_paths = resolve_project_paths(workspace_root)
-    locator = load_project_locator(workspace_root)
-    paths = resolve_v2_paths(workspace_root)
+def _scan_doctor_tasks(
+    paths: V2Paths,
+    scan_errors: list[str],
+    scan_diagnostics: list[dict[str, object]],
+) -> tuple[
+    tuple[TaskRecord, ...],
+    dict[str, TaskRecord],
+    tuple[IncompleteTaskAllocation, ...],
+]:
+    from taskledger.storage.task_identity import scan_task_identity_inventory
+    from taskledger.storage.task_store import _load_task
 
-    identity_inventory = task_identity_inventory(paths)
-    incomplete_task_allocations = tuple(
-        IncompleteTaskAllocation(
-            identity.task_id,
-            identity.path,
-            tuple(sorted(path.name for path in identity.path.iterdir())),
+    try:
+        identities = scan_task_identity_inventory(paths).entries
+    except Exception as exc:  # noqa: BLE001
+        scan_errors.append(str(exc))
+        scan_diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "TASK_IDENTITY_SCAN_FAILED"),
+                "phase": "task_identity",
+                "message": str(exc),
+                "details": getattr(exc, "details", {}),
+            }
         )
-        for identity in identity_inventory.entries
-        if identity.state == "incomplete"
-    )
+        identities = None
+
+    candidates: list[tuple[Path, str | None, str | None]] = []
+    incomplete: list[IncompleteTaskAllocation] = []
+    if identities is not None:
+        for identity in identities:
+            source_kind: Literal["legacy_directory", "uuid_directory"] = (
+                "legacy_directory"
+                if identity.source_kind == "legacy_task"
+                else "uuid_directory"
+            )
+            if identity.state == "incomplete":
+                try:
+                    files = tuple(
+                        sorted(child.name for child in identity.path.iterdir())
+                    )
+                except OSError as exc:
+                    files = ()
+                    scan_errors.append(str(exc))
+                    scan_diagnostics.append(
+                        {
+                            "severity": "error",
+                            "code": "INCOMPLETE_ALLOCATION_READ_FAILED",
+                            "phase": "task_identity",
+                            "path": str(identity.path),
+                            "message": str(exc),
+                        }
+                    )
+                incomplete.append(
+                    IncompleteTaskAllocation(
+                        task_id=identity.task_id,
+                        path=identity.path,
+                        files=files,
+                        source_kind=source_kind,
+                        legacy_task_id=identity.legacy_task_id,
+                        task_uuid=str(identity.task_uuid),
+                    )
+                )
+            task_path = identity.path / "task.md"
+            if task_path.is_file():
+                candidates.append(
+                    (task_path, identity.task_id, str(identity.task_uuid))
+                )
+    else:
+        try:
+            children = sorted(paths.tasks_dir.iterdir(), key=lambda child: child.name)
+        except OSError as exc:
+            children = []
+            scan_errors.append(str(exc))
+            scan_diagnostics.append(
+                {
+                    "severity": "error",
+                    "code": "TASK_DIRECTORY_SCAN_FAILED",
+                    "phase": "task_identity",
+                    "path": str(paths.tasks_dir),
+                    "message": str(exc),
+                }
+            )
+        for child in children:
+            try:
+                if child.is_symlink() or not child.is_dir():
+                    continue
+                task_path = child / "task.md"
+                if task_path.is_file():
+                    raw_id = child.name if child.name.startswith("task-") else None
+                    candidates.append((task_path, raw_id, None))
+                elif child.name.startswith("task-") or (
+                    len(child.name) == 36 and child.name.count("-") == 4
+                ):
+                    files = tuple(sorted(item.name for item in child.iterdir()))
+                    if files:
+                        incomplete.append(
+                            IncompleteTaskAllocation(
+                                task_id=child.name
+                                if child.name.startswith("task-")
+                                else None,
+                                path=child,
+                                files=files,
+                                source_kind=(
+                                    "legacy_directory"
+                                    if child.name.startswith("task-")
+                                    else "uuid_directory"
+                                ),
+                                legacy_task_id=(
+                                    child.name
+                                    if child.name.startswith("task-")
+                                    else None
+                                ),
+                                task_uuid=(
+                                    child.name
+                                    if len(child.name) == 36
+                                    and child.name.count("-") == 4
+                                    else None
+                                ),
+                            )
+                        )
+            except OSError as exc:
+                scan_errors.append(str(exc))
+                scan_diagnostics.append(
+                    {
+                        "severity": "error",
+                        "code": "TASK_BUNDLE_SCAN_FAILED",
+                        "phase": "task_identity",
+                        "path": str(child),
+                        "message": str(exc),
+                    }
+                )
+
+    tasks_list: list[TaskRecord] = []
+    for task_path, task_id, task_uuid in candidates:
+        try:
+            task = _load_task(
+                task_path,
+                paths=paths if identities is not None else None,
+                task_id=task_id,
+                task_uuid=task_uuid,
+            )
+        except Exception as exc:  # noqa: BLE001
+            scan_errors.append(str(exc))
+            scan_diagnostics.append(
+                {
+                    "severity": "error",
+                    "code": getattr(exc, "code", "TASK_RELATION_UNRESOLVED"),
+                    "phase": "task_record",
+                    "path": str(task_path),
+                    "task_id": task_id,
+                    "message": str(exc),
+                    "details": getattr(exc, "details", {}),
+                }
+            )
+            try:
+                task = _load_task(task_path, task_id=task_id, task_uuid=task_uuid)
+            except Exception as raw_exc:  # noqa: BLE001
+                scan_errors.append(str(raw_exc))
+                scan_diagnostics.append(
+                    {
+                        "severity": "error",
+                        "code": getattr(raw_exc, "code", "TASK_RECORD_UNREADABLE"),
+                        "phase": "task_record",
+                        "path": str(task_path),
+                        "task_id": task_id,
+                        "message": str(raw_exc),
+                    }
+                )
+                continue
+        tasks_list.append(task)
+
+    id_counts: dict[str, int] = {}
+    for task in tasks_list:
+        id_counts[task.id] = id_counts.get(task.id, 0) + 1
+    for task_id, count in id_counts.items():
+        if count > 1:
+            message = f"Multiple task records share display ID {task_id}."
+            scan_errors.append(message)
+            scan_diagnostics.append(
+                {
+                    "severity": "error",
+                    "code": "TASK_DISPLAY_ID_COLLISION",
+                    "phase": "task_identity",
+                    "task_id": task_id,
+                    "message": message,
+                }
+            )
+    tasks = tuple(tasks_list)
+    task_by_id = {task.id: task for task in tasks if id_counts[task.id] == 1}
+    return tasks, task_by_id, tuple(incomplete)
+
+
+def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
+    """Build a best-effort, read-only scan context for one doctor invocation."""
+    from taskledger.services.lock_inventory import build_lock_inventory
     from taskledger.storage.artifact_policy import ABSOLUTE_MAX_ARTIFACT_BYTES
     from taskledger.storage.project_config import (
         load_project_config_document,
         merge_project_config,
     )
 
-    tasks = tuple(list_tasks_from_paths(paths))
-    task_by_id: dict[str, TaskRecord] = {task.id: task for task in tasks}
+    resolved_paths = resolve_project_paths(workspace_root)
+    locator = load_project_locator(workspace_root)
+    paths = resolve_v2_paths(workspace_root)
+    scan_errors: list[str] = []
+    scan_diagnostics: list[dict[str, object]] = []
+    tasks, task_by_id, incomplete_task_allocations = _scan_doctor_tasks(
+        paths, scan_errors, scan_diagnostics
+    )
 
-    locks = tuple(load_active_locks_from_paths(paths))
+    try:
+        lock_inventory = build_lock_inventory(paths)
+        locks = tuple(
+            entry.lock for entry in lock_inventory.entries if entry.lock is not None
+        )
+        for entry in lock_inventory.entries:
+            if entry.is_malformed:
+                message = entry.parse_error or f"Malformed lock {entry.path}."
+                scan_errors.append(message)
+                scan_diagnostics.append(
+                    {
+                        "severity": "error",
+                        "code": "MALFORMED_LOCK",
+                        "phase": "lock_inventory",
+                        "path": str(entry.path),
+                        "message": message,
+                    }
+                )
+    except Exception as exc:  # noqa: BLE001
+        locks = ()
+        scan_errors.append(str(exc))
+        scan_diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "LOCK_INVENTORY_FAILED"),
+                "phase": "lock_inventory",
+                "message": str(exc),
+                "details": getattr(exc, "details", {}),
+            }
+        )
 
     runs_by_task: dict[str, tuple[TaskRunRecord, ...]] = {}
     run_by_key: dict[tuple[str, str], TaskRunRecord] = {}
+
     for task in tasks:
-        task_runs = tuple(list_runs_from_paths(paths, task.id))
+        if task.id not in task_by_id:
+            continue
+        try:
+            task_runs = tuple(list_runs_from_paths(paths, task.task_uuid or task.id))
+        except Exception as exc:  # noqa: BLE001
+            message = str(exc)
+            scan_errors.append(message)
+            scan_diagnostics.append(
+                {
+                    "severity": "error",
+                    "code": getattr(exc, "code", "TASK_RUN_SCAN_FAILED"),
+                    "phase": "run_inventory",
+                    "task_id": task.id,
+                    "message": message,
+                }
+            )
+            continue
         runs_by_task[task.id] = task_runs
         for run in task_runs:
             run_by_key[(task.id, run.run_id)] = run
 
     try:
         active_state = load_active_task_state_from_paths(paths)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         active_state = None
+        scan_errors.append(str(exc))
+        scan_diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "ACTIVE_TASK_STATE_UNREADABLE"),
+                "phase": "active_task",
+                "path": str(paths.active_task_path),
+                "message": str(exc),
+            }
+        )
     try:
         artifact_limit_bytes = merge_project_config(
             load_project_config_document(resolved_paths.config_path)
         ).artifact_max_bytes
-    except LaunchError:
+    except Exception as exc:  # noqa: BLE001
         artifact_limit_bytes = ABSOLUTE_MAX_ARTIFACT_BYTES
+        scan_errors.append(str(exc))
+        scan_diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "PROJECT_CONFIG_UNREADABLE"),
+                "phase": "project_config",
+                "path": str(resolved_paths.config_path),
+                "message": str(exc),
+            }
+        )
 
     return DoctorScanContext(
         workspace_root=workspace_root,
@@ -120,6 +374,8 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         run_by_key=run_by_key,
         active_state=active_state,
         incomplete_task_allocations=incomplete_task_allocations,
+        scan_errors=tuple(scan_errors),
+        scan_diagnostics=tuple(scan_diagnostics),
         artifact_limit_bytes=artifact_limit_bytes,
     )
 
@@ -177,15 +433,43 @@ def _inspect_implementation_snapshots(
         )
 
 
+def _count_task_records_readonly(
+    paths: V2Paths,
+    tasks: tuple[TaskRecord, ...],
+    loader: Callable[[V2Paths, str], Sequence[object]],
+    *,
+    record_name: str,
+    errors: list[str],
+    diagnostics: list[dict[str, object]],
+) -> int:
+    total = 0
+    for task in tasks:
+        task_ref = task.task_uuid or task.id
+        try:
+            total += len(loader(paths, task_ref))
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"Unable to inspect {record_name} for {task.id}: {exc}")
+            diagnostics.append(
+                {
+                    "severity": "error",
+                    "code": f"{record_name.upper()}_SCAN_FAILED",
+                    "phase": f"{record_name}_inventory",
+                    "task_id": task.id,
+                    "message": str(exc),
+                }
+            )
+    return total
+
+
 def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
     with _timing.stage("scan_context"):
         ctx = _build_scan_context(workspace_root)
 
-    errors: list[str] = []
+    errors: list[str] = list(ctx.scan_errors)
     warnings: list[str] = []
     repair_hints: list[str] = []
     run_lock_mismatches: list[dict[str, object]] = []
-    diagnostics: list[dict[str, object]] = []
+    diagnostics = list(ctx.scan_diagnostics)
     broken_links: list[dict[str, object]] = []
     expired_locks: list[dict[str, object]] = []
 
@@ -193,34 +477,50 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
     from taskledger.services.doctor_checks.project_scan import scan_project_config
     from taskledger.services.doctor_checks.task_checks import scan_task_integrity
 
-    with _timing.stage("project_config"):
-        scan_project_config(
-            workspace_root=workspace_root,
-            resolved_paths=ctx.resolved_paths,
-            locator=ctx.locator,
-            errors=errors,
-            warnings=warnings,
-            repair_hints=repair_hints,
+    try:
+        with _timing.stage("project_config"):
+            scan_project_config(
+                workspace_root=workspace_root,
+                resolved_paths=ctx.resolved_paths,
+                locator=ctx.locator,
+                errors=errors,
+                warnings=warnings,
+                repair_hints=repair_hints,
+            )
+    except Exception as exc:  # noqa: BLE001
+        errors.append(str(exc))
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "PROJECT_CONFIG_SCAN_FAILED"),
+                "phase": "project_config",
+                "message": str(exc),
+            }
         )
 
     for allocation in ctx.incomplete_task_allocations:
-        message = f"Incomplete task allocation {allocation.task_id} is missing task.md."
+        allocation_id = (
+            allocation.legacy_task_id or allocation.task_uuid or allocation.path.name
+        )
+        message = f"Incomplete task allocation {allocation_id} is missing task.md."
         errors.append(message)
         repair_hints.append(
-            "Inspect and quarantine incomplete task allocations with "
-            '`taskledger repair allocations --apply --reason "..."`.'
+            "Inspect and quarantine this source explicitly with "
+            f'`taskledger repair allocations --task-id "{allocation_id}" --apply '
+            '--reason "..."` or review the complete allocation set with --all.'
         )
         diagnostics.append(
             {
                 "severity": "error",
                 "code": "INCOMPLETE_TASK_ALLOCATION",
                 "message": message,
-                "task_id": allocation.task_id,
+                "task_id": allocation.display_task_id,
+                "legacy_task_id": allocation.legacy_task_id,
+                "task_uuid": allocation.task_uuid,
                 "path": str(allocation.path),
                 "files": list(allocation.files),
             }
         )
-
     # Active task check
     if ctx.active_state is not None:
         active_task = ctx.task_by_id.get(ctx.active_state.task_id)
@@ -233,35 +533,57 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
                 f"Active task {active_task.id} is {active_task.status_stage}."
             )
 
-    with _timing.stage("task_integrity"):
-        scan_task_integrity(
-            workspace_root=workspace_root,
-            paths=ctx.paths,
-            tasks=list(ctx.tasks),
-            task_map=dict(ctx.task_by_id),
-            locks=list(ctx.locks),
-            task_runs={tid: list(runs) for tid, runs in ctx.runs_by_task.items()},
-            run_map=dict(ctx.run_by_key),
-            active_state=ctx.active_state,
-            errors=errors,
-            warnings=warnings,
-            repair_hints=repair_hints,
-            broken_links=broken_links,
-            run_lock_mismatches=run_lock_mismatches,
-            diagnostics=diagnostics,
+    try:
+        with _timing.stage("task_integrity"):
+            scan_task_integrity(
+                workspace_root=workspace_root,
+                paths=ctx.paths,
+                tasks=list(ctx.tasks),
+                task_map=dict(ctx.task_by_id),
+                locks=list(ctx.locks),
+                task_runs={tid: list(runs) for tid, runs in ctx.runs_by_task.items()},
+                run_map=dict(ctx.run_by_key),
+                active_state=ctx.active_state,
+                errors=errors,
+                warnings=warnings,
+                repair_hints=repair_hints,
+                broken_links=broken_links,
+                run_lock_mismatches=run_lock_mismatches,
+                diagnostics=diagnostics,
+            )
+    except Exception as exc:  # noqa: BLE001
+        errors.append(str(exc))
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "TASK_INTEGRITY_SCAN_FAILED"),
+                "phase": "task_integrity",
+                "message": str(exc),
+                "details": getattr(exc, "details", {}),
+            }
         )
 
     from taskledger.services.doctor_checks.artifact_checks import (
         find_oversized_artifacts,
     )
 
-    with _timing.stage("artifact_policy"):
-        for diagnostic in find_oversized_artifacts(
-            ctx.paths, max_bytes=ctx.artifact_limit_bytes
-        ):
-            diagnostics.append(diagnostic)
-            errors.append(str(diagnostic["message"]))
-
+    try:
+        with _timing.stage("artifact_policy"):
+            for diagnostic in find_oversized_artifacts(
+                ctx.paths, max_bytes=ctx.artifact_limit_bytes
+            ):
+                diagnostics.append(diagnostic)
+                errors.append(str(diagnostic["message"]))
+    except Exception as exc:  # noqa: BLE001
+        errors.append(str(exc))
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "ARTIFACT_SCAN_FAILED"),
+                "phase": "artifact_policy",
+                "message": str(exc),
+            }
+        )
     with _timing.stage("lock_consistency"):
         for lock in ctx.locks:
             lock_task = ctx.task_by_id.get(lock.task_id)
@@ -298,18 +620,40 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
                     f"run {run.run_id} type {run.run_type}."
                 )
 
-    with _timing.stage("migration_state"):
-        scan_migration_state(
-            tasks=list(ctx.tasks),
-            paths=ctx.paths,
-            errors=errors,
-            warnings=warnings,
-            repair_hints=repair_hints,
+    try:
+        with _timing.stage("migration_state"):
+            scan_migration_state(
+                tasks=list(ctx.tasks),
+                paths=ctx.paths,
+                errors=errors,
+                warnings=warnings,
+                repair_hints=repair_hints,
+            )
+    except Exception as exc:  # noqa: BLE001
+        errors.append(str(exc))
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "MIGRATION_SCAN_FAILED"),
+                "phase": "migration_state",
+                "message": str(exc),
+            }
         )
 
-    with _timing.stage("workspace_snapshot"):
-        _inspect_implementation_snapshots(
-            workspace_root, ctx, warnings, repair_hints, diagnostics
+    try:
+        with _timing.stage("workspace_snapshot"):
+            _inspect_implementation_snapshots(
+                workspace_root, ctx, warnings, repair_hints, diagnostics
+            )
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(f"Unable to inspect implementation snapshots: {exc}")
+        diagnostics.append(
+            {
+                "severity": "warning",
+                "code": "IMPLEMENTATION_SNAPSHOT_SCAN_FAILED",
+                "phase": "workspace_snapshot",
+                "message": str(exc),
+            }
         )
     if broken_links:
         errors.append("V2 task records contain broken references.")
@@ -320,19 +664,31 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
             '`taskledger repair lock <task> --reason "..."`.'
         )
 
-    # Counts are computed via path-bound readers to avoid repeated
-    # resolution and context loading per task.
-    total_plans = sum(
-        len(list_plans_from_paths(ctx.paths, task.id)) for task in ctx.tasks
+    total_plans = _count_task_records_readonly(
+        ctx.paths,
+        ctx.tasks,
+        list_plans_from_paths,
+        record_name="plans",
+        errors=errors,
+        diagnostics=diagnostics,
     )
-    total_questions = sum(
-        len(list_questions_from_paths(ctx.paths, task.id)) for task in ctx.tasks
+    total_questions = _count_task_records_readonly(
+        ctx.paths,
+        ctx.tasks,
+        list_questions_from_paths,
+        record_name="questions",
+        errors=errors,
+        diagnostics=diagnostics,
     )
     total_runs = sum(len(runs) for runs in ctx.runs_by_task.values())
-    total_changes = sum(
-        len(list_changes_from_paths(ctx.paths, task.id)) for task in ctx.tasks
+    total_changes = _count_task_records_readonly(
+        ctx.paths,
+        ctx.tasks,
+        list_changes_from_paths,
+        record_name="changes",
+        errors=errors,
+        diagnostics=diagnostics,
     )
-
     return {
         "kind": "taskledger_doctor",
         "counts": {
@@ -372,15 +728,37 @@ def _run_lock_mismatches(
     paths: V2Paths, inventory: LockInventory
 ) -> tuple[list[dict[str, object]], list[str]]:
     from taskledger.domain.policies import derive_active_stage
-    from taskledger.storage.sidecar_index import load_sidecar_index
-    from taskledger.storage.task_index import list_task_summaries
+    from taskledger.storage.common import try_load_json_object
+    from taskledger.storage.sidecar_index import SIDECAR_INDEX_FILENAME
+    from taskledger.storage.task_index import (
+        TaskSummaryRecord,
+        _read_index,
+    )
     from taskledger.storage.task_store import list_runs_from_paths
 
-    task_summaries = {
-        task.task_uuid or task.id: task
-        for task in list_task_summaries(paths, visibility="all")
-    }
-    sidecars = load_sidecar_index(paths)
+    errors: list[str] = []
+    task_summaries: dict[str, TaskSummaryRecord] = {}
+    task_index = _read_index(paths)
+    task_entries = task_index.get("entries") if task_index is not None else None
+    if isinstance(task_entries, list):
+        for raw in task_entries:
+            if isinstance(raw, dict):
+                try:
+                    summary = TaskSummaryRecord.from_dict(raw)
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"Invalid task index entry: {exc}")
+                    continue
+                task_summaries[summary.task_uuid or summary.id] = summary
+
+    sidecar_data = try_load_json_object(
+        paths.indexes_dir / SIDECAR_INDEX_FILENAME, "sidecar index"
+    )
+    raw_sidecars = sidecar_data.get("entries") if sidecar_data is not None else None
+    sidecars = (
+        {key: value for key, value in raw_sidecars.items() if isinstance(value, dict)}
+        if isinstance(raw_sidecars, dict)
+        else {}
+    )
     active_locks = {
         entry.lock.task_uuid or entry.lock.task_id: entry.lock
         for entry in inventory.entries
@@ -393,12 +771,36 @@ def _run_lock_mismatches(
         if isinstance(running, list) and running:
             candidate_task_ids.add(task_id)
 
+    try:
+        task_directories = sorted(paths.tasks_dir.iterdir(), key=lambda path: path.name)
+    except OSError as exc:
+        task_directories = []
+        errors.append(f"Unable to enumerate task bundles for lock inspection: {exc}")
+    for task_directory in task_directories:
+        runs_directory = task_directory / "runs"
+        if (
+            not task_directory.is_symlink()
+            and task_directory.is_dir()
+            and (
+                task_directory.name.startswith("task-")
+                or (
+                    len(task_directory.name) == 36
+                    and task_directory.name.count("-") == 4
+                )
+            )
+            and not runs_directory.is_symlink()
+            and runs_directory.is_dir()
+        ):
+            candidate_task_ids.add(task_directory.name)
     mismatches: list[dict[str, object]] = []
-    errors: list[str] = []
     for task_ref in sorted(candidate_task_ids):
         task = task_summaries.get(task_ref)
         task_id = task.id if task is not None else task_ref
-        runs = list_runs_from_paths(paths, task_ref)
+        try:
+            runs = list_runs_from_paths(paths, task_ref)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"Unable to inspect runs for {task_id}: {exc}")
+            continue
         running_runs = [run for run in runs if run.status == "running"]
         lock = active_locks.get(task_ref)
         active_stage = derive_active_stage(lock, running_runs)
@@ -471,18 +873,67 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
     from taskledger.services.lock_inventory import build_lock_inventory
     from taskledger.storage.task_store import resolve_v2_paths
 
+    errors: list[str] = []
+    diagnostics: list[dict[str, object]] = []
     try:
         paths = resolve_v2_paths(workspace_root)
-        inventory = build_lock_inventory(paths)
     except Exception as exc:  # noqa: BLE001
+        message = str(exc)
+        diagnostic = {
+            "severity": "error",
+            "code": getattr(exc, "code", "LOCK_PATH_RESOLUTION_FAILED"),
+            "phase": "lock_inventory",
+            "message": message,
+            "details": getattr(exc, "details", {}),
+        }
         return {
             "kind": "taskledger_lock_inspection",
             "healthy": False,
-            "errors": [str(exc)],
+            "errors": [message],
             "expired_locks": [],
             "run_lock_mismatches": [],
             "summary": {},
             "entries": [],
+            "diagnostics": [diagnostic],
+        }
+
+    from taskledger.storage.task_identity import scan_task_identity_inventory
+
+    try:
+        scan_task_identity_inventory(paths)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(str(exc))
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "TASK_IDENTITY_SCAN_FAILED"),
+                "phase": "task_identity",
+                "message": str(exc),
+                "details": getattr(exc, "details", {}),
+            }
+        )
+    try:
+        inventory = build_lock_inventory(paths)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(str(exc))
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "LOCK_INVENTORY_FAILED"),
+                "phase": "lock_inventory",
+                "message": str(exc),
+                "details": getattr(exc, "details", {}),
+            }
+        )
+        return {
+            "kind": "taskledger_lock_inspection",
+            "healthy": False,
+            "errors": errors,
+            "expired_locks": [],
+            "run_lock_mismatches": [],
+            "summary": {},
+            "entries": [],
+            "diagnostics": diagnostics,
         }
 
     expired_locks: list[dict[str, object]] = []
@@ -490,7 +941,6 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
     malformed_locks: list[dict[str, object]] = []
     unverifiable_locks: list[dict[str, object]] = []
     live_locks: list[dict[str, object]] = []
-    errors: list[str] = []
     next_commands: list[str] = []
 
     for entry in inventory.entries:
@@ -498,6 +948,15 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
         if entry.is_malformed:
             malformed_locks.append(entry_dict)
             errors.append(f"Malformed lock {entry.path}: {entry.parse_error}")
+            diagnostics.append(
+                {
+                    "severity": "error",
+                    "code": "MALFORMED_LOCK",
+                    "phase": "lock_inventory",
+                    "path": str(entry.path),
+                    "message": entry.parse_error or "Malformed lock record.",
+                }
+            )
             continue
         classification = entry.classification
         if classification == "expired":
@@ -529,8 +988,21 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
                 if isinstance(cmd, str) and not cmd.startswith("#"):
                     next_commands.append(cmd)
 
-    run_lock_mismatches, mismatch_errors = _run_lock_mismatches(paths, inventory)
-    errors.extend(mismatch_errors)
+    try:
+        run_lock_mismatches, mismatch_errors = _run_lock_mismatches(paths, inventory)
+        errors.extend(mismatch_errors)
+    except Exception as exc:  # noqa: BLE001
+        run_lock_mismatches = []
+        errors.append(str(exc))
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "RUN_LOCK_SCAN_FAILED"),
+                "phase": "run_lock_consistency",
+                "message": str(exc),
+                "details": getattr(exc, "details", {}),
+            }
+        )
     for mismatch in run_lock_mismatches:
         command = mismatch.get("next_command")
         if isinstance(command, str):
@@ -541,6 +1013,7 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
         and not malformed_locks
         and not unverifiable_locks
         and not run_lock_mismatches
+        and not errors
     )
 
     return {
@@ -563,21 +1036,47 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
         "run_lock_mismatches": run_lock_mismatches,
         "next_commands": list(dict.fromkeys(next_commands)),
         "entries": [e.to_dict() for e in inventory.entries],
+        "diagnostics": diagnostics,
     }
 
 
 def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
+    project_diagnostics: list[dict[str, object]] = []
     try:
         payload = inspect_v2_project(workspace_root)
+        raw_diagnostics = payload.get("diagnostics", [])
+        if isinstance(raw_diagnostics, list):
+            project_diagnostics = [
+                item for item in raw_diagnostics if isinstance(item, dict)
+            ]
         schema_errors = [
             item
             for item in cast(list[str], payload["errors"])
             if "schema" in item.lower() or "version" in item.lower()
         ]
+        for diagnostic in project_diagnostics:
+            code = str(diagnostic.get("code", "")).upper()
+            if diagnostic.get("severity") == "error" and (
+                "IDENTITY" in code or "RELATION" in code or "AMBIGUOUS" in code
+            ):
+                message = diagnostic.get("message")
+                if isinstance(message, str):
+                    schema_errors.append(message)
     except Exception as exc:  # noqa: BLE001
         schema_errors = [str(exc)]
-    needed, issues = inspect_records_for_migration(workspace_root)
-    schema_errors.extend(issue.message for issue in issues)
+        project_diagnostics = [
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "SCHEMA_PROJECT_SCAN_FAILED"),
+                "message": str(exc),
+            }
+        ]
+    needed: list[MigrationNeeded] = []
+    try:
+        needed, issues = inspect_records_for_migration(workspace_root)
+        schema_errors.extend(issue.message for issue in issues)
+    except Exception as exc:  # noqa: BLE001
+        schema_errors.append(f"Unable to inspect schema records: {exc}")
     schema_errors.extend(
         (
             f"{item.object_type} record requires schema migration "
@@ -614,10 +1113,15 @@ def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
         "kind": "taskledger_schema_inspection",
         "healthy": not schema_errors,
         "errors": schema_errors,
+        "diagnostics": project_diagnostics
+        + [
+            {"severity": "error", "code": "SCHEMA_CHECK_FAILED", "message": error}
+            for error in schema_errors
+        ],
     }
 
 
-def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
+def _inspect_v2_indexes_readonly(workspace_root: Path) -> dict[str, object]:
     paths = require_v2_layout(workspace_root)
     from taskledger.storage.indexes import index_is_dirty
     from taskledger.storage.sidecar_index import SIDECAR_INDEX_FILENAME
@@ -649,7 +1153,6 @@ def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
         TASK_INDEX_FILENAME,
         _read_index,
     )
-    from taskledger.storage.task_store import task_markdown_path
 
     stale_task_entries: list[str] = []
     task_index_path = paths.indexes_dir / TASK_INDEX_FILENAME
@@ -662,11 +1165,18 @@ def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
                     if not isinstance(entry, dict):
                         continue
                     task_id = entry.get("id")
-                    if not isinstance(task_id, str):
+                    task_label = task_id if isinstance(task_id, str) else "?"
+                    raw_path = entry.get("path")
+                    if not isinstance(raw_path, str):
+                        stale_task_entries.append(f"{task_label}: path missing")
                         continue
-                    task_path = task_markdown_path(paths, task_id)
-                    if not task_path.exists():
-                        stale_task_entries.append(f"{task_id}: file missing")
+                    task_path = (paths.ledger_dir / raw_path).resolve()
+                    if task_path.name != "task.md" or not task_path.is_relative_to(
+                        paths.tasks_dir.resolve()
+                    ):
+                        stale_task_entries.append(f"{task_label}: invalid task path")
+                    elif not task_path.is_file():
+                        stale_task_entries.append(f"{task_label}: file missing")
                     else:
                         try:
                             stat = task_path.stat()
@@ -674,9 +1184,9 @@ def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
                                 entry.get("size") != stat.st_size
                                 or entry.get("mtime_ns") != stat.st_mtime_ns
                             ):
-                                stale_task_entries.append(f"{task_id}: stale")
+                                stale_task_entries.append(f"{task_label}: stale")
                         except OSError:
-                            stale_task_entries.append(f"{task_id}: stat error")
+                            stale_task_entries.append(f"{task_label}: stat error")
     else:
         missing.append(str(task_index_path.relative_to(paths.project_dir)))
 
@@ -691,6 +1201,44 @@ def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
         and not stale_task_entries
         and not dirty_indexes
     )
+    diagnostics = [
+        {
+            "severity": "warning",
+            "code": "INDEX_MISSING",
+            "phase": "index_inspection",
+            "path": path,
+            "message": f"Derived index is missing: {path}.",
+        }
+        for path in missing
+    ]
+    diagnostics.extend(
+        {
+            "severity": "warning",
+            "code": "INDEX_DIRTY",
+            "phase": "index_inspection",
+            "index": name,
+            "message": f"Derived index is marked dirty: {name}.",
+        }
+        for name in dirty_indexes
+    )
+    diagnostics.extend(
+        {
+            "severity": "warning",
+            "code": "STALE_TASK_INDEX_ENTRY",
+            "phase": "index_inspection",
+            "message": message,
+        }
+        for message in stale_task_entries
+    )
+    diagnostics.extend(
+        {
+            "severity": "error",
+            "code": "EVENT_LOG_READ_FAILED",
+            "phase": "event_log",
+            "message": message,
+        }
+        for message in event_errors
+    )
     return {
         "kind": "taskledger_index_inspection",
         "healthy": healthy,
@@ -698,7 +1246,33 @@ def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
         "dirty_indexes": dirty_indexes,
         "stale_task_entries": stale_task_entries[:20],
         "event_errors": event_errors,
+        "errors": list(event_errors),
+        "diagnostics": diagnostics,
     }
+
+
+def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
+    """Inspect derived indexes without rebuilding or changing any index state."""
+    try:
+        return _inspect_v2_indexes_readonly(workspace_root)
+    except Exception as exc:  # noqa: BLE001
+        diagnostic = {
+            "severity": "error",
+            "code": getattr(exc, "code", "INDEX_INSPECTION_FAILED"),
+            "phase": "index_inspection",
+            "message": str(exc),
+            "details": getattr(exc, "details", {}),
+        }
+        return {
+            "kind": "taskledger_index_inspection",
+            "healthy": False,
+            "missing_indexes": [],
+            "dirty_indexes": [],
+            "stale_task_entries": [],
+            "event_errors": [],
+            "errors": [str(exc)],
+            "diagnostics": [diagnostic],
+        }
 
 
 def cleanup_orphan_slug_dirs(workspace_root: Path) -> dict[str, object]:
@@ -725,7 +1299,7 @@ def cleanup_orphan_slug_dirs(workspace_root: Path) -> dict[str, object]:
 
 
 def _inspect_v2_project_with_boundary(workspace_root: Path) -> dict[str, object]:
-    from taskledger.errors import LaunchError, TaskledgerRegistrationMissing
+    from taskledger.errors import TaskledgerRegistrationMissing
     from taskledger.services.doctor_checks.project_scan import (
         scan_canonical_boundary,
     )
@@ -768,8 +1342,6 @@ def _inspect_v2_project_with_boundary(workspace_root: Path) -> dict[str, object]
             "diagnostics": diagnostics,
         }
     except LaunchError as exc:
-        if exc.code != "TASKLEDGER_NOT_INITIALIZED":
-            raise
         return {
             "kind": "taskledger_doctor",
             "counts": {
@@ -791,4 +1363,32 @@ def _inspect_v2_project_with_boundary(workspace_root: Path) -> dict[str, object]
             "diagnostics": [
                 {"severity": "error", "code": exc.code, "message": str(exc)}
             ],
+        }
+    except Exception as exc:  # noqa: BLE001
+        diagnostic = {
+            "severity": "error",
+            "code": getattr(exc, "code", "DOCTOR_SCAN_FAILED"),
+            "phase": "doctor_scan",
+            "message": str(exc),
+            "details": getattr(exc, "details", {}),
+        }
+        return {
+            "kind": "taskledger_doctor",
+            "counts": {
+                "tasks": 0,
+                "plans": 0,
+                "questions": 0,
+                "runs": 0,
+                "changes": 0,
+                "locks": 0,
+                "active_task": 0,
+            },
+            "healthy": False,
+            "errors": [str(exc)],
+            "warnings": [],
+            "repair_hints": [],
+            "broken_links": [],
+            "expired_locks": [],
+            "run_lock_mismatches": [],
+            "diagnostics": [diagnostic],
         }

@@ -344,12 +344,145 @@ def show_active_task(workspace_root: Path) -> dict[str, object]:
     )
 
 
+def _show_direct_uuid_task_with_relation_errors(
+    workspace_root: Path, ref: str
+) -> dict[str, object] | None:
+    from taskledger.ids import parse_uuid7
+    from taskledger.storage.task_store import (
+        load_task_bundle_by_uuid,
+        load_task_bundle_details_by_uuid,
+        resolve_v2_paths,
+    )
+
+    try:
+        task_uuid = str(parse_uuid7(ref.strip().lower()))
+    except ValueError:
+        return None
+    paths = resolve_v2_paths(workspace_root)
+    task = load_task_bundle_by_uuid(paths, task_uuid)
+    relationship_diagnostics: list[dict[str, object]] = []
+    parent_task: dict[str, object] | None = None
+    if task.parent_task_id and not task.parent_task_uuid:
+        relationship_diagnostics.append(
+            {
+                "severity": "error",
+                "code": "PARENT_TASK_UUID_MISSING",
+                "task_id": task.id,
+                "task_uuid": task_uuid,
+                "parent_task_id": task.parent_task_id,
+                "message": (
+                    "Parent task is stored only as a legacy alias; direct UUID "
+                    "inspection did not resolve aliases."
+                ),
+            }
+        )
+    elif task.parent_task_uuid:
+        try:
+            parent = load_task_bundle_by_uuid(paths, task.parent_task_uuid)
+        except LaunchError as exc:
+            relationship_diagnostics.append(
+                {
+                    "severity": "error",
+                    "code": "PARENT_TASK_UUID_UNRESOLVED",
+                    "task_id": task.id,
+                    "task_uuid": task_uuid,
+                    "parent_task_uuid": task.parent_task_uuid,
+                    "message": str(exc),
+                }
+            )
+        else:
+            if task.parent_task_id and task.parent_task_id != parent.id:
+                relationship_diagnostics.append(
+                    {
+                        "severity": "error",
+                        "code": "PARENT_TASK_ID_MISMATCH",
+                        "task_id": task.id,
+                        "task_uuid": task_uuid,
+                        "parent_task_id": task.parent_task_id,
+                        "parent_task_uuid": task.parent_task_uuid,
+                        "resolved_parent_task_id": parent.id,
+                        "message": (
+                            "Stored parent task ID disagrees with its UUID target."
+                        ),
+                    }
+                )
+            else:
+                parent_task = {
+                    "task_id": parent.id,
+                    "task_uuid": parent.task_uuid,
+                    "title": parent.title,
+                    "slug": parent.slug,
+                }
+    if not relationship_diagnostics:
+        return None
+    task, plans, questions, runs, changes = load_task_bundle_details_by_uuid(
+        paths, task_uuid
+    )
+    lock_root = paths.runtime_root / "checkouts" / paths.ledger_ref / "locks"
+    lock_candidates = [lock_root / f"{task_uuid}.yaml"]
+    if task.id.startswith("task-"):
+        lock_candidates.append(lock_root / f"{task.id}.yaml")
+    lock_candidates.append(paths.tasks_dir / task_uuid / "lock.yaml")
+    lock_path = next(
+        (path for path in lock_candidates if path.is_file()), lock_candidates[0]
+    )
+    inspection_diagnostics: list[dict[str, object]] = []
+    try:
+        lock = read_lock(lock_path)
+    except LaunchError as exc:
+        lock = None
+        inspection_diagnostics.append(
+            {
+                "severity": "warning",
+                "code": "TASK_LOCK_READ_FAILED",
+                "task_id": task.id,
+                "task_uuid": task_uuid,
+                "path": str(lock_path),
+                "message": str(exc),
+            }
+        )
+    active_stage = (
+        _task_active_stage(workspace_root, task, lock=lock, runs=runs)
+        if lock is not None
+        else None
+    )
+    relationship_diagnostics.append(
+        {
+            "severity": "warning",
+            "code": "FOLLOW_UP_TASKS_NOT_SCANNED",
+            "task_id": task.id,
+            "task_uuid": task_uuid,
+            "message": (
+                "Direct UUID inspection does not enumerate unrelated task bundles."
+            ),
+        }
+    )
+    payload: dict[str, object] = {
+        "kind": "task",
+        "task": _task_payload(workspace_root, task, active_stage=active_stage),
+        "lock": lock.to_dict() if lock is not None else None,
+        "plans": [plan.to_dict() for plan in plans],
+        "questions": [question.to_dict() for question in questions],
+        "runs": [run.to_dict() for run in runs],
+        "changes": [change.to_dict() for change in changes],
+        "parent_task": parent_task,
+        "follow_up_tasks": [],
+        "relationship_diagnostics": relationship_diagnostics,
+    }
+    if inspection_diagnostics:
+        payload["inspection_diagnostics"] = inspection_diagnostics
+    return payload
+
+
 def show_task(
     workspace_root: Path,
     ref: str,
     *,
     include_archived: bool = False,
 ) -> dict[str, object]:
+    direct_payload = _show_direct_uuid_task_with_relation_errors(workspace_root, ref)
+    if direct_payload is not None:
+        return direct_payload
     from taskledger.services.handoff import build_task_relationship_payload
 
     task = _task_with_sidecars(

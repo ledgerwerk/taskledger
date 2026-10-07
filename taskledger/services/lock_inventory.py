@@ -210,6 +210,7 @@ def build_lock_inventory(
 
     from taskledger.storage.task_identity import (
         AMBIGUOUS_LEGACY_TASK_REF,
+        TASK_IDENTITY_CONFLICT,
         task_identity_for_ref,
         task_identity_for_stored_ref,
     )
@@ -249,8 +250,13 @@ def build_lock_inventory(
                 if candidate.state == "live":
                     identity = candidate
             except LaunchError as exc:
-                if exc.code == AMBIGUOUS_LEGACY_TASK_REF:
-                    parse_error = str(exc)
+                if exc.code in {
+                    AMBIGUOUS_LEGACY_TASK_REF,
+                    TASK_IDENTITY_CONFLICT,
+                }:
+                    parse_error = (
+                        f"Cannot resolve lock task identity {lock.task_id!r}: {exc}"
+                    )
         elif path_uuid is not None:
             try:
                 candidate = task_identity_for_ref(paths, path_uuid)

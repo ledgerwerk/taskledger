@@ -6,7 +6,7 @@ import pytest
 
 from taskledger.domain.actor import ActorRef
 from taskledger.domain.lock import TaskLock
-from taskledger.domain.models import TaskRecord
+from taskledger.domain.models import DependencyRequirement, TaskRecord
 from taskledger.errors import LaunchError
 from taskledger.services.task_lifecycle import create_task
 from taskledger.storage.frontmatter import write_markdown_front_matter
@@ -176,8 +176,16 @@ def test_layout5_mapping_is_deterministic_across_copies_and_diverges_safely(
 def test_layout5_migration_rolls_back_renames_when_index_rebuild_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from taskledger.storage.frontmatter import read_markdown_front_matter
+
     root, paths = _legacy_project(tmp_path / "project")
-    original = _add_task(paths, "task-0002", "2024-04-01T10:00:00+00:00")
+    _add_task(paths, "task-0001", "2024-03-31T10:00:00+00:00")
+    _add_task(paths, "task-0002", "2024-04-01T10:00:00+00:00")
+    child_path = paths.tasks_dir / "task-0002" / "task.md"
+    metadata, body = read_markdown_front_matter(child_path)
+    metadata["parent_task_id"] = "task-0001"
+    write_markdown_front_matter(child_path, metadata, body)
+    original = child_path.read_bytes()
 
     def fail_rebuild(_paths: V2Paths) -> None:
         raise RuntimeError("injected rebuild failure")
@@ -189,8 +197,11 @@ def test_layout5_migration_rolls_back_renames_when_index_rebuild_fails(
     with pytest.raises(LaunchError, match="migration failed"):
         _migrate(root)
 
-    assert (paths.tasks_dir / "task-0002" / "task.md").read_bytes() == original
-    assert [path.name for path in paths.tasks_dir.iterdir()] == ["task-0002"]
+    assert child_path.read_bytes() == original
+    assert sorted(path.name for path in paths.tasks_dir.iterdir()) == [
+        "task-0001",
+        "task-0002",
+    ]
     assert not list((paths.ledger_dir / "tombstones").glob("*.toml"))
     assert _storage_version(root) == 5
     journal = paths.ledger_dir / "task-directory-migration-v5-to-v6.json"
@@ -332,3 +343,84 @@ def test_layout5_migration_blocks_unresolved_git_conflicts(
 
     assert (paths.tasks_dir / "task-0001").is_dir()
     assert not (paths.ledger_dir / "task-directory-migration-v5-to-v6.json").exists()
+
+
+def test_layout5_migration_backfills_parent_and_requirement_uuids(
+    tmp_path: Path,
+) -> None:
+    from taskledger.storage.frontmatter import read_markdown_front_matter
+
+    root, paths = _legacy_project(tmp_path / "project")
+    _add_task(paths, "task-0001", "2024-09-01T10:00:00+00:00")
+    _add_task(paths, "task-0002", "2024-09-02T10:00:00+00:00")
+    child_path = paths.tasks_dir / "task-0002" / "task.md"
+    metadata, body = read_markdown_front_matter(child_path)
+    metadata["parent_task_id"] = "task-0001"
+    write_markdown_front_matter(child_path, metadata, body)
+
+    requirement = DependencyRequirement(
+        task_id="task-0001",
+        required_task_id="task-0001",
+        parent_task_id="task-0002",
+    )
+    requirement_path = paths.tasks_dir / "task-0002" / "requirements" / "req-0001.md"
+    requirement_path.parent.mkdir()
+    write_markdown_front_matter(requirement_path, requirement.to_dict(), "")
+
+    assert _migrate(root) == ["uuidv7-task-directories"]
+    migrated_paths = resolve_v2_paths(root)
+    parent_uuid = str(
+        deterministic_legacy_task_uuid(
+            project_uuid=PROJECT_UUID,
+            ledger_ref="main",
+            legacy_task_id="task-0001",
+            created_at="2024-09-01T10:00:00+00:00",
+        )
+    )
+    child_uuid = str(
+        deterministic_legacy_task_uuid(
+            project_uuid=PROJECT_UUID,
+            ledger_ref="main",
+            legacy_task_id="task-0002",
+            created_at="2024-09-02T10:00:00+00:00",
+        )
+    )
+    migrated_task, _ = read_markdown_front_matter(
+        migrated_paths.tasks_dir / child_uuid / "task.md"
+    )
+    assert migrated_task["parent_task_id"] == "task-0001"
+    assert migrated_task["parent_task_uuid"] == parent_uuid
+
+    migrated_requirement, _ = read_markdown_front_matter(
+        migrated_paths.tasks_dir / child_uuid / "requirements" / "req-0001.md"
+    )
+    assert migrated_requirement["required_task_id"] == "task-0001"
+    assert migrated_requirement["required_task_uuid"] == parent_uuid
+    assert migrated_requirement["parent_task_id"] == "task-0002"
+    assert migrated_requirement["parent_task_uuid"] == child_uuid
+
+
+def test_layout5_migration_fails_with_source_and_field_for_reserved_relation(
+    tmp_path: Path,
+) -> None:
+    from taskledger.storage.frontmatter import read_markdown_front_matter
+
+    root, paths = _legacy_project(tmp_path / "project")
+    _add_task(paths, "task-0002", "2024-10-02T10:00:00+00:00")
+    _add_task(paths, "task-0004", "2024-10-04T10:00:00+00:00")
+    source_path = paths.tasks_dir / "task-0002" / "task.md"
+    metadata, body = read_markdown_front_matter(source_path)
+    metadata["parent_task_id"] = "task-0003"
+    write_markdown_front_matter(source_path, metadata, body)
+    original = source_path.read_bytes()
+
+    with pytest.raises(LaunchError) as caught:
+        _migrate(root)
+
+    assert caught.value.code == "TASKLEDGER_RELATION_RESOLUTION_FAILED"
+    assert caught.value.details["field"] == "parent_task_uuid"
+    relation_source = caught.value.details["source"]
+    assert isinstance(relation_source, str)
+    assert relation_source.endswith("/task.md")
+    assert (paths.tasks_dir / "task-0002" / "task.md").read_bytes() == original
+    assert (paths.tasks_dir / "task-0004").is_dir()

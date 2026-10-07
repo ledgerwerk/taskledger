@@ -55,6 +55,8 @@ The broader command surface is organized as:
 
 - `lock`, `doctor`, `repair`
 
+For corrupted UUID identity or allocation state, take a backup of the canonical configuration and resolved data mount before applying a reviewed repair plan. See the [backup-first recovery runbook](docs/recovery_identity.md); its Readio section is guidance only and does not imply access to that separate ledger.
+
 **Project lifecycle:**
 
 - `init`, `status`, `export`, `import`, `snapshot`, `release`

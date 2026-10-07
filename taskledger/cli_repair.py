@@ -435,17 +435,103 @@ def repair_allocations_command(
     reason: Annotated[
         str, typer.Option("--reason", help="Reason for quarantining allocations.")
     ] = "",
+    task_id: Annotated[
+        str | None, typer.Option("--task-id", help="Physical legacy ID or UUID source.")
+    ] = None,
+    all_allocations: Annotated[
+        bool, typer.Option("--all", help="Apply to all incomplete allocations.")
+    ] = False,
+    plan_id: Annotated[
+        str | None, typer.Option("--plan-id", help="Reviewed dry-run plan fingerprint.")
+    ] = None,
+    audit: Annotated[
+        bool, typer.Option("--audit", help="Audit prior allocation repair provenance.")
+    ] = False,
+    reconcile_source_id: Annotated[
+        str | None,
+        typer.Option(
+            "--reconcile-source-id", help="Evidence-backed physical source ID."
+        ),
+    ] = None,
+    tombstone_id: Annotated[
+        str | None,
+        typer.Option("--tombstone-id", help="Misattributed tombstone ID to correct."),
+    ] = None,
 ) -> None:
-    from taskledger.api.repair import repair_allocations
+    from taskledger.api.repair import (
+        audit_allocation_repairs,
+        reconcile_allocation_tombstone,
+        repair_allocations,
+    )
 
     state = ctx.obj
     assert isinstance(state, CLIState)
     try:
-        payload = repair_allocations(state.cwd, apply=apply, reason=reason)
+        if audit:
+            if (
+                apply
+                or reason
+                or task_id
+                or all_allocations
+                or plan_id
+                or reconcile_source_id
+                or tombstone_id
+            ):
+                raise LaunchError(
+                    "--audit cannot be combined with repair or reconciliation options."
+                )
+            payload = audit_allocation_repairs(state.cwd)
+            entries_raw = payload.get("entries", [])
+            entries = entries_raw if isinstance(entries_raw, list) else []
+            summary = payload.get("summary", {})
+            lines = [f"allocation repair provenance audit: {len(entries)} event(s)"]
+            if isinstance(summary, dict):
+                lines.extend(f"  {key}: {value}" for key, value in summary.items())
+            emit_payload(ctx, payload, human="\n".join(lines))
+            return
+
+        if reconcile_source_id is not None or tombstone_id is not None:
+            if reconcile_source_id is None or tombstone_id is None:
+                raise LaunchError(
+                    "Tombstone reconciliation requires both --reconcile-source-id "
+                    "and --tombstone-id."
+                )
+            if task_id is not None or all_allocations:
+                raise LaunchError(
+                    "Tombstone reconciliation cannot combine with allocation selectors."
+                )
+            payload = reconcile_allocation_tombstone(
+                state.cwd,
+                source_id=reconcile_source_id,
+                tombstone_id=tombstone_id,
+                apply=apply,
+                plan_id=plan_id,
+                reason=reason,
+            )
+        else:
+            payload = repair_allocations(
+                state.cwd,
+                apply=apply,
+                reason=reason,
+                task_id=task_id,
+                all_allocations=all_allocations,
+                plan_id=plan_id,
+            )
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-    if payload.get("dry_run"):
+
+    if payload.get("kind") == "task_allocation_tombstone_reconciliation":
+        status = str(payload.get("status", "unknown"))
+        human = f"allocation tombstone reconciliation: {status}"
+        warning = payload.get("warning")
+        if isinstance(warning, str) and warning:
+            human += f"\nwarning: {warning}"
+        next_command = payload.get("next_command")
+        if isinstance(next_command, str):
+            human += f"\nNext: {next_command}"
+        emit_payload(ctx, payload, human=human)
+    elif payload.get("dry_run"):
         entries_raw = payload.get("incomplete_allocations", [])
         entries = entries_raw if isinstance(entries_raw, list) else []
         lines = [
@@ -453,7 +539,10 @@ def repair_allocations_command(
         ]
         for entry in entries:
             if isinstance(entry, dict):
-                lines.append(f"  {entry.get('task_id')}  {entry.get('path')}")
+                lines.append(
+                    f"  {entry.get('physical_source')}  "
+                    f"display={entry.get('display_task_id')}"
+                )
         next_command = payload.get("next_command")
         if next_command:
             lines.append(f"\nNext: {next_command}")
@@ -618,6 +707,64 @@ def repair_planning_command_changes_command(
     emit_payload(ctx, payload, human=human)
 
 
+def repair_relation_command(
+    ctx: typer.Context,
+    task_uuid: Annotated[
+        str,
+        typer.Option("--task-uuid", help="UUID of the task containing the relation."),
+    ],
+    field: Annotated[
+        str,
+        typer.Option(
+            "--field",
+            help="Relation UUID field: parent_task_uuid or required_task_uuid.",
+        ),
+    ],
+    requirement_id: Annotated[
+        str | None,
+        typer.Option("--requirement-id", help="Target a requirement sidecar record."),
+    ] = None,
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Apply the reviewed dry-run plan.")
+    ] = False,
+    plan_id: Annotated[
+        str | None, typer.Option("--plan-id", help="Reviewed dry-run plan ID.")
+    ] = None,
+    reason: Annotated[
+        str, typer.Option("--reason", help="Reason for repairing this relation.")
+    ] = "",
+) -> None:
+    from taskledger.api.repair import repair_task_relation
+
+    state = cli_state_from_context(ctx)
+    try:
+        payload = repair_task_relation(
+            state.cwd,
+            task_uuid=task_uuid,
+            field=field,
+            requirement_id=requirement_id,
+            apply=apply,
+            plan_id=plan_id,
+            reason=reason,
+        )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    status = str(payload.get("status", "unknown"))
+    human_lines = [f"task relation repair: {status}"]
+    if isinstance(payload.get("field"), str):
+        human_lines.append(f"field: {payload['field']}")
+    if isinstance(payload.get("source_path"), str):
+        human_lines.append(f"source: {payload['source_path']}")
+    if isinstance(payload.get("target_task_uuid"), str):
+        human_lines.append(f"target: {payload['target_task_uuid']}")
+    if isinstance(payload.get("plan_id"), str):
+        human_lines.append(f"plan_id: {payload['plan_id']}")
+    if isinstance(payload.get("audit_event_id"), str):
+        human_lines.append(f"audit_event_id: {payload['audit_event_id']}")
+    emit_payload(ctx, payload, human="\n".join(human_lines))
+
+
 def repair_task_dirs_command(ctx: typer.Context) -> None:
     from taskledger.services.doctor import cleanup_orphan_slug_dirs
 
@@ -642,6 +789,7 @@ def register_repair_commands(repair_app: typer.Typer, doctor_app: typer.Typer) -
     repair_app.command("lock")(repair_lock_command)
     repair_app.command("locks")(repair_locks_command)
     repair_app.command("allocations")(repair_allocations_command)
+    repair_app.command("relation")(repair_relation_command)
     repair_app.command("project-identity")(repair_project_identity_command)
     repair_app.command("task")(repair_task_command)
     repair_app.command("run")(repair_run_command)

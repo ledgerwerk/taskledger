@@ -12,15 +12,22 @@ from typing import Any
 
 from filelock import FileLock
 
+from taskledger.domain.models import DependencyRequirement, TaskRecord
 from taskledger.errors import LaunchError
 from taskledger.ids import TASK_ID_FORMAT
 from taskledger.storage.atomic import atomic_write_text
+from taskledger.storage.frontmatter import (
+    read_markdown_front_matter,
+    write_markdown_front_matter,
+)
 from taskledger.storage.task_identity import (
     LEGACY_GAP_CREATED_AT,
+    TaskIdentity,
     deterministic_legacy_task_uuid,
     invalidate_task_identity_inventory,
     missing_legacy_task_ids,
     scan_task_identity_inventory,
+    task_identity_for_stored_ref,
 )
 from taskledger.storage.task_store import V2Paths, resolve_v2_paths
 
@@ -57,12 +64,15 @@ def migrate_v5_task_directories_to_uuidv7(workspace_root: Path) -> None:
             "task_renames": plan["task_renames"],
             "tombstone_renames": plan["tombstone_renames"],
             "reservation_creates": plan["reservation_creates"],
+            "relation_backfills": [],
+            "relation_backfill_version": 1,
         }
         _write_journal(journal_path, journal)
         try:
             _apply_renames(paths, journal)
+            _backfill_task_relationship_uuids(paths, journal_path, journal)
             _mark_and_rebuild_indexes(paths)
-            _validate_migrated_storage(paths)
+            _validate_migrated_storage(paths, require_relation_uuids=True)
             journal["status"] = "complete"
             from taskledger.timeutils import utc_now_iso
 
@@ -344,6 +354,25 @@ def _apply_renames(paths: V2Paths, journal: dict[str, object]) -> None:
 def _rollback_migration(
     paths: V2Paths, journal_path: Path, journal: dict[str, object]
 ) -> None:
+    relation_backfills = journal.get("relation_backfills", [])
+    if not isinstance(relation_backfills, list):
+        raise LaunchError("Migration journal relation backfills are invalid.")
+    for item in reversed(relation_backfills):
+        if not isinstance(item, dict):
+            raise LaunchError("Migration journal relation backfill is invalid.")
+        relative_path = item.get("path")
+        encoded = item.get("original_contents_base64")
+        if not isinstance(relative_path, str) or not isinstance(encoded, str):
+            raise LaunchError("Migration journal relation backup is invalid.")
+        path = paths.ledger_dir / relative_path
+        if not path.is_file():
+            raise LaunchError(f"Cannot restore missing relation source {path}.")
+        try:
+            relation_original = base64.b64decode(encoded, validate=True).decode("utf-8")
+        except (ValueError, TypeError, UnicodeDecodeError) as exc:
+            raise LaunchError("Migration journal relation backup is corrupt.") from exc
+        atomic_write_text(path, relation_original)
+    journal["relation_backfills"] = []
     for item in reversed(_journal_list(journal, "task_renames")):
         source = paths.ledger_dir / str(item["old"])
         destination = paths.ledger_dir / str(item["new"])
@@ -366,7 +395,7 @@ def _rollback_migration(
         encoded = item.get("original_contents_base64")
         if not isinstance(encoded, str):
             raise LaunchError("Migration journal cannot restore tombstone contents.")
-        original = base64.b64decode(encoded)
+        tombstone_original = base64.b64decode(encoded)
         if destination.exists():
             current = _read_toml(destination)
             if current.get("task_uuid") != item.get("task_uuid"):
@@ -374,10 +403,10 @@ def _rollback_migration(
                     f"Cannot roll back foreign UUID tombstone {destination}."
                 )
             destination.unlink()
-        if source.exists() and source.read_bytes() != original:
+        if source.exists() and source.read_bytes() != tombstone_original:
             raise LaunchError(f"Cannot restore changed legacy tombstone {source}.")
         if not source.exists():
-            atomic_write_text(source, original.decode("utf-8"))
+            atomic_write_text(source, tombstone_original.decode("utf-8"))
     for item in reversed(_journal_list(journal, "reservation_creates")):
         destination = paths.ledger_dir / str(item["new"])
         if not destination.exists():
@@ -394,7 +423,178 @@ def _rollback_migration(
     _mark_indexes_dirty(paths)
 
 
-def _validate_migrated_storage(paths: V2Paths) -> None:
+def _resolve_live_relation(
+    paths: V2Paths,
+    *,
+    source_path: Path,
+    field: str,
+    task_id: str,
+    task_uuid: str | None,
+) -> TaskIdentity:
+    try:
+        identity = task_identity_for_stored_ref(
+            paths, task_id=task_id, task_uuid=task_uuid
+        )
+    except LaunchError as exc:
+        raise LaunchError(
+            f"Cannot safely resolve relation {field} in {source_path}: {exc}",
+            code="TASKLEDGER_RELATION_RESOLUTION_FAILED",
+            details={
+                "source": str(source_path),
+                "field": field,
+                "task_id": task_id,
+                "task_uuid": task_uuid,
+                "cause_code": exc.code,
+                "cause": str(exc),
+            },
+        ) from exc
+    if identity.state != "live" or not (identity.path / "task.md").is_file():
+        raise LaunchError(
+            f"Relation {field} in {source_path} targets non-live task "
+            f"{task_id!r} ({identity.state}).",
+            code="TASKLEDGER_RELATION_RESOLUTION_FAILED",
+            details={
+                "source": str(source_path),
+                "field": field,
+                "task_id": task_id,
+                "task_uuid": str(identity.task_uuid),
+                "target_state": identity.state,
+            },
+        )
+    return identity
+
+
+def _prepare_task_relation_backfills(paths: V2Paths) -> list[dict[str, object]]:
+    inventory = scan_task_identity_inventory(paths)
+    updates: list[dict[str, object]] = []
+    for identity in inventory.entries:
+        if identity.state != "live" or not (identity.path / "task.md").is_file():
+            continue
+        task_path = identity.path / "task.md"
+        metadata, body = read_markdown_front_matter(task_path)
+        task = TaskRecord.from_dict(metadata)
+        if task.parent_task_id or task.parent_task_uuid:
+            parent = _resolve_live_relation(
+                paths,
+                source_path=task_path,
+                field="parent_task_uuid",
+                task_id=task.parent_task_id or "",
+                task_uuid=task.parent_task_uuid,
+            )
+            updated = dict(metadata)
+            updated["parent_task_id"] = parent.task_id
+            updated["parent_task_uuid"] = str(parent.task_uuid)
+            if updated != metadata:
+                updates.append(
+                    {
+                        "path": task_path,
+                        "metadata": updated,
+                        "body": body,
+                        "original_bytes": task_path.read_bytes(),
+                        "fields": ["parent_task_uuid"],
+                    }
+                )
+
+        requirements_dir = identity.path / "requirements"
+        for requirement_path in sorted(requirements_dir.glob("req-*.md")):
+            requirement_metadata, requirement_body = read_markdown_front_matter(
+                requirement_path
+            )
+            requirement = DependencyRequirement.from_dict(requirement_metadata)
+            owner_task_id = requirement.parent_task_id or task.id
+            owner_task_uuid = requirement.parent_task_uuid
+            if requirement.parent_task_id is None and owner_task_uuid is None:
+                owner_task_uuid = str(identity.task_uuid)
+            owner = _resolve_live_relation(
+                paths,
+                source_path=requirement_path,
+                field="parent_task_uuid",
+                task_id=owner_task_id,
+                task_uuid=owner_task_uuid,
+            )
+            required = _resolve_live_relation(
+                paths,
+                source_path=requirement_path,
+                field="required_task_uuid",
+                task_id=requirement.required_task_id or requirement.task_id,
+                task_uuid=requirement.required_task_uuid,
+            )
+            updated_requirement = dict(requirement_metadata)
+            updated_requirement["task_id"] = required.task_id
+            updated_requirement["required_task_id"] = required.task_id
+            updated_requirement["required_task_uuid"] = str(required.task_uuid)
+            updated_requirement["parent_task_id"] = owner.task_id
+            updated_requirement["parent_task_uuid"] = str(owner.task_uuid)
+            if updated_requirement != requirement_metadata:
+                updates.append(
+                    {
+                        "path": requirement_path,
+                        "metadata": updated_requirement,
+                        "body": requirement_body,
+                        "original_bytes": requirement_path.read_bytes(),
+                        "fields": ["parent_task_uuid", "required_task_uuid"],
+                    }
+                )
+    return updates
+
+
+def _backfill_task_relationship_uuids(
+    paths: V2Paths, journal_path: Path, journal: dict[str, object]
+) -> None:
+    updates = _prepare_task_relation_backfills(paths)
+    entries = journal.get("relation_backfills", [])
+    if not isinstance(entries, list):
+        raise LaunchError("Migration journal relation backfills are invalid.")
+    snapshots: list[dict[str, object]] = []
+    for update in updates:
+        path = update["path"]
+        original_bytes = update["original_bytes"]
+        if not isinstance(path, Path) or not isinstance(original_bytes, bytes):
+            raise LaunchError("Migration relation backfill plan is invalid.")
+        snapshots.append(
+            {
+                "path": path.relative_to(paths.ledger_dir).as_posix(),
+                "original_contents_base64": base64.b64encode(original_bytes).decode(
+                    "ascii"
+                ),
+                "fields": update["fields"],
+            }
+        )
+    journal["relation_backfills"] = snapshots
+    _write_journal(journal_path, journal)
+    for update in updates:
+        path = update["path"]
+        original_bytes = update["original_bytes"]
+        metadata = update["metadata"]
+        body = update["body"]
+        if not isinstance(path, Path) or not isinstance(original_bytes, bytes):
+            raise LaunchError("Migration relation backfill plan is invalid.")
+        if not isinstance(metadata, dict) or not isinstance(body, str):
+            raise LaunchError("Migration relation backfill content is invalid.")
+        fields = update["fields"]
+        if not isinstance(fields, list) or not all(
+            isinstance(field, str) for field in fields
+        ):
+            raise LaunchError("Migration relation backfill fields are invalid.")
+        if path.read_bytes() != original_bytes:
+            raise LaunchError(
+                f"Relation source changed during migration: {path}.",
+                code="TASKLEDGER_RELATION_SOURCE_CHANGED",
+                details={"source": str(path), "fields": update["fields"]},
+            )
+        write_markdown_front_matter(path, metadata, body)
+        verified_metadata, _ = read_markdown_front_matter(path)
+        if any(verified_metadata.get(field) != metadata.get(field) for field in fields):
+            raise LaunchError(
+                f"Relation backfill postcondition failed for {path}.",
+                code="TASKLEDGER_RELATION_BACKFILL_FAILED",
+                details={"source": str(path), "fields": update["fields"]},
+            )
+
+
+def _validate_migrated_storage(
+    paths: V2Paths, *, require_relation_uuids: bool = False
+) -> None:
     if paths.tasks_dir.exists() and any(
         path.name.startswith("task-") for path in paths.tasks_dir.iterdir()
     ):
@@ -405,6 +605,17 @@ def _validate_migrated_storage(paths: V2Paths) -> None:
     ):
         raise LaunchError("Migration left numeric task tombstones in layout 6.")
     scan_task_identity_inventory(paths)
+    if require_relation_uuids:
+        pending_backfills = _prepare_task_relation_backfills(paths)
+        if pending_backfills:
+            pending = pending_backfills[0]
+            path = pending["path"]
+            fields = pending["fields"]
+            raise LaunchError(
+                f"Migration left an unbackfilled task relation in {path}.",
+                code="TASKLEDGER_RELATION_BACKFILL_FAILED",
+                details={"source": str(path), "fields": fields},
+            )
     from taskledger.storage.task_store import list_tasks_from_paths
 
     list_tasks_from_paths(paths)
@@ -441,7 +652,9 @@ def _validate_completed_migration(paths: V2Paths, journal: dict[str, object]) ->
             raise LaunchError(
                 f"Completed migration receipt disagrees with {destination}."
             )
-    _validate_migrated_storage(paths)
+    _validate_migrated_storage(
+        paths, require_relation_uuids=journal.get("relation_backfill_version") == 1
+    )
 
 
 def _mark_indexes_dirty(paths: V2Paths) -> None:
@@ -695,6 +908,40 @@ def _validate_journal_entries(journal: dict[str, object]) -> None:
         raise LaunchError(
             "Migration journal does not reserve every legacy ordinal gap."
         )
+    relation_backfills = journal.get("relation_backfills", [])
+    if not isinstance(relation_backfills, list) or not all(
+        isinstance(item, dict) for item in relation_backfills
+    ):
+        raise LaunchError("Migration journal relation backfills are invalid.")
+    for item in relation_backfills:
+        relative_path = item.get("path")
+        encoded = item.get("original_contents_base64")
+        fields = item.get("fields")
+        path = Path(relative_path) if isinstance(relative_path, str) else Path("/")
+        if (
+            not isinstance(relative_path, str)
+            or path.is_absolute()
+            or ".." in path.parts
+            or len(path.parts) < 3
+            or path.parts[0] != "tasks"
+            or path.suffix != ".md"
+            or not isinstance(encoded, str)
+            or not isinstance(fields, list)
+            or not all(
+                isinstance(field, str)
+                and field in {"parent_task_uuid", "required_task_uuid"}
+                for field in fields
+            )
+        ):
+            raise LaunchError(
+                "Migration journal contains an invalid relation backfill."
+            )
+        try:
+            base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError) as exc:
+            raise LaunchError(
+                "Migration journal has invalid relation backup data."
+            ) from exc
 
 
 def _read_journal(path: Path) -> dict[str, object] | None:

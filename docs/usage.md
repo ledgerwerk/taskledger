@@ -741,7 +741,7 @@ taskledger repair allocations --apply --reason "Quarantine incomplete task alloc
 taskledger maintenance gc --scope artifacts
 ```
 
-Forced deactivation clears only a dangling active-task pointer. Run the lock-repair dry-run separately to inspect orphan locks before applying. Allocation repair preserves the partial directory in quarantine and tombstones its ID. Garbage collection is explicit, dry-run by default, and never deletes canonical task history; see `docs/command_contract.md` for scope and retention details.
+Forced deactivation clears only a dangling active-task pointer. Run the lock-repair dry-run separately to inspect orphan locks before applying. Allocation repair is dry-run by default and requires an explicit source or deliberate bulk scope plus a reviewed plan fingerprint before applying. It preserves quarantined payloads and records tombstone provenance. For identity, relationship, and backup-first recovery procedures, see [UUID identity and allocation recovery](recovery_identity.md). Garbage collection is explicit, dry-run by default, and never deletes canonical task history; see `docs/command_contract.md` for scope and retention details.
 
 ## Export and snapshots
 

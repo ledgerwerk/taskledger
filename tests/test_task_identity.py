@@ -9,13 +9,19 @@ from ledgercore import parse_uuid7
 
 from taskledger.errors import LaunchError
 from taskledger.services.task_lifecycle import create_task
+from taskledger.storage.frontmatter import (
+    read_markdown_front_matter,
+    write_markdown_front_matter,
+)
 from taskledger.storage.init import init_canonical_project_state
 from taskledger.storage.task_identity import (
     LEGACY_UUID7_EPOCH_MS,
     allocate_task_identity,
     deterministic_legacy_task_uuid,
+    legacy_task_identity_for_ref,
     scan_task_identity_inventory,
 )
+from taskledger.storage.task_ids import write_task_id_tombstone
 from taskledger.storage.task_store import resolve_v2_paths
 
 
@@ -24,6 +30,26 @@ def _init(tmp_path: Path):
     project.mkdir()
     init_canonical_project_state(project, create_sibling_store=True)
     return project
+
+
+def _migrated_task_37_fixture(tmp_path: Path):
+    project = _init(tmp_path)
+    created = create_task(
+        project, title="Migrated task 37", description="", slug="migrated-37"
+    )
+    paths = resolve_v2_paths(project)
+    task_dir = paths.tasks_dir / str(created.task_uuid)
+    task_path = task_dir / "task.md"
+    metadata, body = read_markdown_front_matter(task_path)
+    metadata["id"] = "task-0037"
+    write_markdown_front_matter(task_path, metadata, body)
+
+    live_uuid = UUID("00dc6acf-ac25-76b7-9c95-3e6e51ff322d")
+    task_dir.rename(paths.tasks_dir / str(live_uuid))
+    # A physical reservation beyond task 37 causes legacy-gap synthesis to
+    # represent earlier missing ordinals in the pre-fix inventory.
+    (paths.tasks_dir / "task-0038").mkdir()
+    return project, paths, live_uuid
 
 
 def test_deterministic_legacy_uuid7_is_stable_valid_and_ordered() -> None:
@@ -84,6 +110,55 @@ def test_identity_inventory_derives_aliases_for_new_tasks(
     assert [entry.state for entry in inventory.entries] == ["live", "live"]
     assert all(UUID(entry.path.name).version == 7 for entry in inventory.entries)
     assert inventory.next_task_id == "task-0003"
+
+
+def test_migrated_uuid_task_id_prevents_duplicate_legacy_gap(
+    tmp_path: Path,
+) -> None:
+    _project, paths, live_uuid = _migrated_task_37_fixture(tmp_path)
+
+    inventory = scan_task_identity_inventory(paths)
+    legacy_timestamp = LEGACY_UUID7_EPOCH_MS + 37
+    matching = tuple(
+        entry
+        for entry in inventory.entries
+        if entry.task_uuid.int >> 80 == legacy_timestamp
+    )
+
+    assert [(entry.task_uuid, entry.state) for entry in matching] == [
+        (live_uuid, "live")
+    ]
+    assert legacy_task_identity_for_ref(paths, "task-0037").task_uuid == live_uuid
+
+
+def test_live_migrated_task_and_legacy_tombstone_report_identity_conflict(
+    tmp_path: Path,
+) -> None:
+    _project, paths, live_uuid = _migrated_task_37_fixture(tmp_path)
+    write_task_id_tombstone(
+        paths,
+        "task-0037",
+        reason="Conflicting identity fixture.",
+        quarantined_path=paths.tasks_dir / "quarantined-task-0037",
+    )
+
+    with pytest.raises(LaunchError) as caught:
+        legacy_task_identity_for_ref(paths, "task-0037")
+
+    assert caught.value.code == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
+    assert caught.value.details["legacy_task_id"] == "task-0037"
+    sources = caught.value.details["sources"]
+    assert isinstance(sources, list)
+    assert any(
+        isinstance(source, dict)
+        and source.get("kind") == "uuid_task"
+        and source.get("task_uuid") == str(live_uuid)
+        for source in sources
+    )
+    assert any(
+        isinstance(source, dict) and source.get("kind") == "tombstone"
+        for source in sources
+    )
 
 
 def test_loading_uuid_bundle_ignores_stale_numeric_display_id(tmp_path: Path) -> None:

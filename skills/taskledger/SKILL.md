@@ -16,7 +16,7 @@ Use taskledger for staged coding work that needs a durable task record, reviewab
 
 - Do not implement before a plan approval has been recorded. Prefer `plan accept` for explicit chat approval.
 - Do not validate before implementation has been finished.
-- Do not use repair commands (`repair lock`, `repair run`, `repair task`, `repair index`) in the normal lifecycle. Use them only after `doctor`/`lock show` proves there is stale or corrupted state. For a normal expired implementation lock, use `implement resume --repair-expired-lock` instead.
+- Do not use repair commands (`repair lock`, `repair run`, `repair task`, `repair allocations`, `repair relation`, `repair index`) in the normal lifecycle. Use them only for diagnosed corruption, after backing up the canonical configuration and resolved data mount and reviewing a dry-run plan. For a normal expired implementation lock, use `implement resume --repair-expired-lock` instead.
 - Do not break locks without a reason.
 - Do not break locks for normal actor or harness transfer; use durable handoffs.
 - Do not mark validation passed without checking every mandatory acceptance criterion.
@@ -385,6 +385,14 @@ A non-zero validation command is not automatically a failed acceptance criterion
 - Run `taskledger validate status` to inspect all blocking issues before finishing.
 - If `validate start` reports `IMPLEMENTATION_SNAPSHOT_MISMATCH`, do not stage or unstage files blindly. Run `validate status` or `can validate`. If the user accepts the current workspace as the implementation result, run `taskledger implement snapshot refresh --reason "..."` and then `taskledger validate start`.
 - If validation fails because implementation has a bug, finish validation as failed, run `taskledger next-action`, then restart implementation with `taskledger implement restart`. Use implementation context or an implementation handoff for the next actor.
+
+### Storage-corruption recovery
+
+- Snapshot the canonical configuration and the full resolved data mount before repair; `storage where` identifies mounts without assuming data is checkout-local.
+- Start with read-only `doctor`, `doctor schema`, `doctor indexes`, and allocation-provenance audit output. Preserve those results.
+- Run `repair allocations` or `repair relation` dry-run first. Apply only the exact reviewed plan ID with a reason; use explicit physical source scope, never a display alias.
+- Do not rebuild indexes until identity, relationship, and schema checks are healthy. Preserve tombstones and quarantine payloads; do not manually delete evidence.
+- Follow [`docs/recovery_identity.md`](../../docs/recovery_identity.md) for the full runbook. Its Readio section is written guidance for a separate operator only; do not discover, access, or mutate that external ledger as part of Taskledger work.
 
 ### Waiver Rules
 

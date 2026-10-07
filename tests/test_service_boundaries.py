@@ -19,6 +19,9 @@ FUNCTION_LINE_WHITELIST: dict[str, str] = {
         "Sub-phases of scan_task_integrity with per-task lock, "
         "run, and validation checks."
     ),
+    "taskledger/services/doctor.py::_inspect_v2_project_phases": (
+        "Project doctor phases collect independent corruption-tolerant diagnostics."
+    ),
     "taskledger/cli_sync.py::register_sync_commands": (
         "Git-sync registration still co-locates Git sync and hook command wiring."
     ),
@@ -99,6 +102,9 @@ CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
     "taskledger/cli_task.py:taskledger.services.actors": (
         "Task record command resolves completed-by actor metadata."
     ),
+    "taskledger/cli_task.py:taskledger.services.agent_logging": (
+        "Task CLI records direct UUID show diagnostics through the agent logger."
+    ),
     "taskledger/cli_task.py:taskledger.services.agent_transcripts": (
         "Task transcript rendering currently lives in services."
     ),
@@ -134,6 +140,16 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/api/repair.py::repair_locks:except-1": (
         "Bulk lock repair reports individual failures while continuing other repairs."
     ),
+    "taskledger/api/repair.py::_apply_one_allocation_repair:except-1": (
+        "Allocation apply rolls back moved source data when a transaction step fails."
+    ),
+    "taskledger/api/repair.py::_apply_task_relation_repair:except-1": (
+        "Relation repair restores original task metadata "
+        "after write verification fails."
+    ),
+    "taskledger/api/repair.py::reconcile_allocation_tombstone:except-1": (
+        "Tombstone reconciliation rolls back both records if a transaction fails."
+    ),
     "taskledger/cli.py::_register_optional_group:except-1": (
         "Optional command group import fallback reports missing modules gracefully."
     ),
@@ -155,6 +171,15 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/doctor.py::_build_scan_context:except-1": (
         "Doctor must continue scanning even when config parsing fails."
     ),
+    "taskledger/services/doctor.py::_build_scan_context:except-2": (
+        "Doctor context assembly records run inventory failures and continues."
+    ),
+    "taskledger/services/doctor.py::_build_scan_context:except-3": (
+        "Doctor context assembly records active-task state failures and continues."
+    ),
+    "taskledger/services/doctor.py::_build_scan_context:except-4": (
+        "Doctor context assembly records project configuration failures and continues."
+    ),
     "taskledger/services/doctor.py::_inspect_v2_project_phases:except-1": (
         "Doctor must continue scanning even when one task metadata read fails."
     ),
@@ -169,6 +194,57 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     ),
     "taskledger/services/doctor.py::inspect_v2_indexes:except-1": (
         "Doctor index inspection degrades gracefully when event loading fails."
+    ),
+    "taskledger/services/doctor.py::_count_task_records_readonly:except-1": (
+        "Doctor records sidecar parse failures and continues counting other records."
+    ),
+    "taskledger/services/doctor.py::_inspect_v2_indexes_readonly:except-1": (
+        "Read-only index diagnosis captures load errors without rebuilding caches."
+    ),
+    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-2": (
+        "Doctor preserves independent diagnostics when task-integrity scanning fails."
+    ),
+    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-3": (
+        "Doctor records artifact-policy scan failures as structured diagnostics."
+    ),
+    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-4": (
+        "Doctor records per-lock expiry classification failures and continues."
+    ),
+    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-5": (
+        "Doctor records migration-state scan failures as structured diagnostics."
+    ),
+    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-6": (
+        "Doctor degrades snapshot inspection failures to a warning diagnostic."
+    ),
+    "taskledger/services/doctor.py::_inspect_v2_project_with_boundary:except-1": (
+        "Doctor converts expected project-state failures into structured output."
+    ),
+    "taskledger/services/doctor.py::_run_lock_mismatches:except-1": (
+        "Lock diagnosis skips malformed task-index entries and continues scanning."
+    ),
+    "taskledger/services/doctor.py::_run_lock_mismatches:except-2": (
+        "Lock diagnosis reports per-task run scan failures without aborting."
+    ),
+    "taskledger/services/doctor.py::_scan_doctor_tasks:except-1": (
+        "Doctor reports identity inventory failures and continues other phases."
+    ),
+    "taskledger/services/doctor.py::_scan_doctor_tasks:except-2": (
+        "Doctor records per-task loading errors and continues scanning bundles."
+    ),
+    "taskledger/services/doctor.py::_scan_doctor_tasks:except-3": (
+        "Doctor records raw task fallback failures without hiding other findings."
+    ),
+    "taskledger/services/doctor.py::inspect_v2_locks:except-2": (
+        "Lock doctor records identity inventory failures as structured diagnostics."
+    ),
+    "taskledger/services/doctor.py::inspect_v2_locks:except-3": (
+        "Lock doctor records lock inventory failures as structured diagnostics."
+    ),
+    "taskledger/services/doctor.py::inspect_v2_locks:except-4": (
+        "Lock doctor returns diagnostics when run/lock matching fails."
+    ),
+    "taskledger/services/doctor.py::inspect_v2_schema:except-3": (
+        "Schema doctor records failures while scanning canonical task records."
     ),
     "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-1": (
         "Project scan continues past config load errors."
@@ -279,9 +355,6 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/storage/task_store.py::save_lock_from_paths:except-2": (
         "save_lock_from_paths sidecar summary update degrades gracefully."
     ),
-    "taskledger/api/repair.py::repair_allocations:except-1": (
-        "Allocation repair reports individual quarantine failures and continues."
-    ),
     "taskledger/services/maintenance.py::garbage_collect:except-1": (
         "Garbage collection reports individual deletion failures and continues."
     ),
@@ -311,9 +384,6 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     ),
     "taskledger/storage/task_store.py::remove_lock_from_paths:except-2": (
         "remove_lock_from_paths sidecar summary update degrades gracefully."
-    ),
-    "taskledger/api/repair.py::repair_allocations:except-2": (
-        "Allocation quarantine restores the source path before propagating failure."
     ),
     (
         "taskledger/storage/task_directory_migration.py::"

@@ -370,16 +370,42 @@ def show_command(
 ) -> None:
     state = cli_state_from_context(ctx)
     try:
-        target = resolve_task_target(
-            state.cwd,
-            arg_ref=task_arg,
-            option_ref=task_ref,
-            command="task show",
-            include_archived=include_archived,
-        )
+        explicit_ref = task_arg if task_arg and not task_ref else task_ref
+        direct_uuid_ref: str | None = None
+        if explicit_ref:
+            from taskledger.ids import parse_uuid7
+
+            try:
+                direct_uuid_ref = str(parse_uuid7(explicit_ref.strip().lower()))
+            except ValueError:
+                direct_uuid_ref = None
+        if direct_uuid_ref is not None:
+            from taskledger.services.agent_logging import note_task
+            from taskledger.storage.task_store import (
+                is_archived_task,
+                load_task_bundle_by_uuid,
+                resolve_v2_paths,
+            )
+
+            direct_task = load_task_bundle_by_uuid(
+                resolve_v2_paths(state.cwd), direct_uuid_ref
+            )
+            if is_archived_task(direct_task) and not include_archived:
+                raise LaunchError(f"Task not found: {direct_uuid_ref}")
+            note_task(direct_task.id)
+            show_ref = direct_uuid_ref
+        else:
+            target = resolve_task_target(
+                state.cwd,
+                arg_ref=task_arg,
+                option_ref=task_ref,
+                command="task show",
+                include_archived=include_archived,
+            )
+            show_ref = target.task.id
         payload = show_task(
             state.cwd,
-            target.task.id,
+            show_ref,
             include_archived=include_archived,
         )
     except LaunchError as exc:
@@ -415,6 +441,14 @@ def show_command(
         )
         if rendered:
             human_lines.append(f"follow-ups: {rendered}")
+    relation_diagnostics = payload.get("relationship_diagnostics")
+    if isinstance(relation_diagnostics, list):
+        for diagnostic in relation_diagnostics:
+            if isinstance(diagnostic, dict):
+                severity = diagnostic.get("severity", "warning")
+                code = diagnostic.get("code", "unknown")
+                message = diagnostic.get("message", "")
+                human_lines.append(f"relationship [{severity}:{code}]: {message}")
     emit_payload(
         ctx,
         payload,

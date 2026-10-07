@@ -774,6 +774,73 @@ def test_doctor_warns_about_non_empty_legacy_sidecar(tmp_path: Path) -> None:
 
 
 # specmason: req=REQ-0017 ac=AC-0176
+def test_doctor_paths_are_structured_read_only_and_continue_after_identity_conflict(
+    tmp_path: Path,
+) -> None:
+    from taskledger.storage.frontmatter import (
+        read_markdown_front_matter,
+        write_markdown_front_matter,
+    )
+
+    _setup_project(tmp_path)
+    from taskledger.storage.project_identity import ensure_project_uuid
+
+    ensure_project_uuid(tmp_path / "taskledger.toml")
+    paths = ensure_v2_layout(tmp_path)
+    original_task_path = next(
+        task_path
+        for task_path in paths.tasks_dir.glob("*/task.md")
+        if read_markdown_front_matter(task_path)[0].get("id") == "task-0001"
+    )
+    original_metadata, original_body = read_markdown_front_matter(original_task_path)
+    original_metadata["legacy_task_id"] = "task-0001"
+    write_markdown_front_matter(original_task_path, original_metadata, original_body)
+    child = _task("task-0002", parent_task_id="task-0001")
+    save_task(tmp_path, child)
+
+    duplicate_uuid = "00dc6acf-ac25-76b7-9c95-3e6e51ff322d"
+    duplicate = _task("task-0001", task_uuid=duplicate_uuid, slug="duplicate")
+    save_task(tmp_path, duplicate)
+    duplicate_path = paths.tasks_dir / duplicate_uuid / "task.md"
+    metadata, body = read_markdown_front_matter(duplicate_path)
+    metadata["legacy_task_id"] = "task-0001"
+    write_markdown_front_matter(duplicate_path, metadata, body)
+
+    incomplete = paths.tasks_dir / "task-0003"
+    incomplete.mkdir()
+    (incomplete / "partial.bin").write_bytes(b"independent finding")
+
+    def index_snapshot() -> dict[str, bytes]:
+        return {
+            path.relative_to(paths.indexes_dir).as_posix(): path.read_bytes()
+            for path in paths.indexes_dir.rglob("*")
+            if path.is_file()
+        }
+
+    before = index_snapshot()
+    project_result = inspect_v2_project(tmp_path)
+    schema_result = inspect_v2_schema(tmp_path)
+    locks_result = inspect_v2_locks(tmp_path)
+    indexes_result = inspect_v2_indexes(tmp_path)
+    after = index_snapshot()
+
+    assert project_result["healthy"] is False
+    project_diagnostics = project_result["diagnostics"]
+    assert isinstance(project_diagnostics, list)
+    assert any(
+        item.get("code") == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
+        for item in project_diagnostics
+        if isinstance(item, dict)
+    )
+    incomplete_allocations = project_result["incomplete_task_allocations"]
+    assert any(item["path"].endswith("task-0003") for item in incomplete_allocations)
+    assert schema_result["healthy"] is False
+    assert locks_result["healthy"] is False
+    assert locks_result["diagnostics"]
+    assert indexes_result["healthy"] is False
+    assert after == before
+
+
 def test_doctor_no_warning_for_canonical_task_dir(tmp_path: Path) -> None:
     task = _task(slug="my-feature")
     save_task(tmp_path, task)

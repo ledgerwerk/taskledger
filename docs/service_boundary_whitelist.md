@@ -35,6 +35,10 @@ smaller compatibility facade and move residual helpers into focused modules.
 
   - Current reason: Sub-phases of scan_task_integrity with per-task lock, run, and validation checks.
 
+- `taskledger/services/doctor.py::_inspect_v2_project_phases`
+
+  - Current reason: Project doctor phases collect independent corruption-tolerant diagnostics.
+
 - `taskledger/cli_sync.py::register_sync_commands`
 
   - Current reason: Git-sync and hook commands are registered together in the
@@ -101,6 +105,8 @@ Current sanctioned imports:
   resolve completed-by actor metadata.
 - `taskledger/cli_task.py:taskledger.services.agent_transcripts` — Task
   transcript rendering lives in services.
+
+- `taskledger/cli_task.py:taskledger.services.agent_logging` — Task CLI records direct UUID show diagnostics through the agent logger.
 - `taskledger/cli_task.py:taskledger.services.task_reports` — Task report
   rendering and options are service-owned.
 - `taskledger/cli_task.py:taskledger.services.task_export` — Task export service

@@ -414,6 +414,22 @@ def test_release_changelog_subcommand_is_not_registered(tmp_path: Path) -> None:
 
 
 # specmason: req=REQ-0007 ac=AC-0085
+def test_repair_allocation_audit_cli_json_contract(tmp_path: Path) -> None:
+    workspace = init_workspace(tmp_path)
+    result = runner.invoke(
+        app,
+        ["--root", str(workspace), "--json", "repair", "allocations", "--audit"],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["result"]["kind"] == "task_allocation_repair_audit"
+    assert payload["result"]["entries"] == []
+    help_result = runner.invoke(app, ["repair", "allocations", "--help"])
+    assert help_result.exit_code == 0
+    assert "--reconcile-source-id" in help_result.output
+
+
 def test_removed_v07_compatibility_syntax_is_rejected(tmp_path: Path) -> None:
     removed_invocations = (
         ["--cwd", str(tmp_path), "--help"],

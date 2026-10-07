@@ -473,11 +473,29 @@ taskledger repair locks --apply --reason "Preserve and remove the orphaned runti
 
 `repair locks` is dry-run by default. It reports `orphan_missing_task` separately from expired and dead-process locks, copies the orphan lock to the recovery audit area, removes the runtime lock, and updates derived lock indexes. Inspect the dry-run before applying.
 
-Doctor also reports nonempty task allocation directories that lack `task.md`. Their repair preserves all files in quarantine and writes a task-ID tombstone so the identifier cannot be reused:
+Doctor also reports nonempty task allocation directories that lack `task.md`. Allocation repair is dry-run by default, and applying requires an explicit `--task-id` or deliberate `--all` scope, the reviewed plan fingerprint, and a reason. Review physical source identity separately from any display alias:
 
 ```bash
 taskledger repair allocations
-taskledger repair allocations --apply --reason "Quarantine incomplete task allocation after record loss."
+taskledger repair allocations --task-id task-0019
+taskledger repair allocations --task-id task-0019 --apply --plan-id PLAN_ID --reason "Quarantine the reviewed physical source."
+taskledger repair allocations --audit
+```
+
+Prior repairs with a misattributed tombstone can be reconciled only when event and quarantine provenance support the physical source. The dry-run is also the required review step:
+
+```bash
+taskledger repair allocations --reconcile-source-id task-0019 --tombstone-id task-0037
+taskledger repair allocations --reconcile-source-id task-0019 --tombstone-id task-0037 --apply --plan-id PLAN_ID --reason "Correct the tombstone to the physical source ID."
+```
+
+Reconciliation preserves the old tombstone and quarantine payload and records an audit event. Do not delete either by hand. Use `taskledger repair allocations --audit` to inspect prior repair provenance.
+
+`repair relation` backfills a known relationship UUID for one UUID task bundle or requirement sidecar. It is dry-run by default; apply only the exact reviewed plan:
+
+```bash
+taskledger repair relation --task-uuid TASK_UUID --field parent_task_uuid
+taskledger repair relation --task-uuid TASK_UUID --field parent_task_uuid --apply --plan-id PLAN_ID --reason "Backfill the reviewed parent UUID."
 ```
 
 ## Maintenance garbage collection

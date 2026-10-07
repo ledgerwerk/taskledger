@@ -31,6 +31,7 @@ from taskledger.storage.task_store import (
     list_tasks,
     load_active_task_state,
     load_requirements,
+    load_task_bundle_by_uuid,
     resolve_lock,
     resolve_task,
     resolve_v2_paths,
@@ -231,5 +232,89 @@ def test_legacy_numeric_ref_is_resolved_or_rejected_as_ambiguous(
         ),
     )
 
-    with pytest.raises(LaunchError, match="ambiguous after UUID migration"):
+    with pytest.raises(LaunchError) as caught:
         task_identity_for_stored_ref(paths, task_id="task-0001", task_uuid=None)
+
+    assert caught.value.code == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
+    assert caught.value.details["legacy_task_id"] == "task-0001"
+    sources = caught.value.details["sources"]
+    assert isinstance(sources, list)
+    assert len(sources) == 2
+    assert all(
+        isinstance(source, dict) and source.get("kind") == "uuid_task"
+        for source in sources
+    )
+
+
+def test_direct_uuid_task_show_reports_broken_parent_without_scanning_tasks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import taskledger.storage.task_identity as identity_module
+    import taskledger.storage.task_store as task_store_module
+    from taskledger.services.tasks import show_task
+
+    init_workspace(tmp_path)
+    task_uuid = "00dc6acf-ac25-76b7-9c95-3e6e51ff322d"
+    task = TaskRecord(
+        id="task-0038",
+        slug="child",
+        title="Child task",
+        body="Load this bundle directly.",
+        status_stage="draft",
+        task_uuid=task_uuid,
+        parent_task_id="task-0037",
+    )
+    save_task(tmp_path, task)
+
+    def fail_unrelated_scan(*_args, **_kwargs):
+        raise AssertionError("direct UUID inspection must not enumerate tasks")
+
+    monkeypatch.setattr(
+        identity_module, "scan_task_identity_inventory", fail_unrelated_scan
+    )
+    monkeypatch.setattr(task_store_module, "list_tasks_from_paths", fail_unrelated_scan)
+
+    raw_task = load_task_bundle_by_uuid(resolve_v2_paths(tmp_path), task_uuid)
+    assert raw_task.id == "task-0038"
+    payload = show_task(tmp_path, task_uuid)
+    shown_task = payload["task"]
+    assert isinstance(shown_task, dict)
+    assert shown_task["task_uuid"] == task_uuid
+    assert shown_task["parent_task_id"] == "task-0037"
+    diagnostics = payload["relationship_diagnostics"]
+    assert isinstance(diagnostics, list)
+    assert any(
+        item.get("code") == "PARENT_TASK_UUID_MISSING"
+        for item in diagnostics
+        if isinstance(item, dict)
+    )
+    assert any(
+        item.get("code") == "FOLLOW_UP_TASKS_NOT_SCANNED"
+        for item in diagnostics
+        if isinstance(item, dict)
+    )
+
+    import json
+
+    from typer.testing import CliRunner
+
+    from taskledger.cli import app
+
+    cli_result = CliRunner().invoke(
+        app,
+        ["--root", str(tmp_path), "--json", "task", "show", task_uuid],
+    )
+    assert cli_result.exit_code == 0, cli_result.stdout
+    cli_payload = json.loads(cli_result.stdout)
+    assert cli_payload["result"]["task"]["task_uuid"] == task_uuid
+    assert any(
+        item.get("code") == "PARENT_TASK_UUID_MISSING"
+        for item in cli_payload["result"]["relationship_diagnostics"]
+    )
+
+    human_result = CliRunner().invoke(
+        app,
+        ["--root", str(tmp_path), "task", "show", task_uuid],
+    )
+    assert human_result.exit_code == 0, human_result.stdout
+    assert "relationship [error:PARENT_TASK_UUID_MISSING]" in human_result.stdout

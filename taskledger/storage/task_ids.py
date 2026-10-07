@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from taskledger.errors import LaunchError
-from taskledger.ids import TASK_ID_FORMAT
+from taskledger.ids import TASK_ID_FORMAT, parse_uuid7
 from taskledger.storage.frontmatter import read_markdown_front_matter
 from taskledger.storage.task_store import V2Paths, require_v2_layout
 
@@ -24,9 +26,117 @@ class TaskIdAllocation:
 
 @dataclass(frozen=True, slots=True)
 class IncompleteTaskAllocation:
-    task_id: str
+    task_id: str | None
     path: Path
     files: tuple[str, ...]
+    source_kind: Literal["legacy_directory", "uuid_directory"] = "legacy_directory"
+    legacy_task_id: str | None = None
+    task_uuid: str | None = None
+    source_fingerprint: str = ""
+
+    @property
+    def display_task_id(self) -> str | None:
+        return self.task_id
+
+    @property
+    def source_path(self) -> Path:
+        return self.path
+
+    @property
+    def entries(self) -> tuple[str, ...]:
+        return self.files
+
+
+def allocation_source_fingerprint(path: Path) -> str:
+    """Hash a physical incomplete allocation's paths, modes, links, and bytes."""
+    if path.is_symlink() or not path.is_dir():
+        raise LaunchError(f"Incomplete allocation source is not a directory: {path}")
+    digest = hashlib.sha256()
+    try:
+        entries = (path, *sorted(path.rglob("*")))
+        for entry in entries:
+            info = entry.lstat()
+            relative = "." if entry == path else entry.relative_to(path).as_posix()
+            digest.update(f"{relative}\\0{info.st_mode}\\0".encode())
+            if stat.S_ISLNK(info.st_mode):
+                digest.update(entry.readlink().as_posix().encode("utf-8"))
+            elif stat.S_ISREG(info.st_mode):
+                with entry.open("rb") as source:
+                    while chunk := source.read(1024 * 1024):
+                        digest.update(chunk)
+            elif not stat.S_ISDIR(info.st_mode):
+                raise LaunchError(
+                    f"Unsupported filesystem entry in incomplete allocation: {entry}"
+                )
+    except OSError as exc:
+        raise LaunchError(
+            f"Unable to fingerprint incomplete allocation {path}: {exc}"
+        ) from exc
+    return f"sha256:{digest.hexdigest()}"
+
+
+def discover_incomplete_task_allocations(
+    paths: V2Paths,
+) -> tuple[IncompleteTaskAllocation, ...]:
+    """Discover incomplete physical directories without a clean identity inventory."""
+    display_ids: dict[Path, str] = {}
+    try:
+        from taskledger.storage.task_identity import task_identity_inventory
+
+        inventory = task_identity_inventory(paths)
+        display_ids = {
+            identity.path: identity.task_id for identity in inventory.entries
+        }
+    except LaunchError:
+        # Physical source identity remains sufficient to present a safe repair plan.
+        pass
+
+    allocations: list[IncompleteTaskAllocation] = []
+    if not paths.tasks_dir.exists():
+        return ()
+    for source_path in sorted(paths.tasks_dir.iterdir(), key=lambda item: item.name):
+        if source_path.is_symlink():
+            raise LaunchError(f"Task allocation path is a symlink: {source_path}")
+        if not source_path.is_dir() or (source_path / "task.md").exists():
+            continue
+        files = tuple(sorted(item.name for item in source_path.iterdir()))
+        if not files:
+            continue
+        if source_path.name.startswith("task-"):
+            legacy_task_id, _ = _parse_canonical_task_id(
+                source_path.name, path=source_path
+            )
+            source_kind: Literal["legacy_directory", "uuid_directory"] = (
+                "legacy_directory"
+            )
+            task_uuid = None
+        elif len(source_path.name) == 36 and source_path.name.count("-") == 4:
+            try:
+                task_uuid = str(parse_uuid7(source_path.name))
+            except ValueError as exc:
+                raise LaunchError(
+                    f"Malformed UUID task allocation path: {source_path}"
+                ) from exc
+            if task_uuid != source_path.name:
+                raise LaunchError(
+                    f"Non-canonical UUID task allocation path: {source_path}"
+                )
+            source_kind = "uuid_directory"
+            legacy_task_id = None
+        else:
+            continue
+        allocations.append(
+            IncompleteTaskAllocation(
+                task_id=display_ids.get(source_path),
+                path=source_path,
+                files=files,
+                source_kind=source_kind,
+                legacy_task_id=legacy_task_id,
+                task_uuid=task_uuid,
+                source_fingerprint=allocation_source_fingerprint(source_path),
+            )
+        )
+    return tuple(allocations)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +181,14 @@ def _scan_task_allocations(
                     empty_reservations.append(entry)
                 else:
                     incomplete_allocations.append(
-                        IncompleteTaskAllocation(task_id, entry, files)
+                        IncompleteTaskAllocation(
+                            task_id=task_id,
+                            path=entry,
+                            files=files,
+                            source_kind="legacy_directory",
+                            legacy_task_id=task_id,
+                            source_fingerprint=allocation_source_fingerprint(entry),
+                        )
                     )
                 continue
             metadata, _ = read_markdown_front_matter(task_path)

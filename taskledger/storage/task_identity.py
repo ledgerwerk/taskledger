@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from taskledger.storage.task_store import V2Paths
 
 IdentityState = Literal["live", "tombstone", "reserved", "incomplete"]
+IdentitySourceKind = Literal["uuid_task", "legacy_task", "tombstone", "reserved_gap"]
+TASK_IDENTITY_CONFLICT = "TASKLEDGER_TASK_IDENTITY_CONFLICT"
 LEGACY_UUID7_EPOCH_MS = 946_684_800_000  # 2000-01-01T00:00:00Z
 AMBIGUOUS_LEGACY_TASK_REF = "TASKLEDGER_AMBIGUOUS_LEGACY_TASK_REF"
 LEGACY_GAP_CREATED_AT = "2000-01-01T00:00:00+00:00"
@@ -36,6 +38,8 @@ class TaskIdentity:
     number: int
     path: Path
     state: IdentityState
+    source_kind: IdentitySourceKind = "uuid_task"
+    legacy_task_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +62,8 @@ class _IdentitySource:
     task_uuid: UUID
     path: Path
     state: IdentityState
+    source_kind: IdentitySourceKind
+    legacy_task_id: str | None = None
 
 
 def deterministic_legacy_task_uuid(
@@ -132,28 +138,58 @@ def missing_legacy_task_ids(existing_ids: Iterable[str]) -> tuple[str, ...]:
     )
 
 
-def _legacy_id_for_source(paths: V2Paths, source: _IdentitySource) -> str | None:
-    if source.path.parent == paths.tasks_dir and source.path.name.startswith("task-"):
-        return source.path.name
-    tombstones_dir = paths.ledger_dir / "tombstones"
-    if (
-        source.path.parent == tombstones_dir
-        and source.path.suffix == ".toml"
-        and source.path.stem.startswith("task-")
-    ):
-        return source.path.stem
-    return None
+def _legacy_id_for_source(source: _IdentitySource) -> str | None:
+    return source.legacy_task_id
+
+
+def _identity_conflict_error(
+    legacy_task_id: str,
+    sources: Iterable[tuple[IdentitySourceKind, UUID, Path, IdentityState]],
+) -> LaunchError:
+    source_details = [
+        {
+            "kind": kind,
+            "task_uuid": str(task_uuid),
+            "path": str(path),
+            "state": state,
+        }
+        for kind, task_uuid, path, state in sources
+    ]
+    return LaunchError(
+        f"Task identity conflict for legacy ID {legacy_task_id!r}: "
+        "multiple authoritative sources claim this identity.",
+        code=TASK_IDENTITY_CONFLICT,
+        details={"legacy_task_id": legacy_task_id, "sources": source_details},
+        remediation=[
+            "Inspect the listed task records and tombstone provenance before repair."
+        ],
+    )
 
 
 def scan_task_identity_inventory(paths: V2Paths) -> TaskIdentityInventory:
     """Scan canonical task bundles and identity tombstones once."""
     sources = [*_scan_task_directories(paths), *_scan_identity_tombstones(paths)]
-    legacy_ids = {
-        task_id
-        for source in sources
-        if (task_id := _legacy_id_for_source(paths, source)) is not None
-    }
-    missing_ids = missing_legacy_task_ids(legacy_ids)
+    legacy_sources: dict[str, list[_IdentitySource]] = {}
+    for source in sources:
+        legacy_task_id = _legacy_id_for_source(source)
+        if legacy_task_id is not None:
+            legacy_sources.setdefault(legacy_task_id, []).append(source)
+    for legacy_task_id, matching_sources in sorted(legacy_sources.items()):
+        if len(matching_sources) > 1:
+            raise _identity_conflict_error(
+                legacy_task_id,
+                (
+                    (
+                        source.source_kind,
+                        source.task_uuid,
+                        source.path,
+                        source.state,
+                    )
+                    for source in matching_sources
+                ),
+            )
+
+    missing_ids = missing_legacy_task_ids(legacy_sources)
     if missing_ids:
         project_uuid = _project_uuid_for_paths(paths)
         tombstones_dir = paths.ledger_dir / "tombstones"
@@ -166,9 +202,11 @@ def scan_task_identity_inventory(paths: V2Paths) -> TaskIdentityInventory:
             )
             sources.append(
                 _IdentitySource(
-                    task_uuid,
-                    tombstones_dir / f"{task_uuid}.toml",
-                    "reserved",
+                    task_uuid=task_uuid,
+                    path=tombstones_dir / f"{task_uuid}.toml",
+                    state="reserved",
+                    source_kind="reserved_gap",
+                    legacy_task_id=task_id,
                 )
             )
     by_uuid_source: dict[UUID, _IdentitySource] = {}
@@ -189,6 +227,8 @@ def scan_task_identity_inventory(paths: V2Paths) -> TaskIdentityInventory:
             number=number,
             path=source.path,
             state=source.state,
+            source_kind=source.source_kind,
+            legacy_task_id=source.legacy_task_id,
         )
         for number, source in enumerate(ordered_sources, start=1)
     )
@@ -224,7 +264,15 @@ def _scan_task_directories(paths: V2Paths) -> list[_IdentitySource]:
                 legacy_task_id=task_id,
                 created_at=source[1],
             )
-            sources.append(_IdentitySource(task_uuid, entry, source[0]))
+            sources.append(
+                _IdentitySource(
+                    task_uuid=task_uuid,
+                    path=entry,
+                    state=source[0],
+                    source_kind="legacy_task",
+                    legacy_task_id=task_id,
+                )
+            )
             continue
         if len(entry.name) == 36 and entry.name.count("-") == 4:
             sources.append(_uuid_directory_source(entry))
@@ -252,6 +300,28 @@ def _legacy_directory_source(entry: Path) -> tuple[str, tuple[IdentityState, str
     return task_id, ("live", created_at)
 
 
+def _persisted_legacy_task_id(
+    metadata: Mapping[str, object], *, task_uuid: UUID, task_path: Path
+) -> str | None:
+    explicit_legacy_id = metadata.get("legacy_task_id")
+    if explicit_legacy_id is not None:
+        if not isinstance(explicit_legacy_id, str):
+            raise LaunchError(
+                f"Task record {task_path} has an invalid legacy_task_id field."
+            )
+        return _parse_legacy_task_id(explicit_legacy_id, task_path)[0]
+
+    stored_id = metadata.get("id")
+    if not isinstance(stored_id, str):
+        raise LaunchError(f"Task record {task_path} has no valid id field.")
+    legacy_task_id, number = _parse_legacy_task_id(stored_id, task_path)
+    if task_uuid.int >> 80 == LEGACY_UUID7_EPOCH_MS + number:
+        return legacy_task_id
+    # UUID-backed tasks created natively use `id` as a display alias; only
+    # deterministic migration UUIDs make that field authoritative legacy data.
+    return None
+
+
 def _uuid_directory_source(entry: Path) -> _IdentitySource:
     try:
         task_uuid = parse_uuid7(entry.name)
@@ -262,16 +332,26 @@ def _uuid_directory_source(entry: Path) -> _IdentitySource:
     if str(task_uuid) != entry.name:
         raise LaunchError(f"Non-canonical UUIDv7 task directory name: {entry.name!r}.")
     task_path = entry / "task.md"
+    legacy_task_id: str | None = None
     if task_path.is_file():
         metadata, _ = read_markdown_front_matter(task_path)
         if metadata.get("object_type") != "task":
             raise LaunchError(
                 f"Task record {task_path} has object_type other than 'task'."
             )
+        legacy_task_id = _persisted_legacy_task_id(
+            metadata, task_uuid=task_uuid, task_path=task_path
+        )
         state: IdentityState = "live"
     else:
         state = "reserved" if not any(entry.iterdir()) else "incomplete"
-    return _IdentitySource(task_uuid, entry, state)
+    return _IdentitySource(
+        task_uuid=task_uuid,
+        path=entry,
+        state=state,
+        source_kind="uuid_task",
+        legacy_task_id=legacy_task_id,
+    )
 
 
 def _scan_identity_tombstones(paths: V2Paths) -> list[_IdentitySource]:
@@ -288,9 +368,29 @@ def _scan_identity_tombstones(paths: V2Paths) -> list[_IdentitySource]:
         if entry.stem.startswith("task-"):
             assert project_uuid is not None
             task_uuid = _legacy_tombstone_uuid(entry, paths, project_uuid)
+            legacy_task_id: str | None = entry.stem
         else:
             task_uuid = _uuid_tombstone_uuid(entry)
-        sources.append(_IdentitySource(task_uuid, entry, "tombstone"))
+            document = _read_toml(entry)
+            stored_legacy_id = document.get("legacy_task_id")
+            if stored_legacy_id is not None and not isinstance(stored_legacy_id, str):
+                raise LaunchError(
+                    f"Task identity tombstone {entry} has an invalid legacy_task_id."
+                )
+            legacy_task_id = (
+                _parse_legacy_task_id(stored_legacy_id, entry)[0]
+                if isinstance(stored_legacy_id, str)
+                else None
+            )
+        sources.append(
+            _IdentitySource(
+                task_uuid=task_uuid,
+                path=entry,
+                state="tombstone",
+                source_kind="tombstone",
+                legacy_task_id=legacy_task_id,
+            )
+        )
     return sources
 
 
@@ -414,6 +514,25 @@ def legacy_task_identity_for_ref(paths: V2Paths, ref: str) -> TaskIdentity:
         raise LaunchError(f"Non-canonical legacy task reference {ref!r}.")
 
     inventory = task_identity_inventory(paths)
+    explicit_matches = tuple(
+        identity for identity in inventory.entries if identity.legacy_task_id == ref
+    )
+    if len(explicit_matches) > 1:
+        raise _identity_conflict_error(
+            ref,
+            (
+                (
+                    identity.source_kind,
+                    identity.task_uuid,
+                    identity.path,
+                    identity.state,
+                )
+                for identity in explicit_matches
+            ),
+        )
+    if explicit_matches:
+        return explicit_matches[0]
+
     legacy_timestamp = LEGACY_UUID7_EPOCH_MS + parts.number
     candidates = tuple(
         identity
@@ -425,6 +544,10 @@ def legacy_task_identity_for_ref(paths: V2Paths, ref: str) -> TaskIdentity:
         raise LaunchError(
             f"Legacy ref {ref!r} is ambiguous after UUID migration: {uuids}.",
             code=AMBIGUOUS_LEGACY_TASK_REF,
+            details={
+                "ref": ref,
+                "candidates": [str(item.task_uuid) for item in candidates],
+            },
         )
     if candidates:
         return candidates[0]
