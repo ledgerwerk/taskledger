@@ -166,9 +166,14 @@ def _identity_conflict_error(
     )
 
 
+def inspect_task_identity_sources(paths: V2Paths) -> tuple[_IdentitySource, ...]:
+    """Inspect validated physical identity sources without enforcing uniqueness."""
+    return (*_scan_task_directories(paths), *_scan_identity_tombstones(paths))
+
+
 def scan_task_identity_inventory(paths: V2Paths) -> TaskIdentityInventory:
     """Scan canonical task bundles and identity tombstones once."""
-    sources = [*_scan_task_directories(paths), *_scan_identity_tombstones(paths)]
+    sources = list(inspect_task_identity_sources(paths))
     legacy_sources: dict[str, list[_IdentitySource]] = {}
     for source in sources:
         legacy_task_id = _legacy_id_for_source(source)

@@ -281,14 +281,19 @@ def list_command(
         error = LaunchError("Use either --archived or --include-archived, not both.")
         emit_error(ctx, error)
         raise typer.Exit(code=launch_error_exit_code(error))
-    payload = {
-        "kind": "task_list",
-        "tasks": list_task_summaries(
+    try:
+        tasks = list_task_summaries(
             state.cwd,
             archived_only=archived,
             include_archived=include_archived,
             slug=slug,
-        ),
+        )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+    payload = {
+        "kind": "task_list",
+        "tasks": tasks,
     }
     human_lines = ["TASKS"]
     if not payload["tasks"]:

@@ -24,8 +24,12 @@ from taskledger.storage.frontmatter import (
 )
 from taskledger.storage.init import init_canonical_project_state
 from taskledger.storage.locks import read_lock, write_lock
+from taskledger.storage.project_identity import load_project_uuid
 from taskledger.storage.sidecar_index import load_sidecar_index
-from taskledger.storage.task_identity import task_identity_inventory
+from taskledger.storage.task_identity import (
+    deterministic_legacy_task_uuid,
+    task_identity_inventory,
+)
 from taskledger.storage.task_ids import write_task_id_tombstone
 from taskledger.storage.task_store import (
     load_active_task_state,
@@ -40,6 +44,42 @@ def _workspace(tmp_path: Path) -> Path:
     workspace.mkdir()
     init_canonical_project_state(workspace, create_sibling_store=True)
     return workspace
+
+
+def _shadowed_migrated_allocation(
+    workspace: Path, *, legacy_task_id: str = "task-0012"
+) -> tuple[object, Path, Path, str]:
+    paths = resolve_v2_paths(workspace)
+    task = create_task(
+        workspace, title="Migrated task", description="", slug="migrated-owner"
+    )
+    original_dir = paths.tasks_dir / str(task.task_uuid)
+    task_path = original_dir / "task.md"
+    metadata, body = read_markdown_front_matter(task_path)
+    project_uuid = load_project_uuid(
+        workspace / ".ledger" / "taskledger" / "config.toml"
+    )
+    assert project_uuid is not None
+    created_at = metadata["created_at"]
+    assert isinstance(created_at, str)
+    migrated_uuid = deterministic_legacy_task_uuid(
+        project_uuid=project_uuid,
+        ledger_ref=paths.ledger_ref,
+        legacy_task_id=legacy_task_id,
+        created_at=created_at,
+    )
+    metadata["id"] = legacy_task_id
+    metadata["legacy_task_id"] = legacy_task_id
+    metadata["task_uuid"] = str(migrated_uuid)
+    write_markdown_front_matter(task_path, metadata, body)
+    migrated_dir = paths.tasks_dir / str(migrated_uuid)
+    original_dir.rename(migrated_dir)
+
+    stale_dir = paths.tasks_dir / legacy_task_id
+    (stale_dir / "audit").mkdir(parents=True)
+    sidecar = stale_dir / "audit" / "preserve.bin"
+    sidecar.write_bytes(b"stale pre-migration allocation")
+    return paths, stale_dir, migrated_dir, str(migrated_uuid)
 
 
 def test_allocation_repair_uses_physical_source_not_display_alias(
@@ -65,6 +105,7 @@ def test_allocation_repair_uses_physical_source_not_display_alias(
     (physical_dir / "partial.bin").write_bytes(b"original task-0019 payload")
 
     dry_run = repair_allocations(workspace, task_id="task-0019")
+    assert dry_run["apply_safe"] is True
     entries = dry_run["incomplete_allocations"]
     target = next(
         entry for entry in entries if entry["physical_source"] == "tasks/task-0019"
@@ -95,6 +136,211 @@ def test_allocation_repair_uses_physical_source_not_display_alias(
     assert isinstance(audit_entries, list)
     assert audit_entries[0]["status"] == "verified"
     assert audit_entries[0]["physical_source_id"] == "task-0019"
+
+
+def test_shadowed_migrated_legacy_allocation_dry_run_identifies_owner(
+    tmp_path: Path,
+) -> None:
+    workspace = _workspace(tmp_path)
+    paths, stale_dir, migrated_dir, migrated_uuid = _shadowed_migrated_allocation(
+        workspace
+    )
+
+    dry_run = repair_allocations(workspace, task_id="task-0012")
+    entry = dry_run["incomplete_allocations"][0]
+    assert dry_run["apply_safe"] is True
+    assert entry["repair_mode"] == "quarantine_shadowed_legacy_source"
+    assert entry["apply_safe"] is True
+    assert entry["planned_tombstone"] is None
+    assert entry["surviving_identity"]["task_uuid"] == migrated_uuid
+    assert (
+        entry["surviving_identity"]["path"]
+        == migrated_dir.relative_to(paths.ledger_dir).as_posix()
+    )
+    assert entry["collision_findings"][0]["state"] == "live"
+    assert entry["planned_quarantine"].endswith("/task-0012")
+    assert dry_run["next_command"]
+    from typer.testing import CliRunner
+
+    from taskledger.cli import app
+
+    cli_result = CliRunner().invoke(
+        app,
+        ["--root", str(workspace), "repair", "allocations", "--task-id", "task-0012"],
+    )
+    assert cli_result.exit_code == 0, cli_result.output
+    assert "mode=quarantine_shadowed_legacy_source" in cli_result.output
+    assert f"owner={migrated_uuid}" in cli_result.output
+    assert "tombstone=none" in cli_result.output
+    assert stale_dir.is_dir()
+
+
+def test_task_list_identity_conflict_is_structured_until_repaired(
+    tmp_path: Path,
+) -> None:
+    import json
+
+    from typer.testing import CliRunner
+
+    from taskledger.cli import app
+
+    workspace = _workspace(tmp_path)
+    paths, _stale_dir, _migrated_dir, _migrated_uuid = _shadowed_migrated_allocation(
+        workspace
+    )
+    from taskledger.storage.indexes import mark_index_dirty
+
+    mark_index_dirty(paths, "task_index")
+    runner = CliRunner()
+    human = runner.invoke(app, ["--root", str(workspace), "task", "list"])
+    assert human.exit_code != 0
+    assert "Task identity conflict" in human.output
+    assert "Traceback" not in human.output
+
+    json_result = runner.invoke(
+        app, ["--root", str(workspace), "--json", "task", "list"]
+    )
+    assert json_result.exit_code != 0
+    payload = json.loads(json_result.stdout)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
+    assert payload["error"]["details"]["legacy_task_id"] == "task-0012"
+
+    dry_run = repair_allocations(workspace, task_id="task-0012")
+    repair_allocations(
+        workspace,
+        task_id="task-0012",
+        apply=True,
+        plan_id=str(dry_run["plan_id"]),
+        reason="Quarantine stale pre-migration allocation.",
+    )
+    listed = runner.invoke(app, ["--root", str(workspace), "task", "list"])
+    assert listed.exit_code == 0, listed.output
+    assert "task-0012" in listed.output
+
+
+def test_shadowed_migrated_legacy_allocation_apply_preserves_live_owner(
+    tmp_path: Path,
+) -> None:
+    workspace = _workspace(tmp_path)
+    paths, stale_dir, migrated_dir, migrated_uuid = _shadowed_migrated_allocation(
+        workspace
+    )
+    task_path = migrated_dir / "task.md"
+    live_task_before = task_path.read_bytes()
+    dry_run = repair_allocations(workspace, task_id="task-0012")
+
+    result = repair_allocations(
+        workspace,
+        task_id="task-0012",
+        apply=True,
+        plan_id=str(dry_run["plan_id"]),
+        reason="Quarantine stale pre-migration allocation.",
+    )
+
+    repaired = result["repaired"]
+    assert isinstance(repaired, list) and len(repaired) == 1
+    item = repaired[0]
+    assert item["repair_mode"] == "quarantine_shadowed_legacy_source"
+    assert item["tombstone_path"] is None
+    assert item["surviving_task_uuid"] == migrated_uuid
+    assert not stale_dir.exists()
+    assert task_path.read_bytes() == live_task_before
+    assert (paths.ledger_dir / "tombstones" / "task-0012.toml").exists() is False
+    quarantine = Path(item["quarantined_path"])
+    assert (quarantine / "audit" / "preserve.bin").read_bytes() == (
+        b"stale pre-migration allocation"
+    )
+
+    inventory = task_identity_inventory(paths)
+    matches = [
+        identity
+        for identity in inventory.entries
+        if identity.legacy_task_id == "task-0012"
+    ]
+    assert len(matches) == 1
+    assert str(matches[0].task_uuid) == migrated_uuid
+    assert matches[0].source_kind == "uuid_task"
+    assert matches[0].state == "live"
+    events = load_events(paths.events_dir)
+    repair_event = next(
+        event for event in events if event.event == "repair.task_allocation_quarantined"
+    )
+    assert repair_event.data["repair_mode"] == "quarantine_shadowed_legacy_source"
+    assert repair_event.data["tombstone_path"] is None
+    assert repair_event.data["surviving_task_uuid"] == migrated_uuid
+    audit = audit_allocation_repairs(workspace)
+    assert audit["entries"][0]["status"] == "existing_owner_preserved"
+
+
+def test_shadowed_owner_change_invalidates_allocation_repair_plan(
+    tmp_path: Path,
+) -> None:
+    workspace = _workspace(tmp_path)
+    _paths, stale_dir, migrated_dir, _migrated_uuid = _shadowed_migrated_allocation(
+        workspace
+    )
+    dry_run = repair_allocations(workspace, task_id="task-0012")
+    task_path = migrated_dir / "task.md"
+    metadata, body = read_markdown_front_matter(task_path)
+    metadata["legacy_task_id"] = "task-0013"
+    write_markdown_front_matter(task_path, metadata, body)
+
+    with pytest.raises(LaunchError) as caught:
+        repair_allocations(
+            workspace,
+            task_id="task-0012",
+            apply=True,
+            plan_id=str(dry_run["plan_id"]),
+            reason="Reject changed migrated owner.",
+        )
+
+    assert caught.value.code == "TASKLEDGER_REPAIR_PLAN_CHANGED"
+    assert stale_dir.is_dir()
+    assert (stale_dir / "audit" / "preserve.bin").read_bytes() == (
+        b"stale pre-migration allocation"
+    )
+
+
+def test_multiple_live_legacy_identity_owners_are_blocked_before_apply(
+    tmp_path: Path,
+) -> None:
+    import shutil
+
+    from taskledger.ids import uuid7
+
+    workspace = _workspace(tmp_path)
+    paths, stale_dir, migrated_dir, _migrated_uuid = _shadowed_migrated_allocation(
+        workspace
+    )
+    second_uuid = uuid7()
+    second_dir = paths.tasks_dir / str(second_uuid)
+    shutil.copytree(migrated_dir, second_dir)
+    second_task_path = second_dir / "task.md"
+    metadata, body = read_markdown_front_matter(second_task_path)
+    metadata["task_uuid"] = str(second_uuid)
+    metadata["slug"] = "second-migrated-owner"
+    write_markdown_front_matter(second_task_path, metadata, body)
+
+    dry_run = repair_allocations(workspace, task_id="task-0012")
+    entry = dry_run["incomplete_allocations"][0]
+    assert entry["repair_mode"] == "blocked_identity_conflict"
+    assert entry["apply_safe"] is False
+    assert dry_run["next_command"] is None
+    assert len(entry["collision_findings"]) == 2
+
+    with pytest.raises(LaunchError) as caught:
+        repair_allocations(
+            workspace,
+            task_id="task-0012",
+            apply=True,
+            plan_id=str(dry_run["plan_id"]),
+            reason="Do not choose between duplicate live owners.",
+        )
+
+    assert caught.value.code == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
+    assert stale_dir.is_dir()
+    assert not (paths.ledger_dir / "tombstones" / "task-0012.toml").exists()
 
 
 def test_allocation_apply_requires_reviewed_unchanged_plan(tmp_path: Path) -> None:
@@ -147,6 +393,11 @@ def test_allocation_apply_refuses_live_tombstone_identity_conflict(
     )
     dry_run = repair_allocations(workspace, task_id="task-0001")
 
+    entry = dry_run["incomplete_allocations"][0]
+    assert entry["repair_mode"] == "blocked_identity_conflict"
+    assert entry["apply_safe"] is False
+    assert dry_run["apply_safe"] is False
+    assert dry_run["next_command"] is None
     with pytest.raises(LaunchError) as exc_info:
         repair_allocations(
             workspace,
@@ -180,7 +431,7 @@ def test_allocation_repair_rolls_back_failed_identity_postcondition(
     def fail_identity_scan(_paths):
         nonlocal scan_count
         scan_count += 1
-        if scan_count == 2:
+        if scan_count == 1:
             raise LaunchError("Injected postcondition failure.")
         return original_scan(_paths)
 
@@ -584,6 +835,91 @@ def test_relation_repair_refuses_ambiguous_identity_evidence(
     assert caught.value.details["field"] == "parent_task_uuid"
     assert caught.value.details["source"] == str(source_path)
     assert source_path.read_bytes() == original
+
+
+def test_bulk_allocation_repair_preflights_all_entries_before_moving(
+    tmp_path: Path,
+) -> None:
+    workspace = _workspace(tmp_path)
+    paths, shadowed_source, _migrated_dir, _migrated_uuid = (
+        _shadowed_migrated_allocation(workspace)
+    )
+    blocked_source = paths.tasks_dir / "task-0014"
+    blocked_source.mkdir()
+    blocked_payload = blocked_source / "partial.bin"
+    blocked_payload.write_bytes(b"keep blocked source")
+    prior_quarantine = paths.ledger_dir / "_recovery" / "prior" / "task-0014"
+    prior_quarantine.mkdir(parents=True)
+    write_task_id_tombstone(
+        paths,
+        "task-0014",
+        reason="Existing claimant blocks bulk repair.",
+        quarantined_path=prior_quarantine,
+    )
+
+    dry_run = repair_allocations(workspace, all_allocations=True)
+    entries = dry_run["incomplete_allocations"]
+    assert dry_run["apply_safe"] is False
+    assert {entry["repair_mode"] for entry in entries} == {
+        "quarantine_shadowed_legacy_source",
+        "blocked_identity_conflict",
+    }
+    with pytest.raises(LaunchError) as caught:
+        repair_allocations(
+            workspace,
+            all_allocations=True,
+            apply=True,
+            plan_id=str(dry_run["plan_id"]),
+            reason="Refuse partially safe bulk allocation repair.",
+        )
+
+    assert caught.value.code == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
+    assert shadowed_source.is_dir()
+    assert blocked_source.is_dir()
+    assert blocked_payload.read_bytes() == b"keep blocked source"
+    assert not (paths.ledger_dir / "tombstones" / "task-0012.toml").exists()
+    quarantine = paths.ledger_dir / "_recovery" / "incomplete-task-allocations"
+    assert not (quarantine / "task-0012").exists()
+
+
+def test_allocation_cli_failed_output_uses_physical_source_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from typer.testing import CliRunner
+
+    from taskledger.api import repair as repair_api
+    from taskledger.cli import app
+
+    workspace = _workspace(tmp_path)
+    monkeypatch.setattr(
+        repair_api,
+        "repair_allocations",
+        lambda *_args, **_kwargs: {
+            "kind": "task_allocation_repair",
+            "status": "applied",
+            "dry_run": False,
+            "repaired": [],
+            "failed": [{"source_id": "task-0019", "error": "injected failure"}],
+        },
+    )
+    result = CliRunner().invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "repair",
+            "allocations",
+            "--task-id",
+            "task-0019",
+            "--apply",
+            "--plan-id",
+            "reviewed-plan",
+            "--reason",
+            "test failure rendering",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "failed: task-0019: injected failure" in result.output
 
 
 def test_task37_task38_task19_recovery_end_to_end(tmp_path: Path) -> None:

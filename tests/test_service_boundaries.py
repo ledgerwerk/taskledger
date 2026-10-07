@@ -19,9 +19,6 @@ FUNCTION_LINE_WHITELIST: dict[str, str] = {
         "Sub-phases of scan_task_integrity with per-task lock, "
         "run, and validation checks."
     ),
-    "taskledger/services/doctor.py::_inspect_v2_project_phases": (
-        "Project doctor phases collect independent corruption-tolerant diagnostics."
-    ),
     "taskledger/cli_sync.py::register_sync_commands": (
         "Git-sync registration still co-locates Git sync and hook command wiring."
     ),
@@ -181,7 +178,7 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
         "Doctor context assembly records project configuration failures and continues."
     ),
     "taskledger/services/doctor.py::_inspect_v2_project_phases:except-1": (
-        "Doctor must continue scanning even when one task metadata read fails."
+        "Doctor preserves project configuration diagnostics and continues scanning."
     ),
     "taskledger/services/doctor.py::inspect_v2_locks:except-1": (
         "Doctor lock inspection degrades gracefully when lock inventory fails."
@@ -202,19 +199,19 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
         "Read-only index diagnosis captures load errors without rebuilding caches."
     ),
     "taskledger/services/doctor.py::_inspect_v2_project_phases:except-2": (
-        "Doctor preserves independent diagnostics when task-integrity scanning fails."
-    ),
-    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-3": (
         "Doctor records artifact-policy scan failures as structured diagnostics."
     ),
-    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-4": (
-        "Doctor records per-lock expiry classification failures and continues."
-    ),
-    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-5": (
+    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-3": (
         "Doctor records migration-state scan failures as structured diagnostics."
     ),
-    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-6": (
+    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-4": (
         "Doctor degrades snapshot inspection failures to a warning diagnostic."
+    ),
+    "taskledger/services/doctor.py::_inspect_lock_consistency:except-1": (
+        "Doctor records lock expiry classification failures and continues."
+    ),
+    "taskledger/services/doctor.py::_inspect_task_integrity:except-1": (
+        "Doctor preserves independent diagnostics when task-integrity scanning fails."
     ),
     "taskledger/services/doctor.py::_inspect_v2_project_with_boundary:except-1": (
         "Doctor converts expected project-state failures into structured output."

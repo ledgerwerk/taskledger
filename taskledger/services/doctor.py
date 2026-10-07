@@ -58,6 +58,7 @@ class DoctorScanContext:
     run_by_key: Mapping[tuple[str, str], TaskRunRecord]
     active_state: ActiveTaskState | None
     incomplete_task_allocations: tuple[IncompleteTaskAllocation, ...]
+    identity_inventory_valid: bool
     scan_errors: tuple[str, ...]
     scan_diagnostics: tuple[dict[str, object], ...]
 
@@ -72,10 +73,12 @@ def _scan_doctor_tasks(
     tuple[TaskRecord, ...],
     dict[str, TaskRecord],
     tuple[IncompleteTaskAllocation, ...],
+    bool,
 ]:
     from taskledger.storage.task_identity import scan_task_identity_inventory
     from taskledger.storage.task_store import _load_task
 
+    identity_inventory_valid = True
     try:
         identities = scan_task_identity_inventory(paths).entries
     except Exception as exc:  # noqa: BLE001
@@ -90,6 +93,7 @@ def _scan_doctor_tasks(
             }
         )
         identities = None
+        identity_inventory_valid = False
 
     candidates: list[tuple[Path, str | None, str | None]] = []
     incomplete: list[IncompleteTaskAllocation] = []
@@ -254,7 +258,7 @@ def _scan_doctor_tasks(
             )
     tasks = tuple(tasks_list)
     task_by_id = {task.id: task for task in tasks if id_counts[task.id] == 1}
-    return tasks, task_by_id, tuple(incomplete)
+    return tasks, task_by_id, tuple(incomplete), identity_inventory_valid
 
 
 def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
@@ -271,9 +275,24 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
     paths = resolve_v2_paths(workspace_root)
     scan_errors: list[str] = []
     scan_diagnostics: list[dict[str, object]] = []
-    tasks, task_by_id, incomplete_task_allocations = _scan_doctor_tasks(
-        paths, scan_errors, scan_diagnostics
-    )
+    (
+        tasks,
+        task_by_id,
+        incomplete_task_allocations,
+        identity_inventory_valid,
+    ) = _scan_doctor_tasks(paths, scan_errors, scan_diagnostics)
+    if not identity_inventory_valid:
+        scan_diagnostics.append(
+            {
+                "severity": "warning",
+                "code": "IDENTITY_DEPENDENT_SCANS_SKIPPED",
+                "phase": "identity_dependent_scans",
+                "message": (
+                    "Task plan, question, change, run, and relationship scans were "
+                    "skipped because the task identity inventory is invalid."
+                ),
+            }
+        )
 
     try:
         lock_inventory = build_lock_inventory(paths)
@@ -309,7 +328,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
     runs_by_task: dict[str, tuple[TaskRunRecord, ...]] = {}
     run_by_key: dict[tuple[str, str], TaskRunRecord] = {}
 
-    for task in tasks:
+    for task in tasks if identity_inventory_valid else ():
         if task.id not in task_by_id:
             continue
         try:
@@ -374,6 +393,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         run_by_key=run_by_key,
         active_state=active_state,
         incomplete_task_allocations=incomplete_task_allocations,
+        identity_inventory_valid=identity_inventory_valid,
         scan_errors=tuple(scan_errors),
         scan_diagnostics=tuple(scan_diagnostics),
         artifact_limit_bytes=artifact_limit_bytes,
@@ -461,6 +481,145 @@ def _count_task_records_readonly(
     return total
 
 
+def _inspect_active_task(
+    ctx: DoctorScanContext, errors: list[str], warnings: list[str]
+) -> None:
+    if not ctx.identity_inventory_valid or ctx.active_state is None:
+        return
+    active_task = ctx.task_by_id.get(ctx.active_state.task_id)
+    if active_task is None:
+        errors.append(f"Active task points to missing task {ctx.active_state.task_id}.")
+    elif active_task.status_stage in {"cancelled", "done"}:
+        warnings.append(f"Active task {active_task.id} is {active_task.status_stage}.")
+
+
+def _inspect_task_integrity(
+    workspace_root: Path,
+    ctx: DoctorScanContext,
+    *,
+    errors: list[str],
+    warnings: list[str],
+    repair_hints: list[str],
+    broken_links: list[dict[str, object]],
+    run_lock_mismatches: list[dict[str, object]],
+    diagnostics: list[dict[str, object]],
+) -> None:
+    if not ctx.identity_inventory_valid:
+        return
+    from taskledger.services.doctor_checks.task_checks import scan_task_integrity
+
+    try:
+        with _timing.stage("task_integrity"):
+            scan_task_integrity(
+                workspace_root=workspace_root,
+                paths=ctx.paths,
+                tasks=list(ctx.tasks),
+                task_map=dict(ctx.task_by_id),
+                locks=list(ctx.locks),
+                task_runs={
+                    task_id: list(runs) for task_id, runs in ctx.runs_by_task.items()
+                },
+                run_map=dict(ctx.run_by_key),
+                active_state=ctx.active_state,
+                errors=errors,
+                warnings=warnings,
+                repair_hints=repair_hints,
+                broken_links=broken_links,
+                run_lock_mismatches=run_lock_mismatches,
+                diagnostics=diagnostics,
+            )
+    except Exception as exc:  # noqa: BLE001
+        errors.append(str(exc))
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": getattr(exc, "code", "TASK_INTEGRITY_SCAN_FAILED"),
+                "phase": "task_integrity",
+                "message": str(exc),
+                "details": getattr(exc, "details", {}),
+            }
+        )
+
+
+def _inspect_lock_consistency(
+    ctx: DoctorScanContext,
+    *,
+    errors: list[str],
+    expired_locks: list[dict[str, object]],
+) -> None:
+    with _timing.stage("lock_consistency"):
+        for lock in ctx.locks:
+            try:
+                if lock_is_expired(lock):
+                    expired_locks.append(lock.to_dict())
+            except Exception as exc:  # noqa: BLE001
+                errors.append(str(exc))
+            if not ctx.identity_inventory_valid:
+                continue
+            lock_task = ctx.task_by_id.get(lock.task_id)
+            if lock_task is None:
+                errors.append(
+                    f"Lock {lock.lock_id} references missing task {lock.task_id}."
+                )
+                continue
+            run = ctx.run_by_key.get((lock.task_id, lock.run_id))
+            if run is None:
+                errors.append(
+                    f"Lock {lock.lock_id} references missing run {lock.run_id} "
+                    f"for task {lock.task_id}."
+                )
+                continue
+            if run.status != "running":
+                errors.append(
+                    f"Lock {lock.lock_id} references non-running run {run.run_id}."
+                )
+            expected_stage = {
+                "planning": "planning",
+                "implementation": "implementing",
+                "validation": "validating",
+            }[run.run_type]
+            if lock.stage != expected_stage:
+                errors.append(
+                    f"Lock {lock.lock_id} stage {lock.stage} does not match "
+                    f"run {run.run_id} type {run.run_type}."
+                )
+
+
+def _count_identity_dependent_records(
+    ctx: DoctorScanContext,
+    *,
+    errors: list[str],
+    diagnostics: list[dict[str, object]],
+) -> tuple[int, int, int, int]:
+    tasks = ctx.tasks if ctx.identity_inventory_valid else ()
+    total_plans = _count_task_records_readonly(
+        ctx.paths,
+        tasks,
+        list_plans_from_paths,
+        record_name="plans",
+        errors=errors,
+        diagnostics=diagnostics,
+    )
+    total_questions = _count_task_records_readonly(
+        ctx.paths,
+        tasks,
+        list_questions_from_paths,
+        record_name="questions",
+        errors=errors,
+        diagnostics=diagnostics,
+    )
+    total_changes = _count_task_records_readonly(
+        ctx.paths,
+        tasks,
+        list_changes_from_paths,
+        record_name="changes",
+        errors=errors,
+        diagnostics=diagnostics,
+    )
+    total_runs = sum(len(runs) for runs in ctx.runs_by_task.values())
+    return total_plans, total_questions, total_runs, total_changes
+
+
 def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
     with _timing.stage("scan_context"):
         ctx = _build_scan_context(workspace_root)
@@ -475,7 +634,6 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
 
     from taskledger.services.doctor_checks.migration_checks import scan_migration_state
     from taskledger.services.doctor_checks.project_scan import scan_project_config
-    from taskledger.services.doctor_checks.task_checks import scan_task_integrity
 
     try:
         with _timing.stage("project_config"):
@@ -505,9 +663,9 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
         message = f"Incomplete task allocation {allocation_id} is missing task.md."
         errors.append(message)
         repair_hints.append(
-            "Inspect and quarantine this source explicitly with "
-            f'`taskledger repair allocations --task-id "{allocation_id}" --apply '
-            '--reason "..."` or review the complete allocation set with --all.'
+            "Inspect this allocation with "
+            f'`taskledger repair allocations --task-id "{allocation_id}"`. '
+            "If the dry-run is safe, apply the exact reviewed plan with its --plan-id."
         )
         diagnostics.append(
             {
@@ -521,47 +679,17 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
                 "files": list(allocation.files),
             }
         )
-    # Active task check
-    if ctx.active_state is not None:
-        active_task = ctx.task_by_id.get(ctx.active_state.task_id)
-        if active_task is None:
-            errors.append(
-                f"Active task points to missing task {ctx.active_state.task_id}."
-            )
-        elif active_task.status_stage in {"cancelled", "done"}:
-            warnings.append(
-                f"Active task {active_task.id} is {active_task.status_stage}."
-            )
-
-    try:
-        with _timing.stage("task_integrity"):
-            scan_task_integrity(
-                workspace_root=workspace_root,
-                paths=ctx.paths,
-                tasks=list(ctx.tasks),
-                task_map=dict(ctx.task_by_id),
-                locks=list(ctx.locks),
-                task_runs={tid: list(runs) for tid, runs in ctx.runs_by_task.items()},
-                run_map=dict(ctx.run_by_key),
-                active_state=ctx.active_state,
-                errors=errors,
-                warnings=warnings,
-                repair_hints=repair_hints,
-                broken_links=broken_links,
-                run_lock_mismatches=run_lock_mismatches,
-                diagnostics=diagnostics,
-            )
-    except Exception as exc:  # noqa: BLE001
-        errors.append(str(exc))
-        diagnostics.append(
-            {
-                "severity": "error",
-                "code": getattr(exc, "code", "TASK_INTEGRITY_SCAN_FAILED"),
-                "phase": "task_integrity",
-                "message": str(exc),
-                "details": getattr(exc, "details", {}),
-            }
-        )
+    _inspect_active_task(ctx, errors, warnings)
+    _inspect_task_integrity(
+        workspace_root,
+        ctx,
+        errors=errors,
+        warnings=warnings,
+        repair_hints=repair_hints,
+        broken_links=broken_links,
+        run_lock_mismatches=run_lock_mismatches,
+        diagnostics=diagnostics,
+    )
 
     from taskledger.services.doctor_checks.artifact_checks import (
         find_oversized_artifacts,
@@ -584,42 +712,7 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
                 "message": str(exc),
             }
         )
-    with _timing.stage("lock_consistency"):
-        for lock in ctx.locks:
-            lock_task = ctx.task_by_id.get(lock.task_id)
-            if lock_task is None:
-                errors.append(
-                    f"Lock {lock.lock_id} references missing task {lock.task_id}."
-                )
-                continue
-            try:
-                if lock_is_expired(lock):
-                    expired_locks.append(lock.to_dict())
-            except Exception as exc:  # noqa: BLE001
-                errors.append(str(exc))
-            # Use pre-built run_map instead of resolve_run per task.
-            run = ctx.run_by_key.get((lock.task_id, lock.run_id))
-            if run is None:
-                errors.append(
-                    f"Lock {lock.lock_id} references missing run {lock.run_id} "
-                    f"for task {lock.task_id}."
-                )
-                continue
-            if run.status != "running":
-                errors.append(
-                    f"Lock {lock.lock_id} references non-running run {run.run_id}."
-                )
-            expected_stage = {
-                "planning": "planning",
-                "implementation": "implementing",
-                "validation": "validating",
-            }[run.run_type]
-            if lock.stage != expected_stage:
-                errors.append(
-                    f"Lock {lock.lock_id} stage {lock.stage} does not match "
-                    f"run {run.run_id} type {run.run_type}."
-                )
-
+    _inspect_lock_consistency(ctx, errors=errors, expired_locks=expired_locks)
     try:
         with _timing.stage("migration_state"):
             scan_migration_state(
@@ -630,15 +723,16 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
                 repair_hints=repair_hints,
             )
     except Exception as exc:  # noqa: BLE001
-        errors.append(str(exc))
-        diagnostics.append(
-            {
-                "severity": "error",
-                "code": getattr(exc, "code", "MIGRATION_SCAN_FAILED"),
-                "phase": "migration_state",
-                "message": str(exc),
-            }
-        )
+        if ctx.identity_inventory_valid or str(exc) not in errors:
+            errors.append(str(exc))
+            diagnostics.append(
+                {
+                    "severity": "error",
+                    "code": getattr(exc, "code", "MIGRATION_SCAN_FAILED"),
+                    "phase": "migration_state",
+                    "message": str(exc),
+                }
+            )
 
     try:
         with _timing.stage("workspace_snapshot"):
@@ -664,28 +758,13 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
             '`taskledger repair lock <task> --reason "..."`.'
         )
 
-    total_plans = _count_task_records_readonly(
-        ctx.paths,
-        ctx.tasks,
-        list_plans_from_paths,
-        record_name="plans",
-        errors=errors,
-        diagnostics=diagnostics,
-    )
-    total_questions = _count_task_records_readonly(
-        ctx.paths,
-        ctx.tasks,
-        list_questions_from_paths,
-        record_name="questions",
-        errors=errors,
-        diagnostics=diagnostics,
-    )
-    total_runs = sum(len(runs) for runs in ctx.runs_by_task.values())
-    total_changes = _count_task_records_readonly(
-        ctx.paths,
-        ctx.tasks,
-        list_changes_from_paths,
-        record_name="changes",
+    (
+        total_plans,
+        total_questions,
+        total_runs,
+        total_changes,
+    ) = _count_identity_dependent_records(
+        ctx,
         errors=errors,
         diagnostics=diagnostics,
     )

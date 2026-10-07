@@ -832,8 +832,29 @@ def test_doctor_paths_are_structured_read_only_and_continue_after_identity_confl
         for item in project_diagnostics
         if isinstance(item, dict)
     )
+    identity_conflicts = [
+        item
+        for item in project_diagnostics
+        if isinstance(item, dict)
+        and item.get("code") == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
+    ]
+    assert len(identity_conflicts) == 1
+    assert any(
+        isinstance(item, dict)
+        and item.get("code") == "IDENTITY_DEPENDENT_SCANS_SKIPPED"
+        for item in project_diagnostics
+    )
+    errors = project_result["errors"]
+    assert sum("Task identity conflict" in str(error) for error in errors) == 1
     incomplete_allocations = project_result["incomplete_task_allocations"]
     assert any(item["path"].endswith("task-0003") for item in incomplete_allocations)
+    repair_hints = project_result["repair_hints"]
+    assert any(
+        'taskledger repair allocations --task-id "task-0003"' in hint
+        and "exact reviewed plan with its --plan-id" in hint
+        for hint in repair_hints
+    )
+    assert not any("--apply --reason" in hint for hint in repair_hints)
     assert schema_result["healthy"] is False
     assert locks_result["healthy"] is False
     assert locks_result["diagnostics"]

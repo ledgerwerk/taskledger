@@ -482,6 +482,17 @@ taskledger repair allocations --task-id task-0019 --apply --plan-id PLAN_ID --re
 taskledger repair allocations --audit
 ```
 
+The dry-run result includes top-level `apply_safe`, `plan_id`, and `next_command`,
+plus `incomplete_allocations` entries containing `physical_source`, `source_kind`,
+`legacy_source_id`, `source_fingerprint`, `repair_mode`, per-entry `apply_safe`,
+`collision_findings`, `surviving_identity`, `planned_quarantine`, and nullable
+`planned_tombstone`. Modes are `quarantine_and_tombstone` for an eligible orphan,
+`quarantine_shadowed_legacy_source` for one stale legacy source with exactly one live
+UUID owner, and `blocked_identity_conflict` for ambiguity. A shadowed-source repair
+preserves the existing live owner and must not create a second tombstone. When any
+selected entry is blocked, top-level `apply_safe` is false and `next_command` is null;
+resolve the ownership ambiguity instead of applying the plan.
+
 Prior repairs with a misattributed tombstone can be reconciled only when event and quarantine provenance support the physical source. The dry-run is also the required review step:
 
 ```bash

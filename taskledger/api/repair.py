@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from taskledger.domain.models import TaskRecord
-    from taskledger.storage.task_identity import TaskIdentity
+    from taskledger.storage.task_identity import TaskIdentity, _IdentitySource
     from taskledger.storage.task_ids import IncompleteTaskAllocation
     from taskledger.storage.task_store import V2Paths
 from taskledger.errors import LaunchError
@@ -205,6 +205,96 @@ def repair_locks(
     }
 
 
+def _identity_source_payload(
+    paths: V2Paths, source: _IdentitySource
+) -> dict[str, object]:
+    return {
+        "kind": source.source_kind,
+        "task_uuid": str(source.task_uuid),
+        "state": source.state,
+        "legacy_task_id": source.legacy_task_id,
+        "path": source.path.relative_to(paths.ledger_dir).as_posix(),
+    }
+
+
+def _classify_allocation_repair(
+    paths: V2Paths, allocation: IncompleteTaskAllocation
+) -> dict[str, object]:
+    from taskledger.storage.task_identity import inspect_task_identity_sources
+
+    sources = inspect_task_identity_sources(paths)
+    expected_kind = (
+        "legacy_task" if allocation.source_kind == "legacy_directory" else "uuid_task"
+    )
+    selected_sources = tuple(
+        source for source in sources if source.path == allocation.path
+    )
+    selected = selected_sources[0] if len(selected_sources) == 1 else None
+    collision_findings: tuple[_IdentitySource, ...] = ()
+    surviving_identity: dict[str, object] | None = None
+    repair_mode = "blocked_identity_conflict"
+
+    selected_matches = (
+        selected is not None
+        and selected.source_kind == expected_kind
+        and selected.state == "incomplete"
+        and selected.legacy_task_id == allocation.legacy_task_id
+        and (
+            allocation.task_uuid is None
+            or str(selected.task_uuid) == allocation.task_uuid
+        )
+    )
+    if selected_matches and selected is not None:
+        uuid_claimants = tuple(
+            source for source in sources if source.task_uuid == selected.task_uuid
+        )
+        if allocation.legacy_task_id is not None:
+            legacy_claimants = tuple(
+                source
+                for source in sources
+                if source.legacy_task_id == allocation.legacy_task_id
+            )
+            collision_findings = tuple(
+                source for source in legacy_claimants if source is not selected
+            )
+            if len(uuid_claimants) == 1 and len(legacy_claimants) == 1:
+                repair_mode = "quarantine_and_tombstone"
+            elif (
+                len(uuid_claimants) == 1
+                and len(legacy_claimants) == 2
+                and sum(
+                    source.source_kind == "uuid_task" and source.state == "live"
+                    for source in collision_findings
+                )
+                == 1
+                and all(
+                    source.source_kind == "uuid_task" and source.state == "live"
+                    for source in collision_findings
+                )
+            ):
+                repair_mode = "quarantine_shadowed_legacy_source"
+                survivor = collision_findings[0]
+                surviving_identity = _identity_source_payload(paths, survivor)
+        else:
+            uuid_claimants = tuple(
+                source for source in sources if source.task_uuid == selected.task_uuid
+            )
+            collision_findings = tuple(
+                source for source in uuid_claimants if source is not selected
+            )
+            if len(uuid_claimants) == 1:
+                repair_mode = "quarantine_and_tombstone"
+
+    return {
+        "repair_mode": repair_mode,
+        "apply_safe": repair_mode != "blocked_identity_conflict",
+        "collision_findings": [
+            _identity_source_payload(paths, source) for source in collision_findings
+        ],
+        "surviving_identity": surviving_identity,
+    }
+
+
 def _allocation_repair_plan_entry(
     paths: V2Paths, allocation: IncompleteTaskAllocation
 ) -> dict[str, object]:
@@ -248,7 +338,12 @@ def _allocation_repair_plan_entry(
             "Computed display ID differs from physical legacy source ID; "
             "repair targets the physical source ID."
         )
-    tombstone_path = paths.ledger_dir / "tombstones" / f"{tombstone_name}.toml"
+    classification = _classify_allocation_repair(paths, allocation)
+    planned_tombstone = None
+    if classification["repair_mode"] == "quarantine_and_tombstone":
+        planned_tombstone = (
+            paths.ledger_dir / "tombstones" / f"{tombstone_name}.toml"
+        ).as_posix()
     return {
         "physical_source": allocation.path.relative_to(paths.ledger_dir).as_posix(),
         "source_path": allocation.path.as_posix(),
@@ -260,8 +355,9 @@ def _allocation_repair_plan_entry(
         "entries": list(allocation.files),
         "source_fingerprint": allocation.source_fingerprint,
         "planned_quarantine": quarantine_path.as_posix(),
-        "planned_tombstone": tombstone_path.as_posix(),
+        "planned_tombstone": planned_tombstone,
         "warnings": warnings,
+        **classification,
     }
 
 
@@ -278,40 +374,109 @@ def _allocation_plan_fingerprint(
 
 
 def _validate_allocation_sources_for_apply(
-    paths: V2Paths, allocations: tuple[IncompleteTaskAllocation, ...]
+    paths: V2Paths,
+    allocations: tuple[IncompleteTaskAllocation, ...],
+    plans: list[dict[str, object]],
 ) -> None:
-    from taskledger.storage.task_identity import scan_task_identity_inventory
+    from taskledger.storage.task_ids import allocation_source_fingerprint
 
-    inventory = scan_task_identity_inventory(paths)
-    for allocation in allocations:
-        matches = tuple(
-            identity
-            for identity in inventory.entries
-            if (
-                identity.legacy_task_id == allocation.legacy_task_id
-                if allocation.legacy_task_id is not None
-                else str(identity.task_uuid) == allocation.task_uuid
-            )
+    if len(allocations) != len(plans):
+        raise LaunchError(
+            "Allocation repair plan changed since dry-run; inspect a fresh plan.",
+            code="TASKLEDGER_REPAIR_PLAN_CHANGED",
         )
+    for allocation, plan in zip(allocations, plans, strict=True):
+        source_path = allocation.path
         if (
-            len(matches) != 1
-            or matches[0].path != allocation.path
-            or matches[0].state != "incomplete"
+            source_path.is_symlink()
+            or not source_path.is_dir()
+            or plan.get("source_path") != source_path.as_posix()
+            or plan.get("source_kind") != allocation.source_kind
         ):
             raise LaunchError(
-                "Allocation source identity is missing, changed, or ambiguous: "
-                f"{allocation.path}.",
+                f"Allocation source identity changed after planning: {source_path}.",
                 code="TASKLEDGER_TASK_IDENTITY_CONFLICT",
-                details={"source_path": str(allocation.path)},
+                details={"source_path": str(source_path)},
+            )
+        current_fingerprint = allocation_source_fingerprint(source_path)
+        if current_fingerprint != plan.get("source_fingerprint"):
+            raise LaunchError(
+                f"Allocation source changed after planning: {source_path}.",
+                code="TASKLEDGER_REPAIR_PLAN_CHANGED",
+                details={"source_path": str(source_path)},
+            )
+        current = _allocation_repair_plan_entry(paths, allocation)
+        if not bool(plan.get("apply_safe")) or not bool(current.get("apply_safe")):
+            raise LaunchError(
+                f"Allocation identity conflict blocks repair: {source_path}.",
+                code="TASKLEDGER_TASK_IDENTITY_CONFLICT",
+                details={"source_path": str(source_path)},
+            )
+        if any(
+            current.get(key) != plan.get(key)
+            for key in (
+                "repair_mode",
+                "collision_findings",
+                "surviving_identity",
+                "planned_tombstone",
+            )
+        ):
+            raise LaunchError(
+                "Allocation repair ownership changed since dry-run; "
+                "inspect a fresh plan before apply.",
+                code="TASKLEDGER_REPAIR_PLAN_CHANGED",
+                details={"source_path": str(source_path)},
             )
 
 
 def _verify_allocation_repair_postcondition(
-    paths: V2Paths, allocation: IncompleteTaskAllocation
+    paths: V2Paths,
+    allocation: IncompleteTaskAllocation,
+    plan: dict[str, object],
 ) -> None:
     from taskledger.storage.task_identity import scan_task_identity_inventory
 
+    source_path = allocation.path
+    quarantine_path = Path(str(plan["planned_quarantine"]))
+    if source_path.exists() or not quarantine_path.is_dir():
+        raise LaunchError(
+            f"Allocation repair postcondition failed for physical source {source_path}."
+        )
     inventory = scan_task_identity_inventory(paths)
+    repair_mode = str(plan.get("repair_mode"))
+    if repair_mode == "quarantine_shadowed_legacy_source":
+        survivor = plan.get("surviving_identity")
+        if not isinstance(survivor, dict) or allocation.legacy_task_id is None:
+            raise LaunchError("Shadowed allocation repair lacks its reviewed survivor.")
+        matches = tuple(
+            identity
+            for identity in inventory.entries
+            if identity.legacy_task_id == allocation.legacy_task_id
+        )
+        survivor_path = str(survivor.get("path"))
+        if (
+            len(matches) != 1
+            or str(matches[0].task_uuid) != survivor.get("task_uuid")
+            or matches[0].path.relative_to(paths.ledger_dir).as_posix() != survivor_path
+            or matches[0].source_kind != "uuid_task"
+            or matches[0].state != "live"
+            or (
+                paths.ledger_dir / "tombstones" / f"{allocation.legacy_task_id}.toml"
+            ).exists()
+        ):
+            raise LaunchError(
+                "Allocation repair postcondition failed: the reviewed live owner "
+                f"does not solely own {allocation.legacy_task_id}."
+            )
+        return
+
+    if (
+        repair_mode != "quarantine_and_tombstone"
+        or plan.get("planned_tombstone") is None
+    ):
+        raise LaunchError(
+            "Allocation repair postcondition received an unsupported repair mode."
+        )
     if allocation.legacy_task_id is not None:
         matches = tuple(
             identity
@@ -364,14 +529,27 @@ def _apply_one_allocation_repair(
 
     source_path = allocation.path
     quarantine_path = Path(str(plan["planned_quarantine"]))
-    tombstone_path = Path(str(plan["planned_tombstone"]))
+    repair_mode = str(plan.get("repair_mode"))
+    planned_tombstone = plan.get("planned_tombstone")
+    tombstone_path: Path | None = None
+    if repair_mode == "quarantine_and_tombstone":
+        if not isinstance(planned_tombstone, str):
+            return None, "Tombstone repair plan has no tombstone destination."
+        tombstone_path = Path(planned_tombstone)
+    elif repair_mode == "quarantine_shadowed_legacy_source":
+        if planned_tombstone is not None:
+            return None, "Shadowed-source repair must not create a tombstone."
+    else:
+        return None, "Blocked allocation identity conflict cannot be applied."
+
     if quarantine_path.exists():
         return None, f"Quarantine destination already exists: {quarantine_path}"
-    if tombstone_path.exists():
+    if tombstone_path is not None and tombstone_path.exists():
         return None, f"Tombstone destination already exists: {tombstone_path}"
 
     moved = False
     tombstone_created = False
+    written_tombstone: Path | None = None
     rollback_errors: list[str] = []
     try:
         current_fingerprint = allocation_source_fingerprint(source_path)
@@ -383,30 +561,41 @@ def _apply_one_allocation_repair(
         source_path.rename(quarantine_path)
         moved = True
         relative_quarantine = quarantine_path.relative_to(paths.ledger_dir).as_posix()
-        if allocation.legacy_task_id is not None:
-            written_tombstone = write_task_id_tombstone(
-                paths,
-                allocation.legacy_task_id,
-                reason=reason,
-                quarantined_path=quarantine_path,
-            )
-        else:
-            if allocation.task_uuid is None:
-                raise LaunchError(
-                    f"Allocation has no authoritative physical identity: {source_path}"
+        if repair_mode == "quarantine_and_tombstone":
+            if allocation.legacy_task_id is not None:
+                written_tombstone = write_task_id_tombstone(
+                    paths,
+                    allocation.legacy_task_id,
+                    reason=reason,
+                    quarantined_path=quarantine_path,
                 )
-            written_tombstone = write_task_identity_tombstone(
-                paths,
-                allocation.task_uuid,
-                reason=reason,
-                quarantined_path=relative_quarantine,
-            )
-        tombstone_created = True
+            else:
+                if allocation.task_uuid is None:
+                    raise LaunchError(
+                        "Allocation has no authoritative physical identity: "
+                        f"{source_path}"
+                    )
+                written_tombstone = write_task_identity_tombstone(
+                    paths,
+                    allocation.task_uuid,
+                    reason=reason,
+                    quarantined_path=relative_quarantine,
+                )
+            tombstone_created = True
         invalidate_task_identity_inventory()
-        _verify_allocation_repair_postcondition(paths, allocation)
-        event_tombstone_path = written_tombstone.relative_to(
-            paths.ledger_dir
-        ).as_posix()
+        _verify_allocation_repair_postcondition(paths, allocation, plan)
+        event_tombstone_path = (
+            written_tombstone.relative_to(paths.ledger_dir).as_posix()
+            if written_tombstone is not None
+            else None
+        )
+        survivor = plan.get("surviving_identity")
+        surviving_task_uuid = (
+            survivor.get("task_uuid") if isinstance(survivor, dict) else None
+        )
+        surviving_source_path = (
+            survivor.get("path") if isinstance(survivor, dict) else None
+        )
         append_task_event(
             workspace_root,
             "*",
@@ -418,9 +607,12 @@ def _apply_one_allocation_repair(
                 "task_uuid": allocation.task_uuid,
                 "display_task_id": allocation.display_task_id,
                 "source_fingerprint": allocation.source_fingerprint,
+                "repair_mode": repair_mode,
                 "reason": reason.strip(),
                 "quarantined_path": relative_quarantine,
                 "tombstone_path": event_tombstone_path,
+                "surviving_task_uuid": surviving_task_uuid,
+                "surviving_source_path": surviving_source_path,
             },
         )
         return (
@@ -429,14 +621,19 @@ def _apply_one_allocation_repair(
                 "legacy_task_id": allocation.legacy_task_id,
                 "task_uuid": allocation.task_uuid,
                 "display_task_id": allocation.display_task_id,
+                "repair_mode": repair_mode,
                 "source_path": str(source_path),
                 "quarantined_path": str(quarantine_path),
-                "tombstone_path": str(written_tombstone),
+                "tombstone_path": (
+                    str(written_tombstone) if written_tombstone is not None else None
+                ),
+                "surviving_task_uuid": surviving_task_uuid,
+                "surviving_source_path": surviving_source_path,
             },
             None,
         )
     except Exception as exc:  # noqa: BLE001
-        if tombstone_created:
+        if tombstone_created and tombstone_path is not None:
             try:
                 tombstone_path.unlink(missing_ok=True)
             except OSError as rollback_exc:
@@ -519,20 +716,24 @@ def repair_allocations(
         )
     if not apply:
         selector = f"--task-id {task_id}" if task_id is not None else "--all"
+        apply_safe = all(bool(entry["apply_safe"]) for entry in entries)
         return {
             "kind": "task_allocation_repair",
             "status": "dry_run",
             "dry_run": True,
             "plan_id": computed_plan_id,
+            "apply_safe": apply_safe,
             "incomplete_allocations": entries,
             "next_command": (
                 "taskledger repair allocations "
                 f"{selector} --apply --plan-id {computed_plan_id} --reason "
                 '"Quarantine incomplete task allocation."'
-            ),
+            )
+            if apply_safe
+            else None,
         }
 
-    _validate_allocation_sources_for_apply(paths, selected)
+    _validate_allocation_sources_for_apply(paths, selected, entries)
 
     repaired: list[dict[str, object]] = []
     failed: list[dict[str, str]] = []
@@ -722,7 +923,14 @@ def audit_allocation_repairs(workspace_root: Path) -> dict[str, object]:
             if isinstance(source_path, str)
             else None
         )
-        if tombstone_id in reconciled:
+        repair_mode = data.get("repair_mode")
+        if (
+            repair_mode == "quarantine_shadowed_legacy_source"
+            and tombstone_id is None
+            and isinstance(data.get("surviving_task_uuid"), str)
+        ):
+            status = "existing_owner_preserved"
+        elif tombstone_id in reconciled:
             status = "reconciled"
         elif physical_id is None or tombstone_id is None:
             status = "unverifiable"
@@ -734,6 +942,9 @@ def audit_allocation_repairs(workspace_root: Path) -> dict[str, object]:
             {
                 "event_id": event.event_id,
                 "status": status,
+                "repair_mode": repair_mode,
+                "surviving_task_uuid": data.get("surviving_task_uuid"),
+                "surviving_source_path": data.get("surviving_source_path"),
                 "physical_source_id": physical_id,
                 "tombstone_id": tombstone_id,
                 "quarantined_path": data.get("quarantined_path"),
@@ -749,6 +960,7 @@ def audit_allocation_repairs(workspace_root: Path) -> dict[str, object]:
                 "verified",
                 "identity_mismatch",
                 "unverifiable",
+                "existing_owner_preserved",
                 "reconciled",
             )
         },

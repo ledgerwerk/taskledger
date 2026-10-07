@@ -56,6 +56,21 @@ taskledger repair allocations --task-id task-0019
 taskledger repair allocations --task-id task-0019 --apply --plan-id PLAN_ID --reason "Quarantine the reviewed physical source."
 ```
 
+A normal orphan allocation uses `quarantine_and_tombstone`: the physical source is
+preserved in quarantine and a tombstone reserves its retired identity. A stale
+incomplete `tasks/task-####/` directory may instead be shadowed by exactly one live
+UUID bundle whose persisted legacy ID is the same. The dry-run identifies this as
+`quarantine_shadowed_legacy_source`, names the surviving UUID owner, and sets
+`planned_tombstone` to null. Applying that reviewed plan quarantines only the stale
+directory and creates no tombstone, because the identity remains live. Strict identity
+inventory must succeed afterward with that UUID bundle as sole owner.
+
+Ambiguous ownership—including an existing tombstone, multiple live claimants, a
+non-live claimant, or a changed physical source—is `blocked_identity_conflict` and
+must not be applied. The dry-run reports `apply_safe: false` and no `next_command`.
+Doctor's allocation hint begins with the dry-run; apply only the exact plan ID when
+that report says it is safe.
+
 For a deliberate bulk operation, inspect the complete dry-run and then use
 `--all --apply --plan-id PLAN_ID --reason "..."`. Never use an unscoped apply.
 The apply verifies source fingerprints, checks destinations and identity

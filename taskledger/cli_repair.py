@@ -427,6 +427,43 @@ def repair_locks_command(
         emit_payload(ctx, payload, human="\n".join(lines))
 
 
+def _allocation_repair_dry_run_human(payload: dict[str, object]) -> str:
+    entries_raw = payload.get("incomplete_allocations", [])
+    entries = entries_raw if isinstance(entries_raw, list) else []
+    lines = [
+        f"INCOMPLETE TASK ALLOCATION REPAIR (dry-run): {len(entries)} allocation(s)"
+    ]
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        lines.append(f"  {entry.get('physical_source')}")
+        display_id = entry.get("display_task_id")
+        if display_id is not None:
+            lines.append(f"    display={display_id}")
+        lines.append(f"    mode={entry.get('repair_mode')}")
+        survivor = entry.get("surviving_identity")
+        if isinstance(survivor, dict):
+            lines.append(f"    owner={survivor.get('task_uuid')}")
+        tombstone = entry.get("planned_tombstone")
+        tombstone_display = tombstone if tombstone is not None else "none"
+        lines.append(f"    tombstone={tombstone_display}")
+        findings = entry.get("collision_findings", [])
+        if isinstance(findings, list):
+            for finding in findings:
+                if isinstance(finding, dict):
+                    lines.append(
+                        "    conflict="
+                        f"{finding.get('kind')} {finding.get('path')} "
+                        f"state={finding.get('state')}"
+                    )
+    next_command = payload.get("next_command")
+    if isinstance(next_command, str) and next_command:
+        lines.append(f"\nNext: {next_command}")
+    elif payload.get("apply_safe") is False:
+        lines.append("\nNo apply command: resolve the identity ambiguity first.")
+    return "\n".join(lines)
+
+
 def repair_allocations_command(
     ctx: typer.Context,
     apply: Annotated[
@@ -532,21 +569,11 @@ def repair_allocations_command(
             human += f"\nNext: {next_command}"
         emit_payload(ctx, payload, human=human)
     elif payload.get("dry_run"):
-        entries_raw = payload.get("incomplete_allocations", [])
-        entries = entries_raw if isinstance(entries_raw, list) else []
-        lines = [
-            f"INCOMPLETE TASK ALLOCATION REPAIR (dry-run): {len(entries)} allocation(s)"
-        ]
-        for entry in entries:
-            if isinstance(entry, dict):
-                lines.append(
-                    f"  {entry.get('physical_source')}  "
-                    f"display={entry.get('display_task_id')}"
-                )
-        next_command = payload.get("next_command")
-        if next_command:
-            lines.append(f"\nNext: {next_command}")
-        emit_payload(ctx, payload, human="\n".join(lines))
+        emit_payload(
+            ctx,
+            payload,
+            human=_allocation_repair_dry_run_human(payload),
+        )
     else:
         repaired_raw = payload.get("repaired", [])
         repaired = repaired_raw if isinstance(repaired_raw, list) else []
@@ -555,7 +582,8 @@ def repair_allocations_command(
         lines = [f"quarantined {len(repaired)} incomplete task allocation(s)"]
         for item in failed:
             if isinstance(item, dict):
-                lines.append(f"  failed: {item.get('task_id')}: {item.get('error')}")
+                source_id = item.get("source_id", item.get("task_id"))
+                lines.append(f"  failed: {source_id}: {item.get('error')}")
         emit_payload(ctx, payload, human="\n".join(lines))
 
 

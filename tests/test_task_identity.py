@@ -18,6 +18,7 @@ from taskledger.storage.task_identity import (
     LEGACY_UUID7_EPOCH_MS,
     allocate_task_identity,
     deterministic_legacy_task_uuid,
+    inspect_task_identity_sources,
     legacy_task_identity_for_ref,
     scan_task_identity_inventory,
 )
@@ -141,6 +142,18 @@ def test_live_migrated_task_and_legacy_tombstone_report_identity_conflict(
         reason="Conflicting identity fixture.",
         quarantined_path=paths.tasks_dir / "quarantined-task-0037",
     )
+
+    raw_sources = inspect_task_identity_sources(paths)
+    matching_sources = tuple(
+        source for source in raw_sources if source.legacy_task_id == "task-0037"
+    )
+    assert {source.source_kind for source in matching_sources} == {
+        "uuid_task",
+        "tombstone",
+    }
+    with pytest.raises(LaunchError) as inventory_error:
+        scan_task_identity_inventory(paths)
+    assert inventory_error.value.code == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
 
     with pytest.raises(LaunchError) as caught:
         legacy_task_identity_for_ref(paths, "task-0037")
