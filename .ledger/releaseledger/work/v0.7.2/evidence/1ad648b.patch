@@ -1,0 +1,1576 @@
+ docs/command_contract.md            |  11 ++
+ docs/recovery_identity.md           |  15 ++
+ taskledger/api/repair.py            | 314 +++++++++++++++++++++++++++------
+ taskledger/cli_repair.py            |  60 +++++--
+ taskledger/cli_task.py              |  13 +-
+ taskledger/services/doctor.py       | 313 ++++++++++++++++++++-------------
+ taskledger/storage/task_identity.py |   7 +-
+ tests/test_doctor.py                |  21 +++
+ tests/test_recovery_repairs.py      | 340 +++++++++++++++++++++++++++++++++++-
+ tests/test_service_boundaries.py    |  19 +-
+ tests/test_task_identity.py         |  13 ++
+ 11 files changed, 924 insertions(+), 202 deletions(-)
+
+diff --git a/docs/command_contract.md b/docs/command_contract.md
+index ce44f9f..816744b 100644
+--- a/docs/command_contract.md
++++ b/docs/command_contract.md
+@@ -482,6 +482,17 @@ taskledger repair allocations --task-id task-0019 --apply --plan-id PLAN_ID --re
+ taskledger repair allocations --audit
+ ```
+ 
++The dry-run result includes top-level `apply_safe`, `plan_id`, and `next_command`,
++plus `incomplete_allocations` entries containing `physical_source`, `source_kind`,
++`legacy_source_id`, `source_fingerprint`, `repair_mode`, per-entry `apply_safe`,
++`collision_findings`, `surviving_identity`, `planned_quarantine`, and nullable
++`planned_tombstone`. Modes are `quarantine_and_tombstone` for an eligible orphan,
++`quarantine_shadowed_legacy_source` for one stale legacy source with exactly one live
++UUID owner, and `blocked_identity_conflict` for ambiguity. A shadowed-source repair
++preserves the existing live owner and must not create a second tombstone. When any
++selected entry is blocked, top-level `apply_safe` is false and `next_command` is null;
++resolve the ownership ambiguity instead of applying the plan.
++
+ Prior repairs with a misattributed tombstone can be reconciled only when event and quarantine provenance support the physical source. The dry-run is also the required review step:
+ 
+ ```bash
+diff --git a/docs/recovery_identity.md b/docs/recovery_identity.md
+index d5216ba..1eac80e 100644
+--- a/docs/recovery_identity.md
++++ b/docs/recovery_identity.md
+@@ -56,6 +56,21 @@ taskledger repair allocations --task-id task-0019
+ taskledger repair allocations --task-id task-0019 --apply --plan-id PLAN_ID --reason "Quarantine the reviewed physical source."
+ ```
+ 
++A normal orphan allocation uses `quarantine_and_tombstone`: the physical source is
++preserved in quarantine and a tombstone reserves its retired identity. A stale
++incomplete `tasks/task-####/` directory may instead be shadowed by exactly one live
++UUID bundle whose persisted legacy ID is the same. The dry-run identifies this as
++`quarantine_shadowed_legacy_source`, names the surviving UUID owner, and sets
++`planned_tombstone` to null. Applying that reviewed plan quarantines only the stale
++directory and creates no tombstone, because the identity remains live. Strict identity
++inventory must succeed afterward with that UUID bundle as sole owner.
++
++Ambiguous ownership—including an existing tombstone, multiple live claimants, a
++non-live claimant, or a changed physical source—is `blocked_identity_conflict` and
++must not be applied. The dry-run reports `apply_safe: false` and no `next_command`.
++Doctor's allocation hint begins with the dry-run; apply only the exact plan ID when
++that report says it is safe.
++
+ For a deliberate bulk operation, inspect the complete dry-run and then use
+ `--all --apply --plan-id PLAN_ID --reason "..."`. Never use an unscoped apply.
+ The apply verifies source fingerprints, checks destinations and identity
+diff --git a/taskledger/api/repair.py b/taskledger/api/repair.py
+index 33d1564..5ab8611 100644
+--- a/taskledger/api/repair.py
++++ b/taskledger/api/repair.py
+@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
+ 
+ if TYPE_CHECKING:
+     from taskledger.domain.models import TaskRecord
+-    from taskledger.storage.task_identity import TaskIdentity
++    from taskledger.storage.task_identity import TaskIdentity, _IdentitySource
+     from taskledger.storage.task_ids import IncompleteTaskAllocation
+     from taskledger.storage.task_store import V2Paths
+ from taskledger.errors import LaunchError
+@@ -205,6 +205,96 @@ def repair_locks(
+     }
+ 
+ 
++def _identity_source_payload(
++    paths: V2Paths, source: _IdentitySource
++) -> dict[str, object]:
++    return {
++        "kind": source.source_kind,
++        "task_uuid": str(source.task_uuid),
++        "state": source.state,
++        "legacy_task_id": source.legacy_task_id,
++        "path": source.path.relative_to(paths.ledger_dir).as_posix(),
++    }
++
++
++def _classify_allocation_repair(
++    paths: V2Paths, allocation: IncompleteTaskAllocation
++) -> dict[str, object]:
++    from taskledger.storage.task_identity import inspect_task_identity_sources
++
++    sources = inspect_task_identity_sources(paths)
++    expected_kind = (
++        "legacy_task" if allocation.source_kind == "legacy_directory" else "uuid_task"
++    )
++    selected_sources = tuple(
++        source for source in sources if source.path == allocation.path
++    )
++    selected = selected_sources[0] if len(selected_sources) == 1 else None
++    collision_findings: tuple[_IdentitySource, ...] = ()
++    surviving_identity: dict[str, object] | None = None
++    repair_mode = "blocked_identity_conflict"
++
++    selected_matches = (
++        selected is not None
++        and selected.source_kind == expected_kind
++        and selected.state == "incomplete"
++        and selected.legacy_task_id == allocation.legacy_task_id
++        and (
++            allocation.task_uuid is None
++            or str(selected.task_uuid) == allocation.task_uuid
++        )
++    )
++    if selected_matches and selected is not None:
++        uuid_claimants = tuple(
++            source for source in sources if source.task_uuid == selected.task_uuid
++        )
++        if allocation.legacy_task_id is not None:
++            legacy_claimants = tuple(
++                source
++                for source in sources
++                if source.legacy_task_id == allocation.legacy_task_id
++            )
++            collision_findings = tuple(
++                source for source in legacy_claimants if source is not selected
++            )
++            if len(uuid_claimants) == 1 and len(legacy_claimants) == 1:
++                repair_mode = "quarantine_and_tombstone"
++            elif (
++                len(uuid_claimants) == 1
++                and len(legacy_claimants) == 2
++                and sum(
++                    source.source_kind == "uuid_task" and source.state == "live"
++                    for source in collision_findings
++                )
++                == 1
++                and all(
++                    source.source_kind == "uuid_task" and source.state == "live"
++                    for source in collision_findings
++                )
++            ):
++                repair_mode = "quarantine_shadowed_legacy_source"
++                survivor = collision_findings[0]
++                surviving_identity = _identity_source_payload(paths, survivor)
++        else:
++            uuid_claimants = tuple(
++                source for source in sources if source.task_uuid == selected.task_uuid
++            )
++            collision_findings = tuple(
++                source for source in uuid_claimants if source is not selected
++            )
++            if len(uuid_claimants) == 1:
++                repair_mode = "quarantine_and_tombstone"
++
++    return {
++        "repair_mode": repair_mode,
++        "apply_safe": repair_mode != "blocked_identity_conflict",
++        "collision_findings": [
++            _identity_source_payload(paths, source) for source in collision_findings
++        ],
++        "surviving_identity": surviving_identity,
++    }
++
++
+ def _allocation_repair_plan_entry(
+     paths: V2Paths, allocation: IncompleteTaskAllocation
+ ) -> dict[str, object]:
+@@ -248,7 +338,12 @@ def _allocation_repair_plan_entry(
+             "Computed display ID differs from physical legacy source ID; "
+             "repair targets the physical source ID."
+         )
+-    tombstone_path = paths.ledger_dir / "tombstones" / f"{tombstone_name}.toml"
++    classification = _classify_allocation_repair(paths, allocation)
++    planned_tombstone = None
++    if classification["repair_mode"] == "quarantine_and_tombstone":
++        planned_tombstone = (
++            paths.ledger_dir / "tombstones" / f"{tombstone_name}.toml"
++        ).as_posix()
+     return {
+         "physical_source": allocation.path.relative_to(paths.ledger_dir).as_posix(),
+         "source_path": allocation.path.as_posix(),
+@@ -260,8 +355,9 @@ def _allocation_repair_plan_entry(
+         "entries": list(allocation.files),
+         "source_fingerprint": allocation.source_fingerprint,
+         "planned_quarantine": quarantine_path.as_posix(),
+-        "planned_tombstone": tombstone_path.as_posix(),
++        "planned_tombstone": planned_tombstone,
+         "warnings": warnings,
++        **classification,
+     }
+ 
+ 
+@@ -278,40 +374,109 @@ def _allocation_plan_fingerprint(
+ 
+ 
+ def _validate_allocation_sources_for_apply(
+-    paths: V2Paths, allocations: tuple[IncompleteTaskAllocation, ...]
++    paths: V2Paths,
++    allocations: tuple[IncompleteTaskAllocation, ...],
++    plans: list[dict[str, object]],
+ ) -> None:
+-    from taskledger.storage.task_identity import scan_task_identity_inventory
++    from taskledger.storage.task_ids import allocation_source_fingerprint
+ 
+-    inventory = scan_task_identity_inventory(paths)
+-    for allocation in allocations:
+-        matches = tuple(
+-            identity
+-            for identity in inventory.entries
+-            if (
+-                identity.legacy_task_id == allocation.legacy_task_id
+-                if allocation.legacy_task_id is not None
+-                else str(identity.task_uuid) == allocation.task_uuid
+-            )
++    if len(allocations) != len(plans):
++        raise LaunchError(
++            "Allocation repair plan changed since dry-run; inspect a fresh plan.",
++            code="TASKLEDGER_REPAIR_PLAN_CHANGED",
+         )
++    for allocation, plan in zip(allocations, plans, strict=True):
++        source_path = allocation.path
+         if (
+-            len(matches) != 1
+-            or matches[0].path != allocation.path
+-            or matches[0].state != "incomplete"
++            source_path.is_symlink()
++            or not source_path.is_dir()
++            or plan.get("source_path") != source_path.as_posix()
++            or plan.get("source_kind") != allocation.source_kind
+         ):
+             raise LaunchError(
+-                "Allocation source identity is missing, changed, or ambiguous: "
+-                f"{allocation.path}.",
++                f"Allocation source identity changed after planning: {source_path}.",
+                 code="TASKLEDGER_TASK_IDENTITY_CONFLICT",
+-                details={"source_path": str(allocation.path)},
++                details={"source_path": str(source_path)},
++            )
++        current_fingerprint = allocation_source_fingerprint(source_path)
++        if current_fingerprint != plan.get("source_fingerprint"):
++            raise LaunchError(
++                f"Allocation source changed after planning: {source_path}.",
++                code="TASKLEDGER_REPAIR_PLAN_CHANGED",
++                details={"source_path": str(source_path)},
++            )
++        current = _allocation_repair_plan_entry(paths, allocation)
++        if not bool(plan.get("apply_safe")) or not bool(current.get("apply_safe")):
++            raise LaunchError(
++                f"Allocation identity conflict blocks repair: {source_path}.",
++                code="TASKLEDGER_TASK_IDENTITY_CONFLICT",
++                details={"source_path": str(source_path)},
++            )
++        if any(
++            current.get(key) != plan.get(key)
++            for key in (
++                "repair_mode",
++                "collision_findings",
++                "surviving_identity",
++                "planned_tombstone",
++            )
++        ):
++            raise LaunchError(
++                "Allocation repair ownership changed since dry-run; "
++                "inspect a fresh plan before apply.",
++                code="TASKLEDGER_REPAIR_PLAN_CHANGED",
++                details={"source_path": str(source_path)},
+             )
+ 
+ 
+ def _verify_allocation_repair_postcondition(
+-    paths: V2Paths, allocation: IncompleteTaskAllocation
++    paths: V2Paths,
++    allocation: IncompleteTaskAllocation,
++    plan: dict[str, object],
+ ) -> None:
+     from taskledger.storage.task_identity import scan_task_identity_inventory
+ 
++    source_path = allocation.path
++    quarantine_path = Path(str(plan["planned_quarantine"]))
++    if source_path.exists() or not quarantine_path.is_dir():
++        raise LaunchError(
++            f"Allocation repair postcondition failed for physical source {source_path}."
++        )
+     inventory = scan_task_identity_inventory(paths)
++    repair_mode = str(plan.get("repair_mode"))
++    if repair_mode == "quarantine_shadowed_legacy_source":
++        survivor = plan.get("surviving_identity")
++        if not isinstance(survivor, dict) or allocation.legacy_task_id is None:
++            raise LaunchError("Shadowed allocation repair lacks its reviewed survivor.")
++        matches = tuple(
++            identity
++            for identity in inventory.entries
++            if identity.legacy_task_id == allocation.legacy_task_id
++        )
++        survivor_path = str(survivor.get("path"))
++        if (
++            len(matches) != 1
++            or str(matches[0].task_uuid) != survivor.get("task_uuid")
++            or matches[0].path.relative_to(paths.ledger_dir).as_posix() != survivor_path
++            or matches[0].source_kind != "uuid_task"
++            or matches[0].state != "live"
++            or (
++                paths.ledger_dir / "tombstones" / f"{allocation.legacy_task_id}.toml"
++            ).exists()
++        ):
++            raise LaunchError(
++                "Allocation repair postcondition failed: the reviewed live owner "
++                f"does not solely own {allocation.legacy_task_id}."
++            )
++        return
++
++    if (
++        repair_mode != "quarantine_and_tombstone"
++        or plan.get("planned_tombstone") is None
++    ):
++        raise LaunchError(
++            "Allocation repair postcondition received an unsupported repair mode."
++        )
+     if allocation.legacy_task_id is not None:
+         matches = tuple(
+             identity
+@@ -364,14 +529,27 @@ def _apply_one_allocation_repair(
+ 
+     source_path = allocation.path
+     quarantine_path = Path(str(plan["planned_quarantine"]))
+-    tombstone_path = Path(str(plan["planned_tombstone"]))
++    repair_mode = str(plan.get("repair_mode"))
++    planned_tombstone = plan.get("planned_tombstone")
++    tombstone_path: Path | None = None
++    if repair_mode == "quarantine_and_tombstone":
++        if not isinstance(planned_tombstone, str):
++            return None, "Tombstone repair plan has no tombstone destination."
++        tombstone_path = Path(planned_tombstone)
++    elif repair_mode == "quarantine_shadowed_legacy_source":
++        if planned_tombstone is not None:
++            return None, "Shadowed-source repair must not create a tombstone."
++    else:
++        return None, "Blocked allocation identity conflict cannot be applied."
++
+     if quarantine_path.exists():
+         return None, f"Quarantine destination already exists: {quarantine_path}"
+-    if tombstone_path.exists():
++    if tombstone_path is not None and tombstone_path.exists():
+         return None, f"Tombstone destination already exists: {tombstone_path}"
+ 
+     moved = False
+     tombstone_created = False
++    written_tombstone: Path | None = None
+     rollback_errors: list[str] = []
+     try:
+         current_fingerprint = allocation_source_fingerprint(source_path)
+@@ -383,30 +561,41 @@ def _apply_one_allocation_repair(
+         source_path.rename(quarantine_path)
+         moved = True
+         relative_quarantine = quarantine_path.relative_to(paths.ledger_dir).as_posix()
+-        if allocation.legacy_task_id is not None:
+-            written_tombstone = write_task_id_tombstone(
+-                paths,
+-                allocation.legacy_task_id,
+-                reason=reason,
+-                quarantined_path=quarantine_path,
+-            )
+-        else:
+-            if allocation.task_uuid is None:
+-                raise LaunchError(
+-                    f"Allocation has no authoritative physical identity: {source_path}"
++        if repair_mode == "quarantine_and_tombstone":
++            if allocation.legacy_task_id is not None:
++                written_tombstone = write_task_id_tombstone(
++                    paths,
++                    allocation.legacy_task_id,
++                    reason=reason,
++                    quarantined_path=quarantine_path,
+                 )
+-            written_tombstone = write_task_identity_tombstone(
+-                paths,
+-                allocation.task_uuid,
+-                reason=reason,
+-                quarantined_path=relative_quarantine,
+-            )
+-        tombstone_created = True
++            else:
++                if allocation.task_uuid is None:
++                    raise LaunchError(
++                        "Allocation has no authoritative physical identity: "
++                        f"{source_path}"
++                    )
++                written_tombstone = write_task_identity_tombstone(
++                    paths,
++                    allocation.task_uuid,
++                    reason=reason,
++                    quarantined_path=relative_quarantine,
++                )
++            tombstone_created = True
+         invalidate_task_identity_inventory()
+-        _verify_allocation_repair_postcondition(paths, allocation)
+-        event_tombstone_path = written_tombstone.relative_to(
+-            paths.ledger_dir
+-        ).as_posix()
++        _verify_allocation_repair_postcondition(paths, allocation, plan)
++        event_tombstone_path = (
++            written_tombstone.relative_to(paths.ledger_dir).as_posix()
++            if written_tombstone is not None
++            else None
++        )
++        survivor = plan.get("surviving_identity")
++        surviving_task_uuid = (
++            survivor.get("task_uuid") if isinstance(survivor, dict) else None
++        )
++        surviving_source_path = (
++            survivor.get("path") if isinstance(survivor, dict) else None
++        )
+         append_task_event(
+             workspace_root,
+             "*",
+@@ -418,9 +607,12 @@ def _apply_one_allocation_repair(
+                 "task_uuid": allocation.task_uuid,
+                 "display_task_id": allocation.display_task_id,
+                 "source_fingerprint": allocation.source_fingerprint,
++                "repair_mode": repair_mode,
+                 "reason": reason.strip(),
+                 "quarantined_path": relative_quarantine,
+                 "tombstone_path": event_tombstone_path,
++                "surviving_task_uuid": surviving_task_uuid,
++                "surviving_source_path": surviving_source_path,
+             },
+         )
+         return (
+@@ -429,14 +621,19 @@ def _apply_one_allocation_repair(
+                 "legacy_task_id": allocation.legacy_task_id,
+                 "task_uuid": allocation.task_uuid,
+                 "display_task_id": allocation.display_task_id,
++                "repair_mode": repair_mode,
+                 "source_path": str(source_path),
+                 "quarantined_path": str(quarantine_path),
+-                "tombstone_path": str(written_tombstone),
++                "tombstone_path": (
++                    str(written_tombstone) if written_tombstone is not None else None
++                ),
++                "surviving_task_uuid": surviving_task_uuid,
++                "surviving_source_path": surviving_source_path,
+             },
+             None,
+         )
+     except Exception as exc:  # noqa: BLE001
+-        if tombstone_created:
++        if tombstone_created and tombstone_path is not None:
+             try:
+                 tombstone_path.unlink(missing_ok=True)
+             except OSError as rollback_exc:
+@@ -519,20 +716,24 @@ def repair_allocations(
+         )
+     if not apply:
+         selector = f"--task-id {task_id}" if task_id is not None else "--all"
++        apply_safe = all(bool(entry["apply_safe"]) for entry in entries)
+         return {
+             "kind": "task_allocation_repair",
+             "status": "dry_run",
+             "dry_run": True,
+             "plan_id": computed_plan_id,
++            "apply_safe": apply_safe,
+             "incomplete_allocations": entries,
+             "next_command": (
+                 "taskledger repair allocations "
+                 f"{selector} --apply --plan-id {computed_plan_id} --reason "
+                 '"Quarantine incomplete task allocation."'
+-            ),
++            )
++            if apply_safe
++            else None,
+         }
+ 
+-    _validate_allocation_sources_for_apply(paths, selected)
++    _validate_allocation_sources_for_apply(paths, selected, entries)
+ 
+     repaired: list[dict[str, object]] = []
+     failed: list[dict[str, str]] = []
+@@ -722,7 +923,14 @@ def audit_allocation_repairs(workspace_root: Path) -> dict[str, object]:
+             if isinstance(source_path, str)
+             else None
+         )
+-        if tombstone_id in reconciled:
++        repair_mode = data.get("repair_mode")
++        if (
++            repair_mode == "quarantine_shadowed_legacy_source"
++            and tombstone_id is None
++            and isinstance(data.get("surviving_task_uuid"), str)
++        ):
++            status = "existing_owner_preserved"
++        elif tombstone_id in reconciled:
+             status = "reconciled"
+         elif physical_id is None or tombstone_id is None:
+             status = "unverifiable"
+@@ -734,6 +942,9 @@ def audit_allocation_repairs(workspace_root: Path) -> dict[str, object]:
+             {
+                 "event_id": event.event_id,
+                 "status": status,
++                "repair_mode": repair_mode,
++                "surviving_task_uuid": data.get("surviving_task_uuid"),
++                "surviving_source_path": data.get("surviving_source_path"),
+                 "physical_source_id": physical_id,
+                 "tombstone_id": tombstone_id,
+                 "quarantined_path": data.get("quarantined_path"),
+@@ -749,6 +960,7 @@ def audit_allocation_repairs(workspace_root: Path) -> dict[str, object]:
+                 "verified",
+                 "identity_mismatch",
+                 "unverifiable",
++                "existing_owner_preserved",
+                 "reconciled",
+             )
+         },
+diff --git a/taskledger/cli_repair.py b/taskledger/cli_repair.py
+index 3686fa3..215b3f8 100644
+--- a/taskledger/cli_repair.py
++++ b/taskledger/cli_repair.py
+@@ -427,6 +427,43 @@ def repair_locks_command(
+         emit_payload(ctx, payload, human="\n".join(lines))
+ 
+ 
++def _allocation_repair_dry_run_human(payload: dict[str, object]) -> str:
++    entries_raw = payload.get("incomplete_allocations", [])
++    entries = entries_raw if isinstance(entries_raw, list) else []
++    lines = [
++        f"INCOMPLETE TASK ALLOCATION REPAIR (dry-run): {len(entries)} allocation(s)"
++    ]
++    for entry in entries:
++        if not isinstance(entry, dict):
++            continue
++        lines.append(f"  {entry.get('physical_source')}")
++        display_id = entry.get("display_task_id")
++        if display_id is not None:
++            lines.append(f"    display={display_id}")
++        lines.append(f"    mode={entry.get('repair_mode')}")
++        survivor = entry.get("surviving_identity")
++        if isinstance(survivor, dict):
++            lines.append(f"    owner={survivor.get('task_uuid')}")
++        tombstone = entry.get("planned_tombstone")
++        tombstone_display = tombstone if tombstone is not None else "none"
++        lines.append(f"    tombstone={tombstone_display}")
++        findings = entry.get("collision_findings", [])
++        if isinstance(findings, list):
++            for finding in findings:
++                if isinstance(finding, dict):
++                    lines.append(
++                        "    conflict="
++                        f"{finding.get('kind')} {finding.get('path')} "
++                        f"state={finding.get('state')}"
++                    )
++    next_command = payload.get("next_command")
++    if isinstance(next_command, str) and next_command:
++        lines.append(f"\nNext: {next_command}")
++    elif payload.get("apply_safe") is False:
++        lines.append("\nNo apply command: resolve the identity ambiguity first.")
++    return "\n".join(lines)
++
++
+ def repair_allocations_command(
+     ctx: typer.Context,
+     apply: Annotated[
+@@ -532,21 +569,11 @@ def repair_allocations_command(
+             human += f"\nNext: {next_command}"
+         emit_payload(ctx, payload, human=human)
+     elif payload.get("dry_run"):
+-        entries_raw = payload.get("incomplete_allocations", [])
+-        entries = entries_raw if isinstance(entries_raw, list) else []
+-        lines = [
+-            f"INCOMPLETE TASK ALLOCATION REPAIR (dry-run): {len(entries)} allocation(s)"
+-        ]
+-        for entry in entries:
+-            if isinstance(entry, dict):
+-                lines.append(
+-                    f"  {entry.get('physical_source')}  "
+-                    f"display={entry.get('display_task_id')}"
+-                )
+-        next_command = payload.get("next_command")
+-        if next_command:
+-            lines.append(f"\nNext: {next_command}")
+-        emit_payload(ctx, payload, human="\n".join(lines))
++        emit_payload(
++            ctx,
++            payload,
++            human=_allocation_repair_dry_run_human(payload),
++        )
+     else:
+         repaired_raw = payload.get("repaired", [])
+         repaired = repaired_raw if isinstance(repaired_raw, list) else []
+@@ -555,7 +582,8 @@ def repair_allocations_command(
+         lines = [f"quarantined {len(repaired)} incomplete task allocation(s)"]
+         for item in failed:
+             if isinstance(item, dict):
+-                lines.append(f"  failed: {item.get('task_id')}: {item.get('error')}")
++                source_id = item.get("source_id", item.get("task_id"))
++                lines.append(f"  failed: {source_id}: {item.get('error')}")
+         emit_payload(ctx, payload, human="\n".join(lines))
+ 
+ 
+diff --git a/taskledger/cli_task.py b/taskledger/cli_task.py
+index 12d647b..ebbc794 100644
+--- a/taskledger/cli_task.py
++++ b/taskledger/cli_task.py
+@@ -281,14 +281,19 @@ def list_command(
+         error = LaunchError("Use either --archived or --include-archived, not both.")
+         emit_error(ctx, error)
+         raise typer.Exit(code=launch_error_exit_code(error))
+-    payload = {
+-        "kind": "task_list",
+-        "tasks": list_task_summaries(
++    try:
++        tasks = list_task_summaries(
+             state.cwd,
+             archived_only=archived,
+             include_archived=include_archived,
+             slug=slug,
+-        ),
++        )
++    except LaunchError as exc:
++        emit_error(ctx, exc)
++        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
++    payload = {
++        "kind": "task_list",
++        "tasks": tasks,
+     }
+     human_lines = ["TASKS"]
+     if not payload["tasks"]:
+diff --git a/taskledger/services/doctor.py b/taskledger/services/doctor.py
+index 1c35b9b..daf9baa 100644
+--- a/taskledger/services/doctor.py
++++ b/taskledger/services/doctor.py
+@@ -58,6 +58,7 @@ class DoctorScanContext:
+     run_by_key: Mapping[tuple[str, str], TaskRunRecord]
+     active_state: ActiveTaskState | None
+     incomplete_task_allocations: tuple[IncompleteTaskAllocation, ...]
++    identity_inventory_valid: bool
+     scan_errors: tuple[str, ...]
+     scan_diagnostics: tuple[dict[str, object], ...]
+ 
+@@ -72,10 +73,12 @@ def _scan_doctor_tasks(
+     tuple[TaskRecord, ...],
+     dict[str, TaskRecord],
+     tuple[IncompleteTaskAllocation, ...],
++    bool,
+ ]:
+     from taskledger.storage.task_identity import scan_task_identity_inventory
+     from taskledger.storage.task_store import _load_task
+ 
++    identity_inventory_valid = True
+     try:
+         identities = scan_task_identity_inventory(paths).entries
+     except Exception as exc:  # noqa: BLE001
+@@ -90,6 +93,7 @@ def _scan_doctor_tasks(
+             }
+         )
+         identities = None
++        identity_inventory_valid = False
+ 
+     candidates: list[tuple[Path, str | None, str | None]] = []
+     incomplete: list[IncompleteTaskAllocation] = []
+@@ -254,7 +258,7 @@ def _scan_doctor_tasks(
+             )
+     tasks = tuple(tasks_list)
+     task_by_id = {task.id: task for task in tasks if id_counts[task.id] == 1}
+-    return tasks, task_by_id, tuple(incomplete)
++    return tasks, task_by_id, tuple(incomplete), identity_inventory_valid
+ 
+ 
+ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
+@@ -271,9 +275,24 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
+     paths = resolve_v2_paths(workspace_root)
+     scan_errors: list[str] = []
+     scan_diagnostics: list[dict[str, object]] = []
+-    tasks, task_by_id, incomplete_task_allocations = _scan_doctor_tasks(
+-        paths, scan_errors, scan_diagnostics
+-    )
++    (
++        tasks,
++        task_by_id,
++        incomplete_task_allocations,
++        identity_inventory_valid,
++    ) = _scan_doctor_tasks(paths, scan_errors, scan_diagnostics)
++    if not identity_inventory_valid:
++        scan_diagnostics.append(
++            {
++                "severity": "warning",
++                "code": "IDENTITY_DEPENDENT_SCANS_SKIPPED",
++                "phase": "identity_dependent_scans",
++                "message": (
++                    "Task plan, question, change, run, and relationship scans were "
++                    "skipped because the task identity inventory is invalid."
++                ),
++            }
++        )
+ 
+     try:
+         lock_inventory = build_lock_inventory(paths)
+@@ -309,7 +328,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
+     runs_by_task: dict[str, tuple[TaskRunRecord, ...]] = {}
+     run_by_key: dict[tuple[str, str], TaskRunRecord] = {}
+ 
+-    for task in tasks:
++    for task in tasks if identity_inventory_valid else ():
+         if task.id not in task_by_id:
+             continue
+         try:
+@@ -374,6 +393,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
+         run_by_key=run_by_key,
+         active_state=active_state,
+         incomplete_task_allocations=incomplete_task_allocations,
++        identity_inventory_valid=identity_inventory_valid,
+         scan_errors=tuple(scan_errors),
+         scan_diagnostics=tuple(scan_diagnostics),
+         artifact_limit_bytes=artifact_limit_bytes,
+@@ -461,6 +481,145 @@ def _count_task_records_readonly(
+     return total
+ 
+ 
++def _inspect_active_task(
++    ctx: DoctorScanContext, errors: list[str], warnings: list[str]
++) -> None:
++    if not ctx.identity_inventory_valid or ctx.active_state is None:
++        return
++    active_task = ctx.task_by_id.get(ctx.active_state.task_id)
++    if active_task is None:
++        errors.append(f"Active task points to missing task {ctx.active_state.task_id}.")
++    elif active_task.status_stage in {"cancelled", "done"}:
++        warnings.append(f"Active task {active_task.id} is {active_task.status_stage}.")
++
++
++def _inspect_task_integrity(
++    workspace_root: Path,
++    ctx: DoctorScanContext,
++    *,
++    errors: list[str],
++    warnings: list[str],
++    repair_hints: list[str],
++    broken_links: list[dict[str, object]],
++    run_lock_mismatches: list[dict[str, object]],
++    diagnostics: list[dict[str, object]],
++) -> None:
++    if not ctx.identity_inventory_valid:
++        return
++    from taskledger.services.doctor_checks.task_checks import scan_task_integrity
++
++    try:
++        with _timing.stage("task_integrity"):
++            scan_task_integrity(
++                workspace_root=workspace_root,
++                paths=ctx.paths,
++                tasks=list(ctx.tasks),
++                task_map=dict(ctx.task_by_id),
++                locks=list(ctx.locks),
++                task_runs={
++                    task_id: list(runs) for task_id, runs in ctx.runs_by_task.items()
++                },
++                run_map=dict(ctx.run_by_key),
++                active_state=ctx.active_state,
++                errors=errors,
++                warnings=warnings,
++                repair_hints=repair_hints,
++                broken_links=broken_links,
++                run_lock_mismatches=run_lock_mismatches,
++                diagnostics=diagnostics,
++            )
++    except Exception as exc:  # noqa: BLE001
++        errors.append(str(exc))
++        diagnostics.append(
++            {
++                "severity": "error",
++                "code": getattr(exc, "code", "TASK_INTEGRITY_SCAN_FAILED"),
++                "phase": "task_integrity",
++                "message": str(exc),
++                "details": getattr(exc, "details", {}),
++            }
++        )
++
++
++def _inspect_lock_consistency(
++    ctx: DoctorScanContext,
++    *,
++    errors: list[str],
++    expired_locks: list[dict[str, object]],
++) -> None:
++    with _timing.stage("lock_consistency"):
++        for lock in ctx.locks:
++            try:
++                if lock_is_expired(lock):
++                    expired_locks.append(lock.to_dict())
++            except Exception as exc:  # noqa: BLE001
++                errors.append(str(exc))
++            if not ctx.identity_inventory_valid:
++                continue
++            lock_task = ctx.task_by_id.get(lock.task_id)
++            if lock_task is None:
++                errors.append(
++                    f"Lock {lock.lock_id} references missing task {lock.task_id}."
++                )
++                continue
++            run = ctx.run_by_key.get((lock.task_id, lock.run_id))
++            if run is None:
++                errors.append(
++                    f"Lock {lock.lock_id} references missing run {lock.run_id} "
++                    f"for task {lock.task_id}."
++                )
++                continue
++            if run.status != "running":
++                errors.append(
++                    f"Lock {lock.lock_id} references non-running run {run.run_id}."
++                )
++            expected_stage = {
++                "planning": "planning",
++                "implementation": "implementing",
++                "validation": "validating",
++            }[run.run_type]
++            if lock.stage != expected_stage:
++                errors.append(
++                    f"Lock {lock.lock_id} stage {lock.stage} does not match "
++                    f"run {run.run_id} type {run.run_type}."
++                )
++
++
++def _count_identity_dependent_records(
++    ctx: DoctorScanContext,
++    *,
++    errors: list[str],
++    diagnostics: list[dict[str, object]],
++) -> tuple[int, int, int, int]:
++    tasks = ctx.tasks if ctx.identity_inventory_valid else ()
++    total_plans = _count_task_records_readonly(
++        ctx.paths,
++        tasks,
++        list_plans_from_paths,
++        record_name="plans",
++        errors=errors,
++        diagnostics=diagnostics,
++    )
++    total_questions = _count_task_records_readonly(
++        ctx.paths,
++        tasks,
++        list_questions_from_paths,
++        record_name="questions",
++        errors=errors,
++        diagnostics=diagnostics,
++    )
++    total_changes = _count_task_records_readonly(
++        ctx.paths,
++        tasks,
++        list_changes_from_paths,
++        record_name="changes",
++        errors=errors,
++        diagnostics=diagnostics,
++    )
++    total_runs = sum(len(runs) for runs in ctx.runs_by_task.values())
++    return total_plans, total_questions, total_runs, total_changes
++
++
+ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
+     with _timing.stage("scan_context"):
+         ctx = _build_scan_context(workspace_root)
+@@ -475,7 +634,6 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
+ 
+     from taskledger.services.doctor_checks.migration_checks import scan_migration_state
+     from taskledger.services.doctor_checks.project_scan import scan_project_config
+-    from taskledger.services.doctor_checks.task_checks import scan_task_integrity
+ 
+     try:
+         with _timing.stage("project_config"):
+@@ -505,9 +663,9 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
+         message = f"Incomplete task allocation {allocation_id} is missing task.md."
+         errors.append(message)
+         repair_hints.append(
+-            "Inspect and quarantine this source explicitly with "
+-            f'`taskledger repair allocations --task-id "{allocation_id}" --apply '
+-            '--reason "..."` or review the complete allocation set with --all.'
++            "Inspect this allocation with "
++            f'`taskledger repair allocations --task-id "{allocation_id}"`. '
++            "If the dry-run is safe, apply the exact reviewed plan with its --plan-id."
+         )
+         diagnostics.append(
+             {
+@@ -521,47 +679,17 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
+                 "files": list(allocation.files),
+             }
+         )
+-    # Active task check
+-    if ctx.active_state is not None:
+-        active_task = ctx.task_by_id.get(ctx.active_state.task_id)
+-        if active_task is None:
+-            errors.append(
+-                f"Active task points to missing task {ctx.active_state.task_id}."
+-            )
+-        elif active_task.status_stage in {"cancelled", "done"}:
+-            warnings.append(
+-                f"Active task {active_task.id} is {active_task.status_stage}."
+-            )
+-
+-    try:
+-        with _timing.stage("task_integrity"):
+-            scan_task_integrity(
+-                workspace_root=workspace_root,
+-                paths=ctx.paths,
+-                tasks=list(ctx.tasks),
+-                task_map=dict(ctx.task_by_id),
+-                locks=list(ctx.locks),
+-                task_runs={tid: list(runs) for tid, runs in ctx.runs_by_task.items()},
+-                run_map=dict(ctx.run_by_key),
+-                active_state=ctx.active_state,
+-                errors=errors,
+-                warnings=warnings,
+-                repair_hints=repair_hints,
+-                broken_links=broken_links,
+-                run_lock_mismatches=run_lock_mismatches,
+-                diagnostics=diagnostics,
+-            )
+-    except Exception as exc:  # noqa: BLE001
+-        errors.append(str(exc))
+-        diagnostics.append(
+-            {
+-                "severity": "error",
+-                "code": getattr(exc, "code", "TASK_INTEGRITY_SCAN_FAILED"),
+-                "phase": "task_integrity",
+-                "message": str(exc),
+-                "details": getattr(exc, "details", {}),
+-            }
+-        )
++    _inspect_active_task(ctx, errors, warnings)
++    _inspect_task_integrity(
++        workspace_root,
++        ctx,
++        errors=errors,
++        warnings=warnings,
++        repair_hints=repair_hints,
++        broken_links=broken_links,
++        run_lock_mismatches=run_lock_mismatches,
++        diagnostics=diagnostics,
++    )
+ 
+     from taskledger.services.doctor_checks.artifact_checks import (
+         find_oversized_artifacts,
+@@ -584,42 +712,7 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
+                 "message": str(exc),
+             }
+         )
+-    with _timing.stage("lock_consistency"):
+-        for lock in ctx.locks:
+-            lock_task = ctx.task_by_id.get(lock.task_id)
+-            if lock_task is None:
+-                errors.append(
+-                    f"Lock {lock.lock_id} references missing task {lock.task_id}."
+-                )
+-                continue
+-            try:
+-                if lock_is_expired(lock):
+-                    expired_locks.append(lock.to_dict())
+-            except Exception as exc:  # noqa: BLE001
+-                errors.append(str(exc))
+-            # Use pre-built run_map instead of resolve_run per task.
+-            run = ctx.run_by_key.get((lock.task_id, lock.run_id))
+-            if run is None:
+-                errors.append(
+-                    f"Lock {lock.lock_id} references missing run {lock.run_id} "
+-                    f"for task {lock.task_id}."
+-                )
+-                continue
+-            if run.status != "running":
+-                errors.append(
+-                    f"Lock {lock.lock_id} references non-running run {run.run_id}."
+-                )
+-            expected_stage = {
+-                "planning": "planning",
+-                "implementation": "implementing",
+-                "validation": "validating",
+-            }[run.run_type]
+-            if lock.stage != expected_stage:
+-                errors.append(
+-                    f"Lock {lock.lock_id} stage {lock.stage} does not match "
+-                    f"run {run.run_id} type {run.run_type}."
+-                )
+-
++    _inspect_lock_consistency(ctx, errors=errors, expired_locks=expired_locks)
+     try:
+         with _timing.stage("migration_state"):
+             scan_migration_state(
+@@ -630,15 +723,16 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
+                 repair_hints=repair_hints,
+             )
+     except Exception as exc:  # noqa: BLE001
+-        errors.append(str(exc))
+-        diagnostics.append(
+-            {
+-                "severity": "error",
+-                "code": getattr(exc, "code", "MIGRATION_SCAN_FAILED"),
+-                "phase": "migration_state",
+-                "message": str(exc),
+-            }
+-        )
++        if ctx.identity_inventory_valid or str(exc) not in errors:
++            errors.append(str(exc))
++            diagnostics.append(
++                {
++                    "severity": "error",
++                    "code": getattr(exc, "code", "MIGRATION_SCAN_FAILED"),
++                    "phase": "migration_state",
++                    "message": str(exc),
++                }
++            )
+ 
+     try:
+         with _timing.stage("workspace_snapshot"):
+@@ -664,28 +758,13 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
+             '`taskledger repair lock <task> --reason "..."`.'
+         )
+ 
+-    total_plans = _count_task_records_readonly(
+-        ctx.paths,
+-        ctx.tasks,
+-        list_plans_from_paths,
+-        record_name="plans",
+-        errors=errors,
+-        diagnostics=diagnostics,
+-    )
+-    total_questions = _count_task_records_readonly(
+-        ctx.paths,
+-        ctx.tasks,
+-        list_questions_from_paths,
+-        record_name="questions",
+-        errors=errors,
+-        diagnostics=diagnostics,
+-    )
+-    total_runs = sum(len(runs) for runs in ctx.runs_by_task.values())
+-    total_changes = _count_task_records_readonly(
+-        ctx.paths,
+-        ctx.tasks,
+-        list_changes_from_paths,
+-        record_name="changes",
++    (
++        total_plans,
++        total_questions,
++        total_runs,
++        total_changes,
++    ) = _count_identity_dependent_records(
++        ctx,
+         errors=errors,
+         diagnostics=diagnostics,
+     )
+diff --git a/taskledger/storage/task_identity.py b/taskledger/storage/task_identity.py
+index e1e6c7d..ad3efa0 100644
+--- a/taskledger/storage/task_identity.py
++++ b/taskledger/storage/task_identity.py
+@@ -166,9 +166,14 @@ def _identity_conflict_error(
+     )
+ 
+ 
++def inspect_task_identity_sources(paths: V2Paths) -> tuple[_IdentitySource, ...]:
++    """Inspect validated physical identity sources without enforcing uniqueness."""
++    return (*_scan_task_directories(paths), *_scan_identity_tombstones(paths))
++
++
+ def scan_task_identity_inventory(paths: V2Paths) -> TaskIdentityInventory:
+     """Scan canonical task bundles and identity tombstones once."""
+-    sources = [*_scan_task_directories(paths), *_scan_identity_tombstones(paths)]
++    sources = list(inspect_task_identity_sources(paths))
+     legacy_sources: dict[str, list[_IdentitySource]] = {}
+     for source in sources:
+         legacy_task_id = _legacy_id_for_source(source)
+diff --git a/tests/test_doctor.py b/tests/test_doctor.py
+index c4251dc..7abe2b1 100644
+--- a/tests/test_doctor.py
++++ b/tests/test_doctor.py
+@@ -832,8 +832,29 @@ def test_doctor_paths_are_structured_read_only_and_continue_after_identity_confl
+         for item in project_diagnostics
+         if isinstance(item, dict)
+     )
++    identity_conflicts = [
++        item
++        for item in project_diagnostics
++        if isinstance(item, dict)
++        and item.get("code") == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
++    ]
++    assert len(identity_conflicts) == 1
++    assert any(
++        isinstance(item, dict)
++        and item.get("code") == "IDENTITY_DEPENDENT_SCANS_SKIPPED"
++        for item in project_diagnostics
++    )
++    errors = project_result["errors"]
++    assert sum("Task identity conflict" in str(error) for error in errors) == 1
+     incomplete_allocations = project_result["incomplete_task_allocations"]
+     assert any(item["path"].endswith("task-0003") for item in incomplete_allocations)
++    repair_hints = project_result["repair_hints"]
++    assert any(
++        'taskledger repair allocations --task-id "task-0003"' in hint
++        and "exact reviewed plan with its --plan-id" in hint
++        for hint in repair_hints
++    )
++    assert not any("--apply --reason" in hint for hint in repair_hints)
+     assert schema_result["healthy"] is False
+     assert locks_result["healthy"] is False
+     assert locks_result["diagnostics"]
+diff --git a/tests/test_recovery_repairs.py b/tests/test_recovery_repairs.py
+index 889168f..eff832d 100644
+--- a/tests/test_recovery_repairs.py
++++ b/tests/test_recovery_repairs.py
+@@ -24,8 +24,12 @@ from taskledger.storage.frontmatter import (
+ )
+ from taskledger.storage.init import init_canonical_project_state
+ from taskledger.storage.locks import read_lock, write_lock
++from taskledger.storage.project_identity import load_project_uuid
+ from taskledger.storage.sidecar_index import load_sidecar_index
+-from taskledger.storage.task_identity import task_identity_inventory
++from taskledger.storage.task_identity import (
++    deterministic_legacy_task_uuid,
++    task_identity_inventory,
++)
+ from taskledger.storage.task_ids import write_task_id_tombstone
+ from taskledger.storage.task_store import (
+     load_active_task_state,
+@@ -42,6 +46,42 @@ def _workspace(tmp_path: Path) -> Path:
+     return workspace
+ 
+ 
++def _shadowed_migrated_allocation(
++    workspace: Path, *, legacy_task_id: str = "task-0012"
++) -> tuple[object, Path, Path, str]:
++    paths = resolve_v2_paths(workspace)
++    task = create_task(
++        workspace, title="Migrated task", description="", slug="migrated-owner"
++    )
++    original_dir = paths.tasks_dir / str(task.task_uuid)
++    task_path = original_dir / "task.md"
++    metadata, body = read_markdown_front_matter(task_path)
++    project_uuid = load_project_uuid(
++        workspace / ".ledger" / "taskledger" / "config.toml"
++    )
++    assert project_uuid is not None
++    created_at = metadata["created_at"]
++    assert isinstance(created_at, str)
++    migrated_uuid = deterministic_legacy_task_uuid(
++        project_uuid=project_uuid,
++        ledger_ref=paths.ledger_ref,
++        legacy_task_id=legacy_task_id,
++        created_at=created_at,
++    )
++    metadata["id"] = legacy_task_id
++    metadata["legacy_task_id"] = legacy_task_id
++    metadata["task_uuid"] = str(migrated_uuid)
++    write_markdown_front_matter(task_path, metadata, body)
++    migrated_dir = paths.tasks_dir / str(migrated_uuid)
++    original_dir.rename(migrated_dir)
++
++    stale_dir = paths.tasks_dir / legacy_task_id
++    (stale_dir / "audit").mkdir(parents=True)
++    sidecar = stale_dir / "audit" / "preserve.bin"
++    sidecar.write_bytes(b"stale pre-migration allocation")
++    return paths, stale_dir, migrated_dir, str(migrated_uuid)
++
++
+ def test_allocation_repair_uses_physical_source_not_display_alias(
+     tmp_path: Path,
+ ) -> None:
+@@ -65,6 +105,7 @@ def test_allocation_repair_uses_physical_source_not_display_alias(
+     (physical_dir / "partial.bin").write_bytes(b"original task-0019 payload")
+ 
+     dry_run = repair_allocations(workspace, task_id="task-0019")
++    assert dry_run["apply_safe"] is True
+     entries = dry_run["incomplete_allocations"]
+     target = next(
+         entry for entry in entries if entry["physical_source"] == "tasks/task-0019"
+@@ -97,6 +138,211 @@ def test_allocation_repair_uses_physical_source_not_display_alias(
+     assert audit_entries[0]["physical_source_id"] == "task-0019"
+ 
+ 
++def test_shadowed_migrated_legacy_allocation_dry_run_identifies_owner(
++    tmp_path: Path,
++) -> None:
++    workspace = _workspace(tmp_path)
++    paths, stale_dir, migrated_dir, migrated_uuid = _shadowed_migrated_allocation(
++        workspace
++    )
++
++    dry_run = repair_allocations(workspace, task_id="task-0012")
++    entry = dry_run["incomplete_allocations"][0]
++    assert dry_run["apply_safe"] is True
++    assert entry["repair_mode"] == "quarantine_shadowed_legacy_source"
++    assert entry["apply_safe"] is True
++    assert entry["planned_tombstone"] is None
++    assert entry["surviving_identity"]["task_uuid"] == migrated_uuid
++    assert (
++        entry["surviving_identity"]["path"]
++        == migrated_dir.relative_to(paths.ledger_dir).as_posix()
++    )
++    assert entry["collision_findings"][0]["state"] == "live"
++    assert entry["planned_quarantine"].endswith("/task-0012")
++    assert dry_run["next_command"]
++    from typer.testing import CliRunner
++
++    from taskledger.cli import app
++
++    cli_result = CliRunner().invoke(
++        app,
++        ["--root", str(workspace), "repair", "allocations", "--task-id", "task-0012"],
++    )
++    assert cli_result.exit_code == 0, cli_result.output
++    assert "mode=quarantine_shadowed_legacy_source" in cli_result.output
++    assert f"owner={migrated_uuid}" in cli_result.output
++    assert "tombstone=none" in cli_result.output
++    assert stale_dir.is_dir()
++
++
++def test_task_list_identity_conflict_is_structured_until_repaired(
++    tmp_path: Path,
++) -> None:
++    import json
++
++    from typer.testing import CliRunner
++
++    from taskledger.cli import app
++
++    workspace = _workspace(tmp_path)
++    paths, _stale_dir, _migrated_dir, _migrated_uuid = _shadowed_migrated_allocation(
++        workspace
++    )
++    from taskledger.storage.indexes import mark_index_dirty
++
++    mark_index_dirty(paths, "task_index")
++    runner = CliRunner()
++    human = runner.invoke(app, ["--root", str(workspace), "task", "list"])
++    assert human.exit_code != 0
++    assert "Task identity conflict" in human.output
++    assert "Traceback" not in human.output
++
++    json_result = runner.invoke(
++        app, ["--root", str(workspace), "--json", "task", "list"]
++    )
++    assert json_result.exit_code != 0
++    payload = json.loads(json_result.stdout)
++    assert payload["ok"] is False
++    assert payload["error"]["code"] == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
++    assert payload["error"]["details"]["legacy_task_id"] == "task-0012"
++
++    dry_run = repair_allocations(workspace, task_id="task-0012")
++    repair_allocations(
++        workspace,
++        task_id="task-0012",
++        apply=True,
++        plan_id=str(dry_run["plan_id"]),
++        reason="Quarantine stale pre-migration allocation.",
++    )
++    listed = runner.invoke(app, ["--root", str(workspace), "task", "list"])
++    assert listed.exit_code == 0, listed.output
++    assert "task-0012" in listed.output
++
++
++def test_shadowed_migrated_legacy_allocation_apply_preserves_live_owner(
++    tmp_path: Path,
++) -> None:
++    workspace = _workspace(tmp_path)
++    paths, stale_dir, migrated_dir, migrated_uuid = _shadowed_migrated_allocation(
++        workspace
++    )
++    task_path = migrated_dir / "task.md"
++    live_task_before = task_path.read_bytes()
++    dry_run = repair_allocations(workspace, task_id="task-0012")
++
++    result = repair_allocations(
++        workspace,
++        task_id="task-0012",
++        apply=True,
++        plan_id=str(dry_run["plan_id"]),
++        reason="Quarantine stale pre-migration allocation.",
++    )
++
++    repaired = result["repaired"]
++    assert isinstance(repaired, list) and len(repaired) == 1
++    item = repaired[0]
++    assert item["repair_mode"] == "quarantine_shadowed_legacy_source"
++    assert item["tombstone_path"] is None
++    assert item["surviving_task_uuid"] == migrated_uuid
++    assert not stale_dir.exists()
++    assert task_path.read_bytes() == live_task_before
++    assert (paths.ledger_dir / "tombstones" / "task-0012.toml").exists() is False
++    quarantine = Path(item["quarantined_path"])
++    assert (quarantine / "audit" / "preserve.bin").read_bytes() == (
++        b"stale pre-migration allocation"
++    )
++
++    inventory = task_identity_inventory(paths)
++    matches = [
++        identity
++        for identity in inventory.entries
++        if identity.legacy_task_id == "task-0012"
++    ]
++    assert len(matches) == 1
++    assert str(matches[0].task_uuid) == migrated_uuid
++    assert matches[0].source_kind == "uuid_task"
++    assert matches[0].state == "live"
++    events = load_events(paths.events_dir)
++    repair_event = next(
++        event for event in events if event.event == "repair.task_allocation_quarantined"
++    )
++    assert repair_event.data["repair_mode"] == "quarantine_shadowed_legacy_source"
++    assert repair_event.data["tombstone_path"] is None
++    assert repair_event.data["surviving_task_uuid"] == migrated_uuid
++    audit = audit_allocation_repairs(workspace)
++    assert audit["entries"][0]["status"] == "existing_owner_preserved"
++
++
++def test_shadowed_owner_change_invalidates_allocation_repair_plan(
++    tmp_path: Path,
++) -> None:
++    workspace = _workspace(tmp_path)
++    _paths, stale_dir, migrated_dir, _migrated_uuid = _shadowed_migrated_allocation(
++        workspace
++    )
++    dry_run = repair_allocations(workspace, task_id="task-0012")
++    task_path = migrated_dir / "task.md"
++    metadata, body = read_markdown_front_matter(task_path)
++    metadata["legacy_task_id"] = "task-0013"
++    write_markdown_front_matter(task_path, metadata, body)
++
++    with pytest.raises(LaunchError) as caught:
++        repair_allocations(
++            workspace,
++            task_id="task-0012",
++            apply=True,
++            plan_id=str(dry_run["plan_id"]),
++            reason="Reject changed migrated owner.",
++        )
++
++    assert caught.value.code == "TASKLEDGER_REPAIR_PLAN_CHANGED"
++    assert stale_dir.is_dir()
++    assert (stale_dir / "audit" / "preserve.bin").read_bytes() == (
++        b"stale pre-migration allocation"
++    )
++
++
++def test_multiple_live_legacy_identity_owners_are_blocked_before_apply(
++    tmp_path: Path,
++) -> None:
++    import shutil
++
++    from taskledger.ids import uuid7
++
++    workspace = _workspace(tmp_path)
++    paths, stale_dir, migrated_dir, _migrated_uuid = _shadowed_migrated_allocation(
++        workspace
++    )
++    second_uuid = uuid7()
++    second_dir = paths.tasks_dir / str(second_uuid)
++    shutil.copytree(migrated_dir, second_dir)
++    second_task_path = second_dir / "task.md"
++    metadata, body = read_markdown_front_matter(second_task_path)
++    metadata["task_uuid"] = str(second_uuid)
++    metadata["slug"] = "second-migrated-owner"
++    write_markdown_front_matter(second_task_path, metadata, body)
++
++    dry_run = repair_allocations(workspace, task_id="task-0012")
++    entry = dry_run["incomplete_allocations"][0]
++    assert entry["repair_mode"] == "blocked_identity_conflict"
++    assert entry["apply_safe"] is False
++    assert dry_run["next_command"] is None
++    assert len(entry["collision_findings"]) == 2
++
++    with pytest.raises(LaunchError) as caught:
++        repair_allocations(
++            workspace,
++            task_id="task-0012",
++            apply=True,
++            plan_id=str(dry_run["plan_id"]),
++            reason="Do not choose between duplicate live owners.",
++        )
++
++    assert caught.value.code == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
++    assert stale_dir.is_dir()
++    assert not (paths.ledger_dir / "tombstones" / "task-0012.toml").exists()
++
++
+ def test_allocation_apply_requires_reviewed_unchanged_plan(tmp_path: Path) -> None:
+     workspace = _workspace(tmp_path)
+     paths = resolve_v2_paths(workspace)
+@@ -147,6 +393,11 @@ def test_allocation_apply_refuses_live_tombstone_identity_conflict(
+     )
+     dry_run = repair_allocations(workspace, task_id="task-0001")
+ 
++    entry = dry_run["incomplete_allocations"][0]
++    assert entry["repair_mode"] == "blocked_identity_conflict"
++    assert entry["apply_safe"] is False
++    assert dry_run["apply_safe"] is False
++    assert dry_run["next_command"] is None
+     with pytest.raises(LaunchError) as exc_info:
+         repair_allocations(
+             workspace,
+@@ -180,7 +431,7 @@ def test_allocation_repair_rolls_back_failed_identity_postcondition(
+     def fail_identity_scan(_paths):
+         nonlocal scan_count
+         scan_count += 1
+-        if scan_count == 2:
++        if scan_count == 1:
+             raise LaunchError("Injected postcondition failure.")
+         return original_scan(_paths)
+ 
+@@ -586,6 +837,91 @@ def test_relation_repair_refuses_ambiguous_identity_evidence(
+     assert source_path.read_bytes() == original
+ 
+ 
++def test_bulk_allocation_repair_preflights_all_entries_before_moving(
++    tmp_path: Path,
++) -> None:
++    workspace = _workspace(tmp_path)
++    paths, shadowed_source, _migrated_dir, _migrated_uuid = (
++        _shadowed_migrated_allocation(workspace)
++    )
++    blocked_source = paths.tasks_dir / "task-0014"
++    blocked_source.mkdir()
++    blocked_payload = blocked_source / "partial.bin"
++    blocked_payload.write_bytes(b"keep blocked source")
++    prior_quarantine = paths.ledger_dir / "_recovery" / "prior" / "task-0014"
++    prior_quarantine.mkdir(parents=True)
++    write_task_id_tombstone(
++        paths,
++        "task-0014",
++        reason="Existing claimant blocks bulk repair.",
++        quarantined_path=prior_quarantine,
++    )
++
++    dry_run = repair_allocations(workspace, all_allocations=True)
++    entries = dry_run["incomplete_allocations"]
++    assert dry_run["apply_safe"] is False
++    assert {entry["repair_mode"] for entry in entries} == {
++        "quarantine_shadowed_legacy_source",
++        "blocked_identity_conflict",
++    }
++    with pytest.raises(LaunchError) as caught:
++        repair_allocations(
++            workspace,
++            all_allocations=True,
++            apply=True,
++            plan_id=str(dry_run["plan_id"]),
++            reason="Refuse partially safe bulk allocation repair.",
++        )
++
++    assert caught.value.code == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
++    assert shadowed_source.is_dir()
++    assert blocked_source.is_dir()
++    assert blocked_payload.read_bytes() == b"keep blocked source"
++    assert not (paths.ledger_dir / "tombstones" / "task-0012.toml").exists()
++    quarantine = paths.ledger_dir / "_recovery" / "incomplete-task-allocations"
++    assert not (quarantine / "task-0012").exists()
++
++
++def test_allocation_cli_failed_output_uses_physical_source_id(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    from typer.testing import CliRunner
++
++    from taskledger.api import repair as repair_api
++    from taskledger.cli import app
++
++    workspace = _workspace(tmp_path)
++    monkeypatch.setattr(
++        repair_api,
++        "repair_allocations",
++        lambda *_args, **_kwargs: {
++            "kind": "task_allocation_repair",
++            "status": "applied",
++            "dry_run": False,
++            "repaired": [],
++            "failed": [{"source_id": "task-0019", "error": "injected failure"}],
++        },
++    )
++    result = CliRunner().invoke(
++        app,
++        [
++            "--root",
++            str(workspace),
++            "repair",
++            "allocations",
++            "--task-id",
++            "task-0019",
++            "--apply",
++            "--plan-id",
++            "reviewed-plan",
++            "--reason",
++            "test failure rendering",
++        ],
++    )
++    assert result.exit_code == 0, result.output
++    assert "failed: task-0019: injected failure" in result.output
++
++
+ def test_task37_task38_task19_recovery_end_to_end(tmp_path: Path) -> None:
+     from taskledger.domain.models import DependencyRequirement, TaskRecord
+     from taskledger.services.doctor import (
+diff --git a/tests/test_service_boundaries.py b/tests/test_service_boundaries.py
+index 3f38c0c..562cb47 100644
+--- a/tests/test_service_boundaries.py
++++ b/tests/test_service_boundaries.py
+@@ -19,9 +19,6 @@ FUNCTION_LINE_WHITELIST: dict[str, str] = {
+         "Sub-phases of scan_task_integrity with per-task lock, "
+         "run, and validation checks."
+     ),
+-    "taskledger/services/doctor.py::_inspect_v2_project_phases": (
+-        "Project doctor phases collect independent corruption-tolerant diagnostics."
+-    ),
+     "taskledger/cli_sync.py::register_sync_commands": (
+         "Git-sync registration still co-locates Git sync and hook command wiring."
+     ),
+@@ -181,7 +178,7 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
+         "Doctor context assembly records project configuration failures and continues."
+     ),
+     "taskledger/services/doctor.py::_inspect_v2_project_phases:except-1": (
+-        "Doctor must continue scanning even when one task metadata read fails."
++        "Doctor preserves project configuration diagnostics and continues scanning."
+     ),
+     "taskledger/services/doctor.py::inspect_v2_locks:except-1": (
+         "Doctor lock inspection degrades gracefully when lock inventory fails."
+@@ -202,19 +199,19 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
+         "Read-only index diagnosis captures load errors without rebuilding caches."
+     ),
+     "taskledger/services/doctor.py::_inspect_v2_project_phases:except-2": (
+-        "Doctor preserves independent diagnostics when task-integrity scanning fails."
++        "Doctor records artifact-policy scan failures as structured diagnostics."
+     ),
+     "taskledger/services/doctor.py::_inspect_v2_project_phases:except-3": (
+-        "Doctor records artifact-policy scan failures as structured diagnostics."
++        "Doctor records migration-state scan failures as structured diagnostics."
+     ),
+     "taskledger/services/doctor.py::_inspect_v2_project_phases:except-4": (
+-        "Doctor records per-lock expiry classification failures and continues."
++        "Doctor degrades snapshot inspection failures to a warning diagnostic."
+     ),
+-    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-5": (
+-        "Doctor records migration-state scan failures as structured diagnostics."
++    "taskledger/services/doctor.py::_inspect_lock_consistency:except-1": (
++        "Doctor records lock expiry classification failures and continues."
+     ),
+-    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-6": (
+-        "Doctor degrades snapshot inspection failures to a warning diagnostic."
++    "taskledger/services/doctor.py::_inspect_task_integrity:except-1": (
++        "Doctor preserves independent diagnostics when task-integrity scanning fails."
+     ),
+     "taskledger/services/doctor.py::_inspect_v2_project_with_boundary:except-1": (
+         "Doctor converts expected project-state failures into structured output."
+diff --git a/tests/test_task_identity.py b/tests/test_task_identity.py
+index cfe2e46..d7102f8 100644
+--- a/tests/test_task_identity.py
++++ b/tests/test_task_identity.py
+@@ -18,6 +18,7 @@ from taskledger.storage.task_identity import (
+     LEGACY_UUID7_EPOCH_MS,
+     allocate_task_identity,
+     deterministic_legacy_task_uuid,
++    inspect_task_identity_sources,
+     legacy_task_identity_for_ref,
+     scan_task_identity_inventory,
+ )
+@@ -142,6 +143,18 @@ def test_live_migrated_task_and_legacy_tombstone_report_identity_conflict(
+         quarantined_path=paths.tasks_dir / "quarantined-task-0037",
+     )
+ 
++    raw_sources = inspect_task_identity_sources(paths)
++    matching_sources = tuple(
++        source for source in raw_sources if source.legacy_task_id == "task-0037"
++    )
++    assert {source.source_kind for source in matching_sources} == {
++        "uuid_task",
++        "tombstone",
++    }
++    with pytest.raises(LaunchError) as inventory_error:
++        scan_task_identity_inventory(paths)
++    assert inventory_error.value.code == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
++
+     with pytest.raises(LaunchError) as caught:
+         legacy_task_identity_for_ref(paths, "task-0037")
+ 

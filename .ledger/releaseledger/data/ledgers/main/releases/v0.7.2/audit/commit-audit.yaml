@@ -1,0 +1,54 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.7.2
+git_base_ref: v0.7.1
+git_base_sha: 1bc5c5096361901f1f4977f7a612a2e80b37cc4d
+git_head_ref: HEAD
+git_head_sha: 1ad648bb0ae4c2a7bc293c7693ff7165f5fac5e9
+git_range: 1bc5c5096361901f1f4977f7a612a2e80b37cc4d..1ad648bb0ae4c2a7bc293c7693ff7165f5fac5e9
+commit_count: 1
+rows:
+- sha: 1ad648bb0ae4c2a7bc293c7693ff7165f5fac5e9
+  source_ref: git:1ad648bb0ae4c2a7bc293c7693ff7165f5fac5e9
+  short_sha: 1ad648b
+  changed_paths:
+  - docs/command_contract.md
+  - docs/recovery_identity.md
+  - taskledger/api/repair.py
+  - taskledger/cli_repair.py
+  - taskledger/cli_task.py
+  - taskledger/services/doctor.py
+  - taskledger/storage/task_identity.py
+  - tests/test_doctor.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  - tests/test_task_identity.py
+  stats:
+    files_changed: 11
+    insertions: 924
+    deletions: 202
+  inspected: true
+  inspected_paths:
+  - docs/command_contract.md
+  - docs/recovery_identity.md
+  - taskledger/api/repair.py
+  - taskledger/cli_repair.py
+  - taskledger/cli_task.py
+  - taskledger/services/doctor.py
+  - taskledger/storage/task_identity.py
+  - tests/test_doctor.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  - tests/test_task_identity.py
+  observed_behavior: Improved allocation-repair safety by distinguishing stale migrated
+    sources from live task owners, preserving the authoritative owner, blocking ambiguous
+    conflicts, and exposing structured diagnostics and CLI guidance.
+  public_impact: public
+  decision: accepted
+  stale: false
+  evidence_subject: 'feat: improved repair of migrated tasks'
+  target_entry_id: entry-0001
+  notes: ''

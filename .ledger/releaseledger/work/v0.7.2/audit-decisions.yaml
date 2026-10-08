@@ -1,0 +1,22 @@
+rows:
+- sha: 1ad648bb0ae4c2a7bc293c7693ff7165f5fac5e9
+  inspected: true
+  inspected_paths:
+  - docs/command_contract.md
+  - docs/recovery_identity.md
+  - taskledger/api/repair.py
+  - taskledger/cli_repair.py
+  - taskledger/cli_task.py
+  - taskledger/services/doctor.py
+  - taskledger/storage/task_identity.py
+  - tests/test_doctor.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  - tests/test_task_identity.py
+  observed_behavior: 'Improved allocation-repair safety by distinguishing stale migrated sources from live task owners, preserving the authoritative owner, blocking ambiguous conflicts, and exposing structured diagnostics and CLI guidance.'
+  public_impact: public
+  decision: accepted
+  target_entry_key: null
+  target_entry_id: null
+  notes: ''
+  stale: false
