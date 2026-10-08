@@ -403,6 +403,11 @@ def _write_active_journal(path: Path, journal: dict[str, object]) -> None:
 
 
 def _fsync_directory(path: Path) -> None:
+    # Windows does not support opening directories with ``os.open`` for fsync.
+    # Directory fsync is an optional POSIX durability barrier, not a reason to
+    # fail an otherwise committed recovery on Windows.
+    if os.name == "nt":
+        return
     descriptor = os.open(path, os.O_RDONLY)
     try:
         os.fsync(descriptor)

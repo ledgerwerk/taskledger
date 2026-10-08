@@ -144,7 +144,7 @@ def _shadowed_migrated_allocation_batch(
         )
         (stale_dir / "plans").mkdir()
         (stale_dir / "plans" / "preserve.md").write_text(
-            f"plan sidecar {task_id}\n", encoding="utf-8"
+            f"plan sidecar {task_id}\n", encoding="utf-8", newline="\n"
         )
         stale_sources[task_id] = stale_dir
     return paths, stale_sources, migrated_dirs, live_task_bytes
