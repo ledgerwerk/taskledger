@@ -31,6 +31,32 @@ def load_yaml_object(
         raise LaunchError(f"Invalid {label} {path}: {exc}") from exc
 
 
+def load_yaml_object_bytes(
+    contents: bytes, label: str, source: Path
+) -> dict[str, object]:
+    """Parse UTF-8 YAML bytes with the same mapping contract as file reads."""
+    import yaml
+
+    try:
+        text = contents.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise LaunchError(f"Invalid {label} {source}: expected UTF-8 YAML.") from exc
+    if not text.strip():
+        raise LaunchError(f"Invalid {label} {source}: YAML document is empty.")
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise LaunchError(f"Invalid {label} {source}: {exc}") from exc
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise LaunchError(
+            f"Invalid {label} {source}: expected YAML mapping, got "
+            f"{type(data).__name__}."
+        )
+    return data
+
+
 def write_yaml_object(
     path: Path,
     payload: Mapping[str, object],

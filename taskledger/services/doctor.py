@@ -37,7 +37,7 @@ from taskledger.storage.task_store import (
     list_questions_from_paths,
     list_runs_from_paths,
     list_tasks,
-    load_active_task_state_from_paths,
+    read_active_task_state_raw,
     require_v2_layout,
     resolve_v2_paths,
 )
@@ -57,12 +57,57 @@ class DoctorScanContext:
     runs_by_task: Mapping[str, tuple[TaskRunRecord, ...]]
     run_by_key: Mapping[tuple[str, str], TaskRunRecord]
     active_state: ActiveTaskState | None
+    active_reference: dict[str, object]
     incomplete_task_allocations: tuple[IncompleteTaskAllocation, ...]
     identity_inventory_valid: bool
     scan_errors: tuple[str, ...]
     scan_diagnostics: tuple[dict[str, object], ...]
 
     artifact_limit_bytes: int
+
+
+def _append_identity_conflict_diagnostics(
+    paths: V2Paths,
+    failure: Exception,
+    diagnostics: list[dict[str, object]],
+) -> None:
+    from taskledger.storage.task_identity import inspect_task_identity_conflicts
+
+    try:
+        conflict_groups = inspect_task_identity_conflicts(paths)
+    except Exception as diagnostic_exc:  # noqa: BLE001
+        diagnostics.append(
+            {
+                "severity": "warning",
+                "code": "IDENTITY_CONFLICT_DIAGNOSTICS_INCOMPLETE",
+                "phase": "task_identity_conflicts",
+                "message": str(diagnostic_exc),
+            }
+        )
+        return
+    error_details = getattr(failure, "details", {})
+    primary_legacy_id = (
+        error_details.get("legacy_task_id") if isinstance(error_details, dict) else None
+    )
+    for conflict in conflict_groups:
+        if (
+            conflict.get("identity_kind") == "legacy_task_id"
+            and conflict.get("identity") == primary_legacy_id
+        ):
+            continue
+        identity_kind = str(conflict.get("identity_kind"))
+        identity = str(conflict.get("identity"))
+        diagnostics.append(
+            {
+                "severity": "error",
+                "code": "TASKLEDGER_TASK_IDENTITY_CONFLICT",
+                "phase": "task_identity_conflicts",
+                "identity_kind": identity_kind,
+                "identity": identity,
+                "sources": conflict.get("sources", []),
+                "message": f"Task identity conflict for {identity_kind} {identity!r}.",
+            }
+        )
 
 
 def _scan_doctor_tasks(
@@ -92,6 +137,7 @@ def _scan_doctor_tasks(
                 "details": getattr(exc, "details", {}),
             }
         )
+        _append_identity_conflict_diagnostics(paths, exc, scan_diagnostics)
         identities = None
         identity_inventory_valid = False
 
@@ -263,6 +309,7 @@ def _scan_doctor_tasks(
 
 def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
     """Build a best-effort, read-only scan context for one doctor invocation."""
+    from taskledger.services.active_task_recovery import inspect_active_task_reference
     from taskledger.services.lock_inventory import build_lock_inventory
     from taskledger.storage.artifact_policy import ABSOLUTE_MAX_ARTIFACT_BYTES
     from taskledger.storage.project_config import (
@@ -286,6 +333,14 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
             {
                 "severity": "warning",
                 "code": "IDENTITY_DEPENDENT_SCANS_SKIPPED",
+                "counts_complete": False,
+                "skipped_scans": [
+                    "task_plans",
+                    "task_questions",
+                    "task_changes",
+                    "task_runs",
+                    "task_relationships",
+                ],
                 "phase": "identity_dependent_scans",
                 "message": (
                     "Task plan, question, change, run, and relationship scans were "
@@ -350,18 +405,51 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         for run in task_runs:
             run_by_key[(task.id, run.run_id)] = run
 
+    active_reference = inspect_active_task_reference(paths)
     try:
-        active_state = load_active_task_state_from_paths(paths)
-    except Exception as exc:  # noqa: BLE001
+        active_state = read_active_task_state_raw(paths)
+    except Exception:  # noqa: BLE001
         active_state = None
-        scan_errors.append(str(exc))
+    active_classification = active_reference.get("classification")
+    if active_classification in {
+        "missing",
+        "ambiguous",
+        "resolution_blocked",
+        "malformed",
+    }:
+        code = (
+            "ACTIVE_TASK_REFERENCE_MISSING"
+            if active_classification == "missing"
+            else "ACTIVE_TASK_STATE_MALFORMED"
+            if active_classification == "malformed"
+            else "ACTIVE_TASK_REFERENCE_UNRESOLVED"
+        )
+        active_message = active_reference.get("message")
+        if isinstance(active_message, str):
+            diagnostic_message = active_message
+        elif active_classification == "missing":
+            diagnostic_message = (
+                f"Active task points to missing task {active_reference.get('task_id')}."
+            )
+        else:
+            diagnostic_message = (
+                "Active-task reference cannot be resolved safely: "
+                f"{active_classification}."
+            )
+        scan_errors.append(diagnostic_message)
         scan_diagnostics.append(
             {
                 "severity": "error",
-                "code": getattr(exc, "code", "ACTIVE_TASK_STATE_UNREADABLE"),
-                "phase": "active_task",
+                "code": code,
+                "phase": "active_task_reference",
                 "path": str(paths.active_task_path),
-                "message": str(exc),
+                "task_id": active_reference.get("task_id"),
+                "task_uuid": active_reference.get("task_uuid"),
+                "proof_summary": active_reference.get("proof_summary"),
+                "candidates": active_reference.get("candidates", []),
+                "protected": active_reference.get("protected", False),
+                "protection_blockers": active_reference.get("protection_blockers", []),
+                "message": diagnostic_message,
             }
         )
     try:
@@ -392,6 +480,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         runs_by_task=runs_by_task,
         run_by_key=run_by_key,
         active_state=active_state,
+        active_reference=active_reference,
         incomplete_task_allocations=incomplete_task_allocations,
         identity_inventory_valid=identity_inventory_valid,
         scan_errors=tuple(scan_errors),
@@ -484,7 +573,11 @@ def _count_task_records_readonly(
 def _inspect_active_task(
     ctx: DoctorScanContext, errors: list[str], warnings: list[str]
 ) -> None:
-    if not ctx.identity_inventory_valid or ctx.active_state is None:
+    if ctx.active_state is None:
+        return
+    if ctx.active_reference.get("classification") != "valid":
+        return
+    if not ctx.identity_inventory_valid:
         return
     active_task = ctx.task_by_id.get(ctx.active_state.task_id)
     if active_task is None:
@@ -662,11 +755,6 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
         )
         message = f"Incomplete task allocation {allocation_id} is missing task.md."
         errors.append(message)
-        repair_hints.append(
-            "Inspect this allocation with "
-            f'`taskledger repair allocations --task-id "{allocation_id}"`. '
-            "If the dry-run is safe, apply the exact reviewed plan with its --plan-id."
-        )
         diagnostics.append(
             {
                 "severity": "error",
@@ -679,7 +767,27 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
                 "files": list(allocation.files),
             }
         )
+    if ctx.incomplete_task_allocations:
+        repair_hints.append(
+            "Review one coordinated plan with "
+            "`taskledger --json repair allocations --all`; "
+            "apply only if every selected source is safe and matches the reviewed plan."
+        )
     _inspect_active_task(ctx, errors, warnings)
+    if ctx.active_reference.get("classification") == "missing":
+        repair_hints.append(
+            "Review the raw active-task pointer with "
+            "`taskledger --json repair active-task --action clear`; "
+            "apply only the fresh safe plan."
+        )
+    elif ctx.active_reference.get("classification") in {
+        "ambiguous",
+        "resolution_blocked",
+    }:
+        repair_hints.append(
+            "Inspect candidates with `taskledger --json repair active-task`; "
+            "do not guess a replacement UUID."
+        )
     _inspect_task_integrity(
         workspace_root,
         ctx,
@@ -779,6 +887,19 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
             "locks": len(ctx.locks),
             "active_task": 1 if ctx.active_state is not None else 0,
         },
+        "counts_complete": ctx.identity_inventory_valid,
+        "skipped_scans": (
+            []
+            if ctx.identity_inventory_valid
+            else [
+                "task_plans",
+                "task_questions",
+                "task_changes",
+                "task_runs",
+                "task_relationships",
+            ]
+        ),
+        "active_task_reference": ctx.active_reference,
         "healthy": not errors,
         "errors": errors,
         "warnings": warnings,

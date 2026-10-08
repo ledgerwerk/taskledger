@@ -501,6 +501,27 @@ taskledger repair allocations --reconcile-source-id task-0019 --tombstone-id tas
 ```
 
 Reconciliation preserves the old tombstone and quarantine payload and records an audit event. Do not delete either by hand. Use `taskledger repair allocations --audit` to inspect prior repair provenance.
+Bulk allocation repair is all-or-nothing at the transaction level: every selected source is preflighted before mutation, and a staging failure rolls back the batch. A repair is successful only with `status: applied`; CLI failures return non-zero and retain counts, physical source IDs, rollback/audit errors, and recovery guidance in the structured error. Inspect journals and Doctor rather than interpreting partial output as success.
+
+Interrupted transactions can be listed and reviewed without mutation. Recovery uses a fresh fingerprint over the journal and observed paths:
+
+```bash
+taskledger --json repair allocations --transactions
+taskledger --json repair allocations --recover TRANSACTION_ID
+taskledger repair allocations --recover TRANSACTION_ID --apply --plan-id PLAN_ID --reason "Recover the reviewed transaction."
+```
+
+Incomplete staging proposes rollback; `audit_pending` proposes audit-event replay. Do not edit transaction journals directly.
+
+`repair active-task` recovers a damaged active-task pointer with a reviewed plan:
+
+```bash
+taskledger --json repair active-task --action clear
+taskledger --json repair active-task --action rebind --target-uuid TASK_UUID
+taskledger repair active-task --action clear --apply --plan-id PLAN_ID --reason "Clear the proven missing reference."
+```
+
+Clear is allowed only for a proven missing task reference. Rebind requires an explicit, uniquely verified UUIDv7 target; ambiguous, malformed, protected, and changed state remains blocked. Apply preserves an exact-byte backup, compares the reviewed bytes, journals the change, and emits an audit event. Run Doctor afterward.
 
 `repair relation` backfills a known relationship UUID for one UUID task bundle or requirement sidecar. It is dry-run by default; apply only the exact reviewed plan:
 

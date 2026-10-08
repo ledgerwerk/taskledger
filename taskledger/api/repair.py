@@ -208,13 +208,18 @@ def repair_locks(
 def _identity_source_payload(
     paths: V2Paths, source: _IdentitySource
 ) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "kind": source.source_kind,
         "task_uuid": str(source.task_uuid),
         "state": source.state,
         "legacy_task_id": source.legacy_task_id,
         "path": source.path.relative_to(paths.ledger_dir).as_posix(),
     }
+    if source.state == "live" and source.path.is_dir():
+        from taskledger.storage.task_ids import allocation_source_fingerprint
+
+        payload["source_fingerprint"] = allocation_source_fingerprint(source.path)
+    return payload
 
 
 def _classify_allocation_repair(
@@ -285,6 +290,9 @@ def _classify_allocation_repair(
             if len(uuid_claimants) == 1:
                 repair_mode = "quarantine_and_tombstone"
 
+    selected_identity = (
+        _identity_source_payload(paths, selected) if selected is not None else None
+    )
     return {
         "repair_mode": repair_mode,
         "apply_safe": repair_mode != "blocked_identity_conflict",
@@ -292,6 +300,7 @@ def _classify_allocation_repair(
             _identity_source_payload(paths, source) for source in collision_findings
         ],
         "surviving_identity": surviving_identity,
+        "selected_identity": selected_identity,
     }
 
 
@@ -362,11 +371,18 @@ def _allocation_repair_plan_entry(
 
 
 def _allocation_plan_fingerprint(
-    *, task_id: str | None, entries: list[dict[str, object]]
+    *,
+    task_id: str | None,
+    entries: list[dict[str, object]],
+    identity_conflicts: tuple[dict[str, object], ...],
 ) -> str:
     scope = "all" if task_id is None else f"source:{task_id}"
     content = json.dumps(
-        {"scope": scope, "entries": entries},
+        {
+            "scope": scope,
+            "entries": entries,
+            "identity_conflicts": identity_conflicts,
+        },
         sort_keys=True,
         separators=(",", ":"),
     )
@@ -417,6 +433,7 @@ def _validate_allocation_sources_for_apply(
             for key in (
                 "repair_mode",
                 "collision_findings",
+                "selected_identity",
                 "surviving_identity",
                 "planned_tombstone",
             )
@@ -660,7 +677,14 @@ def repair_allocations(
     all_allocations: bool = False,
     plan_id: str | None = None,
 ) -> dict[str, object]:
-    """Inspect or safely quarantine selected incomplete physical allocations."""
+    """Inspect or transactionally quarantine selected physical allocations."""
+    from contextlib import nullcontext
+
+    from taskledger.services.allocation_recovery import apply_allocation_repair_batch
+    from taskledger.storage.task_identity import (
+        identity_mutation_lock,
+        inspect_task_identity_conflicts,
+    )
     from taskledger.storage.task_ids import discover_incomplete_task_allocations
     from taskledger.storage.task_store import resolve_v2_paths
 
@@ -682,78 +706,148 @@ def repair_allocations(
         raise LaunchError("--plan-id is only valid when applying a dry-run plan.")
 
     paths = resolve_v2_paths(workspace_root)
-    allocations = discover_incomplete_task_allocations(paths)
-    if task_id is not None:
-        selected = tuple(
-            allocation
-            for allocation in allocations
-            if allocation.legacy_task_id == task_id
-            or allocation.task_uuid == task_id
-            or allocation.path.name == task_id
-        )
+    mutation_lock = identity_mutation_lock(paths) if apply else nullcontext()
+    with mutation_lock:
+        allocations = discover_incomplete_task_allocations(paths)
+        if task_id is not None:
+            selected = tuple(
+                allocation
+                for allocation in allocations
+                if allocation.legacy_task_id == task_id
+                or allocation.task_uuid == task_id
+                or allocation.path.name == task_id
+            )
+            if not selected:
+                code = "TASKLEDGER_REPAIR_PLAN_CHANGED" if apply else None
+                raise LaunchError(
+                    "No incomplete physical task allocation matches "
+                    f"source ID {task_id!r}.",
+                    code=code,
+                )
+        else:
+            selected = allocations
         if not selected:
+            if apply:
+                raise LaunchError(
+                    "Allocation repair plan changed; inspect a fresh dry-run.",
+                    code="TASKLEDGER_REPAIR_PLAN_CHANGED",
+                )
+            return {
+                "kind": "task_allocation_repair",
+                "status": "nothing_to_repair",
+                "dry_run": True,
+                "incomplete_allocations": [],
+                "identity_conflicts": list(inspect_task_identity_conflicts(paths)),
+            }
+
+        entries = [_allocation_repair_plan_entry(paths, item) for item in selected]
+        identity_conflicts = inspect_task_identity_conflicts(paths)
+        computed_plan_id = _allocation_plan_fingerprint(
+            task_id=task_id,
+            entries=entries,
+            identity_conflicts=identity_conflicts,
+        )
+        if apply and plan_id != computed_plan_id:
             raise LaunchError(
-                f"No incomplete physical task allocation matches source ID {task_id!r}."
+                "Allocation repair plan changed since dry-run; "
+                "inspect a fresh plan before apply.",
+                code="TASKLEDGER_REPAIR_PLAN_CHANGED",
+                details={
+                    "expected_plan_id": plan_id,
+                    "current_plan_id": computed_plan_id,
+                },
             )
-    else:
-        selected = allocations
-    if not selected:
-        return {
-            "kind": "task_allocation_repair",
-            "status": "nothing_to_repair",
-            "dry_run": not apply,
-            "incomplete_allocations": [],
-        }
+        if not apply:
+            selector = f"--task-id {task_id}" if task_id is not None else "--all"
+            apply_safe = all(bool(entry["apply_safe"]) for entry in entries)
+            return {
+                "kind": "task_allocation_repair",
+                "status": "dry_run",
+                "dry_run": True,
+                "plan_id": computed_plan_id,
+                "apply_safe": apply_safe,
+                "incomplete_allocations": entries,
+                "identity_conflicts": list(identity_conflicts),
+                "next_command": (
+                    "taskledger repair allocations "
+                    f"{selector} --apply --plan-id {computed_plan_id} --reason "
+                    '"Quarantine incomplete task allocation."'
+                    if apply_safe
+                    else None
+                ),
+            }
 
-    entries = [_allocation_repair_plan_entry(paths, item) for item in selected]
-    computed_plan_id = _allocation_plan_fingerprint(task_id=task_id, entries=entries)
-    if apply and plan_id != computed_plan_id:
-        raise LaunchError(
-            "Allocation repair plan changed since dry-run; "
-            "inspect a fresh plan before apply.",
-            code="TASKLEDGER_REPAIR_PLAN_CHANGED",
-            details={"expected_plan_id": plan_id, "current_plan_id": computed_plan_id},
+        _validate_allocation_sources_for_apply(paths, selected, entries)
+        result = apply_allocation_repair_batch(
+            workspace_root,
+            paths,
+            selected,
+            entries,
+            plan_id=computed_plan_id,
+            reason=reason,
+            scope="all" if all_allocations or task_id is None else "task_id",
         )
-    if not apply:
-        selector = f"--task-id {task_id}" if task_id is not None else "--all"
-        apply_safe = all(bool(entry["apply_safe"]) for entry in entries)
-        return {
-            "kind": "task_allocation_repair",
-            "status": "dry_run",
-            "dry_run": True,
-            "plan_id": computed_plan_id,
-            "apply_safe": apply_safe,
-            "incomplete_allocations": entries,
-            "next_command": (
-                "taskledger repair allocations "
-                f"{selector} --apply --plan-id {computed_plan_id} --reason "
-                '"Quarantine incomplete task allocation."'
-            )
-            if apply_safe
-            else None,
-        }
+        result["scope"] = "all" if all_allocations or task_id is None else "task_id"
+        result["source_selector"] = task_id
+        return result
 
-    _validate_allocation_sources_for_apply(paths, selected, entries)
 
-    repaired: list[dict[str, object]] = []
-    failed: list[dict[str, str]] = []
-    for allocation, entry in zip(selected, entries, strict=True):
-        item, error = _apply_one_allocation_repair(
-            workspace_root, paths, allocation, entry, reason=reason
-        )
-        if item is not None:
-            repaired.append(item)
-        elif error is not None:
-            failed.append({"source_id": str(entry["source_id"]), "error": error})
-    return {
-        "kind": "task_allocation_repair",
-        "status": "applied",
-        "dry_run": False,
-        "plan_id": computed_plan_id,
-        "repaired": repaired,
-        "failed": failed,
-        "reason": reason.strip(),
-    }
+def repair_active_task(
+    workspace_root: Path,
+    *,
+    action: str = "clear",
+    target_uuid: str | None = None,
+    apply: bool = False,
+    plan_id: str | None = None,
+    reason: str = "",
+) -> dict[str, object]:
+    """Diagnose or perform an explicitly reviewed active-task recovery."""
+    from taskledger.services.active_task_recovery import repair_active_task as repair
+
+    return repair(
+        workspace_root,
+        action=action,
+        target_uuid=target_uuid,
+        apply=apply,
+        plan_id=plan_id,
+        reason=reason,
+    )
+
+
+def list_allocation_repair_transactions(
+    workspace_root: Path,
+) -> dict[str, object]:
+    """List durable allocation-repair transaction journals without mutation."""
+    from taskledger.services.allocation_recovery import (
+        list_allocation_repair_transactions as list_transactions,
+    )
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    return list_transactions(resolve_v2_paths(workspace_root))
+
+
+def recover_allocation_repair_transaction(
+    workspace_root: Path,
+    transaction_id: str,
+    *,
+    apply: bool = False,
+    plan_id: str | None = None,
+    reason: str = "",
+) -> dict[str, object]:
+    """Review or apply journal-backed allocation transaction recovery."""
+    from taskledger.services.allocation_recovery import (
+        recover_allocation_repair_transaction as recover_transaction,
+    )
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    return recover_transaction(
+        workspace_root,
+        resolve_v2_paths(workspace_root),
+        transaction_id,
+        apply=apply,
+        plan_id=plan_id,
+        reason=reason,
+    )
 
 
 def _read_allocation_tombstone(path: Path) -> dict[str, object]:

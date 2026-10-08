@@ -42,6 +42,8 @@ YAML_IMPORT_ALLOWLIST: set[str] = {
     "taskledger/storage/migrations.py",
     # lock import in exchange (same pattern as locks.py)
     "taskledger/exchange.py",
+    # in-memory byte parser owned by the YAML storage facade
+    "taskledger/storage/yaml_store.py",
 }
 
 

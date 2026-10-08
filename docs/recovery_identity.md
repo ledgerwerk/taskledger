@@ -76,6 +76,45 @@ For a deliberate bulk operation, inspect the complete dry-run and then use
 The apply verifies source fingerprints, checks destinations and identity
 postconditions, and rolls back or reports an incomplete transaction on failure.
 
+## Coordinated allocation batches and interrupted transactions
+
+A `--all` plan is one coordinated, journaled transaction. The apply path preflights every selected physical source before mutation and verifies the resulting identity state. Review all planned sources and destinations; do not treat partial movement as success. A successful apply reports `status: applied`, its planned/committed/failed counts, and ledger health. A failure exits non-zero and preserves rollback/audit details in the structured error; inspect the listed physical source IDs and transaction journal before deciding the next step.
+
+List transaction journals without changing them, then review a specific recovery plan:
+
+```bash
+taskledger --json repair allocations --transactions
+taskledger --json repair allocations --recover TRANSACTION_ID
+```
+
+The plan fingerprints both the journal and the observed source, quarantine, and tombstone state. Prepared/staging/rollback-incomplete transactions propose rollback; audit-pending transactions propose idempotent event replay. Apply only the freshly reviewed plan, with a reason:
+
+```bash
+taskledger repair allocations --recover TRANSACTION_ID --apply --plan-id PLAN_ID --reason "Recover the reviewed allocation transaction."
+```
+
+Re-run the transaction listing, allocation audit, and Doctor afterward. Do not edit, remove, or replay journal files manually. If recovery reports incomplete rollback or audit, preserve all paths and follow the emitted next step rather than starting another repair.
+
+## Recover a damaged active-task pointer
+
+Doctor reports active-task references that are missing, ambiguous, malformed, protected, or resolvable. Recovery is dry-run by default and requires an explicit action. A clear is safe only when the pointer names a proven missing task; it must not clear a valid, ambiguous, malformed, or otherwise protected pointer. A rebind requires an explicitly supplied UUIDv7 task that is uniquely verified. Never infer a UUID from a display alias or choose among candidates.
+
+Review a clear plan or an explicit rebind plan:
+
+```bash
+taskledger --json repair active-task --action clear
+taskledger --json repair active-task --action rebind --target-uuid TARGET_UUID
+```
+
+Apply only the unchanged plan ID and give a reason:
+
+```bash
+taskledger repair active-task --action clear --apply --plan-id PLAN_ID --reason "Clear the reviewed pointer to a missing task."
+taskledger repair active-task --action rebind --target-uuid TARGET_UUID --apply --plan-id PLAN_ID --reason "Rebind to the explicitly verified UUID task."
+```
+
+The operation compares the raw active-state bytes before mutation, saves an exact-byte backup, journals the change, and emits an audit event. Rebinding preserves historical task references; it does not silently rewrite the task's identity. Check the backup and transaction result, then rerun Doctor before resuming work. Changed, ambiguous, malformed, or protected state requires investigation, not a weaker plan.
+
 ## Reconcile a previously misattributed tombstone
 
 Use this only when the tombstone's repair event and preserved quarantine provide

@@ -390,6 +390,64 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
         "taskledger/storage/task_directory_migration.py::"
         "migrate_v5_task_directories_to_uuidv7:except-2"
     ): ("Task-directory migration reports when rollback itself fails."),
+    (
+        "taskledger/services/active_task_recovery.py::"
+        "_append_active_repair_event:except-1"
+    ): ("Active-task audit append failures remain journaled for explicit replay."),
+    "taskledger/services/active_task_recovery.py::_protection_state:except-1": (
+        "Lock-inventory errors block active-task recovery instead of guessing safety."
+    ),
+    "taskledger/services/active_task_recovery.py::_protection_state:except-2": (
+        "Run-scan errors block active-task recovery instead of guessing safety."
+    ),
+    "taskledger/services/active_task_recovery.py::_source_details:except-1": (
+        "Identity scan errors classify the pointer as resolution_blocked."
+    ),
+    "taskledger/services/active_task_recovery.py::_source_details:except-2": (
+        "Malformed source records prevent active-task identity inference."
+    ),
+    "taskledger/services/allocation_recovery.py::_append_transaction_events:except-1": (
+        "Event append failures are captured for journal-backed idempotent replay."
+    ),
+    "taskledger/services/allocation_recovery.py::_append_transaction_events:except-2": (
+        "Event verification failures remain pending for explicit audit recovery."
+    ),
+    "taskledger/services/allocation_recovery.py::_assert_unprotected:except-1": (
+        "Lock inventory failures block allocation movement."
+    ),
+    "taskledger/services/allocation_recovery.py::_assert_unprotected:except-2": (
+        "Run inventory failures block allocation movement."
+    ),
+    "taskledger/services/allocation_recovery.py::_rollback_transaction:except-1": (
+        "Rollback records tombstone restore failures without hiding journal state."
+    ),
+    "taskledger/services/allocation_recovery.py::_rollback_transaction:except-2": (
+        "Rollback records source restore failures for operator recovery."
+    ),
+    "taskledger/services/allocation_recovery.py::_rollback_transaction:except-3": (
+        "Rollback records tombstone cleanup failures in the transaction journal."
+    ),
+    "taskledger/services/allocation_recovery.py::_rollback_transaction:except-4": (
+        "Rollback records filesystem verification failures explicitly."
+    ),
+    "taskledger/services/allocation_recovery.py::_rollback_transaction:except-5": (
+        "Rollback persistence failures are returned as incomplete recovery errors."
+    ),
+    (
+        "taskledger/services/allocation_recovery.py::"
+        "apply_allocation_repair_batch:except-1"
+    ): ("Apply failure triggers coordinated rollback of the entire selected batch."),
+    (
+        "taskledger/services/allocation_recovery.py::"
+        "apply_allocation_repair_batch:except-2"
+    ): ("Audit replay errors are preserved as pending transaction state."),
+    (
+        "taskledger/services/allocation_recovery.py::"
+        "apply_allocation_repair_batch:except-3"
+    ): ("Post-commit diagnostics preserve transaction results on scan failure."),
+    "taskledger/services/doctor.py::_append_identity_conflict_diagnostics:except-1": (
+        "Doctor reports identity conflict inspection failures independently."
+    ),
 }
 
 

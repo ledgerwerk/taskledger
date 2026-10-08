@@ -130,6 +130,7 @@ advanced metadata control and compatibility.
 - `taskledger.api.locks`
 - `taskledger.api.handoff`
 - `taskledger.api.releases`
+- `taskledger.api.repair`
 - `taskledger.api.storage`
 - `taskledger.api.sync`
 - `taskledger.api.search`

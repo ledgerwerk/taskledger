@@ -171,6 +171,58 @@ def inspect_task_identity_sources(paths: V2Paths) -> tuple[_IdentitySource, ...]
     return (*_scan_task_directories(paths), *_scan_identity_tombstones(paths))
 
 
+@lru_cache(maxsize=128)
+def _cached_identity_mutation_lock(lock_path: str) -> FileLock:
+    return FileLock(lock_path)
+
+
+def identity_mutation_lock(paths: V2Paths) -> FileLock:
+    """Return the shared process lock for task identity mutations."""
+    lock_path = paths.ledger_dir / ".task-identity-allocation.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    return _cached_identity_mutation_lock(str(lock_path))
+
+
+def inspect_task_identity_conflicts(
+    paths: V2Paths,
+) -> tuple[dict[str, object], ...]:
+    """Return every physical identity collision without enforcing uniqueness."""
+    sources = inspect_task_identity_sources(paths)
+    groups: dict[tuple[str, str], list[_IdentitySource]] = {}
+    for source in sources:
+        if source.legacy_task_id is not None:
+            groups.setdefault(("legacy_task_id", source.legacy_task_id), []).append(
+                source
+            )
+        groups.setdefault(("task_uuid", str(source.task_uuid)), []).append(source)
+
+    conflicts: list[dict[str, object]] = []
+    for (identity_kind, identity), members in sorted(groups.items()):
+        if len(members) < 2:
+            continue
+        conflicts.append(
+            {
+                "code": TASK_IDENTITY_CONFLICT,
+                "identity_kind": identity_kind,
+                "identity": identity,
+                "sources": [
+                    {
+                        "source_kind": source.source_kind,
+                        "task_uuid": str(source.task_uuid),
+                        "legacy_task_id": source.legacy_task_id,
+                        "state": source.state,
+                        "path": str(source.path),
+                    }
+                    for source in sorted(
+                        members,
+                        key=lambda item: (item.path.as_posix(), item.source_kind),
+                    )
+                ],
+            }
+        )
+    return tuple(conflicts)
+
+
 def scan_task_identity_inventory(paths: V2Paths) -> TaskIdentityInventory:
     """Scan canonical task bundles and identity tombstones once."""
     sources = list(inspect_task_identity_sources(paths))
@@ -576,9 +628,7 @@ def allocate_task_identity(paths: V2Paths, *, max_attempts: int = 32) -> TaskAll
     """Reserve a fresh UUIDv7 task directory and derive its current display ID."""
     if max_attempts < 1:
         raise ValueError("max_attempts must be positive")
-    lock_path = paths.ledger_dir / ".task-identity-allocation.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with FileLock(str(lock_path)):
+    with identity_mutation_lock(paths):
         inventory = scan_task_identity_inventory(paths)
         if any(
             identity.path.name.startswith("task-") for identity in inventory.entries
@@ -663,6 +713,7 @@ def write_task_identity_tombstone(
     *,
     reason: str,
     quarantined_path: str,
+    transaction_id: str | None = None,
 ) -> Path:
     """Record a quarantined UUID task directory as a durable reservation."""
     import json
@@ -676,19 +727,21 @@ def write_task_identity_tombstone(
     tombstones_dir = paths.ledger_dir / "tombstones"
     tombstones_dir.mkdir(parents=True, exist_ok=True)
     tombstone_path = tombstones_dir / f"{parsed_uuid}.toml"
-    with FileLock(str(paths.ledger_dir / ".task-identity-tombstone.lock")):
+    with identity_mutation_lock(paths):
         if tombstone_path.exists():
             raise LaunchError(
                 f"Task identity tombstone already exists: {tombstone_path}"
             )
-        lines = (
+        lines = [
             "schema_version = 2",
             'object_type = "task_identity_tombstone"',
             f"task_uuid = {json.dumps(str(parsed_uuid))}",
             f"reason = {json.dumps(reason.strip())}",
             f"created_at = {json.dumps(utc_now_iso())}",
             f"quarantined_path = {json.dumps(quarantined_path)}",
-        )
+        ]
+        if transaction_id is not None:
+            lines.append(f"transaction_id = {json.dumps(transaction_id)}")
         atomic_write_text(tombstone_path, "\n".join(lines) + "\n")
     invalidate_task_identity_inventory()
     return tombstone_path
@@ -702,6 +755,8 @@ __all__ = [
     "TaskIdentityInventory",
     "allocate_task_identity",
     "deterministic_legacy_task_uuid",
+    "identity_mutation_lock",
+    "inspect_task_identity_conflicts",
     "invalidate_task_identity_inventory",
     "legacy_task_identity_for_ref",
     "scan_task_identity_inventory",

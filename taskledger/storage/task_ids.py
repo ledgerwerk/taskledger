@@ -272,54 +272,63 @@ def write_task_id_tombstone(
     *,
     reason: str,
     quarantined_path: Path,
+    transaction_id: str | None = None,
 ) -> Path:
     _parse_canonical_task_id(task_id, path=paths.tasks_dir / task_id)
     if not reason.strip():
         raise LaunchError("Task allocation repair requires a non-empty reason.")
+    from taskledger.storage.task_identity import identity_mutation_lock
+
     tombstone_path = paths.ledger_dir / "tombstones" / f"{task_id}.toml"
     relative_quarantine = quarantined_path.relative_to(
         paths.tasks_dir.parent
     ).as_posix()
-    if tombstone_path.exists():
-        try:
-            tomllib = importlib.import_module("tomllib")
-        except ModuleNotFoundError:  # pragma: no cover
-            tomllib = importlib.import_module("tomli")
-        try:
-            existing = tomllib.loads(tombstone_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise LaunchError(
-                f"Invalid task tombstone {tombstone_path}: {exc}"
-            ) from exc
-        if (
-            existing.get("schema_version") == 1
-            and existing.get("object_type") == "task_id_tombstone"
-            and existing.get("id") == task_id
-            and existing.get("quarantined_path") == relative_quarantine
-            and isinstance(existing.get("reason"), str)
-            and isinstance(existing.get("created_at"), str)
-        ):
-            return tombstone_path
-        raise LaunchError(f"Task tombstone conflicts with repair: {tombstone_path}")
-    from taskledger.storage.atomic import atomic_create_text
-    from taskledger.timeutils import utc_now_iso
+    with identity_mutation_lock(paths):
+        if tombstone_path.exists():
+            try:
+                tomllib = importlib.import_module("tomllib")
+            except ModuleNotFoundError:  # pragma: no cover
+                tomllib = importlib.import_module("tomli")
+            try:
+                existing = tomllib.loads(tombstone_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise LaunchError(
+                    f"Invalid task tombstone {tombstone_path}: {exc}"
+                ) from exc
+            if (
+                existing.get("schema_version") == 1
+                and existing.get("object_type") == "task_id_tombstone"
+                and existing.get("id") == task_id
+                and existing.get("quarantined_path") == relative_quarantine
+                and isinstance(existing.get("reason"), str)
+                and isinstance(existing.get("created_at"), str)
+                and (
+                    transaction_id is None
+                    or existing.get("transaction_id") == transaction_id
+                )
+            ):
+                return tombstone_path
+            raise LaunchError(f"Task tombstone conflicts with repair: {tombstone_path}")
+        from taskledger.storage.atomic import atomic_create_text
+        from taskledger.timeutils import utc_now_iso
 
-    document = "\n".join(
-        (
+        lines = [
             "schema_version = 1",
             'object_type = "task_id_tombstone"',
             f"id = {json.dumps(task_id)}",
             f"reason = {json.dumps(reason.strip())}",
             f"created_at = {json.dumps(utc_now_iso())}",
             f"quarantined_path = {json.dumps(relative_quarantine)}",
-            "",
-        )
-    )
-    try:
-        atomic_create_text(tombstone_path, document)
-    except FileExistsError as exc:
-        raise LaunchError(f"Task tombstone already exists: {tombstone_path}") from exc
-    return tombstone_path
+        ]
+        if transaction_id is not None:
+            lines.append(f"transaction_id = {json.dumps(transaction_id)}")
+        try:
+            atomic_create_text(tombstone_path, "\n".join((*lines, "")))
+        except FileExistsError as exc:
+            raise LaunchError(
+                f"Task tombstone already exists: {tombstone_path}"
+            ) from exc
+        return tombstone_path
 
 
 def scan_task_id_inventory(paths: V2Paths) -> TaskIdInventory:
@@ -335,14 +344,17 @@ def next_task_id(paths: V2Paths) -> str:
 
 
 def reserve_task_directory(paths: V2Paths, task_id: str) -> Path:
+    from taskledger.storage.task_identity import identity_mutation_lock
+
     task_dir = paths.tasks_dir / task_id
-    try:
-        task_dir.mkdir(parents=False, exist_ok=False)
-    except FileExistsError:
-        raise
-    except OSError as exc:
-        raise LaunchError(f"Unable to reserve {task_dir}: {exc}") from exc
-    return task_dir
+    with identity_mutation_lock(paths):
+        try:
+            task_dir.mkdir(parents=False, exist_ok=False)
+        except FileExistsError:
+            raise
+        except OSError as exc:
+            raise LaunchError(f"Unable to reserve {task_dir}: {exc}") from exc
+        return task_dir
 
 
 def allocate_task_directory(
@@ -360,12 +372,15 @@ def allocate_task_directory_from_paths(
     *,
     max_attempts: int = 32,
 ) -> tuple[str, Path]:
-    for _ in range(max_attempts):
-        candidate = scan_task_id_inventory(paths).next_task_id
-        try:
-            return candidate, reserve_task_directory(paths, candidate)
-        except FileExistsError:
-            continue
+    from taskledger.storage.task_identity import identity_mutation_lock
+
+    with identity_mutation_lock(paths):
+        for _ in range(max_attempts):
+            candidate = scan_task_id_inventory(paths).next_task_id
+            try:
+                return candidate, reserve_task_directory(paths, candidate)
+            except FileExistsError:
+                continue
     raise LaunchError(
         "Unable to allocate a task ID after repeated exclusive-create collisions."
     )
@@ -373,17 +388,22 @@ def allocate_task_directory_from_paths(
 
 def reserve_task_directories(paths: V2Paths, task_ids: list[str]) -> None:
     """Reserve imported task directories with exclusive creation."""
+    from taskledger.storage.task_identity import identity_mutation_lock
+
     reserved: list[Path] = []
-    try:
-        for task_id in task_ids:
-            reserved.append(reserve_task_directory(paths, task_id))
-    except FileExistsError as exc:
-        for directory in reversed(reserved):
-            try:
-                directory.rmdir()
-            except OSError:
-                pass
-        raise LaunchError(f"Task allocation already exists: {exc.filename}") from exc
+    with identity_mutation_lock(paths):
+        try:
+            for task_id in task_ids:
+                reserved.append(reserve_task_directory(paths, task_id))
+        except FileExistsError as exc:
+            for directory in reversed(reserved):
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
+            raise LaunchError(
+                f"Task allocation already exists: {exc.filename}"
+            ) from exc
 
 
 __all__ = [

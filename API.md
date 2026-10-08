@@ -13,6 +13,7 @@ This repository exposes a task-first public API. The supported modules are:
 - `taskledger.api.locks`
 - `taskledger.api.handoff`
 - `taskledger.api.releases`
+- `taskledger.api.repair`
 - `taskledger.api.storage`
 - `taskledger.api.sync`
 - `taskledger.api.search`
@@ -305,6 +306,20 @@ details in JSON context payloads.
 - `garbage_collect`
 
 `garbage_collect(workspace_root, *, scope="all", task_id=None, older_than=None, apply=False, reason="")` reports eligible cache, runtime snapshot, and unreferenced artifact files. It is dry-run by default. Evidence/runtime deletion requires `apply=True` and a non-empty `reason`; canonical task records are never targets.
+
+### `taskledger.api.repair`
+
+- `repair_project_identity`
+- `repair_locks`
+- `repair_allocations`
+- `repair_active_task`
+- `list_allocation_repair_transactions`
+- `recover_allocation_repair_transaction`
+- `audit_allocation_repairs`
+- `reconcile_allocation_tombstone`
+- `repair_task_relation`
+
+Allocation transaction and active-task recovery APIs use reviewed plans and explicit reasons for mutation. Transaction listing, diagnosis, and dry-run plans do not mutate canonical state. Never use these exceptional recovery APIs as normal lifecycle shortcuts.
 
 ## CLI command groups
 

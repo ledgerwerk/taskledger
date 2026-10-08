@@ -850,8 +850,8 @@ def test_doctor_paths_are_structured_read_only_and_continue_after_identity_confl
     assert any(item["path"].endswith("task-0003") for item in incomplete_allocations)
     repair_hints = project_result["repair_hints"]
     assert any(
-        'taskledger repair allocations --task-id "task-0003"' in hint
-        and "exact reviewed plan with its --plan-id" in hint
+        "taskledger --json repair allocations --all" in hint
+        and "every selected source is safe" in hint
         for hint in repair_hints
     )
     assert not any("--apply --reason" in hint for hint in repair_hints)

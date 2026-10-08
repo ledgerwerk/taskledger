@@ -9,6 +9,7 @@ __all__ = [
     "project",
     "questions",
     "releases",
+    "repair",
     "reviews",
     "search",
     "storage",

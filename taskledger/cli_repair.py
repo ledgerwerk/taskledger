@@ -464,6 +464,91 @@ def _allocation_repair_dry_run_human(payload: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def _list_allocation_transactions(
+    ctx: typer.Context,
+    state: CLIState,
+    *,
+    requested: bool,
+    apply: bool,
+    reason: str,
+    plan_id: str | None,
+    task_id: str | None,
+    all_allocations: bool,
+    recover: str | None,
+    reconcile_source_id: str | None,
+    tombstone_id: str | None,
+) -> bool:
+    if not requested:
+        return False
+    if any(
+        (
+            apply,
+            bool(reason),
+            plan_id is not None,
+            task_id is not None,
+            all_allocations,
+            recover is not None,
+            reconcile_source_id is not None,
+            tombstone_id is not None,
+        )
+    ):
+        raise LaunchError("--transactions cannot be combined with repair options.")
+    from taskledger.api.repair import list_allocation_repair_transactions
+
+    payload = list_allocation_repair_transactions(state.cwd)
+    transaction_rows = payload.get("transactions", [])
+    count = len(transaction_rows) if isinstance(transaction_rows, list) else 0
+    emit_payload(ctx, payload, human=f"allocation repair transactions: {count}")
+    return True
+
+
+def _recover_allocation_transaction(
+    ctx: typer.Context,
+    state: CLIState,
+    transaction_id: str,
+    *,
+    apply: bool,
+    plan_id: str | None,
+    reason: str,
+) -> None:
+    if not apply and (reason or plan_id):
+        raise LaunchError("Recovery plan options require --apply.")
+    from taskledger.api.repair import recover_allocation_repair_transaction
+
+    payload = recover_allocation_repair_transaction(
+        state.cwd,
+        transaction_id,
+        apply=apply,
+        plan_id=plan_id,
+        reason=reason,
+    )
+    if payload.get("dry_run"):
+        emit_payload(
+            ctx,
+            payload,
+            human=(
+                f"allocation transaction recovery plan: {payload.get('action')} "
+                f"({payload.get('phase')})\nNext: {payload.get('next_command')}"
+            ),
+        )
+        return
+
+    status = str(payload.get("status", "unknown"))
+    if status in {"rollback_incomplete", "audit_pending", "failed"}:
+        error = LaunchError(
+            f"Allocation transaction recovery did not complete: {status}.",
+            code="TASKLEDGER_ALLOCATION_REPAIR_FAILED",
+            details=payload,
+        )
+        emit_error(ctx, error)
+        raise typer.Exit(code=launch_error_exit_code(error)) from error
+    emit_payload(
+        ctx,
+        payload,
+        human=f"allocation transaction recovery: {status}",
+    )
+
+
 def repair_allocations_command(
     ctx: typer.Context,
     apply: Annotated[
@@ -484,6 +569,14 @@ def repair_allocations_command(
     audit: Annotated[
         bool, typer.Option("--audit", help="Audit prior allocation repair provenance.")
     ] = False,
+    transactions: Annotated[
+        bool,
+        typer.Option("--transactions", help="List allocation repair transactions."),
+    ] = False,
+    recover: Annotated[
+        str | None,
+        typer.Option("--recover", help="Review or recover a transaction ID."),
+    ] = None,
     reconcile_source_id: Annotated[
         str | None,
         typer.Option(
@@ -513,6 +606,8 @@ def repair_allocations_command(
                 or plan_id
                 or reconcile_source_id
                 or tombstone_id
+                or transactions
+                or recover
             ):
                 raise LaunchError(
                     "--audit cannot be combined with repair or reconciliation options."
@@ -525,6 +620,42 @@ def repair_allocations_command(
             if isinstance(summary, dict):
                 lines.extend(f"  {key}: {value}" for key, value in summary.items())
             emit_payload(ctx, payload, human="\n".join(lines))
+            return
+
+        if _list_allocation_transactions(
+            ctx,
+            state,
+            requested=transactions,
+            apply=apply,
+            reason=reason,
+            plan_id=plan_id,
+            task_id=task_id,
+            all_allocations=all_allocations,
+            recover=recover,
+            reconcile_source_id=reconcile_source_id,
+            tombstone_id=tombstone_id,
+        ):
+            return
+
+        if recover is not None:
+            if (
+                task_id is not None
+                or all_allocations
+                or transactions
+                or reconcile_source_id
+                or tombstone_id
+            ):
+                raise LaunchError(
+                    "--recover cannot be combined with allocation selectors."
+                )
+            _recover_allocation_transaction(
+                ctx,
+                state,
+                recover,
+                apply=apply,
+                plan_id=plan_id,
+                reason=reason,
+            )
             return
 
         if reconcile_source_id is not None or tombstone_id is not None:
@@ -579,12 +710,174 @@ def repair_allocations_command(
         repaired = repaired_raw if isinstance(repaired_raw, list) else []
         failed_raw = payload.get("failed", [])
         failed = failed_raw if isinstance(failed_raw, list) else []
-        lines = [f"quarantined {len(repaired)} incomplete task allocation(s)"]
-        for item in failed:
-            if isinstance(item, dict):
-                source_id = item.get("source_id", item.get("task_id"))
-                lines.append(f"  failed: {source_id}: {item.get('error')}")
+        repaired_count_raw = payload.get("repaired_count", len(repaired))
+        failed_count_raw = payload.get("failed_count", len(failed))
+        attempted_raw = payload.get("attempted_count", len(repaired) + len(failed))
+        repaired_count = (
+            repaired_count_raw if isinstance(repaired_count_raw, int) else len(repaired)
+        )
+        failed_count = max(
+            failed_count_raw if isinstance(failed_count_raw, int) else 0,
+            len(failed),
+        )
+        attempted_count = (
+            attempted_raw
+            if isinstance(attempted_raw, int)
+            else repaired_count + failed_count
+        )
+        status = str(payload.get("status", "unknown"))
+        ledger_healthy = payload.get("ledger_healthy")
+        ledger_state = (
+            "ledger healthy"
+            if ledger_healthy is True
+            else "ledger still blocked"
+            if ledger_healthy is False
+            else "ledger status unknown"
+        )
+        summary = (
+            f"{attempted_count} planned · {repaired_count} committed · "
+            f"{failed_count} failed · {ledger_state}"
+        )
+        if failed_count > 0 or status != "applied" or attempted_count > repaired_count:
+            error_data: dict[str, object] = {
+                "status": status,
+                "plan_id": payload.get("plan_id"),
+                "transaction_id": payload.get("transaction_id"),
+                "attempted_count": attempted_count,
+                "repaired_count": repaired_count,
+                "failed_count": failed_count,
+                "repaired": repaired,
+                "failed": failed,
+                "rollback_state": status,
+                "rollback_errors": payload.get("rollback_errors", []),
+                "journal_path": payload.get("journal_path"),
+                "ledger_healthy": ledger_healthy,
+                "remaining_conflicts": payload.get("remaining_conflicts", []),
+                "audit_errors": payload.get("audit_errors", []),
+            }
+            next_commands = payload.get("next_commands", [])
+            next_command = payload.get("next_command")
+            remediation = (
+                [str(next_commands[0])]
+                if isinstance(next_commands, list) and next_commands
+                else [next_command]
+                if isinstance(next_command, str)
+                else ["Inspect the transaction journal and run a fresh Doctor report."]
+            )
+            error = LaunchError(
+                f"Allocation repair failed: {summary} (status={status}).",
+                code="TASKLEDGER_ALLOCATION_REPAIR_FAILED",
+                details=error_data,
+                remediation=remediation,
+            )
+            if not state.json_output:
+                typer.echo(summary, err=True)
+                for item in failed:
+                    if isinstance(item, dict):
+                        typer.echo(
+                            f"  failed: {item.get('source_id', item.get('task_id'))}: "
+                            f"{item.get('error')}",
+                            err=True,
+                        )
+            emit_error(ctx, error)
+            raise typer.Exit(code=launch_error_exit_code(error)) from error
+
+        emit_payload(ctx, payload, human=summary)
+
+
+def repair_active_task_command(
+    ctx: typer.Context,
+    action: Annotated[
+        str, typer.Option("--action", help="Explicit recovery action: clear or rebind.")
+    ] = "clear",
+    target_uuid: Annotated[
+        str | None,
+        typer.Option("--target-uuid", help="Explicit UUIDv7 target for rebind."),
+    ] = None,
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Apply the reviewed recovery plan.")
+    ] = False,
+    plan_id: Annotated[
+        str | None, typer.Option("--plan-id", help="Reviewed active-task plan ID.")
+    ] = None,
+    reason: Annotated[
+        str, typer.Option("--reason", help="Reason for the active-task recovery.")
+    ] = "",
+) -> None:
+    from taskledger.api.repair import repair_active_task
+
+    state = ctx.obj
+    assert isinstance(state, CLIState)
+    try:
+        payload = repair_active_task(
+            state.cwd,
+            action=action,
+            target_uuid=target_uuid,
+            apply=apply,
+            plan_id=plan_id,
+            reason=reason,
+        )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+
+    if apply and payload.get("status") != "applied":
+        error = LaunchError(
+            f"Active-task recovery did not complete: "
+            f"{payload.get('status', 'unknown')}.",
+            code="TASKLEDGER_ACTIVE_TASK_REPAIR_FAILED",
+            details=payload,
+        )
+        if not state.json_output:
+            typer.echo(
+                f"active-task {action}: {payload.get('status')} · "
+                "audit or recovery remains pending",
+                err=True,
+            )
+        emit_error(ctx, error)
+        raise typer.Exit(code=launch_error_exit_code(error)) from error
+
+    if payload.get("dry_run"):
+        inspection = payload.get("inspection", {})
+        inspection = inspection if isinstance(inspection, dict) else {}
+        lines = [
+            (
+                "ACTIVE TASK REPAIR (dry-run): "
+                f"{inspection.get('classification', 'unknown')}"
+            ),
+            f"action: {action}",
+            f"apply_safe: {payload.get('apply_safe')}",
+            f"plan_id: {payload.get('plan_id')}",
+        ]
+        for key in ("task_id", "task_uuid"):
+            value = inspection.get(key)
+            if value is not None:
+                lines.append(f"{key}: {value}")
+        blockers = payload.get("blocked_reasons", [])
+        if isinstance(blockers, list):
+            for blocker in blockers:
+                lines.append(f"blocked: {blocker}")
+        candidates = inspection.get("candidates", [])
+        if isinstance(candidates, list):
+            for candidate in candidates:
+                if isinstance(candidate, dict):
+                    lines.append(
+                        f"candidate: {candidate.get('task_uuid')} "
+                        f"{candidate.get('path')}"
+                    )
+        next_command = payload.get("next_command")
+        if isinstance(next_command, str):
+            lines.append(f"Next: {next_command}")
         emit_payload(ctx, payload, human="\n".join(lines))
+        return
+
+    human = (
+        f"active-task {action}: {payload.get('status')}\n"
+        f"backup: {payload.get('backup_path')}\n"
+        f"journal: {payload.get('journal_path')}\n"
+        f"Next: {payload.get('next_command')}"
+    )
+    emit_payload(ctx, payload, human=human)
 
 
 def repair_project_identity_command(
@@ -817,6 +1110,7 @@ def register_repair_commands(repair_app: typer.Typer, doctor_app: typer.Typer) -
     repair_app.command("lock")(repair_lock_command)
     repair_app.command("locks")(repair_locks_command)
     repair_app.command("allocations")(repair_allocations_command)
+    repair_app.command("active-task")(repair_active_task_command)
     repair_app.command("relation")(repair_relation_command)
     repair_app.command("project-identity")(repair_project_identity_command)
     repair_app.command("task")(repair_task_command)

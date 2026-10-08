@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from click import unstyle
 from typer.testing import CliRunner
 
@@ -429,6 +430,58 @@ def test_repair_allocation_audit_cli_json_contract(tmp_path: Path) -> None:
     help_result = runner.invoke(app, ["repair", "allocations", "--help"])
     assert help_result.exit_code == 0
     assert "--reconcile-source-id" in unstyle(help_result.output)
+    assert "--transactions" in unstyle(help_result.output)
+    active_help = runner.invoke(app, ["repair", "active-task", "--help"])
+    assert active_help.exit_code == 0
+    assert "--target-uuid" in unstyle(active_help.output)
+
+
+def test_allocation_transaction_recovery_cli_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from taskledger.services import allocation_recovery
+
+    workspace = init_workspace(tmp_path)
+    listed = runner.invoke(
+        app,
+        ["--root", str(workspace), "--json", "repair", "allocations", "--transactions"],
+    )
+    assert listed.exit_code == 0, listed.stdout
+    listed_payload = json.loads(listed.stdout)
+    assert listed_payload["result"]["kind"] == "allocation_repair_transactions"
+    assert listed_payload["result"]["transactions"] == []
+
+    transaction_id = "00000000-0000-7000-8000-000000000001"
+    monkeypatch.setattr(
+        allocation_recovery,
+        "recover_allocation_repair_transaction",
+        lambda *_args, **_kwargs: {
+            "kind": "allocation_repair_recovery",
+            "transaction_id": transaction_id,
+            "phase": "staging",
+            "action": "rollback",
+            "plan_id": "reviewed-fingerprint",
+            "dry_run": True,
+            "status": "dry_run",
+            "next_command": "taskledger repair allocations --recover ...",
+        },
+    )
+    recovery = runner.invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "--json",
+            "repair",
+            "allocations",
+            "--recover",
+            transaction_id,
+        ],
+    )
+    assert recovery.exit_code == 0, recovery.stdout
+    recovery_payload = json.loads(recovery.stdout)
+    assert recovery_payload["result"]["action"] == "rollback"
+    assert recovery_payload["result"]["plan_id"] == "reviewed-fingerprint"
 
 
 def test_removed_v07_compatibility_syntax_is_rejected(tmp_path: Path) -> None:

@@ -16,7 +16,7 @@ Use taskledger for staged coding work that needs a durable task record, reviewab
 
 - Do not implement before a plan approval has been recorded. Prefer `plan accept` for explicit chat approval.
 - Do not validate before implementation has been finished.
-- Do not use repair commands (`repair lock`, `repair run`, `repair task`, `repair allocations`, `repair relation`, `repair index`) in the normal lifecycle. Use them only for diagnosed corruption, after backing up the canonical configuration and resolved data mount and reviewing a dry-run plan. For a normal expired implementation lock, use `implement resume --repair-expired-lock` instead.
+- Do not use repair commands (`repair lock`, `repair run`, `repair task`, `repair allocations`, `repair active-task`, `repair relation`, `repair index`) in the normal lifecycle. Use them only for diagnosed corruption, after backing up the canonical configuration and resolved data mount and reviewing a dry-run plan. Allocation transaction recovery (`repair allocations --recover`) is also exceptional; inspect its journal-backed plan first. For a normal expired implementation lock, use `implement resume --repair-expired-lock` instead.
 - Do not break locks without a reason.
 - Do not break locks for normal actor or harness transfer; use durable handoffs.
 - Do not mark validation passed without checking every mandatory acceptance criterion.
@@ -391,6 +391,10 @@ A non-zero validation command is not automatically a failed acceptance criterion
 - Snapshot the canonical configuration and the full resolved data mount before repair; `storage where` identifies mounts without assuming data is checkout-local.
 - Start with read-only `doctor`, `doctor schema`, `doctor indexes`, and allocation-provenance audit output. Preserve those results.
 - Run `repair allocations` or `repair relation` dry-run first. Apply only the exact reviewed plan ID with a reason; use explicit physical source scope, never a display alias.
+- Treat `repair allocations --all` as one coordinated transaction. Review every selected physical source and the full preflight; the command must not leave a subset silently reported as successful. A non-zero exit, non-`applied` status, or nonzero failure count is a failed repair even when some evidence was committed.
+- For an interrupted allocation repair, inspect `repair allocations --transactions`, then run `repair allocations --recover TRANSACTION_ID` to review the exact journal and observed filesystem state. Apply only its current plan ID with a reason. Recovery rolls back an incomplete staging transaction or replays pending audit events; never edit or delete transaction journals by hand.
+- Use `repair active-task` only after Doctor identifies a damaged active pointer. Clear only a proven missing reference; rebind only to an explicitly selected, uniquely verified UUIDv7 task. Review and apply the exact plan ID with a reason. Ambiguous, malformed, protected, or changed state is not a guess-and-fix situation.
+- End-to-end sequence: Doctor → reviewed allocation batch plan → apply that exact plan → verify allocation audit and Doctor → active-pointer dry-run → explicit, authorized active-task apply → verify Doctor and backups → resume the normal task workflow. Never infer a replacement task or treat Doctor `ok: true` alone as proof of health.
 - Do not rebuild indexes until identity, relationship, and schema checks are healthy. Preserve tombstones and quarantine payloads; do not manually delete evidence.
 - Follow [`docs/recovery_identity.md`](../../docs/recovery_identity.md) for the full runbook. Its Readio section is written guidance for a separate operator only; do not discover, access, or mutate that external ledger as part of Taskledger work.
 

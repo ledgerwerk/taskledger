@@ -481,6 +481,44 @@ def load_active_task_state(workspace_root: Path) -> ActiveTaskState | None:
     return load_active_task_state_from_paths(resolve_v2_paths(workspace_root))
 
 
+def active_task_state_from_bytes(paths: V2Paths, contents: bytes) -> ActiveTaskState:
+    from taskledger.storage.yaml_store import load_yaml_object_bytes
+
+    try:
+        payload = load_yaml_object_bytes(
+            contents, "active task state", paths.active_task_path
+        )
+        return ActiveTaskState.from_dict(payload)
+    except LaunchError as exc:
+        raise LaunchError(
+            f"Malformed active task state {paths.active_task_path}: {exc}",
+            code="ACTIVE_TASK_STATE_MALFORMED",
+            details={"path": str(paths.active_task_path)},
+        ) from exc
+
+
+def read_active_task_state_raw(paths: V2Paths) -> ActiveTaskState | None:
+    """Read the persisted pointer without resolving it through task identity."""
+    path = paths.active_task_path
+    if path.is_symlink():
+        raise LaunchError(
+            f"Active task state path is a symlink: {path}",
+            code="ACTIVE_TASK_STATE_UNSAFE_PATH",
+            details={"path": str(path)},
+        )
+    try:
+        contents = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise LaunchError(
+            f"Unable to read active task state {path}: {exc}",
+            code="ACTIVE_TASK_STATE_UNREADABLE",
+            details={"path": str(path)},
+        ) from exc
+    return active_task_state_from_bytes(paths, contents)
+
+
 def load_active_task_state_from_paths(
     paths: V2Paths,
 ) -> ActiveTaskState | None:
@@ -532,6 +570,15 @@ def save_active_task_state(
     state: ActiveTaskState,
 ) -> ActiveTaskState:
     paths = require_v2_layout(workspace_root)
+    from taskledger.storage.task_identity import identity_mutation_lock
+
+    with identity_mutation_lock(paths):
+        return _save_active_task_state_unlocked(workspace_root, state, paths)
+
+
+def _save_active_task_state_unlocked(
+    workspace_root: Path, state: ActiveTaskState, paths: V2Paths
+) -> ActiveTaskState:
     from taskledger.storage.task_identity import (
         AMBIGUOUS_LEGACY_TASK_REF,
         task_identity_for_stored_ref,
@@ -573,10 +620,13 @@ def save_active_task_state(
 
 def clear_active_task_state(workspace_root: Path) -> ActiveTaskState | None:
     paths = require_v2_layout(workspace_root)
-    state = load_active_task_state(workspace_root)
-    if paths.active_task_path.exists():
-        paths.active_task_path.unlink()
-    return state
+    from taskledger.storage.task_identity import identity_mutation_lock
+
+    with identity_mutation_lock(paths):
+        state = load_active_task_state(workspace_root)
+        if paths.active_task_path.exists():
+            paths.active_task_path.unlink()
+        return state
 
 
 def load_actor_state(workspace_root: Path) -> ActiveActorState | None:
