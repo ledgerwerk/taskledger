@@ -20,6 +20,7 @@ from taskledger.api.repair import (
 from taskledger.domain.active_state import ActiveTaskState
 from taskledger.errors import LaunchError
 from taskledger.services.allocation_recovery import (
+    _remaining_identity_claim_conflicts,
     apply_identity_conflict_repair_batch,
     list_allocation_repair_transactions,
     plan_allocation_recovery,
@@ -1586,6 +1587,41 @@ def test_conflict_cli_returns_nonzero_for_rolled_back_batch(
     error_envelope = json.loads(result.stdout)
     assert error_envelope["ok"] is False
     assert error_envelope["error"]["details"]["status"] == "rolled_back"
+
+
+def test_remaining_identity_conflicts_normalizes_path_separator_styles(
+    tmp_path: Path,
+) -> None:
+    selected_tombstone = tmp_path / "tombstones" / "task-0040.toml"
+    selected_owner = tmp_path / "tasks" / "owner-0040"
+    unrelated_paths = (
+        tmp_path / "tombstones" / "task-0037.toml",
+        tmp_path / "tasks" / "owner-0037",
+    )
+    before = (
+        {
+            "identity_kind": "legacy_task_id",
+            "identity": "task-0040",
+            "sources": [
+                {"path": str(selected_tombstone), "source_kind": "tombstone"},
+                {"path": str(selected_owner), "source_kind": "uuid_task"},
+            ],
+        },
+        {
+            "identity_kind": "legacy_task_id",
+            "identity": "task-0037",
+            "sources": [{"path": str(path)} for path in unrelated_paths],
+        },
+    )
+
+    remaining = _remaining_identity_claim_conflicts(
+        before, {Path(selected_tombstone.as_posix())}
+    )
+
+    assert [conflict["identity"] for conflict in remaining] == ["task-0037"]
+    assert [
+        source["path"] for source in remaining[0]["sources"]
+    ] == [str(path) for path in unrelated_paths]
 
 
 def test_conflict_cli_scoped_apply_reports_expected_remaining_conflicts(

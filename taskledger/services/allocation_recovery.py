@@ -1068,7 +1068,7 @@ def apply_identity_conflict_repair_batch(
                 else ()
             )
             removed_tombstones = {
-                str(action["tombstone_path"]) for action in journal_actions
+                Path(str(action["tombstone_path"])) for action in journal_actions
             }
             expected_conflicts = _remaining_identity_claim_conflicts(
                 before_conflicts, removed_tombstones
@@ -1200,7 +1200,7 @@ def _identity_uuid_conflict_is_covered(
 
 
 def _remaining_identity_claim_conflicts(
-    before: tuple[dict[str, object], ...], removed_tombstones: set[str]
+    before: tuple[dict[str, object], ...], removed_tombstones: set[Path]
 ) -> tuple[dict[str, object], ...]:
     remaining: list[dict[str, object]] = []
     for conflict in before:
@@ -1211,7 +1211,7 @@ def _remaining_identity_claim_conflicts(
             member
             for member in members
             if isinstance(member, dict)
-            and str(member.get("path")) not in removed_tombstones
+            and Path(str(member.get("path"))) not in removed_tombstones
         ]
         if len(kept) > 1:
             remaining.append({**conflict, "sources": kept})
