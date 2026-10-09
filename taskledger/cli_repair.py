@@ -464,6 +464,41 @@ def _allocation_repair_dry_run_human(payload: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def _allocation_conflict_repair_dry_run_human(
+    payload: dict[str, object],
+) -> str:
+    actions_raw = payload.get("actions", [])
+    actions = actions_raw if isinstance(actions_raw, list) else []
+    lines = [f"IDENTITY CONFLICT REPAIR (dry-run): {len(actions)} action(s)"]
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        lines.append(
+            f"  {action.get('legacy_task_id', action.get('identity'))} "
+            f"mode={action.get('repair_mode')} "
+            f"evidence={action.get('evidence_status')}"
+        )
+        if action.get("requires_operator_override"):
+            lines.append("    requires --allow-unverifiable")
+        reason = action.get("reason")
+        if isinstance(reason, str) and reason:
+            lines.append(f"    reason={reason}")
+    plan_id = payload.get("plan_id")
+    if isinstance(plan_id, str):
+        lines.append(f"plan_id: {plan_id}")
+    transaction_id = payload.get("transaction_id")
+    if isinstance(transaction_id, str):
+        lines.append(f"transaction_id: {transaction_id}")
+    next_command = payload.get("next_command")
+    if isinstance(next_command, str) and next_command:
+        lines.append(f"Next: {next_command}")
+    elif not actions:
+        lines.append("No identity conflicts are available to repair.")
+    else:
+        lines.append("No apply command: resolve the identity ambiguity first.")
+    return "\n".join(lines)
+
+
 def _list_allocation_transactions(
     ctx: typer.Context,
     state: CLIState,
@@ -477,6 +512,8 @@ def _list_allocation_transactions(
     recover: str | None,
     reconcile_source_id: str | None,
     tombstone_id: str | None,
+    conflicts: bool,
+    allow_unverifiable: bool,
 ) -> bool:
     if not requested:
         return False
@@ -490,6 +527,8 @@ def _list_allocation_transactions(
             recover is not None,
             reconcile_source_id is not None,
             tombstone_id is not None,
+            conflicts,
+            allow_unverifiable,
         )
     ):
         raise LaunchError("--transactions cannot be combined with repair options.")
@@ -549,147 +588,88 @@ def _recover_allocation_transaction(
     )
 
 
-def repair_allocations_command(
-    ctx: typer.Context,
-    apply: Annotated[
-        bool, typer.Option("--apply", help="Apply repairs (default is dry-run).")
-    ] = False,
-    reason: Annotated[
-        str, typer.Option("--reason", help="Reason for quarantining allocations.")
-    ] = "",
-    task_id: Annotated[
-        str | None, typer.Option("--task-id", help="Physical legacy ID or UUID source.")
-    ] = None,
-    all_allocations: Annotated[
-        bool, typer.Option("--all", help="Apply to all incomplete allocations.")
-    ] = False,
-    plan_id: Annotated[
-        str | None, typer.Option("--plan-id", help="Reviewed dry-run plan fingerprint.")
-    ] = None,
-    audit: Annotated[
-        bool, typer.Option("--audit", help="Audit prior allocation repair provenance.")
-    ] = False,
-    transactions: Annotated[
-        bool,
-        typer.Option("--transactions", help="List allocation repair transactions."),
-    ] = False,
-    recover: Annotated[
-        str | None,
-        typer.Option("--recover", help="Review or recover a transaction ID."),
-    ] = None,
-    reconcile_source_id: Annotated[
-        str | None,
-        typer.Option(
-            "--reconcile-source-id", help="Evidence-backed physical source ID."
-        ),
-    ] = None,
-    tombstone_id: Annotated[
-        str | None,
-        typer.Option("--tombstone-id", help="Misattributed tombstone ID to correct."),
-    ] = None,
-) -> None:
-    from taskledger.api.repair import (
-        audit_allocation_repairs,
-        reconcile_allocation_tombstone,
-        repair_allocations,
+def _identity_conflict_repair_payload(
+    state: CLIState,
+    *,
+    requested: bool,
+    allow_unverifiable: bool,
+    apply: bool,
+    plan_id: str | None,
+    reason: str,
+    task_id: str | None,
+    all_allocations: bool,
+    reconcile_source_id: str | None,
+    tombstone_id: str | None,
+) -> dict[str, object] | None:
+    if allow_unverifiable and not requested:
+        raise LaunchError("--allow-unverifiable requires --conflicts.")
+    if not requested:
+        return None
+    if task_id is not None or reconcile_source_id is not None:
+        raise LaunchError(
+            "Conflict repair cannot combine with allocation or "
+            "reconciliation selectors."
+        )
+    if all_allocations and tombstone_id is not None:
+        raise LaunchError("Choose either --all or --tombstone-id for conflict repair.")
+    from taskledger.api.repair import repair_allocation_conflicts
+
+    return repair_allocation_conflicts(
+        state.cwd,
+        apply=apply,
+        plan_id=plan_id,
+        reason=reason,
+        allow_unverifiable=allow_unverifiable,
+        tombstone_id=tombstone_id,
     )
 
-    state = ctx.obj
-    assert isinstance(state, CLIState)
-    try:
-        if audit:
-            if (
-                apply
-                or reason
-                or task_id
-                or all_allocations
-                or plan_id
-                or reconcile_source_id
-                or tombstone_id
-                or transactions
-                or recover
-            ):
-                raise LaunchError(
-                    "--audit cannot be combined with repair or reconciliation options."
-                )
-            payload = audit_allocation_repairs(state.cwd)
-            entries_raw = payload.get("entries", [])
-            entries = entries_raw if isinstance(entries_raw, list) else []
-            summary = payload.get("summary", {})
-            lines = [f"allocation repair provenance audit: {len(entries)} event(s)"]
-            if isinstance(summary, dict):
-                lines.extend(f"  {key}: {value}" for key, value in summary.items())
-            emit_payload(ctx, payload, human="\n".join(lines))
-            return
 
-        if _list_allocation_transactions(
+def _validate_allocation_audit_options(
+    *,
+    conflicts: bool,
+    allow_unverifiable: bool,
+    apply: bool,
+    reason: str,
+    task_id: str | None,
+    all_allocations: bool,
+    plan_id: str | None,
+    reconcile_source_id: str | None,
+    tombstone_id: str | None,
+    transactions: bool,
+    recover: str | None,
+) -> None:
+    if any(
+        (
+            conflicts,
+            allow_unverifiable,
+            apply,
+            bool(reason),
+            task_id is not None,
+            all_allocations,
+            plan_id is not None,
+            reconcile_source_id is not None,
+            tombstone_id is not None,
+            transactions,
+            recover is not None,
+        )
+    ):
+        raise LaunchError(
+            "--audit cannot be combined with repair or reconciliation options."
+        )
+
+
+def _emit_allocation_repair_result(
+    ctx: typer.Context, state: CLIState, payload: dict[str, object]
+) -> None:
+    if payload.get("kind") == "task_allocation_conflict_repair" and payload.get(
+        "dry_run"
+    ):
+        emit_payload(
             ctx,
-            state,
-            requested=transactions,
-            apply=apply,
-            reason=reason,
-            plan_id=plan_id,
-            task_id=task_id,
-            all_allocations=all_allocations,
-            recover=recover,
-            reconcile_source_id=reconcile_source_id,
-            tombstone_id=tombstone_id,
-        ):
-            return
-
-        if recover is not None:
-            if (
-                task_id is not None
-                or all_allocations
-                or transactions
-                or reconcile_source_id
-                or tombstone_id
-            ):
-                raise LaunchError(
-                    "--recover cannot be combined with allocation selectors."
-                )
-            _recover_allocation_transaction(
-                ctx,
-                state,
-                recover,
-                apply=apply,
-                plan_id=plan_id,
-                reason=reason,
-            )
-            return
-
-        if reconcile_source_id is not None or tombstone_id is not None:
-            if reconcile_source_id is None or tombstone_id is None:
-                raise LaunchError(
-                    "Tombstone reconciliation requires both --reconcile-source-id "
-                    "and --tombstone-id."
-                )
-            if task_id is not None or all_allocations:
-                raise LaunchError(
-                    "Tombstone reconciliation cannot combine with allocation selectors."
-                )
-            payload = reconcile_allocation_tombstone(
-                state.cwd,
-                source_id=reconcile_source_id,
-                tombstone_id=tombstone_id,
-                apply=apply,
-                plan_id=plan_id,
-                reason=reason,
-            )
-        else:
-            payload = repair_allocations(
-                state.cwd,
-                apply=apply,
-                reason=reason,
-                task_id=task_id,
-                all_allocations=all_allocations,
-                plan_id=plan_id,
-            )
-    except LaunchError as exc:
-        emit_error(ctx, exc)
-        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-
-    if payload.get("kind") == "task_allocation_tombstone_reconciliation":
+            payload,
+            human=_allocation_conflict_repair_dry_run_human(payload),
+        )
+    elif payload.get("kind") == "task_allocation_tombstone_reconciliation":
         status = str(payload.get("status", "unknown"))
         human = f"allocation tombstone reconciliation: {status}"
         warning = payload.get("warning")
@@ -783,6 +763,180 @@ def repair_allocations_command(
             raise typer.Exit(code=launch_error_exit_code(error)) from error
 
         emit_payload(ctx, payload, human=summary)
+
+
+def repair_allocations_command(
+    ctx: typer.Context,
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Apply repairs (default is dry-run).")
+    ] = False,
+    conflicts: Annotated[
+        bool,
+        typer.Option(
+            "--conflicts",
+            help="Plan or apply repairs for authoritative identity conflicts.",
+        ),
+    ] = False,
+    allow_unverifiable: Annotated[
+        bool,
+        typer.Option(
+            "--allow-unverifiable",
+            help="Allow reviewed retirement of unverifiable shadowing tombstones.",
+        ),
+    ] = False,
+    reason: Annotated[
+        str, typer.Option("--reason", help="Reason for quarantining allocations.")
+    ] = "",
+    task_id: Annotated[
+        str | None, typer.Option("--task-id", help="Physical legacy ID or UUID source.")
+    ] = None,
+    all_allocations: Annotated[
+        bool, typer.Option("--all", help="Apply to all incomplete allocations.")
+    ] = False,
+    plan_id: Annotated[
+        str | None, typer.Option("--plan-id", help="Reviewed dry-run plan fingerprint.")
+    ] = None,
+    audit: Annotated[
+        bool, typer.Option("--audit", help="Audit prior allocation repair provenance.")
+    ] = False,
+    transactions: Annotated[
+        bool,
+        typer.Option("--transactions", help="List allocation repair transactions."),
+    ] = False,
+    recover: Annotated[
+        str | None,
+        typer.Option("--recover", help="Review or recover a transaction ID."),
+    ] = None,
+    reconcile_source_id: Annotated[
+        str | None,
+        typer.Option(
+            "--reconcile-source-id", help="Evidence-backed physical source ID."
+        ),
+    ] = None,
+    tombstone_id: Annotated[
+        str | None,
+        typer.Option("--tombstone-id", help="Misattributed tombstone ID to correct."),
+    ] = None,
+) -> None:
+    from taskledger.api.repair import (
+        audit_allocation_repairs,
+        reconcile_allocation_tombstone,
+        repair_allocations,
+    )
+
+    state = ctx.obj
+    assert isinstance(state, CLIState)
+    try:
+        if audit:
+            _validate_allocation_audit_options(
+                conflicts=conflicts,
+                allow_unverifiable=allow_unverifiable,
+                apply=apply,
+                reason=reason,
+                task_id=task_id,
+                all_allocations=all_allocations,
+                plan_id=plan_id,
+                reconcile_source_id=reconcile_source_id,
+                tombstone_id=tombstone_id,
+                transactions=transactions,
+                recover=recover,
+            )
+            payload = audit_allocation_repairs(state.cwd)
+            entries_raw = payload.get("entries", [])
+            entries = entries_raw if isinstance(entries_raw, list) else []
+            summary = payload.get("summary", {})
+            lines = [f"allocation repair provenance audit: {len(entries)} event(s)"]
+            if isinstance(summary, dict):
+                lines.extend(f"  {key}: {value}" for key, value in summary.items())
+            emit_payload(ctx, payload, human="\n".join(lines))
+            return
+
+        if _list_allocation_transactions(
+            ctx,
+            state,
+            requested=transactions,
+            apply=apply,
+            reason=reason,
+            plan_id=plan_id,
+            task_id=task_id,
+            all_allocations=all_allocations,
+            recover=recover,
+            reconcile_source_id=reconcile_source_id,
+            tombstone_id=tombstone_id,
+            conflicts=conflicts,
+            allow_unverifiable=allow_unverifiable,
+        ):
+            return
+
+        if recover is not None:
+            if (
+                conflicts
+                or allow_unverifiable
+                or task_id is not None
+                or all_allocations
+                or transactions
+                or reconcile_source_id
+                or tombstone_id
+            ):
+                raise LaunchError(
+                    "--recover cannot be combined with allocation selectors."
+                )
+            _recover_allocation_transaction(
+                ctx,
+                state,
+                recover,
+                apply=apply,
+                plan_id=plan_id,
+                reason=reason,
+            )
+            return
+
+        conflict_payload = _identity_conflict_repair_payload(
+            state,
+            requested=conflicts,
+            allow_unverifiable=allow_unverifiable,
+            apply=apply,
+            plan_id=plan_id,
+            reason=reason,
+            task_id=task_id,
+            all_allocations=all_allocations,
+            reconcile_source_id=reconcile_source_id,
+            tombstone_id=tombstone_id,
+        )
+        if conflict_payload is not None:
+            payload = conflict_payload
+        elif reconcile_source_id is not None or tombstone_id is not None:
+            if reconcile_source_id is None or tombstone_id is None:
+                raise LaunchError(
+                    "Tombstone reconciliation requires both --reconcile-source-id "
+                    "and --tombstone-id."
+                )
+            if task_id is not None or all_allocations:
+                raise LaunchError(
+                    "Tombstone reconciliation cannot combine with allocation selectors."
+                )
+            payload = reconcile_allocation_tombstone(
+                state.cwd,
+                source_id=reconcile_source_id,
+                tombstone_id=tombstone_id,
+                apply=apply,
+                plan_id=plan_id,
+                reason=reason,
+            )
+        else:
+            payload = repair_allocations(
+                state.cwd,
+                apply=apply,
+                reason=reason,
+                task_id=task_id,
+                all_allocations=all_allocations,
+                plan_id=plan_id,
+            )
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+
+    _emit_allocation_repair_result(ctx, state, payload)
 
 
 def repair_active_task_command(

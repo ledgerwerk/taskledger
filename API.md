@@ -312,12 +312,18 @@ details in JSON context payloads.
 - `repair_project_identity`
 - `repair_locks`
 - `repair_allocations`
+- `repair_allocation_conflicts`
 - `repair_active_task`
 - `list_allocation_repair_transactions`
 - `recover_allocation_repair_transaction`
 - `audit_allocation_repairs`
 - `reconcile_allocation_tombstone`
 - `repair_task_relation`
+
+`repair_allocation_conflicts` plans or applies a fingerprinted identity-conflict
+batch. Tombstone retirement requires an explicit `allow_unverifiable` plan
+posture and non-empty apply reason; a committed selector-scoped repair can
+return expected remaining conflicts with `ledger_healthy: false`.
 
 Allocation transaction and active-task recovery APIs use reviewed plans and explicit reasons for mutation. Transaction listing, diagnosis, and dry-run plans do not mutate canonical state. Never use these exceptional recovery APIs as normal lifecycle shortcuts.
 

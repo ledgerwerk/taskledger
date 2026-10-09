@@ -493,6 +493,21 @@ preserves the existing live owner and must not create a second tombstone. When a
 selected entry is blocked, top-level `apply_safe` is false and `next_command` is null;
 resolve the ownership ambiguity instead of applying the plan.
 
+Historical allocation tombstones can also conflict with live migrated UUID tasks after the original incomplete source has already been quarantined. Use `--conflicts` to review the authoritative identity claimants; this is separate from `--all`, which targets currently incomplete directories:
+
+```bash
+taskledger --json repair allocations --conflicts
+taskledger --json repair allocations --conflicts --allow-unverifiable
+```
+
+The plan classifies evidence-backed tombstone rehomes and shadowing-tombstone retirement. Retirement creates no replacement tombstone and does not invent a physical source ID. It preserves the original tombstone bytes under recovery storage, leaves the quarantine and live UUID owner unchanged, and records that the original source provenance remains unverifiable. It is applicable only when the plan is reviewed with `--allow-unverifiable` and applied with the exact `plan_id` and a non-empty reason. If using `--tombstone-id`, the same selection and override posture must be supplied again at apply:
+
+```bash
+taskledger repair allocations --conflicts --allow-unverifiable --apply --plan-id PLAN_ID --reason "Operator approved the reviewed identity-conflict recovery."
+```
+
+The full conflict set is selected by default; `--tombstone-id TASK_ID` narrows it. A committed subset reports `status: applied`, `remaining_conflicts`, and `ledger_healthy: false` without rolling back the valid selected repair. A rollback failure or pending audit replay returns non-zero and includes transaction recovery guidance. `repair allocations --audit` reports `shadow_tombstone_retired` separately while keeping the historical physical source marked unverifiable. Doctor first recommends the dry-run and does not invent an apply command before a plan exists.
+
 Prior repairs with a misattributed tombstone can be reconciled only when event and quarantine provenance support the physical source. The dry-run is also the required review step:
 
 ```bash

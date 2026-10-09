@@ -71,6 +71,23 @@ must not be applied. The dry-run reports `apply_safe: false` and no `next_comman
 Doctor's allocation hint begins with the dry-run; apply only the exact plan ID when
 that report says it is safe.
 
+## Historical shadowing-tombstone recovery
+
+A live migrated UUID task can conflict with a historical allocation tombstone even when no incomplete task directory remains. The supported workflow is a reviewed identity-conflict plan, not an invented `--reconcile-source-id`:
+
+```bash
+taskledger --json repair allocations --conflicts
+taskledger --json repair allocations --conflicts --allow-unverifiable
+```
+
+Review each action's claimant set, owner and quarantine fingerprints, historical event evidence, and `apply_safe` state. Evidence-backed rehomes are preferred. An unverifiable shadowing tombstone can be retired only when exactly one live UUID owner and the quarantined recovery payload are validated, and the reviewed plan explicitly includes `--allow-unverifiable`. Apply that same selector/override posture with the exact plan ID and a reason:
+
+```bash
+taskledger repair allocations --conflicts --allow-unverifiable --apply --plan-id PLAN_ID --reason "Operator approved reviewed tombstone retirement."
+```
+
+Retirement moves the original tombstone bytes to transaction-scoped recovery storage, does not modify the quarantine or live owner, creates no replacement tombstone, and leaves the original physical source ID unresolved. The audit event must continue to say `unverifiable_physical_source`; do not call this provenance verified. A selected subset may commit with `ledger_healthy: false` and exact `remaining_conflicts`. Re-run Doctor and allocation audit after the transaction. Never delete tombstones or infer physical source IDs from recovery directory names.
+
 For a deliberate bulk operation, inspect the complete dry-run and then use
 `--all --apply --plan-id PLAN_ID --reason "..."`. Never use an unscoped apply.
 The apply verifies source fingerprints, checks destinations and identity

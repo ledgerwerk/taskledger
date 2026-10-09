@@ -792,6 +792,77 @@ def repair_allocations(
         return result
 
 
+def repair_allocation_conflicts(
+    workspace_root: Path,
+    *,
+    apply: bool = False,
+    plan_id: str | None = None,
+    reason: str = "",
+    allow_unverifiable: bool = False,
+    tombstone_id: str | None = None,
+) -> dict[str, object]:
+    """Plan or apply a reviewed batch repair for task identity conflicts."""
+    from taskledger.services.allocation_recovery import (
+        apply_identity_conflict_repair_batch,
+        plan_identity_conflict_recovery,
+    )
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    if apply and not reason.strip():
+        raise LaunchError("Identity conflict repair requires --reason when applying.")
+    if apply and not plan_id:
+        raise LaunchError(
+            "Applying identity conflict repair requires the reviewed dry-run plan_id."
+        )
+    if not apply and plan_id is not None:
+        raise LaunchError("--plan-id is only valid when applying a conflict plan.")
+
+    paths = resolve_v2_paths(workspace_root)
+    if apply:
+        result = apply_identity_conflict_repair_batch(
+            workspace_root,
+            paths,
+            plan_id=str(plan_id),
+            reason=reason,
+            allow_unverifiable=allow_unverifiable,
+            tombstone_id=tombstone_id,
+        )
+        if result.get("status") in {"audit_pending", "rollback_incomplete"}:
+            transaction_id = result.get("transaction_id")
+            if isinstance(transaction_id, str):
+                result["next_command"] = (
+                    f"taskledger repair allocations --recover {transaction_id}"
+                )
+        return result
+
+    plan = plan_identity_conflict_recovery(
+        paths,
+        allow_unverifiable=allow_unverifiable,
+        tombstone_id=tombstone_id,
+    )
+    if tombstone_id is not None:
+        conflicts = plan.get("identity_conflicts", [])
+        if not isinstance(conflicts, list) or not any(
+            isinstance(conflict, dict)
+            and conflict.get("identity_kind") == "legacy_task_id"
+            and conflict.get("identity") == tombstone_id
+            for conflict in conflicts
+        ):
+            raise LaunchError(
+                f"No authoritative identity conflict exists for {tombstone_id!r}."
+            )
+    next_command: str | None = None
+    if plan.get("apply_safe"):
+        selector = f" --tombstone-id {tombstone_id}" if tombstone_id is not None else ""
+        override = " --allow-unverifiable" if allow_unverifiable else ""
+        next_command = (
+            "taskledger repair allocations --conflicts"
+            f"{selector}{override} --apply --plan-id {plan['plan_id']} "
+            '--reason "User approved reviewed identity conflict recovery."'
+        )
+    return {**plan, "next_command": next_command}
+
+
 def repair_active_task(
     workspace_root: Path,
     *,
@@ -879,6 +950,7 @@ def _allocation_tombstone_reconciliation_plan(
 
     from taskledger.ids import TASK_ID_FORMAT
     from taskledger.storage.events import load_events
+    from taskledger.storage.task_identity import inspect_legacy_identity_claims
     from taskledger.storage.task_store import resolve_v2_paths
 
     for value in (source_id, tombstone_id):
@@ -899,6 +971,25 @@ def _allocation_tombstone_reconciliation_plan(
     old_tombstone = paths.ledger_dir / "tombstones" / f"{tombstone_id}.toml"
     if not old_tombstone.is_file():
         raise LaunchError(f"Misattributed tombstone does not exist: {old_tombstone}")
+    source_claims = inspect_legacy_identity_claims(paths, source_id)
+    previous_claims = inspect_legacy_identity_claims(paths, tombstone_id)
+    if source_claims:
+        raise LaunchError(
+            f"Correct source ID {source_id} already has physical identity claimants."
+        )
+    if not any(
+        source.path == old_tombstone and source.source_kind == "tombstone"
+        for source in previous_claims
+    ):
+        raise LaunchError(
+            "The reviewed tombstone is not an authoritative identity claimant."
+        )
+    source_claimants = [
+        _identity_source_payload(paths, source) for source in source_claims
+    ]
+    previous_claimants = [
+        _identity_source_payload(paths, source) for source in previous_claims
+    ]
     document = _read_allocation_tombstone(old_tombstone)
     if (
         document.get("schema_version") != 1
@@ -978,6 +1069,8 @@ def _allocation_tombstone_reconciliation_plan(
         "new_tombstone": str(new_tombstone),
         "evidence_status": evidence_status,
         "event_ids": sorted(event.event_id for event in matching_events),
+        "source_claimants": source_claimants,
+        "previous_claimants": previous_claimants,
         "tombstone_sha256": hashlib.sha256(old_tombstone.read_bytes()).hexdigest(),
     }
     fingerprint = hashlib.sha256(
@@ -1045,6 +1138,28 @@ def audit_allocation_repairs(workspace_root: Path) -> dict[str, object]:
                 "source_fingerprint": data.get("source_fingerprint"),
             }
         )
+    for event in events:
+        if event.event != "repair.task_allocation_shadow_tombstone_retired":
+            continue
+        data = event.data
+        entries.append(
+            {
+                "event_id": event.event_id,
+                "status": "shadow_tombstone_retired",
+                "repair_mode": "retire_shadowing_tombstone",
+                "physical_source_id": None,
+                "tombstone_id": data.get("legacy_task_id"),
+                "previous_tombstone_path": data.get("previous_tombstone_path"),
+                "preserved_tombstone": data.get("preserved_tombstone"),
+                "quarantined_path": data.get("quarantined_path"),
+                "surviving_task_uuid": data.get("surviving_task_uuid"),
+                "surviving_source_path": data.get("surviving_source_path"),
+                "source_fingerprint": data.get("surviving_source_fingerprint"),
+                "evidence_status": data.get("evidence_status"),
+                "operator_override": data.get("operator_override"),
+                "transaction_id": data.get("transaction_id"),
+            }
+        )
     return {
         "kind": "task_allocation_repair_audit",
         "entries": entries,
@@ -1056,6 +1171,7 @@ def audit_allocation_repairs(workspace_root: Path) -> dict[str, object]:
                 "unverifiable",
                 "existing_owner_preserved",
                 "reconciled",
+                "shadow_tombstone_retired",
             )
         },
     }
@@ -1073,8 +1189,9 @@ def reconcile_allocation_tombstone(
     """Correct a misattributed tombstone without losing its recovery payload."""
     from taskledger.services.task_events import append_task_event
     from taskledger.storage.task_identity import (
+        inspect_legacy_identity_claims,
+        inspect_task_identity_conflicts,
         invalidate_task_identity_inventory,
-        scan_task_identity_inventory,
     )
     from taskledger.storage.task_ids import write_task_id_tombstone
     from taskledger.storage.task_store import resolve_v2_paths
@@ -1137,25 +1254,41 @@ def reconcile_allocation_tombstone(
             quarantined_path=Path(str(plan["quarantined_path"])),
         )
         created = True
+        paths = resolve_v2_paths(workspace_root)
         invalidate_task_identity_inventory()
-        inventory = scan_task_identity_inventory(resolve_v2_paths(workspace_root))
-        source_matches = tuple(
-            identity
-            for identity in inventory.entries
-            if identity.legacy_task_id == source_id
-        )
-        previous_matches = tuple(
-            identity
-            for identity in inventory.entries
-            if identity.legacy_task_id == tombstone_id
-        )
+        source_matches = inspect_legacy_identity_claims(paths, source_id)
+        previous_matches = inspect_legacy_identity_claims(paths, tombstone_id)
+        tombstone_document = _read_allocation_tombstone(written)
+        old_tombstone_relative = f"tombstones/{tombstone_id}.toml"
+        expected_previous = plan.get("previous_claimants")
+        actual_previous = [
+            _identity_source_payload(paths, identity)
+            for identity in previous_matches
+            if identity.path != old_tombstone
+        ]
         if (
             len(source_matches) != 1
             or source_matches[0].source_kind != "tombstone"
             or source_matches[0].state != "tombstone"
-            or any(identity.source_kind == "tombstone" for identity in previous_matches)
+            or source_matches[0].path != written
+            or tombstone_document.get("schema_version") != 1
+            or tombstone_document.get("object_type") != "task_id_tombstone"
+            or tombstone_document.get("id") != source_id
+            or tombstone_document.get("reason") != reason.strip()
+            or tombstone_document.get("quarantined_path")
+            != plan["quarantined_relative_path"]
+            or not isinstance(expected_previous, list)
+            or actual_previous
+            != [
+                claimant
+                for claimant in expected_previous
+                if isinstance(claimant, dict)
+                and claimant.get("path") != old_tombstone_relative
+            ]
         ):
-            raise LaunchError("Tombstone reconciliation postcondition failed.")
+            raise LaunchError("Tombstone reconciliation local postcondition failed.")
+        remaining_conflicts = list(inspect_task_identity_conflicts(paths))
+        ledger_healthy = not remaining_conflicts
         append_task_event(
             workspace_root,
             "*",
@@ -1183,6 +1316,8 @@ def reconcile_allocation_tombstone(
             "preserved_tombstone": str(preserved_tombstone),
             "new_tombstone": str(written),
             "reason": reason.strip(),
+            "remaining_conflicts": remaining_conflicts,
+            "ledger_healthy": ledger_healthy,
         }
     except Exception as exc:
         if created:

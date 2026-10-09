@@ -1639,6 +1639,7 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
         tier=TIER_RARE,
         ledger_effect=EFFECT_WRITE,
     ),
+    # Identity-conflict recovery extends this path; it is not a new command.
     "repair allocations": CommandSpec(
         REPAIR,
         "ledger_mutation",

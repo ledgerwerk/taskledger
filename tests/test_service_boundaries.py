@@ -207,6 +207,9 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/doctor.py::_inspect_v2_project_phases:except-4": (
         "Doctor degrades snapshot inspection failures to a warning diagnostic."
     ),
+    "taskledger/services/doctor.py::_inspect_v2_project_phases:except-5": (
+        "Doctor skips conflict remediation hints if the planning probe fails."
+    ),
     "taskledger/services/doctor.py::_inspect_lock_consistency:except-1": (
         "Doctor records lock expiry classification failures and continues."
     ),
@@ -445,6 +448,30 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
         "taskledger/services/allocation_recovery.py::"
         "apply_allocation_repair_batch:except-3"
     ): ("Post-commit diagnostics preserve transaction results on scan failure."),
+    (
+        "taskledger/services/allocation_recovery.py::"
+        "_rollback_identity_conflict_transaction:except-1"
+    ): ("Rollback preflight blocks unsafe or changed filesystem ownership."),
+    (
+        "taskledger/services/allocation_recovery.py::"
+        "_rollback_identity_conflict_transaction:except-2"
+    ): ("Per-action restoration failures remain available for explicit recovery."),
+    (
+        "taskledger/services/allocation_recovery.py::"
+        "_rollback_identity_conflict_transaction:except-3"
+    ): ("Rollback progress persistence failures stop the batch."),
+    (
+        "taskledger/services/allocation_recovery.py::"
+        "_rollback_identity_conflict_transaction:except-4"
+    ): ("Final rollback journal persistence failures are surfaced as recovery errors."),
+    (
+        "taskledger/services/allocation_recovery.py::"
+        "_append_identity_conflict_events:except-1"
+    ): ("Audit append failures remain pending for idempotent recovery."),
+    (
+        "taskledger/services/allocation_recovery.py::"
+        "apply_identity_conflict_repair_batch:except-1"
+    ): ("Batch failures trigger coordinated rollback and preserve journal state."),
     "taskledger/services/doctor.py::_append_identity_conflict_diagnostics:except-1": (
         "Doctor reports identity conflict inspection failures independently."
     ),

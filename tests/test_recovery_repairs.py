@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 from dataclasses import replace
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from taskledger.api.repair import (
     audit_allocation_repairs,
     reconcile_allocation_tombstone,
     repair_active_task,
+    repair_allocation_conflicts,
     repair_allocations,
     repair_locks,
     repair_task_relation,
@@ -18,8 +20,10 @@ from taskledger.api.repair import (
 from taskledger.domain.active_state import ActiveTaskState
 from taskledger.errors import LaunchError
 from taskledger.services.allocation_recovery import (
+    apply_identity_conflict_repair_batch,
     list_allocation_repair_transactions,
     plan_allocation_recovery,
+    plan_identity_conflict_recovery,
     recover_allocation_repair_transaction,
 )
 from taskledger.services.doctor import inspect_v2_project
@@ -148,6 +152,100 @@ def _shadowed_migrated_allocation_batch(
         )
         stale_sources[task_id] = stale_dir
     return paths, stale_sources, migrated_dirs, live_task_bytes
+
+
+def _two_conflict_tombstone_reconciliation_fixture(
+    tmp_path: Path,
+    *,
+    numbers: tuple[int, ...] = (37, 40),
+    include_verified_provenance: bool = True,
+    correlated_uuid_claim: bool = False,
+) -> tuple[Path, object]:
+    workspace = _workspace(tmp_path)
+    paths = resolve_v2_paths(workspace)
+    project_uuid = load_project_uuid(
+        workspace / ".ledger" / "taskledger" / "config.toml"
+    )
+    assert project_uuid is not None
+
+    tasks = [
+        create_task(
+            workspace,
+            title=f"Migrated owner task-{number:04d}",
+            description="",
+            slug=f"migrated-owner-{number}",
+        )
+        for number in numbers
+    ]
+    for number, task in zip(numbers, tasks, strict=True):
+        legacy_id = f"task-{number:04d}"
+        source_dir = paths.tasks_dir / str(task.task_uuid)
+        task_path = source_dir / "task.md"
+        metadata, body = read_markdown_front_matter(task_path)
+        metadata["created_at"] = "2020-01-01T00:00:00+00:00"
+        created_at = metadata["created_at"]
+        assert isinstance(created_at, str)
+        migrated_uuid = deterministic_legacy_task_uuid(
+            project_uuid=project_uuid,
+            ledger_ref=paths.ledger_ref,
+            legacy_task_id=legacy_id,
+            created_at=created_at,
+        )
+        metadata["id"] = legacy_id
+        metadata["legacy_task_id"] = legacy_id
+        metadata["task_uuid"] = str(migrated_uuid)
+        write_markdown_front_matter(task_path, metadata, body)
+        source_dir.rename(paths.tasks_dir / str(migrated_uuid))
+
+        quarantine = (
+            paths.ledger_dir / "_recovery" / "incomplete-task-allocations" / legacy_id
+        )
+        quarantine.mkdir(parents=True)
+        (quarantine / "preserve.bin").write_bytes(legacy_id.encode("utf-8"))
+        write_task_id_tombstone(
+            paths,
+            legacy_id,
+            reason="Earlier allocation repair quarantined an incomplete source.",
+            quarantined_path=quarantine,
+        )
+        if correlated_uuid_claim and number == 37:
+            tombstone_path = paths.ledger_dir / "tombstones" / f"{legacy_id}.toml"
+            tombstone_text = tombstone_path.read_text(encoding="utf-8")
+            tombstone_text, replacements = re.subn(
+                r'(?m)^created_at = "[^"]+"$',
+                f'created_at = "{created_at}"',
+                tombstone_text,
+                count=1,
+            )
+            assert replacements == 1
+            tombstone_path.write_text(tombstone_text, encoding="utf-8")
+        if number == 37 and include_verified_provenance:
+            append_task_event(
+                workspace,
+                "*",
+                "repair.task_allocation_quarantined",
+                {
+                    "legacy_task_id": "task-0019",
+                    "source_path": "tasks/task-0019",
+                    "quarantined_path": (
+                        "_recovery/incomplete-task-allocations/task-0037"
+                    ),
+                    "tombstone_path": "tombstones/task-0037.toml",
+                },
+            )
+        else:
+            append_task_event(
+                workspace,
+                "*",
+                "repair.task_allocation_quarantined",
+                {
+                    "quarantined_path": (
+                        f"_recovery/incomplete-task-allocations/{legacy_id}"
+                    ),
+                    "tombstone_path": f"tombstones/{legacy_id}.toml",
+                },
+            )
+    return workspace, paths
 
 
 def test_identity_conflict_inspection_groups_all_sources_and_shares_mutation_lock(
@@ -1110,6 +1208,749 @@ def test_reconcile_misattributed_tombstone_preserves_recovery_payload(
     after_entries = after["entries"]
     assert isinstance(after_entries, list)
     assert after_entries[0]["status"] == "reconciled"
+
+
+def test_reconcile_tombstone_succeeds_with_unrelated_identity_conflict(
+    tmp_path: Path,
+) -> None:
+    workspace, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    old_tombstone = paths.ledger_dir / "tombstones" / "task-0037.toml"
+    unrelated_tombstone = paths.ledger_dir / "tombstones" / "task-0040.toml"
+
+    dry_run = reconcile_allocation_tombstone(
+        workspace, source_id="task-0019", tombstone_id="task-0037"
+    )
+    assert dry_run["evidence_status"] == "verified_event"
+    applied = reconcile_allocation_tombstone(
+        workspace,
+        source_id="task-0019",
+        tombstone_id="task-0037",
+        apply=True,
+        plan_id=str(dry_run["plan_id"]),
+        reason="Rehome the tombstone using its recorded physical source identity.",
+    )
+
+    assert applied["status"] == "applied"
+    assert applied["ledger_healthy"] is False
+    remaining = applied["remaining_conflicts"]
+    assert isinstance(remaining, list)
+    assert any(
+        conflict["identity_kind"] == "legacy_task_id"
+        and conflict["identity"] == "task-0040"
+        for conflict in remaining
+    )
+    assert not old_tombstone.exists()
+    assert unrelated_tombstone.is_file()
+    assert (paths.ledger_dir / "tombstones" / "task-0019.toml").is_file()
+    with pytest.raises(LaunchError, match="Task identity conflict"):
+        scan_task_identity_inventory(paths)
+
+
+def test_reconcile_tombstone_local_postcondition_does_not_require_global_inventory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    dry_run = reconcile_allocation_tombstone(
+        workspace, source_id="task-0019", tombstone_id="task-0037"
+    )
+
+    def fail_global_scan(*args: object, **kwargs: object) -> None:
+        raise AssertionError(
+            "strict global scan must not be used for local verification"
+        )
+
+    monkeypatch.setattr(
+        "taskledger.storage.task_identity.scan_task_identity_inventory",
+        fail_global_scan,
+    )
+    applied = reconcile_allocation_tombstone(
+        workspace,
+        source_id="task-0019",
+        tombstone_id="task-0037",
+        apply=True,
+        plan_id=str(dry_run["plan_id"]),
+        reason="Verify the selected identity locally despite unrelated conflicts.",
+    )
+    assert applied["status"] == "applied"
+    assert applied["ledger_healthy"] is False
+    assert (paths.ledger_dir / "tombstones" / "task-0019.toml").is_file()
+
+
+def test_conflict_plan_classifies_unverifiable_retirement_and_verified_rehome(
+    tmp_path: Path,
+) -> None:
+    _workspace, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+
+    unapproved = plan_identity_conflict_recovery(paths, tombstone_id="task-0040")
+    unapproved_action = unapproved["actions"][0]
+    assert isinstance(unapproved_action, dict)
+    assert unapproved_action["repair_mode"] == "retire_shadowing_tombstone"
+    assert unapproved_action["evidence_status"] == "unverifiable_physical_source"
+    assert unapproved_action["source_id"] is None
+    assert unapproved_action["new_tombstone"] is None
+    assert unapproved_action["requires_operator_override"] is True
+    assert unapproved_action["apply_safe"] is False
+
+    approved_posture = plan_identity_conflict_recovery(
+        paths, tombstone_id="task-0040", allow_unverifiable=True
+    )
+    approved_action = approved_posture["actions"][0]
+    assert isinstance(approved_action, dict)
+    assert approved_posture["plan_id"] != unapproved["plan_id"]
+    assert approved_action["apply_safe"] is True
+    assert approved_action["operator_override"] is True
+    assert approved_action["tombstone_sha256"]
+    assert approved_action["quarantine_fingerprint"].startswith("sha256:")
+    owner = approved_action["surviving_identity"]
+    assert isinstance(owner, dict)
+    assert owner["task_uuid"]
+    assert owner["state"] == "live"
+    assert owner["source_kind"] == "uuid_task"
+    assert owner["source_fingerprint"].startswith("sha256:")
+    assert approved_action["preserved_tombstone"].endswith(
+        f"/{approved_posture['transaction_id']}/task-0040.toml"
+    )
+
+    verified = plan_identity_conflict_recovery(paths, tombstone_id="task-0037")
+    verified_action = verified["actions"][0]
+    assert isinstance(verified_action, dict)
+    assert verified_action["repair_mode"] == "rehome_tombstone_verified"
+    assert verified_action["source_id"] == "task-0019"
+    assert verified_action["requires_operator_override"] is False
+    assert verified_action["apply_safe"] is True
+
+
+def test_identity_conflict_batch_resolves_correlated_uuid_claim_conflicts(
+    tmp_path: Path,
+) -> None:
+    workspace, paths = _two_conflict_tombstone_reconciliation_fixture(
+        tmp_path, correlated_uuid_claim=True
+    )
+    conflicts = inspect_task_identity_conflicts(paths)
+    assert sum(conflict["identity_kind"] == "task_uuid" for conflict in conflicts) == 1
+    plan = plan_identity_conflict_recovery(paths, allow_unverifiable=True)
+    actions = plan["actions"]
+    assert isinstance(actions, list) and len(actions) == 2
+    assert all(
+        action["repair_mode"] != "blocked_identity_conflict" for action in actions
+    )
+
+    result = apply_identity_conflict_repair_batch(
+        workspace,
+        paths,
+        plan_id=str(plan["plan_id"]),
+        reason=(
+            "Retire the reviewed historical tombstones and their duplicate UUID claims."
+        ),
+        allow_unverifiable=True,
+    )
+    assert result["status"] == "applied"
+    assert result["ledger_healthy"] is True
+    assert result["remaining_conflicts"] == []
+
+
+def test_conflict_cli_json_batch_apply_and_doctor_remediation(
+    tmp_path: Path,
+) -> None:
+    from typer.testing import CliRunner
+
+    from taskledger.cli import app
+
+    workspace, _paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    before_doctor = inspect_v2_project(workspace)
+    hints = before_doctor["repair_hints"]
+    assert any(
+        "repair allocations --conflicts`" in hint
+        for hint in hints
+        if isinstance(hint, str)
+    )
+    assert any(
+        "repair allocations --conflicts --allow-unverifiable`" in hint
+        for hint in hints
+        if isinstance(hint, str)
+    )
+
+    runner = CliRunner()
+    planned = runner.invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "--json",
+            "repair",
+            "allocations",
+            "--conflicts",
+            "--allow-unverifiable",
+        ],
+    )
+    assert planned.exit_code == 0, planned.stdout
+    plan_envelope = json.loads(planned.stdout)
+    assert plan_envelope["ok"] is True
+    plan = plan_envelope["result"]
+    assert plan["kind"] == "task_allocation_conflict_repair"
+    assert plan["status"] == "dry_run"
+    assert plan["apply_safe"] is True
+    assert plan["plan_id"]
+    assert plan["transaction_id"]
+    assert len(plan["actions"]) == 2
+    assert "--apply --plan-id" in plan["next_command"]
+
+    applied = runner.invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "--json",
+            "repair",
+            "allocations",
+            "--conflicts",
+            "--allow-unverifiable",
+            "--apply",
+            "--plan-id",
+            str(plan["plan_id"]),
+            "--reason",
+            "Operator approved the reviewed identity conflict batch.",
+        ],
+    )
+    assert applied.exit_code == 0, applied.stdout
+    applied_envelope = json.loads(applied.stdout)
+    assert applied_envelope["ok"] is True
+    result = applied_envelope["result"]
+    assert result["status"] == "applied"
+    assert result["transaction_id"] == plan["transaction_id"]
+    assert result["repaired_count"] == 2
+    assert result["remaining_conflicts"] == []
+    assert result["ledger_healthy"] is True
+
+    after_doctor = inspect_v2_project(workspace)
+    assert after_doctor["healthy"] is True
+
+
+def test_nine_conflict_incident_batch_preserves_evidence_and_clears_doctor(
+    tmp_path: Path,
+) -> None:
+    from typer.testing import CliRunner
+
+    from taskledger.cli import app
+
+    legacy_ids = (
+        "task-0037",
+        "task-0040",
+        "task-0041",
+        "task-0043",
+        "task-0045",
+        "task-0047",
+        "task-0052",
+        "task-0053",
+        "task-0059",
+    )
+    workspace, _paths = _two_conflict_tombstone_reconciliation_fixture(
+        tmp_path,
+        numbers=tuple(int(task_id.removeprefix("task-")) for task_id in legacy_ids),
+        include_verified_provenance=False,
+    )
+    before_doctor = inspect_v2_project(workspace)
+    assert any(
+        "repair allocations --conflicts --allow-unverifiable`" in hint
+        for hint in before_doctor["repair_hints"]
+        if isinstance(hint, str)
+    )
+    runner = CliRunner()
+    planned = runner.invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "--json",
+            "repair",
+            "allocations",
+            "--conflicts",
+            "--allow-unverifiable",
+        ],
+    )
+    assert planned.exit_code == 0, planned.stdout
+    plan = json.loads(planned.stdout)["result"]
+    actions = plan["actions"]
+    assert len(actions) == 9
+    assert all(
+        action["repair_mode"] == "retire_shadowing_tombstone"
+        and action["source_id"] is None
+        and action["new_tombstone"] is None
+        for action in actions
+    )
+    original_tombstones = {
+        action["legacy_task_id"]: Path(action["tombstone_path"]).read_bytes()
+        for action in actions
+    }
+    quarantine_payloads = {
+        action["legacy_task_id"]: (
+            Path(action["quarantined_path"]) / "preserve.bin"
+        ).read_bytes()
+        for action in actions
+    }
+
+    applied = runner.invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "--json",
+            "repair",
+            "allocations",
+            "--conflicts",
+            "--allow-unverifiable",
+            "--apply",
+            "--plan-id",
+            str(plan["plan_id"]),
+            "--reason",
+            "Operator approved the reviewed nine-conflict recovery batch.",
+        ],
+    )
+    assert applied.exit_code == 0, applied.stdout
+    result = json.loads(applied.stdout)["result"]
+    assert result["status"] == "applied"
+    assert result["repaired_count"] == 9
+    assert result["remaining_conflicts"] == []
+    assert result["ledger_healthy"] is True
+    for action in actions:
+        legacy_id = action["legacy_task_id"]
+        assert (
+            Path(action["preserved_tombstone"]).read_bytes()
+            == original_tombstones[legacy_id]
+        )
+        assert not Path(action["tombstone_path"]).exists()
+        assert (
+            Path(action["quarantined_path"]) / "preserve.bin"
+        ).read_bytes() == quarantine_payloads[legacy_id]
+
+    audit = audit_allocation_repairs(workspace)
+    audit_entries = audit["entries"]
+    assert isinstance(audit_entries, list)
+    retired = [
+        entry
+        for entry in audit_entries
+        if entry["status"] == "shadow_tombstone_retired"
+    ]
+    assert len(retired) == 9
+    assert all(entry["operator_override"] is True for entry in retired)
+    after_doctor = inspect_v2_project(workspace)
+    assert after_doctor["healthy"] is True
+
+
+def test_conflict_cli_returns_nonzero_for_rolled_back_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from typer.testing import CliRunner
+
+    import taskledger.api.repair as repair_api
+    from taskledger.cli import app
+
+    workspace, _paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    plan = repair_allocation_conflicts(workspace, allow_unverifiable=True)
+    monkeypatch.setattr(
+        repair_api,
+        "repair_allocation_conflicts",
+        lambda *_args, **_kwargs: {
+            "kind": "task_allocation_conflict_repair",
+            "status": "rolled_back",
+            "dry_run": False,
+            "plan_id": plan["plan_id"],
+            "transaction_id": plan["transaction_id"],
+            "attempted_count": 2,
+            "repaired_count": 0,
+            "failed_count": 1,
+            "repaired": [],
+            "failed": [{"legacy_task_id": "task-0037", "error": "injected"}],
+            "ledger_healthy": False,
+            "remaining_conflicts": [],
+        },
+    )
+    result = CliRunner().invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "--json",
+            "repair",
+            "allocations",
+            "--conflicts",
+            "--allow-unverifiable",
+            "--apply",
+            "--plan-id",
+            str(plan["plan_id"]),
+            "--reason",
+            "Exercise truthful rollback exit status.",
+        ],
+    )
+    assert result.exit_code != 0
+    error_envelope = json.loads(result.stdout)
+    assert error_envelope["ok"] is False
+    assert error_envelope["error"]["details"]["status"] == "rolled_back"
+
+
+def test_conflict_cli_scoped_apply_reports_expected_remaining_conflicts(
+    tmp_path: Path,
+) -> None:
+    from typer.testing import CliRunner
+
+    from taskledger.cli import app
+
+    workspace, _paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    runner = CliRunner()
+    selector = ["--conflicts", "--allow-unverifiable", "--tombstone-id", "task-0040"]
+    planned = runner.invoke(
+        app,
+        ["--root", str(workspace), "--json", "repair", "allocations", *selector],
+    )
+    assert planned.exit_code == 0, planned.stdout
+    plan = json.loads(planned.stdout)["result"]
+    assert len(plan["actions"]) == 1
+    assert plan["actions"][0]["legacy_task_id"] == "task-0040"
+
+    applied = runner.invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "--json",
+            "repair",
+            "allocations",
+            *selector,
+            "--apply",
+            "--plan-id",
+            str(plan["plan_id"]),
+            "--reason",
+            "Apply only the selected reviewed identity conflict.",
+        ],
+    )
+    assert applied.exit_code == 0, applied.stdout
+    result = json.loads(applied.stdout)["result"]
+    assert result["status"] == "applied"
+    assert result["ledger_healthy"] is False
+    remaining = result["remaining_conflicts"]
+    assert len(remaining) == 1
+    assert remaining[0]["identity"] == "task-0037"
+
+
+def test_conflict_plan_rejects_changed_tombstone_quarantine_and_owner(
+    tmp_path: Path,
+) -> None:
+    _workspace, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    baseline = plan_identity_conflict_recovery(
+        paths, tombstone_id="task-0040", allow_unverifiable=True
+    )
+    action = baseline["actions"][0]
+    assert isinstance(action, dict)
+    tombstone = Path(str(action["tombstone_path"]))
+    tombstone_bytes = tombstone.read_bytes()
+    tombstone.write_bytes(tombstone_bytes + b"\n")
+    changed_tombstone = plan_identity_conflict_recovery(
+        paths, tombstone_id="task-0040", allow_unverifiable=True
+    )
+    assert changed_tombstone["plan_id"] != baseline["plan_id"]
+
+    action = changed_tombstone["actions"][0]
+    assert isinstance(action, dict)
+    quarantine = Path(str(action["quarantined_path"]))
+    (quarantine / "new-evidence.bin").write_bytes(b"changed")
+    changed_quarantine = plan_identity_conflict_recovery(
+        paths, tombstone_id="task-0040", allow_unverifiable=True
+    )
+    assert changed_quarantine["plan_id"] != changed_tombstone["plan_id"]
+
+    action = changed_quarantine["actions"][0]
+    assert isinstance(action, dict)
+    owner = action["surviving_identity"]
+    assert isinstance(owner, dict)
+    owner_path = paths.ledger_dir / str(owner["path"])
+    task_record = owner_path / "task.md"
+    task_record.write_bytes(task_record.read_bytes() + b"\n")
+    changed_owner = plan_identity_conflict_recovery(
+        paths, tombstone_id="task-0040", allow_unverifiable=True
+    )
+    assert changed_owner["plan_id"] != changed_quarantine["plan_id"]
+
+
+def test_conflict_plan_blocks_ambiguous_or_missing_quarantine_claimants(
+    tmp_path: Path,
+) -> None:
+    _workspace, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    from taskledger.storage.task_identity import inspect_legacy_identity_claims
+
+    owner = next(
+        source
+        for source in inspect_legacy_identity_claims(paths, "task-0040")
+        if source.source_kind == "uuid_task"
+    )
+    duplicate_uuid = "00000000-0000-7000-8000-000000000404"
+    duplicate_dir = paths.tasks_dir / duplicate_uuid
+    duplicate_dir.mkdir()
+    metadata, body = read_markdown_front_matter(owner.path / "task.md")
+    metadata["task_uuid"] = duplicate_uuid
+    write_markdown_front_matter(duplicate_dir / "task.md", metadata, body)
+
+    ambiguous = plan_identity_conflict_recovery(
+        paths, tombstone_id="task-0040", allow_unverifiable=True
+    )
+    assert ambiguous["actions"][0]["repair_mode"] == "blocked_identity_conflict"
+    assert ambiguous["apply_safe"] is False
+
+    duplicate_dir.rename(paths.tasks_dir / "retired-not-an-identity")
+    quarantine = (
+        paths.ledger_dir / "_recovery" / "incomplete-task-allocations" / "task-0040"
+    )
+    import shutil
+
+    shutil.rmtree(quarantine)
+    missing_quarantine = plan_identity_conflict_recovery(
+        paths, tombstone_id="task-0040", allow_unverifiable=True
+    )
+    assert (
+        missing_quarantine["actions"][0]["repair_mode"] == "blocked_identity_conflict"
+    )
+    assert missing_quarantine["apply_safe"] is False
+
+
+def test_conflict_plan_blocks_malformed_identity_source(tmp_path: Path) -> None:
+    _, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    (paths.ledger_dir / "tombstones" / "task-0040.toml").write_text(
+        "not valid TOML = [\n", encoding="utf-8"
+    )
+    plan = plan_identity_conflict_recovery(paths, allow_unverifiable=True)
+    assert plan["actions"][0]["repair_mode"] == "blocked_identity_conflict"
+    assert plan["apply_safe"] is False
+
+
+def test_identity_conflict_batch_preserves_evidence_and_commits_atomically(
+    tmp_path: Path,
+) -> None:
+    workspace, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    plan = plan_identity_conflict_recovery(paths, allow_unverifiable=True)
+    actions = plan["actions"]
+    assert len(actions) == 2, json.dumps(plan["identity_conflicts"], indent=2)
+    tombstone_bytes = {
+        action["legacy_task_id"]: Path(action["tombstone_path"]).read_bytes()
+        for action in actions
+    }
+    quarantine_bytes = {
+        action["legacy_task_id"]: (
+            Path(action["quarantined_path"]) / "preserve.bin"
+        ).read_bytes()
+        for action in actions
+    }
+    owner_bytes = {
+        action["legacy_task_id"]: (
+            paths.ledger_dir / action["surviving_identity"]["path"] / "task.md"
+        ).read_bytes()
+        for action in actions
+    }
+
+    result = apply_identity_conflict_repair_batch(
+        workspace,
+        paths,
+        plan_id=str(plan["plan_id"]),
+        reason="User approved retirement of unverifiable shadowing tombstones.",
+        allow_unverifiable=True,
+    )
+
+    assert result["status"] == "applied"
+    assert result["repaired_count"] == 2
+    assert result["failed_count"] == 0
+    assert result["ledger_healthy"] is True
+    assert result["remaining_conflicts"] == []
+    for action in actions:
+        legacy_id = str(action["legacy_task_id"])
+        assert not Path(str(action["tombstone_path"])).exists()
+        preserved = Path(str(action["preserved_tombstone"]))
+        assert preserved.read_bytes() == tombstone_bytes[legacy_id]
+        assert (
+            Path(str(action["quarantined_path"])) / "preserve.bin"
+        ).read_bytes() == quarantine_bytes[legacy_id]
+        owner_path = paths.ledger_dir / str(action["surviving_identity"]["path"])
+        assert (owner_path / "task.md").read_bytes() == owner_bytes[legacy_id]
+        if action["repair_mode"] == "retire_shadowing_tombstone":
+            assert action["source_id"] is None
+            assert action["new_tombstone"] is None
+            assert not (paths.ledger_dir / "tombstones" / "task-0040.toml").exists()
+    scan_task_identity_inventory(paths)
+    events = load_events(paths.events_dir)
+    retired = [
+        event
+        for event in events
+        if event.event == "repair.task_allocation_shadow_tombstone_retired"
+    ]
+    assert len(retired) == 1
+    assert retired[0].data["evidence_status"] == "unverifiable_physical_source"
+    assert retired[0].data["operator_override"] is True
+
+
+def test_identity_conflict_batch_rolls_back_after_second_action_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    plan = plan_identity_conflict_recovery(paths, allow_unverifiable=True)
+    actions = plan["actions"]
+    assert isinstance(actions, list) and len(actions) == 2
+    original_bytes = {
+        action["legacy_task_id"]: Path(action["tombstone_path"]).read_bytes()
+        for action in actions
+    }
+    from taskledger.services import allocation_recovery
+
+    original_verify = allocation_recovery._verify_identity_conflict_action
+
+    def fail_second_action(paths_arg: object, action: dict[str, object]) -> None:
+        if action["legacy_task_id"] == "task-0040":
+            raise LaunchError("injected second-action verification failure")
+        original_verify(paths_arg, action)
+
+    monkeypatch.setattr(
+        "taskledger.services.allocation_recovery._verify_identity_conflict_action",
+        fail_second_action,
+    )
+    result = apply_identity_conflict_repair_batch(
+        workspace,
+        paths,
+        plan_id=str(plan["plan_id"]),
+        reason="Exercise whole-batch rollback after an injected failure.",
+        allow_unverifiable=True,
+    )
+
+    assert result["status"] == "rolled_back"
+    assert result["repaired_count"] == 0
+    assert result["failed_count"] == 1
+    assert len(result["remaining_conflicts"]) == 2
+    for action in actions:
+        legacy_id = str(action["legacy_task_id"])
+        assert (
+            Path(str(action["tombstone_path"])).read_bytes()
+            == original_bytes[legacy_id]
+        )
+        assert not Path(str(action["preserved_tombstone"])).exists()
+    assert not (paths.ledger_dir / "tombstones" / "task-0019.toml").exists()
+    assert not any(
+        event.event == "repair.task_allocation_shadow_tombstone_retired"
+        for event in load_events(paths.events_dir)
+    )
+    journal = json.loads(Path(str(result["journal_path"])).read_text(encoding="utf-8"))
+    assert journal["phase"] == "rolled_back"
+
+
+def test_identity_conflict_journal_recovers_interrupted_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    plan = plan_identity_conflict_recovery(paths, allow_unverifiable=True)
+
+    def interrupt_second_action(paths_arg: object, action: dict[str, object]) -> None:
+        if action["legacy_task_id"] == "task-0040":
+            raise KeyboardInterrupt("simulated process interruption")
+
+    monkeypatch.setattr(
+        "taskledger.services.allocation_recovery._verify_identity_conflict_action",
+        interrupt_second_action,
+    )
+    with pytest.raises(KeyboardInterrupt, match="simulated process interruption"):
+        apply_identity_conflict_repair_batch(
+            workspace,
+            paths,
+            plan_id=str(plan["plan_id"]),
+            reason="Simulate process interruption during a reviewed recovery batch.",
+            allow_unverifiable=True,
+        )
+
+    transaction_id = str(plan["transaction_id"])
+    recovery_plan = plan_allocation_recovery(paths, transaction_id)
+    assert recovery_plan["transaction_kind"] == "identity_conflict_repair"
+    assert recovery_plan["action"] == "rollback"
+    recovered = recover_allocation_repair_transaction(
+        workspace,
+        paths,
+        transaction_id,
+        apply=True,
+        plan_id=str(recovery_plan["plan_id"]),
+        reason="Restore tombstones after the interrupted batch.",
+    )
+    assert recovered["status"] == "rolled_back"
+    for action in plan["actions"]:
+        assert Path(str(action["tombstone_path"])).is_file()
+        assert not Path(str(action["preserved_tombstone"])).exists()
+
+
+@pytest.mark.parametrize("changed_claim", ("tombstone", "quarantine"))
+def test_identity_conflict_batch_rejects_stale_reviewed_claims(
+    tmp_path: Path, changed_claim: str
+) -> None:
+    workspace, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    plan = plan_identity_conflict_recovery(paths, allow_unverifiable=True)
+    action = plan["actions"][0]
+    if changed_claim == "tombstone":
+        claim_path = Path(str(action["tombstone_path"]))
+        claim_path.write_bytes(claim_path.read_bytes() + b"\n")
+    else:
+        claim_path = Path(str(action["quarantined_path"])) / "preserve.bin"
+        claim_path.write_bytes(claim_path.read_bytes() + b"changed")
+
+    with pytest.raises(LaunchError) as exc_info:
+        apply_identity_conflict_repair_batch(
+            workspace,
+            paths,
+            plan_id=str(plan["plan_id"]),
+            reason="Reject changes made after reviewing the allocation recovery plan.",
+            allow_unverifiable=True,
+        )
+    assert exc_info.value.code == "TASKLEDGER_REPAIR_PLAN_CHANGED"
+    assert Path(str(action["tombstone_path"])).exists()
+    assert not Path(str(action["preserved_tombstone"])).exists()
+
+
+def test_identity_conflict_transaction_replays_partial_audit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from taskledger.services import task_events
+
+    workspace, paths = _two_conflict_tombstone_reconciliation_fixture(tmp_path)
+    plan = plan_identity_conflict_recovery(paths, allow_unverifiable=True)
+    original_append = task_events.append_task_event
+    calls = 0
+
+    def append_then_fail_once(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise LaunchError("injected audit append failure")
+        return original_append(*args, **kwargs)
+
+    monkeypatch.setattr(task_events, "append_task_event", append_then_fail_once)
+    result = apply_identity_conflict_repair_batch(
+        workspace,
+        paths,
+        plan_id=str(plan["plan_id"]),
+        reason="Exercise audit replay after a partial append.",
+        allow_unverifiable=True,
+    )
+    assert result["status"] == "audit_pending"
+    transaction_id = str(plan["transaction_id"])
+    recovery_plan = plan_allocation_recovery(paths, transaction_id)
+    assert recovery_plan["action"] == "replay_audit"
+
+    monkeypatch.setattr(task_events, "append_task_event", original_append)
+    recovered = recover_allocation_repair_transaction(
+        workspace,
+        paths,
+        transaction_id,
+        apply=True,
+        plan_id=str(recovery_plan["plan_id"]),
+        reason="Replay the missing allocation recovery audit event.",
+    )
+    assert recovered["status"] == "committed"
+    matching_events = [
+        event
+        for event in load_events(paths.events_dir)
+        if event.data.get("transaction_id") == transaction_id
+    ]
+    assert len(matching_events) == 2
+    assert {event.data.get("action_index") for event in matching_events} == {0, 1}
 
 
 def test_relation_repair_requires_reviewed_plan_and_audits_parent_and_requirement(

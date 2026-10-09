@@ -773,6 +773,51 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
             "`taskledger --json repair allocations --all`; "
             "apply only if every selected source is safe and matches the reviewed plan."
         )
+    identity_conflicts_present = any(
+        item.get("code") == "TASKLEDGER_TASK_IDENTITY_CONFLICT" for item in diagnostics
+    )
+    if identity_conflicts_present:
+        repair_hints.append(
+            "Review authoritative identity conflicts with "
+            "`taskledger repair allocations --conflicts`."
+        )
+        try:
+            from taskledger.services.allocation_recovery import (
+                plan_identity_conflict_recovery,
+            )
+
+            conflict_plan = plan_identity_conflict_recovery(
+                resolve_v2_paths(workspace_root)
+            )
+            actions = conflict_plan.get("actions", [])
+        except Exception:  # noqa: BLE001
+            actions = []
+        if (
+            isinstance(actions, list)
+            and actions
+            and any(
+                isinstance(action, dict)
+                and action.get("repair_mode") == "retire_shadowing_tombstone"
+                and action.get("requires_operator_override") is True
+                for action in actions
+            )
+            and all(
+                isinstance(action, dict)
+                and (
+                    action.get("apply_safe") is True
+                    or (
+                        action.get("repair_mode") == "retire_shadowing_tombstone"
+                        and action.get("requires_operator_override") is True
+                    )
+                )
+                for action in actions
+            )
+        ):
+            repair_hints.append(
+                "If you explicitly accept the unverifiable tombstone risk, review the "
+                "override plan with `taskledger repair allocations --conflicts "
+                "--allow-unverifiable`."
+            )
     _inspect_active_task(ctx, errors, warnings)
     if ctx.active_reference.get("classification") == "missing":
         repair_hints.append(

@@ -567,11 +567,16 @@ def test_current_execution_lock_guidance_is_documented() -> None:
 def test_identity_recovery_runbook_is_backup_first_and_readio_scoped() -> None:
     runbook = (ROOT / "docs" / "recovery_identity.md").read_text(encoding="utf-8")
     skill = (ROOT / "skills" / "taskledger" / "SKILL.md").read_text(encoding="utf-8")
+    contract = (ROOT / "docs" / "command_contract.md").read_text(encoding="utf-8")
 
     assert (
         "Before any mutation, create and verify a complete backup/snapshot" in runbook
     )
     assert "--reconcile-source-id task-0019 --tombstone-id task-0037" in runbook
+    assert "repair allocations --conflicts" in runbook
+    assert "--allow-unverifiable" in runbook
+    assert "shadow_tombstone_retired" in contract
+    assert "repair allocations --conflicts" in skill
     assert (
         "rebuild indexes while canonical identity/schema findings remain unresolved."
         in runbook

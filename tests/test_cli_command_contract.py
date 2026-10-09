@@ -431,6 +431,8 @@ def test_repair_allocation_audit_cli_json_contract(tmp_path: Path) -> None:
     assert help_result.exit_code == 0
     assert "--reconcile-source-id" in unstyle(help_result.output)
     assert "--transactions" in unstyle(help_result.output)
+    assert "--conflicts" in unstyle(help_result.output)
+    assert "--allow-unverifiable" in unstyle(help_result.output)
     active_help = runner.invoke(app, ["repair", "active-task", "--help"])
     assert active_help.exit_code == 0
     assert "--target-uuid" in unstyle(active_help.output)

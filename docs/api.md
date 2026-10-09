@@ -225,12 +225,19 @@ payload = plan_guidance(Path.cwd(), "task-0001")
 - `repair_project_identity`
 - `repair_locks`
 - `repair_allocations`
+- `repair_allocation_conflicts`
 - `repair_active_task`
 - `list_allocation_repair_transactions`
 - `recover_allocation_repair_transaction`
 - `audit_allocation_repairs`
 - `reconcile_allocation_tombstone`
 - `repair_task_relation`
+
+`repair_allocation_conflicts` returns a fingerprinted dry-run plan by default and
+applies only that exact plan with a non-empty reason. Unverifiable tombstone
+retirement additionally requires the same explicit override posture at review
+and apply. A committed subset may leave `ledger_healthy` false while returning
+expected `remaining_conflicts`.
 
 Allocation transaction and active-task recovery use reviewed plans and explicit reasons for mutation. Listing, diagnosis, and dry-run plans are read-only. These are exceptional recovery APIs, not lifecycle shortcuts.
 

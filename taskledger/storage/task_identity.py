@@ -171,6 +171,23 @@ def inspect_task_identity_sources(paths: V2Paths) -> tuple[_IdentitySource, ...]
     return (*_scan_task_directories(paths), *_scan_identity_tombstones(paths))
 
 
+def inspect_legacy_identity_claims(
+    paths: V2Paths, legacy_task_id: str
+) -> tuple[_IdentitySource, ...]:
+    """Inspect physical claimants for one legacy ID without enforcing uniqueness."""
+    try:
+        parts = TASK_ID_FORMAT.parse_parts(legacy_task_id)
+    except ValueError as exc:
+        raise LaunchError(f"Invalid legacy task ID {legacy_task_id!r}.") from exc
+    if TASK_ID_FORMAT.format(parts.number) != legacy_task_id or parts.number < 1:
+        raise LaunchError(f"Non-canonical legacy task ID {legacy_task_id!r}.")
+    return tuple(
+        source
+        for source in inspect_task_identity_sources(paths)
+        if source.legacy_task_id == legacy_task_id
+    )
+
+
 @lru_cache(maxsize=128)
 def _cached_identity_mutation_lock(lock_path: str) -> FileLock:
     return FileLock(lock_path)
@@ -756,6 +773,7 @@ __all__ = [
     "allocate_task_identity",
     "deterministic_legacy_task_uuid",
     "identity_mutation_lock",
+    "inspect_legacy_identity_claims",
     "inspect_task_identity_conflicts",
     "invalidate_task_identity_inventory",
     "legacy_task_identity_for_ref",

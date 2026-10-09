@@ -70,6 +70,8 @@ def test_inventory_marks_core_and_repair_commands() -> None:
     assert COMMAND_METADATA["monitor"].audience == HUMAN_ORIENTED
     assert COMMAND_METADATA["repair lock"].audience == REPAIR
     assert COMMAND_METADATA["doctor"].audience == REPAIR
+    assert COMMAND_METADATA["repair allocations"].audience == REPAIR
+    assert COMMAND_METADATA["repair allocations"].surface == REPAIR_SURFACE
 
 
 # specmason: req=REQ-0011 ac=AC-0112
