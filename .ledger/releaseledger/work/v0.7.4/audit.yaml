@@ -1,0 +1,44 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 1
+release_version: v0.7.4
+git_base_ref: v0.7.3
+git_base_sha: f5aabad9f7a094de250d30a139640da59ef1a04c
+git_head_ref: HEAD
+git_head_sha: 74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f
+git_range: f5aabad9f7a094de250d30a139640da59ef1a04c..74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f
+commit_count: 1
+rows:
+- sha: 74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f
+  source_ref: git:74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f
+  short_sha: 74c46b7
+  changed_paths:
+  - API.md
+  - docs/api.md
+  - docs/command_contract.md
+  - docs/recovery_identity.md
+  - skills/taskledger/SKILL.md
+  - taskledger/api/repair.py
+  - taskledger/cli_repair.py
+  - taskledger/command_inventory.py
+  - taskledger/services/allocation_recovery.py
+  - taskledger/services/doctor.py
+  - taskledger/storage/task_identity.py
+  - tests/test_cli_command_contract.py
+  - tests/test_command_inventory.py
+  - tests/test_docs_and_skill.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  stats:
+    files_changed: 16
+    insertions: 2422
+    deletions: 129
+  inspected: false
+  inspected_paths: []
+  observed_behavior: ''
+  public_impact: unknown
+  decision: needs_review
+  stale: false
+  evidence_subject: 'feat: repair command improved'

@@ -1,0 +1,41 @@
+schema: releaseledger.entry-batch.v1
+operation: create
+schema_version: 1
+object_type: release_entry_batch
+release_version: v0.7.4
+git_base_ref: f5aabad9f7a094de250d30a139640da59ef1a04c
+git_base_sha: f5aabad9f7a094de250d30a139640da59ef1a04c
+git_head_ref: 74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f
+git_head_sha: 74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f
+include_merges: nontrivial
+entries:
+- kind: added
+  summary: 'Added reviewed recovery for historical task identity conflicts'
+  body: >-
+    Plans fingerprint claimants, quarantine, and live-owner state; apply preserves original tombstone bytes and journals rollback and audit recovery. Unverifiable tombstone retirement requires explicit operator approval.
+  status: accepted
+  source_refs:
+  - git:74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f
+  paths:
+  - API.md
+  - docs/api.md
+  - docs/command_contract.md
+  - docs/recovery_identity.md
+  - skills/taskledger/SKILL.md
+  - taskledger/api/repair.py
+  - taskledger/cli_repair.py
+  - taskledger/command_inventory.py
+  - taskledger/services/allocation_recovery.py
+  - taskledger/services/doctor.py
+  - taskledger/storage/task_identity.py
+  - tests/test_cli_command_contract.py
+  - tests/test_command_inventory.py
+  - tests/test_docs_and_skill.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  sources:
+  - git:74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f
+  prs: []
+  issues: []
+  contributors:
+  - '@holgern'

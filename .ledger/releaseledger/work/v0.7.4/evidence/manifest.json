@@ -1,0 +1,40 @@
+{
+  "candidate_count": 1,
+  "candidates": [
+    {
+      "additions": 2422,
+      "deletions": 129,
+      "patch_file": "74c46b7.patch",
+      "patch_sha256": "5eb7901ab846ef19924ee0dda7babf62f366de8a88faa48f67256622fb751435",
+      "paths": [
+        "API.md",
+        "docs/api.md",
+        "docs/command_contract.md",
+        "docs/recovery_identity.md",
+        "skills/taskledger/SKILL.md",
+        "taskledger/api/repair.py",
+        "taskledger/cli_repair.py",
+        "taskledger/command_inventory.py",
+        "taskledger/services/allocation_recovery.py",
+        "taskledger/services/doctor.py",
+        "taskledger/storage/task_identity.py",
+        "tests/test_cli_command_contract.py",
+        "tests/test_command_inventory.py",
+        "tests/test_docs_and_skill.py",
+        "tests/test_recovery_repairs.py",
+        "tests/test_service_boundaries.py"
+      ],
+      "sha": "74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f",
+      "short_sha": "74c46b7",
+      "source_ref": "git:74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f"
+    }
+  ],
+  "git_base_ref": "f5aabad9f7a094de250d30a139640da59ef1a04c",
+  "git_base_sha": "f5aabad9f7a094de250d30a139640da59ef1a04c",
+  "git_head_ref": "74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f",
+  "git_head_sha": "74c46b7e0c1e02d67e09f0dc7dcf42bb7fac162f",
+  "include_merges": "nontrivial",
+  "object_type": "git_evidence_manifest",
+  "release_version": "v0.7.4",
+  "schema_version": 1
+}
