@@ -611,13 +611,13 @@ def plan_identity_conflict_recovery(
             "retire_shadowing_tombstone",
             "rehome_tombstone_verified",
         } and isinstance(legacy_id, str):
-            action["preserved_tombstone"] = str(
+            action["preserved_tombstone"] = (
                 paths.ledger_dir
                 / "recovery"
                 / "misattributed-allocation-tombstones"
                 / transaction_id
                 / f"{legacy_id}.toml"
-            )
+            ).as_posix()
     plan_payload = {**base, "transaction_id": transaction_id}
     plan_id = hashlib.sha256(
         json.dumps(plan_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
