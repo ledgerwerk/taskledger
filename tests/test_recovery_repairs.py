@@ -1619,9 +1619,9 @@ def test_remaining_identity_conflicts_normalizes_path_separator_styles(
     )
 
     assert [conflict["identity"] for conflict in remaining] == ["task-0037"]
-    assert [
-        source["path"] for source in remaining[0]["sources"]
-    ] == [str(path) for path in unrelated_paths]
+    assert [source["path"] for source in remaining[0]["sources"]] == [
+        str(path) for path in unrelated_paths
+    ]
 
 
 def test_conflict_cli_scoped_apply_reports_expected_remaining_conflicts(
