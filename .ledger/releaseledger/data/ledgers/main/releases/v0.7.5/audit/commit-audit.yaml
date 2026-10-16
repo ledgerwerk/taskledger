@@ -1,0 +1,72 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 2
+release_version: v0.7.5
+git_base_ref: v0.7.4
+git_base_sha: d57dad22e01b2cad3e473c588aebba0d8c9d3007
+git_head_ref: HEAD
+git_head_sha: 19b9a8423f97d906932eb23a21d232fe8d46f69a
+git_range: d57dad22e01b2cad3e473c588aebba0d8c9d3007..19b9a8423f97d906932eb23a21d232fe8d46f69a
+commit_count: 1
+rows:
+- sha: 19b9a8423f97d906932eb23a21d232fe8d46f69a
+  source_ref: git:19b9a8423f97d906932eb23a21d232fe8d46f69a
+  short_sha: 19b9a84
+  changed_paths:
+  - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+  - .ledger/releaseledger/data/ledgers/main/releases/v0.7.5/entries/entry-0001.md
+  - .ledger/releaseledger/data/ledgers/main/releases/v0.7.5/release.md
+  - docs/command_contract.md
+  - docs/recovery_identity.md
+  - docs/usage.md
+  - skills/taskledger/SKILL.md
+  - taskledger/api/repair.py
+  - taskledger/cli_repair.py
+  - taskledger/services/allocation_protection.py
+  - taskledger/services/allocation_recovery.py
+  - taskledger/services/doctor.py
+  - taskledger/services/doctor_checks/task_checks.py
+  - taskledger/services/lock_inventory.py
+  - taskledger/storage/physical_runs.py
+  - taskledger/storage/task_store.py
+  - tests/test_doctor.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  - tests/test_taskledger_migration_v3.py
+  stats:
+    files_changed: 20
+    insertions: 1365
+    deletions: 199
+  inspected: true
+  inspected_paths:
+  - docs/command_contract.md
+  - docs/recovery_identity.md
+  - docs/usage.md
+  - skills/taskledger/SKILL.md
+  - taskledger/api/repair.py
+  - taskledger/cli_repair.py
+  - taskledger/services/allocation_protection.py
+  - taskledger/services/allocation_recovery.py
+  - taskledger/services/doctor.py
+  - taskledger/services/doctor_checks/task_checks.py
+  - taskledger/services/lock_inventory.py
+  - taskledger/storage/physical_runs.py
+  - taskledger/storage/task_store.py
+  - tests/test_doctor.py
+  - tests/test_recovery_repairs.py
+  - tests/test_service_boundaries.py
+  - tests/test_taskledger_migration_v3.py
+  observed_behavior: Allocation repair now blocks selected physical sources containing
+    active pointers, locks, or physical running runs; Doctor and lock diagnostics
+    distinguish unresolved identity from malformed or expired state and inspect physical
+    run ownership. Regression tests cover pointer, lock, and run blockers, fresh-plan
+    requirements, and identity-conflict recovery.
+  public_impact: public
+  decision: accepted
+  stale: false
+  evidence_subject: 'feat: prepare next relaese with better repair function'
+  target_entry_id: entry-0001
+  notes: Focused pytest collection could not start because this environment lacks
+    typer.
