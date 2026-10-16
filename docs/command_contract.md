@@ -471,9 +471,11 @@ taskledger repair locks
 taskledger repair locks --apply --reason "Preserve and remove the orphaned runtime lock."
 ```
 
-`repair locks` is dry-run by default. It reports `orphan_missing_task` separately from expired and dead-process locks, copies the orphan lock to the recovery audit area, removes the runtime lock, and updates derived lock indexes. Inspect the dry-run before applying.
+`repair locks` is dry-run by default. It reports orphan, expired, dead-process, malformed, and identity-unresolved findings separately. A readable expired lock with unresolved identity is not malformed or automatically repairable and remains a migration blocker. Inspect the dry-run before applying safe repairs; do not guess the lock owner.
 
-Doctor also reports nonempty task allocation directories that lack `task.md`. Allocation repair is dry-run by default, and applying requires an explicit `--task-id` or deliberate `--all` scope, the reviewed plan fingerprint, and a reason. Review physical source identity separately from any display alias:
+`repair task-dirs` removes only empty slug directories backed by valid physical task records. It does not remove task-ID directories or incomplete allocations and does not require global identity uniqueness.
+
+Doctor also reports nonempty task allocation directories that lack `task.md`. If identity scans are skipped, Doctor still inspects runs and locks in known physical bundles. Allocation repair is dry-run by default; apply only with an explicit `--task-id` physical source or deliberate `--all` scope, the exact reviewed plan ID, and a reason. Review the physical source path separately from any display alias:
 
 ```bash
 taskledger repair allocations
@@ -490,8 +492,7 @@ plus `incomplete_allocations` entries containing `physical_source`, `source_kind
 `quarantine_shadowed_legacy_source` for one stale legacy source with exactly one live
 UUID owner, and `blocked_identity_conflict` for ambiguity. A shadowed-source repair
 preserves the existing live owner and must not create a second tombstone. When any
-selected entry is blocked, top-level `apply_safe` is false and `next_command` is null;
-resolve the ownership ambiguity instead of applying the plan.
+selected entry or protection check is blocked, top-level `apply_safe` is false and `next_command` is null; do not apply the plan. Protection checks cover active-task pointers, locks, and running runs physically located in each selected source; run metadata alone does not establish physical ownership. If `active_task_pointer` is reported, rebind only to an explicitly verified UUID owner with a reviewed plan, then request a fresh allocation dry-run. Resolve lock and run blockers without bypassing lifecycle safety.
 
 Historical allocation tombstones can also conflict with live migrated UUID tasks after the original incomplete source has already been quarantined. Use `--conflicts` to review the authoritative identity claimants; this is separate from `--all`, which targets currently incomplete directories:
 

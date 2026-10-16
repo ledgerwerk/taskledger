@@ -138,7 +138,17 @@ def _scan_task_integrity_phases(  # noqa: C901
             errors.append(f"Task {task.id} has multiple running runs.")
 
         active_stage = derive_active_stage(active_lock, running_runs)
-        if running_runs and active_stage is None:
+        supported_cancelled_run = (
+            task.status_stage == "cancelled"
+            and active_lock is None
+            and len(running_runs) == 1
+            and running_runs[0].run_type == "implementation"
+            and running_runs[0].run_id == task.latest_implementation_run
+            and any(
+                plan.plan_version == task.accepted_plan_version for plan in accepted
+            )
+        )
+        if running_runs and active_stage is None and not supported_cancelled_run:
             errors.append(
                 f"Task {task.id} has a running run without a matching active lock."
             )

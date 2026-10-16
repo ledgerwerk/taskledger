@@ -467,6 +467,43 @@ def test_doctor_reports_missing_lock_for_running_implementation_with_recovery_hi
     assert mismatch["next_command"] != "taskledger doctor"
 
 
+def test_doctor_accepts_cancelled_resumable_implementation_run_without_lock(
+    tmp_path: Path,
+) -> None:
+    task = _task(
+        status_stage="cancelled",
+        latest_plan_version=1,
+        accepted_plan_version=1,
+        latest_implementation_run="run-0002",
+    )
+    save_task(tmp_path, task)
+    save_plan(
+        tmp_path,
+        PlanRecord(
+            task_id=task.id,
+            plan_version=1,
+            body="accepted plan",
+            status="accepted",
+            created_by=_actor(),
+            criteria=(AcceptanceCriterion(id="ac-1", text="test"),),
+        ),
+    )
+    save_run(
+        tmp_path,
+        _run(run_id="run-0002", run_type="implementation", status="running"),
+    )
+
+    project_report = inspect_v2_project(tmp_path)
+    assert not any(
+        "running run without a matching active lock" in str(error)
+        for error in project_report["errors"]
+    )
+    assert project_report["run_lock_mismatches"] == []
+
+    lock_report = inspect_v2_locks(tmp_path)
+    assert lock_report["run_lock_mismatches"] == []
+
+
 # specmason: req=REQ-0017 ac=AC-0193
 def test_inspect_lock_without_running_run(tmp_path: Path) -> None:
     task = _task()
@@ -851,7 +888,8 @@ def test_doctor_paths_are_structured_read_only_and_continue_after_identity_confl
     repair_hints = project_result["repair_hints"]
     assert any(
         "taskledger --json repair allocations --all" in hint
-        and "every selected source is safe" in hint
+        and "rebind active-task pointers" in hint
+        and "fresh blocker-free plan" in hint
         for hint in repair_hints
     )
     assert not any("--apply --reason" in hint for hint in repair_hints)

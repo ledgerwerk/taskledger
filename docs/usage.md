@@ -728,20 +728,29 @@ Default data is external at `../ledger`; indexes are checkout-specific cache dat
 taskledger doctor
 taskledger doctor locks
 taskledger lock show
-taskledger repair lock --reason "recover stale planning lock"
 taskledger implement resume --reason "Reacquire implementation lock for existing running run."
 taskledger task uncancel --task TASK_REF --reason "Restore the task to a safe durable stage."
 taskledger next-action
 taskledger repair index
 taskledger task deactivate --force --reason "Clear dangling active task after record loss."
 taskledger repair locks
-taskledger repair locks --apply --reason "Preserve and remove the orphaned runtime lock."
+taskledger repair locks --apply --reason "Preserve and remove the diagnosed orphaned runtime lock."
 taskledger repair allocations
-taskledger repair allocations --apply --reason "Quarantine incomplete task allocation after record loss."
+taskledger repair allocations --task-id task-0019
+taskledger repair allocations --task-id task-0019 --apply --plan-id PLAN_ID --reason "Quarantine the reviewed physical source."
+taskledger repair active-task --action rebind --target-uuid TARGET_UUID
+taskledger repair active-task --action rebind --target-uuid TARGET_UUID --apply --plan-id PLAN_ID --reason "Rebind to the verified UUID owner."
+taskledger repair task-dirs
 taskledger maintenance gc --scope artifacts
 ```
 
-Forced deactivation clears only a dangling active-task pointer. Run the lock-repair dry-run separately to inspect orphan locks before applying. Allocation repair is dry-run by default and requires an explicit source or deliberate bulk scope plus a reviewed plan fingerprint before applying. It preserves quarantined payloads and records tombstone provenance. For identity, relationship, and backup-first recovery procedures, see [UUID identity and allocation recovery](recovery_identity.md). Garbage collection is explicit, dry-run by default, and never deletes canonical task history; see `docs/command_contract.md` for scope and retention details.
+Forced deactivation clears only a dangling active-task pointer. Run the lock-repair dry-run separately; apply only diagnosed locks and preserve the reason.
+
+`repair task-dirs` removes only empty slug directories backed by valid physical task records. It does not remove task-ID directories or incomplete allocations and does not require global identity uniqueness.
+
+Allocation repair is dry-run by default. Use an explicit physical source ID or deliberate `--all` scope, review the exact plan, and supply its plan ID and a reason when applying. Protection blockers cover active-task pointers, locks, and running runs physically inside each selected source.
+
+If a plan reports `active_task_pointer`, do not apply it. Rebind only to an explicitly verified UUID owner with a reviewed `repair active-task` plan, then request a fresh allocation dry-run. Resolve lock or running-run blockers through the proper lifecycle or reviewed repair path. Verify strict identity, allocation audit, and Doctor after applying.
 
 ## Export and snapshots
 

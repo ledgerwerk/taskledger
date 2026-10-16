@@ -30,6 +30,9 @@ FUNCTION_LINE_WHITELIST: dict[str, str] = {
         "Migration inspect logic covers candidate discovery,"
         " config analysis, and issue assembly."
     ),
+    "taskledger/services/doctor.py::_inspect_v2_project_phases": (
+        "Project doctor phases collect independent corruption-tolerant diagnostics."
+    ),
 }
 
 CLI_SERVICES_IMPORT_WHITELIST: dict[str, str] = {
@@ -415,12 +418,6 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/allocation_recovery.py::_append_transaction_events:except-2": (
         "Event verification failures remain pending for explicit audit recovery."
     ),
-    "taskledger/services/allocation_recovery.py::_assert_unprotected:except-1": (
-        "Lock inventory failures block allocation movement."
-    ),
-    "taskledger/services/allocation_recovery.py::_assert_unprotected:except-2": (
-        "Run inventory failures block allocation movement."
-    ),
     "taskledger/services/allocation_recovery.py::_rollback_transaction:except-1": (
         "Rollback records tombstone restore failures without hiding journal state."
     ),
@@ -474,6 +471,20 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     ): ("Batch failures trigger coordinated rollback and preserve journal state."),
     "taskledger/services/doctor.py::_append_identity_conflict_diagnostics:except-1": (
         "Doctor reports identity conflict inspection failures independently."
+    ),
+    "taskledger/services/doctor.py::_inspect_task_integrity:except-2": (
+        "Physical run/lock inspection failures become structured Doctor diagnostics."
+    ),
+    (
+        "taskledger/services/allocation_protection.py::"
+        "inspect_allocation_protection:except-1"
+    ): ("Malformed active-task state is reported as a protection blocker."),
+    (
+        "taskledger/services/allocation_protection.py::"
+        "inspect_allocation_protection:except-2"
+    ): ("Lock and physical-run inventory failures block allocation movement."),
+    "taskledger/storage/physical_runs.py::list_physical_runs_from_paths:except-1": (
+        "Unreadable physical run records fail inspection instead of being omitted."
     ),
 }
 

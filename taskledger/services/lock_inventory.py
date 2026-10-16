@@ -61,12 +61,25 @@ class LockInventoryEntry:
     diagnostics: LockDiagnostics | None
     parse_error: str | None
     task_uuid: str | None = None
-
     orphan_missing_task: bool = False
+    identity_error: str | None = None
+    identity_error_code: str | None = None
 
     @property
     def is_malformed(self) -> bool:
         return self.parse_error is not None
+
+    @property
+    def identity_unresolved(self) -> bool:
+        return self.identity_error is not None
+
+    @property
+    def binding_status(self) -> str:
+        if self.identity_unresolved:
+            return "unresolved"
+        if self.orphan_missing_task:
+            return "missing"
+        return "resolved"
 
     @property
     def is_expired(self) -> bool:
@@ -99,13 +112,22 @@ class LockInventoryEntry:
             "task_uuid": self.task_uuid,
             "path": str(self.path),
             "classification": self.classification,
+            "file_health": "malformed" if self.is_malformed else "valid",
+            "lease_state": (
+                self.diagnostics.classification
+                if self.diagnostics is not None
+                else None
+            ),
+            "identity_status": self.binding_status,
+            "identity_error_code": self.identity_error_code,
+            "identity_error": self.identity_error,
+            "parse_error": self.parse_error,
+            "orphan_missing_task": self.orphan_missing_task,
         }
         if self.lock is not None:
             result["lock"] = self.lock.to_dict()
         if self.diagnostics is not None:
             result["diagnostics"] = self.diagnostics.to_dict()
-        if self.parse_error is not None:
-            result["parse_error"] = self.parse_error
         return result
 
 
@@ -170,19 +192,38 @@ class LockInventory:
         )
 
     @property
+    def identity_unresolved_count(self) -> int:
+        return sum(1 for entry in self.entries if entry.identity_unresolved)
+
+    @property
     def migration_blockers(self) -> tuple[LockInventoryEntry, ...]:
-        """Entries that block migration (malformed or active non-safe)."""
+        """Entries that block migration because state or ownership is unsafe."""
         return tuple(
-            e
-            for e in self.entries
-            if e.is_malformed or e.classification in ACTIVE_BLOCKING_CLASSIFICATIONS
+            entry
+            for entry in self.entries
+            if entry.is_malformed
+            or entry.identity_unresolved
+            or entry.classification in ACTIVE_BLOCKING_CLASSIFICATIONS
         )
 
     @property
     def safe_repairable(self) -> tuple[LockInventoryEntry, ...]:
         """Entries that can be safely repaired automatically."""
         return tuple(
-            e for e in self.entries if e.classification in SAFE_REPAIR_CLASSIFICATIONS
+            entry
+            for entry in self.entries
+            if entry.classification in SAFE_REPAIR_CLASSIFICATIONS
+            and not entry.identity_unresolved
+        )
+
+    @property
+    def identity_blocked_repairable(self) -> tuple[LockInventoryEntry, ...]:
+        """Stale locks that cannot be mutated until identity binding is resolved."""
+        return tuple(
+            entry
+            for entry in self.entries
+            if entry.classification in SAFE_REPAIR_CLASSIFICATIONS
+            and entry.identity_unresolved
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -192,11 +233,12 @@ class LockInventory:
             "expired_count": self.expired_count,
             "stale_count": self.stale_count,
             "malformed_count": self.malformed_count,
+            "identity_unresolved_count": self.identity_unresolved_count,
             "unverifiable_count": self.unverifiable_count,
             "no_pid_count": self.no_pid_count,
             "harness_session_count": self.harness_session_count,
             "other_actor_count": self.other_actor_count,
-            "entries": [e.to_dict() for e in self.entries],
+            "entries": [entry.to_dict() for entry in self.entries],
         }
 
 
@@ -240,6 +282,8 @@ def build_lock_inventory(
             logger.warning("Malformed lock file %s: %s", lock_path, exc)
 
         identity = None
+        identity_error: str | None = None
+        identity_error_code: str | None = None
         if lock is not None:
             try:
                 candidate = task_identity_for_stored_ref(
@@ -254,9 +298,10 @@ def build_lock_inventory(
                     AMBIGUOUS_LEGACY_TASK_REF,
                     TASK_IDENTITY_CONFLICT,
                 }:
-                    parse_error = (
+                    identity_error = (
                         f"Cannot resolve lock task identity {lock.task_id!r}: {exc}"
                     )
+                    identity_error_code = exc.code
         elif path_uuid is not None:
             try:
                 candidate = task_identity_for_ref(paths, path_uuid)
@@ -287,7 +332,10 @@ def build_lock_inventory(
                 logger.warning("Lock diagnosis failed %s: %s", lock_path, exc)
 
         orphan_missing_task = (
-            lock is not None and lock_path.parent.name == "locks" and identity is None
+            lock is not None
+            and lock_path.parent.name == "locks"
+            and identity is None
+            and identity_error is None
         )
         entries.append(
             LockInventoryEntry(
@@ -298,6 +346,8 @@ def build_lock_inventory(
                 diagnostics=diagnostics,
                 parse_error=parse_error,
                 orphan_missing_task=orphan_missing_task,
+                identity_error=identity_error,
+                identity_error_code=identity_error_code,
             )
         )
 
@@ -327,26 +377,31 @@ def require_migration_safe_locks(
         "active_count": inventory.active_count,
         "expired_count": inventory.expired_count,
         "malformed_count": inventory.malformed_count,
+        "identity_unresolved_count": inventory.identity_unresolved_count,
         "stale_count": inventory.stale_count,
-        "blocker_task_ids": [e.task_id for e in blockers if e.task_id is not None],
-        "blocker_classifications": [e.classification for e in blockers],
+        "blocker_task_ids": [
+            entry.task_id for entry in blockers if entry.task_id is not None
+        ],
+        "blocker_classifications": [entry.classification for entry in blockers],
     }
 
     has_malformed = inventory.malformed_count > 0
+    has_identity_unresolved = inventory.identity_unresolved_count > 0
     has_active_blockers = any(
-        e.classification in ACTIVE_BLOCKING_CLASSIFICATIONS for e in blockers
+        entry.classification in ACTIVE_BLOCKING_CLASSIFICATIONS for entry in blockers
     )
 
-    if has_malformed:
+    if has_malformed or has_identity_unresolved:
         raise LaunchError(
-            f"Taskledger storage migration is blocked by "
-            f"{inventory.malformed_count} malformed lock file(s) and "
-            f"{inventory.active_count} active lock(s). "
-            f"Repair malformed locks and stale locks before migrating.",
+            "Taskledger storage migration is blocked by "
+            f"{inventory.malformed_count} malformed lock file(s), "
+            f"{inventory.identity_unresolved_count} lock(s) with "
+            f"unresolved task identity, "
+            f"and {inventory.active_count} active lock(s). "
+            "Resolve malformed locks and task identity conflicts before migrating.",
             code="TASKLEDGER_STORAGE_MIGRATION_LOCK_STATE_INVALID",
             details=details,
         )
-
     if has_active_blockers:
         raise LaunchError(
             f"Taskledger storage migration is blocked by "

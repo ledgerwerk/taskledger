@@ -68,8 +68,22 @@ inventory must succeed afterward with that UUID bundle as sole owner.
 Ambiguous ownership—including an existing tombstone, multiple live claimants, a
 non-live claimant, or a changed physical source—is `blocked_identity_conflict` and
 must not be applied. The dry-run reports `apply_safe: false` and no `next_command`.
-Doctor's allocation hint begins with the dry-run; apply only the exact plan ID when
-that report says it is safe.
+If the allocation dry-run reports protection blockers, do not apply that plan. Resolve an `active_task_pointer` blocker only through an explicit, reviewed rebind to a verified UUID owner, then request a fresh allocation dry-run. Active locks and running runs physically inside a selected source remain blockers; do not bypass them. Apply only the exact fresh plan when it is safe.
+
+## Dependency order and physical repair boundaries
+
+When the identity inventory is invalid, Doctor marks logical scans incomplete but still inspects locks and runs in known physical task bundles. A run is owned by the directory containing its run record; its `task_id` metadata does not transfer ownership to another directory.
+
+Lock file health, lease state, and identity binding are separate findings. A readable expired lock with unresolved identity is not malformed or automatically repairable, and remains a migration blocker. Do not use lock cleanup to guess its owner. Restore unique identity evidence first, then review a fresh lock plan if cleanup is still required.
+
+Use this order for a shadowed allocation:
+
+1. Back up the canonical configuration and resolved data mount, then inspect Doctor, lock diagnostics, the active-task pointer, and allocation audit.
+2. Run an allocation dry-run to identify the exact physical source set and protection blockers. If it reports `active_task_pointer`, stop and review `repair active-task --action rebind --target-uuid TARGET_UUID`. Rebind only to the explicitly verified live UUID owner, using the exact plan ID and a reason. Do not clear a valid or ambiguous pointer to get past the blocker.
+3. Request a new allocation dry-run after the rebind. Review all source paths, fingerprints, quarantine destinations, and blockers again. Active locks and running runs physically inside a selected source still block quarantine; runs under other physical UUID bundles do not become blockers from metadata aliases alone.
+4. Apply only the exact fresh, blocker-free plan. Verify unchanged UUID owners, quarantined bytes, strict identity resolution, allocation audit, lock diagnostics, and Doctor.
+
+`repair task-dirs` is a separate narrow cleanup. It removes only empty slug directories supported by valid physical task records. It does not remove task-ID directories, incomplete allocations, or require global identity uniqueness.
 
 ## Historical shadowing-tombstone recovery
 

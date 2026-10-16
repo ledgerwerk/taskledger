@@ -199,6 +199,10 @@ def _render_lock_entries(
         parse_error = item.get("parse_error")
         if parse_error and show_path:
             lines.append(f"    error: {parse_error}")
+        if item.get("identity_status") == "unresolved":
+            code = item.get("identity_error_code")
+            suffix = f" ({code})" if code else ""
+            lines.append(f"    identity binding: unresolved{suffix}")
 
 
 def _lock_inspection_human(payload: dict[str, object]) -> str:
@@ -214,6 +218,7 @@ def _lock_inspection_human(payload: dict[str, object]) -> str:
             "expired",
             "stale",
             "malformed",
+            "identity_unresolved",
             "unverifiable",
         ):
             val = summary.get(key)
@@ -402,13 +407,28 @@ def repair_locks_command(
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-    if payload.get("dry_run"):
+    if payload.get("dry_run") or payload.get("status") == "blocked_identity":
         entries_raw = payload.get("entries", [])
         entries = entries_raw if isinstance(entries_raw, list) else []
-        lines = [f"BULK LOCK REPAIR (dry-run): {len(entries)} lock(s)"]
+        is_dry_run = bool(payload.get("dry_run"))
+        phase = "dry-run" if is_dry_run else "blocked"
+        lines = [f"BULK LOCK REPAIR ({phase}): {len(entries)} repairable lock(s)"]
         for entry in entries:
             if isinstance(entry, dict):
                 lines.append(f"  {entry.get('task_id')}  {entry.get('classification')}")
+        blocked_raw = payload.get("blocked_entries", [])
+        blocked = blocked_raw if isinstance(blocked_raw, list) else []
+        if blocked:
+            lines.append(f"\nIdentity-blocked: {len(blocked)} lock(s)")
+            for entry in blocked:
+                if isinstance(entry, dict):
+                    lines.append(
+                        f"  {entry.get('task_id')}  {entry.get('classification')} "
+                        f"identity_status={entry.get('identity_status')}"
+                    )
+            lines.append(
+                "Resolve the task identity conflict, then rerun lock diagnostics."
+            )
         next_cmd = payload.get("next_command")
         if next_cmd:
             lines.append(f"\nNext: {next_cmd}")
@@ -456,9 +476,48 @@ def _allocation_repair_dry_run_human(payload: dict[str, object]) -> str:
                         f"{finding.get('kind')} {finding.get('path')} "
                         f"state={finding.get('state')}"
                     )
+        blockers = entry.get("protection_blockers")
+        if isinstance(blockers, list):
+            for blocker in blockers:
+                if not isinstance(blocker, dict):
+                    continue
+                kind = blocker.get("kind")
+                if kind == "active_task_pointer":
+                    lines.append(
+                        "    blocked=active_task_pointer "
+                        f"task={blocker.get('active_task_id')} "
+                        f"uuid={blocker.get('active_task_uuid')}"
+                    )
+                elif kind == "task_lock":
+                    lock = blocker.get("lock")
+                    if isinstance(lock, dict):
+                        lines.append(
+                            "    blocked=task_lock "
+                            f"path={lock.get('path')} "
+                            f"identity={lock.get('identity_status')} "
+                            f"classification={lock.get('classification')}"
+                        )
+                elif kind == "running_run":
+                    lines.append(
+                        "    blocked=running_run "
+                        f"run={blocker.get('run_id')} "
+                        f"task={blocker.get('run_task_id')} "
+                        f"physical={blocker.get('physical_task_directory')}"
+                    )
+                elif kind == "inspection_error":
+                    lines.append(
+                        "    blocked=inspection_error "
+                        f"scope={blocker.get('scope')} "
+                        f"error={blocker.get('error')}"
+                    )
     next_command = payload.get("next_command")
     if isinstance(next_command, str) and next_command:
         lines.append(f"\nNext: {next_command}")
+    elif payload.get("protection_blocked"):
+        lines.append(
+            "\nNo apply command: resolve the active pointer, task lock, "
+            "or running run first."
+        )
     elif payload.get("apply_safe") is False:
         lines.append("\nNo apply command: resolve the identity ambiguity first.")
     return "\n".join(lines)
@@ -1241,11 +1300,16 @@ def repair_relation_command(
 
 
 def repair_task_dirs_command(ctx: typer.Context) -> None:
+    """Remove empty slug directories backed by valid physical task records."""
     from taskledger.services.doctor import cleanup_orphan_slug_dirs
 
     state = ctx.obj
     assert isinstance(state, CLIState)
-    payload = cleanup_orphan_slug_dirs(state.cwd)
+    try:
+        payload = cleanup_orphan_slug_dirs(state.cwd)
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
     removed = cast(list[str], payload.get("removed", []))
     names = ", ".join(removed) if removed else "(none)"
     emit_payload(
@@ -1272,4 +1336,7 @@ def register_repair_commands(repair_app: typer.Typer, doctor_app: typer.Typer) -
     repair_app.command("planning-command-changes")(
         repair_planning_command_changes_command
     )
-    repair_app.command("task-dirs")(repair_task_dirs_command)
+    repair_app.command(
+        "task-dirs",
+        help="Remove empty slug directories backed by valid physical task records.",
+    )(repair_task_dirs_command)

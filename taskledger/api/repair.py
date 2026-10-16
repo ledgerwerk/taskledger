@@ -114,9 +114,7 @@ def repair_locks(
 
     Default mode is dry-run. Requires --apply and --reason for mutation.
     """
-    from taskledger.services.lock_inventory import (
-        build_lock_inventory,
-    )
+    from taskledger.services.lock_inventory import build_lock_inventory
     from taskledger.services.run_store import break_lock, break_orphan_lock
     from taskledger.storage.task_store import resolve_v2_paths
 
@@ -128,14 +126,28 @@ def repair_locks(
         for entry in inventory.entries
         if entry.classification == "orphan_missing_task"
     )
+    identity_blocked = inventory.identity_blocked_repairable
     eligible = (*safe, *orphans)
+    blocked_entries = [
+        {
+            **entry.to_dict(),
+            "remediation": [
+                "Repair the shadowed or incomplete task allocation first.",
+                "Run taskledger doctor locks again.",
+                "Rerun taskledger repair locks after resolving task identity.",
+            ],
+        }
+        for entry in identity_blocked
+    ]
     if not eligible:
         return {
             "kind": "bulk_lock_repair",
-            "status": "nothing_to_repair",
+            "status": "blocked_identity" if identity_blocked else "nothing_to_repair",
             "dry_run": not apply,
             "safe_repairable": 0,
             "orphan_missing_task": 0,
+            "identity_blocked": len(identity_blocked),
+            "blocked_entries": blocked_entries,
             "total_locks": inventory.lock_file_count,
         }
 
@@ -146,17 +158,17 @@ def repair_locks(
             "dry_run": True,
             "safe_repairable": len(safe),
             "orphan_missing_task": len(orphans),
+            "identity_blocked": len(identity_blocked),
+            "blocked_entries": blocked_entries,
             "total_locks": inventory.lock_file_count,
             "entries": [
                 {
-                    "task_id": e.task_id,
-                    "classification": e.classification,
-                    "path": str(e.path),
-                    "remediation": list(e.diagnostics.remediation)
-                    if e.diagnostics
+                    **entry.to_dict(),
+                    "remediation": list(entry.diagnostics.remediation)
+                    if entry.diagnostics
                     else [],
                 }
-                for e in eligible
+                for entry in eligible
             ],
             "next_command": (
                 "taskledger repair locks --apply "
@@ -200,6 +212,8 @@ def repair_locks(
         "dry_run": False,
         "repaired": repaired,
         "orphan_missing_task_repaired": orphan_repaired,
+        "identity_blocked": len(identity_blocked),
+        "blocked_entries": blocked_entries,
         "failed": failed,
         "reason": reason,
     }
@@ -680,7 +694,10 @@ def repair_allocations(
     """Inspect or transactionally quarantine selected physical allocations."""
     from contextlib import nullcontext
 
-    from taskledger.services.allocation_recovery import apply_allocation_repair_batch
+    from taskledger.services.allocation_recovery import (
+        apply_allocation_repair_batch,
+        inspect_allocation_protection,
+    )
     from taskledger.storage.task_identity import (
         identity_mutation_lock,
         inspect_task_identity_conflicts,
@@ -742,6 +759,23 @@ def repair_allocations(
 
         entries = [_allocation_repair_plan_entry(paths, item) for item in selected]
         identity_conflicts = inspect_task_identity_conflicts(paths)
+        protection_blockers = inspect_allocation_protection(paths, entries)
+        for entry in entries:
+            source_id = entry.get("source_id")
+            entry_blockers = [
+                blocker
+                for blocker in protection_blockers
+                if blocker.get("source_id") is None
+                or blocker.get("source_id") == source_id
+            ]
+            entry["protection_blockers"] = entry_blockers
+            entry["protection_safe"] = not entry_blockers
+        if apply and protection_blockers:
+            raise LaunchError(
+                "Allocation repair is blocked by task protection state.",
+                code="TASKLEDGER_ALLOCATION_REPAIR_BLOCKED",
+                details={"blockers": protection_blockers},
+            )
         computed_plan_id = _allocation_plan_fingerprint(
             task_id=task_id,
             entries=entries,
@@ -759,7 +793,10 @@ def repair_allocations(
             )
         if not apply:
             selector = f"--task-id {task_id}" if task_id is not None else "--all"
-            apply_safe = all(bool(entry["apply_safe"]) for entry in entries)
+            apply_safe = (
+                all(bool(entry["apply_safe"]) for entry in entries)
+                and not protection_blockers
+            )
             return {
                 "kind": "task_allocation_repair",
                 "status": "dry_run",
@@ -768,6 +805,8 @@ def repair_allocations(
                 "apply_safe": apply_safe,
                 "incomplete_allocations": entries,
                 "identity_conflicts": list(identity_conflicts),
+                "protection_blockers": protection_blockers,
+                "protection_blocked": bool(protection_blockers),
                 "next_command": (
                     "taskledger repair allocations "
                     f"{selector} --apply --plan-id {computed_plan_id} --reason "

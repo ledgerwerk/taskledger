@@ -14,7 +14,7 @@ from taskledger.domain.models import (
 )
 from taskledger.domain.states import TASKLEDGER_STORAGE_LAYOUT_VERSION
 from taskledger.errors import LaunchError
-from taskledger.services.lock_inventory import LockInventory
+from taskledger.services.lock_inventory import LockInventory, LockInventoryEntry
 from taskledger.storage.events import load_events
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.migrations import (
@@ -36,7 +36,6 @@ from taskledger.storage.task_store import (
     list_plans_from_paths,
     list_questions_from_paths,
     list_runs_from_paths,
-    list_tasks,
     read_active_task_state_raw,
     require_v2_layout,
     resolve_v2_paths,
@@ -55,6 +54,7 @@ class DoctorScanContext:
     task_by_id: Mapping[str, TaskRecord]
     locks: tuple[TaskLock, ...]
     runs_by_task: Mapping[str, tuple[TaskRunRecord, ...]]
+    lock_entries: tuple[LockInventoryEntry, ...]
     run_by_key: Mapping[tuple[str, str], TaskRunRecord]
     active_state: ActiveTaskState | None
     active_reference: dict[str, object]
@@ -343,17 +343,20 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
                 ],
                 "phase": "identity_dependent_scans",
                 "message": (
-                    "Task plan, question, change, run, and relationship scans were "
-                    "skipped because the task identity inventory is invalid."
+                    "Task plan, question, change, task-indexed run, and relationship "
+                    "scans were skipped because task identity is invalid; physical "
+                    "run/lock checks still inspect known bundles."
                 ),
             }
         )
 
+    lock_entries: tuple[LockInventoryEntry, ...] = ()
     try:
         lock_inventory = build_lock_inventory(paths)
         locks = tuple(
             entry.lock for entry in lock_inventory.entries if entry.lock is not None
         )
+        lock_entries = lock_inventory.entries
         for entry in lock_inventory.entries:
             if entry.is_malformed:
                 message = entry.parse_error or f"Malformed lock {entry.path}."
@@ -365,6 +368,19 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
                         "phase": "lock_inventory",
                         "path": str(entry.path),
                         "message": message,
+                    }
+                )
+            elif entry.identity_unresolved:
+                scan_diagnostics.append(
+                    {
+                        "severity": "warning",
+                        "code": "LOCK_IDENTITY_UNRESOLVED",
+                        "phase": "lock_inventory",
+                        "path": str(entry.path),
+                        "file_health": "valid",
+                        "lease_state": entry.classification,
+                        "identity_status": "unresolved",
+                        "message": entry.identity_error,
                     }
                 )
     except Exception as exc:  # noqa: BLE001
@@ -477,6 +493,7 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         tasks=tasks,
         task_by_id=task_by_id,
         locks=locks,
+        lock_entries=lock_entries,
         runs_by_task=runs_by_task,
         run_by_key=run_by_key,
         active_state=active_state,
@@ -598,6 +615,41 @@ def _inspect_task_integrity(
     diagnostics: list[dict[str, object]],
 ) -> None:
     if not ctx.identity_inventory_valid:
+        try:
+            physical_mismatches, physical_errors = _run_lock_mismatches(
+                ctx.paths, LockInventory(ctx.lock_entries)
+            )
+        except Exception as exc:  # noqa: BLE001
+            errors.append(str(exc))
+            diagnostics.append(
+                {
+                    "severity": "error",
+                    "code": getattr(exc, "code", "RUN_LOCK_INSPECTION_FAILED"),
+                    "phase": "physical_run_lock_inventory",
+                    "message": str(exc),
+                }
+            )
+            return
+        run_lock_mismatches.extend(physical_mismatches)
+        errors.extend(physical_errors)
+        for mismatch in physical_mismatches:
+            diagnostics.append(
+                {
+                    "severity": "error",
+                    "code": "RUN_LOCK_MISMATCH",
+                    "phase": "physical_run_lock_inventory",
+                    "task_id": mismatch.get("task_id"),
+                    "run_id": mismatch.get("run_id"),
+                    "message": mismatch.get("note")
+                    or "Physical running run has no matching active lock.",
+                    "next_command": mismatch.get("next_command"),
+                }
+            )
+        if physical_mismatches:
+            repair_hints.append(
+                "Resolve reported physical run/lock mismatches before applying "
+                "allocation quarantine, then request a fresh allocation dry-run."
+            )
         return
     from taskledger.services.doctor_checks.task_checks import scan_task_integrity
 
@@ -641,10 +693,22 @@ def _inspect_lock_consistency(
     expired_locks: list[dict[str, object]],
 ) -> None:
     with _timing.stage("lock_consistency"):
+        lock_entries_by_id = {
+            entry.lock.lock_id: entry
+            for entry in ctx.lock_entries
+            if entry.lock is not None
+        }
         for lock in ctx.locks:
+            lock_entry = lock_entries_by_id.get(lock.lock_id)
             try:
                 if lock_is_expired(lock):
-                    expired_locks.append(lock.to_dict())
+                    expired_payload = (
+                        lock_entry.to_dict()
+                        if lock_entry is not None
+                        else lock.to_dict()
+                    )
+                    expired_payload["lease_state"] = "expired"
+                    expired_locks.append(expired_payload)
             except Exception as exc:  # noqa: BLE001
                 errors.append(str(exc))
             if not ctx.identity_inventory_valid:
@@ -769,17 +833,19 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
         )
     if ctx.incomplete_task_allocations:
         repair_hints.append(
-            "Review one coordinated plan with "
-            "`taskledger --json repair allocations --all`; "
-            "apply only if every selected source is safe and matches the reviewed plan."
+            "Review one coordinated dry-run with "
+            "`taskledger --json repair allocations --all`; rebind active-task pointers "
+            "to verified owners, resolve blockers physically inside selected sources, "
+            "then apply only a fresh blocker-free plan."
         )
     identity_conflicts_present = any(
         item.get("code") == "TASKLEDGER_TASK_IDENTITY_CONFLICT" for item in diagnostics
     )
     if identity_conflicts_present:
         repair_hints.append(
-            "Review authoritative identity conflicts with "
-            "`taskledger repair allocations --conflicts`."
+            "Review tombstone/owner conflicts with "
+            "`taskledger repair allocations --conflicts`; this does not quarantine "
+            "incomplete physical task directories."
         )
         try:
             from taskledger.services.allocation_recovery import (
@@ -979,7 +1045,7 @@ def _run_lock_mismatches(
         TaskSummaryRecord,
         _read_index,
     )
-    from taskledger.storage.task_store import list_runs_from_paths
+    from taskledger.storage.task_store import _load_task, list_physical_runs_from_paths
 
     errors: list[str] = []
     task_summaries: dict[str, TaskSummaryRecord] = {}
@@ -1007,7 +1073,11 @@ def _run_lock_mismatches(
     active_locks = {
         entry.lock.task_uuid or entry.lock.task_id: entry.lock
         for entry in inventory.entries
-        if entry.lock is not None and not lock_is_expired(entry.lock)
+        if (
+            entry.lock is not None
+            and not entry.identity_unresolved
+            and not lock_is_expired(entry.lock)
+        )
     }
     candidate_task_ids = set(active_locks)
     for task_id, sidecar in sidecars.items():
@@ -1021,39 +1091,48 @@ def _run_lock_mismatches(
     except OSError as exc:
         task_directories = []
         errors.append(f"Unable to enumerate task bundles for lock inspection: {exc}")
+    physical_runs_by_directory: dict[str, list[TaskRunRecord]] = {}
+    physical_task_records: dict[str, TaskRecord] = {}
     for task_directory in task_directories:
-        runs_directory = task_directory / "runs"
-        if (
-            not task_directory.is_symlink()
-            and task_directory.is_dir()
-            and (
-                task_directory.name.startswith("task-")
-                or (
-                    len(task_directory.name) == 36
-                    and task_directory.name.count("-") == 4
-                )
-            )
-            and not runs_directory.is_symlink()
-            and runs_directory.is_dir()
+        if not (
+            task_directory.name.startswith("task-")
+            or (len(task_directory.name) == 36 and task_directory.name.count("-") == 4)
         ):
-            candidate_task_ids.add(task_directory.name)
+            continue
+        candidate_task_ids.add(task_directory.name)
+        try:
+            physical_runs_by_directory[task_directory.name] = (
+                list_physical_runs_from_paths(paths, task_directory)
+            )
+            task_record_path = task_directory / "task.md"
+            if not task_record_path.is_symlink() and task_record_path.is_file():
+                physical_task_records[task_directory.name] = _load_task(
+                    task_record_path
+                )
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"Unable to inspect runs in {task_directory}: {exc}")
     mismatches: list[dict[str, object]] = []
     for task_ref in sorted(candidate_task_ids):
-        task = task_summaries.get(task_ref)
+        task = physical_task_records.get(task_ref) or task_summaries.get(task_ref)
         task_id = task.id if task is not None else task_ref
-        try:
-            runs = list_runs_from_paths(paths, task_ref)
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"Unable to inspect runs for {task_id}: {exc}")
-            continue
+        runs = physical_runs_by_directory.get(task_ref, [])
         running_runs = [run for run in runs if run.status == "running"]
         lock = active_locks.get(task_ref)
         active_stage = derive_active_stage(lock, running_runs)
-        if running_runs and active_stage is None:
+        supported_cancelled_run = (
+            task is not None
+            and task.status_stage == "cancelled"
+            and task.accepted_plan_version is not None
+            and task.latest_implementation_run is not None
+            and len(running_runs) == 1
+            and running_runs[0].run_type == "implementation"
+            and running_runs[0].run_id == task.latest_implementation_run
+            and lock is None
+        )
+        if running_runs and active_stage is None and not supported_cancelled_run:
             errors.append(
                 f"Task {task_id} has a running run without a matching active lock."
             )
-            task = task_summaries.get(task_ref)
             for run in running_runs:
                 next_command = f"taskledger task show --task {task_id}"
                 note = "Inspect task and run state before choosing repair."
@@ -1203,6 +1282,20 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
                 }
             )
             continue
+        if entry.identity_unresolved:
+            diagnostics.append(
+                {
+                    "severity": "warning",
+                    "code": "LOCK_IDENTITY_UNRESOLVED",
+                    "phase": "lock_inventory",
+                    "path": str(entry.path),
+                    "file_health": entry_dict["file_health"],
+                    "lease_state": entry_dict["lease_state"],
+                    "identity_status": "unresolved",
+                    "identity_error_code": entry.identity_error_code,
+                    "message": entry.identity_error,
+                }
+            )
         classification = entry.classification
         if classification == "expired":
             expired_locks.append(entry_dict)
@@ -1271,6 +1364,7 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
             "expired": len(expired_locks),
             "stale": len(stale_locks),
             "malformed": len(malformed_locks),
+            "identity_unresolved": inventory.identity_unresolved_count,
             "unverifiable": len(unverifiable_locks),
         },
         "live_locks": live_locks,
@@ -1521,21 +1615,55 @@ def inspect_v2_indexes(workspace_root: Path) -> dict[str, object]:
 
 
 def cleanup_orphan_slug_dirs(workspace_root: Path) -> dict[str, object]:
-    """Remove empty slug-named directories under tasks/ that have no task.md."""
+    """Remove only empty slug directories backed by physically valid task records."""
+    from taskledger.storage.task_store import _load_task
+
     paths = require_v2_layout(workspace_root)
-    tasks = list_tasks(workspace_root)
-    task_slugs = {task.slug for task in tasks if task.slug}
+    if paths.tasks_dir.is_symlink():
+        raise LaunchError(
+            "Cannot inspect task directories through symlinked mount: "
+            f"{paths.tasks_dir}"
+        )
+    try:
+        children = sorted(paths.tasks_dir.iterdir())
+    except OSError as exc:
+        raise LaunchError(
+            f"Unable to inspect task directories under {paths.tasks_dir}: {exc}"
+        ) from exc
+
+    task_slugs: set[str] = set()
+    for task_directory in children:
+        if task_directory.is_symlink() or not task_directory.is_dir():
+            continue
+        task_record = task_directory / "task.md"
+        if task_record.is_symlink() or not task_record.is_file():
+            continue
+        try:
+            task = _load_task(task_record)
+        except (LaunchError, OSError):
+            continue
+        if task.slug:
+            task_slugs.add(task.slug)
+
     removed: list[str] = []
-    for child in sorted(paths.tasks_dir.iterdir()):
+    for child in children:
         if (
-            child.is_dir()
-            and not child.name.startswith("task-")
-            and child.name in task_slugs
-            and not (child / "task.md").exists()
-            and not any(child.iterdir())
+            child.is_symlink()
+            or not child.is_dir()
+            or child.name.startswith("task-")
+            or child.name not in task_slugs
+            or (child / "task.md").exists()
         ):
+            continue
+        try:
+            if any(child.iterdir()):
+                continue
             child.rmdir()
-            removed.append(child.name)
+        except OSError as exc:
+            raise LaunchError(
+                f"Unable to remove orphan slug directory {child}: {exc}"
+            ) from exc
+        removed.append(child.name)
     return {
         "kind": "taskledger_repair_task_dirs",
         "removed": removed,

@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from taskledger.errors import LaunchError
+from taskledger.services.allocation_protection import inspect_allocation_protection
 from taskledger.timeutils import utc_now_iso
 
 if TYPE_CHECKING:
-    from taskledger.domain.models import TaskRunRecord
     from taskledger.storage.task_ids import IncompleteTaskAllocation
     from taskledger.storage.task_store import V2Paths
 
@@ -134,104 +134,13 @@ def _plan_action(
 
 
 def _assert_unprotected(paths: V2Paths, actions: list[dict[str, Any]]) -> None:
-    from taskledger.domain.models import ActiveTaskState
-    from taskledger.services.lock_inventory import build_lock_inventory
-    from taskledger.storage.task_store import _load_run
-    from taskledger.storage.yaml_store import load_yaml_object
-
-    if paths.active_task_path.exists():
-        try:
-            active_state = ActiveTaskState.from_dict(
-                load_yaml_object(paths.active_task_path, "active task state")
-            )
-        except Exception as exc:
-            raise LaunchError(
-                "Cannot safely repair allocations while active-task "
-                "state is unreadable.",
-                code="TASKLEDGER_ALLOCATION_REPAIR_BLOCKED",
-                details={
-                    "active_task_path": str(paths.active_task_path),
-                    "error": str(exc),
-                },
-            ) from exc
-        for action in actions:
-            uuid_match = active_state.task_uuid == action["task_uuid"]
-            id_match = (
-                active_state.task_id == action["source_id"]
-                or active_state.task_id == Path(action["source_path"]).name
-            )
-            if uuid_match or (active_state.task_uuid is None and id_match):
-                raise LaunchError(
-                    "Allocation repair is blocked because the selected physical source "
-                    "is referenced by active-task state.",
-                    code="TASKLEDGER_ALLOCATION_REPAIR_BLOCKED",
-                    details={
-                        "source_id": action["source_id"],
-                        "active_task_id": active_state.task_id,
-                        "active_task_uuid": active_state.task_uuid,
-                    },
-                )
-
-    try:
-        inventory = build_lock_inventory(paths)
-        runs: list[TaskRunRecord] = []
-        for task_dir in sorted(paths.tasks_dir.iterdir()):
-            if task_dir.is_symlink():
-                raise LaunchError(
-                    f"Cannot inspect runs through symlinked task path: {task_dir}"
-                )
-            if not task_dir.is_dir():
-                continue
-            run_dir = task_dir / "runs"
-            if run_dir.is_symlink():
-                raise LaunchError(f"Cannot inspect symlinked run directory: {run_dir}")
-            if run_dir.is_dir():
-                runs.extend(
-                    _load_run(run_path) for run_path in sorted(run_dir.glob("*.md"))
-                )
-    except Exception as exc:
+    blockers = inspect_allocation_protection(paths, actions)
+    if blockers:
         raise LaunchError(
-            "Cannot safely inspect lock/run protection before allocation repair.",
+            "Allocation repair is blocked by task protection state.",
             code="TASKLEDGER_ALLOCATION_REPAIR_BLOCKED",
-            details={"error": str(exc)},
-        ) from exc
-
-    for action in actions:
-        source_path = Path(action["source_path"])
-        identifiers = {
-            str(action["source_id"]),
-            source_path.name,
-            str(action["task_uuid"]),
-        }
-        for lock_entry in inventory.entries:
-            lock_uuid = (
-                lock_entry.lock.task_uuid
-                if lock_entry.lock is not None
-                else lock_entry.task_uuid
-            )
-            lock_ids = (
-                {str(lock_uuid)}
-                if lock_uuid is not None
-                else {str(lock_entry.task_id)}
-                if lock_entry.task_id is not None
-                else set()
-            )
-            colocated = lock_entry.path == source_path / "lock.yaml"
-            if (identifiers & lock_ids or colocated) and (
-                lock_entry.is_malformed or lock_entry.is_active
-            ):
-                raise LaunchError(
-                    "Allocation repair is blocked by a task lock.",
-                    code="TASKLEDGER_ALLOCATION_REPAIR_BLOCKED",
-                    details=lock_entry.to_dict(),
-                )
-        for run in runs:
-            if run.status == "running" and run.task_id in identifiers:
-                raise LaunchError(
-                    "Allocation repair is blocked by a running task run.",
-                    code="TASKLEDGER_ALLOCATION_REPAIR_BLOCKED",
-                    details={"source_id": action["source_id"], "run_id": run.run_id},
-                )
+            details={"blockers": blockers},
+        )
 
 
 def _verify_local_action(paths: V2Paths, action: dict[str, Any]) -> None:

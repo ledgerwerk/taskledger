@@ -55,6 +55,9 @@ from taskledger.storage.frontmatter import (
 )
 from taskledger.storage.locks import read_lock, remove_lock, update_lock, write_lock
 from taskledger.storage.paths import ProjectPaths
+from taskledger.storage.physical_runs import (
+    list_physical_runs_from_paths as _list_physical_runs_from_paths,
+)
 from taskledger.storage.yaml_store import load_yaml_object, write_yaml_object
 from taskledger.timeutils import utc_now_iso
 
@@ -1003,6 +1006,13 @@ def list_runs_from_paths(paths: V2Paths, task_id: str) -> list[TaskRunRecord]:
     return _list_records(
         directory, pattern="*.md", loader=_load_run, sort_key=lambda item: item.run_id
     )
+
+
+def list_physical_runs_from_paths(
+    paths: V2Paths, task_directory: Path
+) -> list[TaskRunRecord]:
+    """Read runs from one physical task bundle without resolving its identity."""
+    return _list_physical_runs_from_paths(paths, task_directory)
 
 
 def resolve_run(workspace_root: Path, task_id: str, run_id: str) -> TaskRunRecord:

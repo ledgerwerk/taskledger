@@ -18,8 +18,12 @@ from taskledger.api.repair import (
     repair_task_relation,
 )
 from taskledger.domain.active_state import ActiveTaskState
+from taskledger.domain.actor import ActorRef
+from taskledger.domain.lock import TaskLock
+from taskledger.domain.models import TaskRunRecord
 from taskledger.errors import LaunchError
 from taskledger.services.allocation_recovery import (
+    _assert_unprotected,
     _remaining_identity_claim_conflicts,
     apply_identity_conflict_repair_batch,
     list_allocation_repair_transactions,
@@ -27,7 +31,11 @@ from taskledger.services.allocation_recovery import (
     plan_identity_conflict_recovery,
     recover_allocation_repair_transaction,
 )
-from taskledger.services.doctor import inspect_v2_project
+from taskledger.services.doctor import inspect_v2_locks, inspect_v2_project
+from taskledger.services.lock_inventory import (
+    build_lock_inventory,
+    require_migration_safe_locks,
+)
 from taskledger.services.task_events import append_task_event
 from taskledger.services.task_lifecycle import activate_task, deactivate_task
 from taskledger.services.tasks import create_task, start_planning
@@ -49,9 +57,13 @@ from taskledger.storage.task_identity import (
 )
 from taskledger.storage.task_ids import write_task_id_tombstone
 from taskledger.storage.task_store import (
+    V2Paths,
+    list_physical_runs_from_paths,
+    list_runs_from_paths,
     load_active_task_state,
     read_active_task_state_raw,
     resolve_v2_paths,
+    save_run,
     task_lock_path,
     task_markdown_path,
 )
@@ -63,6 +75,84 @@ def _workspace(tmp_path: Path) -> Path:
     workspace.mkdir(parents=True)
     init_canonical_project_state(workspace, create_sibling_store=True)
     return workspace
+
+
+def test_physical_run_reader_is_deterministic_and_rejects_symlinks(
+    tmp_path: Path,
+) -> None:
+    workspace = _workspace(tmp_path)
+    paths = resolve_v2_paths(workspace)
+    task_directory = paths.tasks_dir / "task-physical"
+    run_directory = task_directory / "runs"
+    run_directory.mkdir(parents=True)
+    for run_id in ("run-0002", "run-0001"):
+        run = TaskRunRecord(
+            run_id=run_id,
+            task_id="task-survivor",
+            run_type="implementation",
+            status="running",
+        )
+        write_markdown_front_matter(run_directory / f"{run_id}.md", run.to_dict(), "")
+
+    runs = list_physical_runs_from_paths(paths, task_directory)
+    assert [run.run_id for run in runs] == ["run-0001", "run-0002"]
+    assert {run.task_id for run in runs} == {"task-survivor"}
+
+    task_alias = paths.tasks_dir / "task-alias"
+    task_alias.symlink_to(task_directory, target_is_directory=True)
+    with pytest.raises(LaunchError, match="symlinked task path"):
+        list_physical_runs_from_paths(paths, task_alias)
+
+    run_alias = paths.tasks_dir / "task-run-alias"
+    run_alias.mkdir()
+    (run_alias / "runs").symlink_to(run_directory, target_is_directory=True)
+    with pytest.raises(LaunchError, match="symlinked run directory"):
+        list_physical_runs_from_paths(paths, run_alias)
+
+    record_alias_dir = paths.tasks_dir / "task-record-alias" / "runs"
+    record_alias_dir.mkdir(parents=True)
+    (record_alias_dir / "run-0001.md").symlink_to(run_directory / "run-0001.md")
+    with pytest.raises(LaunchError, match="non-regular run record"):
+        list_physical_runs_from_paths(paths, record_alias_dir.parent)
+
+
+def test_allocation_guard_uses_physical_run_owner(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    paths = resolve_v2_paths(workspace)
+    source_directory = paths.tasks_dir / "task-shadow"
+    source_directory.mkdir()
+    survivor_runs = paths.tasks_dir / "task-survivor" / "runs"
+    survivor_runs.mkdir(parents=True)
+    survivor_run = TaskRunRecord(
+        run_id="run-0001",
+        task_id="task-shadow",
+        run_type="implementation",
+        status="running",
+    )
+    write_markdown_front_matter(
+        survivor_runs / "run-0001.md", survivor_run.to_dict(), ""
+    )
+    action = {
+        "source_id": "task-shadow",
+        "source_path": str(source_directory),
+        "task_uuid": "source-uuid",
+    }
+
+    _assert_unprotected(paths, [action])
+
+    source_runs = source_directory / "runs"
+    source_runs.mkdir()
+    source_run = replace(survivor_run, run_id="run-0002", task_id="task-survivor")
+    write_markdown_front_matter(source_runs / "run-0002.md", source_run.to_dict(), "")
+    with pytest.raises(LaunchError) as raised:
+        _assert_unprotected(paths, [action])
+    assert raised.value.code == "TASKLEDGER_ALLOCATION_REPAIR_BLOCKED"
+    blockers = raised.value.details["blockers"]
+    run_blocker = next(
+        blocker for blocker in blockers if blocker["kind"] == "running_run"
+    )
+    assert run_blocker["run_task_id"] == "task-survivor"
+    assert run_blocker["physical_task_directory"] == str(source_directory)
 
 
 def _shadowed_migrated_allocation(
@@ -99,6 +189,48 @@ def _shadowed_migrated_allocation(
     sidecar = stale_dir / "audit" / "preserve.bin"
     sidecar.write_bytes(b"stale pre-migration allocation")
     return paths, stale_dir, migrated_dir, str(migrated_uuid)
+
+
+def _write_ambiguous_runtime_lock(
+    paths: V2Paths,
+    *,
+    task_id: str,
+    expires_at: str,
+    request: pytest.FixtureRequest,
+) -> Path:
+    lock_path = (
+        paths.runtime_root
+        / "checkouts"
+        / paths.ledger_ref
+        / "locks"
+        / f"{task_id}.yaml"
+    )
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    previous_test_lock = lock_path.parent / "task-0012.yaml"
+    if previous_test_lock.exists():
+        previous_lock = read_lock(previous_test_lock)
+        if previous_lock is not None and previous_lock.lock_id == "lock-ambiguous":
+            previous_test_lock.unlink()
+    lock = TaskLock(
+        lock_id=f"lock-ambiguous-{task_id}",
+        task_id=task_id,
+        stage="implementing",
+        run_id="run-0002",
+        created_at="2026-06-04T20:35:58+00:00",
+        expires_at=expires_at,
+        reason="test",
+        holder=ActorRef.from_dict(
+            {
+                "actor_type": "agent",
+                "actor_name": "test-agent",
+                "host": "localhost",
+                "pid": 999999,
+            }
+        ),
+    )
+    write_lock(lock_path, lock)
+    request.addfinalizer(lambda: lock_path.unlink(missing_ok=True))
+    return lock_path
 
 
 def _shadowed_migrated_allocation_batch(
@@ -472,6 +604,186 @@ def test_allocation_batch_rolls_back_when_fourth_stage_fails(
     assert journal["phase"] == "rolled_back"
 
 
+def test_four_shadowed_allocations_recover_after_pointer_rebind(
+    tmp_path: Path, request: pytest.FixtureRequest
+) -> None:
+    import json
+
+    legacy_ids = ("task-0012", "task-0013", "task-0014", "task-0015")
+    workspace = _workspace(tmp_path)
+    paths, stale_sources, migrated_dirs, live_task_bytes = (
+        _shadowed_migrated_allocation_batch(workspace, legacy_ids)
+    )
+    owner_uuids = {
+        legacy_id: str(
+            read_markdown_front_matter(migrated_dirs[legacy_id] / "task.md")[0][
+                "task_uuid"
+            ]
+        )
+        for legacy_id in legacy_ids
+    }
+
+    write_yaml_object(
+        paths.active_task_path,
+        ActiveTaskState(task_id=legacy_ids[0]).to_dict(),
+    )
+    _write_ambiguous_runtime_lock(
+        paths,
+        task_id=legacy_ids[0],
+        expires_at="2020-01-01T00:00:00+00:00",
+        request=request,
+    )
+    run_owner_id = legacy_ids[1]
+    run_directory = migrated_dirs[run_owner_id] / "runs"
+    run_directory.mkdir(exist_ok=True)
+    run = TaskRunRecord(
+        run_id="run-0001",
+        task_id=owner_uuids[run_owner_id],
+        run_type="implementation",
+        status="running",
+    )
+    write_markdown_front_matter(run_directory / "run-0001.md", run.to_dict(), "")
+    write_lock(
+        migrated_dirs[run_owner_id] / "lock.yaml",
+        TaskLock(
+            lock_id="lock-owner-run",
+            task_id=run_owner_id,
+            stage="implementing",
+            run_id=run.run_id,
+            created_at="2026-06-04T20:35:58+00:00",
+            expires_at="2099-12-31T23:59:59+00:00",
+            reason="Protect the surviving physical owner run.",
+            holder=ActorRef.from_dict(
+                {
+                    "actor_type": "agent",
+                    "actor_name": "incident-test",
+                    "host": "localhost",
+                    "pid": 123456,
+                }
+            ),
+            task_uuid=owner_uuids[run_owner_id],
+        ),
+    )
+
+    with pytest.raises(LaunchError, match="Task identity conflict"):
+        scan_task_identity_inventory(paths)
+
+    lock_inventory = build_lock_inventory(paths)
+    ambiguous_lock = next(
+        entry
+        for entry in lock_inventory.entries
+        if entry.lock is not None and entry.lock.lock_id.startswith("lock-ambiguous")
+    )
+    assert ambiguous_lock.is_expired
+    assert ambiguous_lock.identity_unresolved
+    assert not ambiguous_lock.is_malformed
+    assert ambiguous_lock not in lock_inventory.safe_repairable
+
+    blocked_plan = repair_allocations(workspace, all_allocations=True)
+    blocked_entries = blocked_plan["incomplete_allocations"]
+    assert {entry["source_id"] for entry in blocked_entries} == set(legacy_ids)
+    blockers = blocked_plan["protection_blockers"]
+    assert {blocker["kind"] for blocker in blockers} == {"active_task_pointer"}
+    assert blocked_plan["apply_safe"] is False
+    assert blocked_plan["next_command"] is None
+
+    target_uuid = owner_uuids[legacy_ids[0]]
+    rebind_plan = repair_active_task(
+        workspace, action="rebind", target_uuid=target_uuid
+    )
+    assert rebind_plan["apply_safe"] is True, rebind_plan["blocked_reasons"]
+    repair_active_task(
+        workspace,
+        action="rebind",
+        target_uuid=target_uuid,
+        apply=True,
+        plan_id=str(rebind_plan["plan_id"]),
+        reason="Rebind the reviewed active pointer to its verified UUID owner.",
+    )
+    rebound_state = load_active_task_state(workspace)
+    assert rebound_state is not None
+    assert rebound_state.task_id == legacy_ids[0]
+    assert rebound_state.task_uuid == target_uuid
+
+    reviewed_plan = repair_allocations(workspace, all_allocations=True)
+    assert reviewed_plan["apply_safe"] is True
+    assert reviewed_plan["protection_blockers"] == []
+    reviewed_sources = {
+        entry["source_path"] for entry in reviewed_plan["incomplete_allocations"]
+    }
+    assert reviewed_sources == {
+        str(paths.tasks_dir / legacy_id) for legacy_id in legacy_ids
+    }
+    result = repair_allocations(
+        workspace,
+        all_allocations=True,
+        apply=True,
+        plan_id=str(reviewed_plan["plan_id"]),
+        reason="Quarantine the four reviewed shadowed allocations.",
+    )
+    assert result["status"] == "applied"
+    assert result["attempted_count"] == 4
+    assert result["repaired_count"] == 4
+    assert result["failed_count"] == 0
+    assert result["remaining_conflicts"] == []
+
+    for legacy_id in legacy_ids:
+        assert not stale_sources[legacy_id].exists()
+        assert (migrated_dirs[legacy_id] / "task.md").read_bytes() == live_task_bytes[
+            legacy_id
+        ]
+        quarantine = (
+            paths.ledger_dir / "_recovery" / "incomplete-task-allocations" / legacy_id
+        )
+        assert (quarantine / "artifacts" / "preserve.bin").read_bytes() == (
+            f"artifact:{legacy_id}".encode()
+        )
+        assert (quarantine / "plans" / "preserve.md").read_bytes() == (
+            f"plan sidecar {legacy_id}\n".encode()
+        )
+
+    identity_inventory = scan_task_identity_inventory(paths)
+    assert not inspect_task_identity_conflicts(paths)
+    for legacy_id in legacy_ids:
+        owners = [
+            identity
+            for identity in identity_inventory.entries
+            if identity.legacy_task_id == legacy_id and identity.state == "live"
+        ]
+        assert len(owners) == 1
+        assert str(owners[0].task_uuid) == owner_uuids[legacy_id]
+
+    final_locks = build_lock_inventory(paths)
+    final_ambiguous_lock = next(
+        entry
+        for entry in final_locks.entries
+        if entry.lock is not None and entry.lock.lock_id.startswith("lock-ambiguous")
+    )
+    assert final_ambiguous_lock.is_expired
+    assert not final_ambiguous_lock.identity_unresolved
+
+    transaction_id = result["transaction_id"]
+    events = [
+        event
+        for event in load_events(paths.events_dir)
+        if event.event == "repair.task_allocation_quarantined"
+        and event.data.get("transaction_id") == transaction_id
+    ]
+    assert len(events) == 4
+    assert {event.data["legacy_task_id"] for event in events} == set(legacy_ids)
+    journal = json.loads(Path(str(result["journal_path"])).read_text(encoding="utf-8"))
+    assert journal["phase"] == "committed"
+    assert {action["source_id"] for action in journal["actions"]} == set(legacy_ids)
+    audit = audit_allocation_repairs(workspace)
+    audit_entries = audit["entries"]
+    assert isinstance(audit_entries, list)
+    assert {
+        entry["physical_source_id"]
+        for entry in audit_entries
+        if entry["status"] == "existing_owner_preserved"
+    } >= set(legacy_ids)
+
+
 def test_allocation_batch_preflight_rejects_one_unsafe_owner_without_moving_any(
     tmp_path: Path,
 ) -> None:
@@ -717,6 +1029,194 @@ def test_shadowed_migrated_legacy_allocation_dry_run_identifies_owner(
     assert f"owner={migrated_uuid}" in cli_result.output
     assert "tombstone=none" in cli_result.output
     assert stale_dir.is_dir()
+
+
+def test_doctor_lock_scan_reads_runs_from_physical_legacy_directory(
+    tmp_path: Path,
+) -> None:
+    workspace = _workspace(tmp_path)
+    _paths, stale_directory, _migrated_directory, migrated_uuid = (
+        _shadowed_migrated_allocation(workspace)
+    )
+    runs_directory = stale_directory / "runs"
+    runs_directory.mkdir()
+    run = TaskRunRecord(
+        run_id="run-0001",
+        task_id=migrated_uuid,
+        run_type="implementation",
+        status="running",
+    )
+    write_markdown_front_matter(runs_directory / "run-0001.md", run.to_dict(), "")
+
+    report = inspect_v2_locks(workspace)
+    mismatches = report["run_lock_mismatches"]
+    project_report = inspect_v2_project(workspace)
+    project_mismatches = project_report["run_lock_mismatches"]
+    assert isinstance(project_mismatches, list)
+    assert any(
+        isinstance(item, dict)
+        and item.get("task_id") == "task-0012"
+        and item.get("run_id") == "run-0001"
+        for item in project_mismatches
+    )
+    assert isinstance(mismatches, list)
+    assert any(
+        isinstance(item, dict)
+        and item.get("task_id") == "task-0012"
+        and item.get("run_id") == "run-0001"
+        for item in mismatches
+    )
+
+
+def test_allocation_repair_dry_run_reports_protection_blockers(
+    tmp_path: Path, request: pytest.FixtureRequest
+) -> None:
+    from typer.testing import CliRunner
+
+    from taskledger.cli import app
+
+    workspace = _workspace(tmp_path)
+    paths, stale_directory, _migrated_directory, migrated_uuid = (
+        _shadowed_migrated_allocation(workspace)
+    )
+    write_yaml_object(
+        paths.active_task_path,
+        ActiveTaskState(task_id="task-0012").to_dict(),
+    )
+    _write_ambiguous_runtime_lock(
+        paths,
+        task_id="task-0012",
+        expires_at="2099-06-04T20:35:58+00:00",
+        request=request,
+    )
+    runs_directory = stale_directory / "runs"
+    runs_directory.mkdir()
+    run = TaskRunRecord(
+        run_id="run-0001",
+        task_id=migrated_uuid,
+        run_type="implementation",
+        status="running",
+    )
+    write_markdown_front_matter(runs_directory / "run-0001.md", run.to_dict(), "")
+
+    dry_run = repair_allocations(workspace, task_id="task-0012")
+    blockers = dry_run["protection_blockers"]
+    assert isinstance(blockers, list)
+    assert {item["kind"] for item in blockers} == {
+        "active_task_pointer",
+        "task_lock",
+        "running_run",
+    }
+    assert dry_run["protection_blocked"] is True
+    assert dry_run["apply_safe"] is False
+    assert dry_run["next_command"] is None
+
+    plan_id = dry_run["plan_id"]
+    assert isinstance(plan_id, str)
+    with pytest.raises(LaunchError) as raised:
+        repair_allocations(
+            workspace,
+            apply=True,
+            reason="Do not quarantine a protected allocation.",
+            task_id="task-0012",
+            plan_id=plan_id,
+        )
+    assert raised.value.code == "TASKLEDGER_ALLOCATION_REPAIR_BLOCKED"
+    assert {blocker["kind"] for blocker in raised.value.details["blockers"]} == {
+        "active_task_pointer",
+        "task_lock",
+        "running_run",
+    }
+    assert stale_directory.is_dir()
+
+    cli = CliRunner().invoke(
+        app,
+        ["--root", str(workspace), "repair", "allocations", "--task-id", "task-0012"],
+    )
+    assert cli.exit_code == 0, cli.output
+    assert "blocked=active_task_pointer" in cli.output
+    assert "blocked=task_lock" in cli.output
+    assert "blocked=running_run" in cli.output
+    assert "No apply command" in cli.output
+    assert "Next:" not in cli.output
+    assert "Traceback" not in cli.output
+
+    json_result = CliRunner().invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "--json",
+            "repair",
+            "allocations",
+            "--task-id",
+            "task-0012",
+        ],
+    )
+    assert json_result.exit_code == 0, json_result.stdout
+    payload = json.loads(json_result.stdout)
+    result = payload["result"]
+    assert result["next_command"] is None
+    assert {item["kind"] for item in result["protection_blockers"]} == {
+        "active_task_pointer",
+        "task_lock",
+        "running_run",
+    }
+
+
+def test_task_dirs_repair_uses_physically_valid_task_slugs(
+    tmp_path: Path,
+) -> None:
+    from taskledger.services.doctor import cleanup_orphan_slug_dirs
+
+    workspace = _workspace(tmp_path)
+    paths, stale_directory, migrated_directory, _migrated_uuid = (
+        _shadowed_migrated_allocation(workspace)
+    )
+    assert inspect_task_identity_conflicts(paths)
+    orphan_slug = paths.tasks_dir / "migrated-owner"
+    orphan_slug.mkdir()
+    unrelated_empty = paths.tasks_dir / "unrelated-empty"
+    unrelated_empty.mkdir()
+    task_named_directory = paths.tasks_dir / "task-0099"
+    task_named_directory.mkdir()
+    nonempty_slug = paths.tasks_dir / "migrated-owner-copy"
+    nonempty_slug.mkdir()
+    (nonempty_slug / "keep.bin").write_bytes(b"keep")
+
+    result = cleanup_orphan_slug_dirs(workspace)
+
+    assert result["removed"] == ["migrated-owner"]
+    assert not orphan_slug.exists()
+    assert unrelated_empty.is_dir()
+    assert task_named_directory.is_dir()
+    assert nonempty_slug.is_dir()
+    assert stale_directory.is_dir()
+    assert (migrated_directory / "task.md").is_file()
+
+
+def test_task_dirs_cli_translates_launch_errors_and_documents_scope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from typer.testing import CliRunner
+
+    from taskledger.cli import app
+    from taskledger.services import doctor as doctor_services
+
+    workspace = _workspace(tmp_path)
+    runner = CliRunner()
+    help_result = runner.invoke(app, ["repair", "task-dirs", "--help"])
+    assert "empty slug directories" in help_result.output
+    assert "valid physical task records" in help_result.output
+
+    def fail_cleanup(_workspace: Path) -> dict[str, object]:
+        raise LaunchError("Task directory inspection failed.", code="TEST_REPAIR_ERROR")
+
+    monkeypatch.setattr(doctor_services, "cleanup_orphan_slug_dirs", fail_cleanup)
+    result = runner.invoke(app, ["--root", str(workspace), "repair", "task-dirs"])
+    assert result.exit_code != 0
+    assert "Task directory inspection failed." in result.output
+    assert "Traceback" not in result.output
 
 
 def test_task_list_identity_conflict_is_structured_until_repaired(
@@ -1026,6 +1526,125 @@ def test_repair_locks_handles_bundle_local_expired_lock(tmp_path: Path) -> None:
     assert not bundle_lock_path.exists()
 
 
+def test_expired_lock_with_ambiguous_legacy_identity_is_not_malformed(
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    workspace = _workspace(tmp_path)
+    paths, _, _, _ = _shadowed_migrated_allocation(workspace)
+    lock_path = _write_ambiguous_runtime_lock(
+        paths,
+        task_id="task-0012",
+        expires_at="2020-01-01T00:00:00+00:00",
+        request=request,
+    )
+
+    inventory = build_lock_inventory(paths)
+    assert len(inventory.entries) == 1
+    entry = inventory.entries[0]
+    assert entry.lock is not None
+    assert not entry.is_malformed
+    assert entry.is_expired
+    assert not entry.is_active
+    assert entry.classification == "expired"
+    assert entry.identity_unresolved
+    assert entry.identity_error_code == "TASKLEDGER_TASK_IDENTITY_CONFLICT"
+    assert not entry.orphan_missing_task
+    assert entry.binding_status == "unresolved"
+    assert entry.to_dict()["file_health"] == "valid"
+    assert entry.to_dict()["lease_state"] == "expired"
+    assert inventory.expired_count == 1
+    assert inventory.malformed_count == 0
+    assert inventory.identity_unresolved_count == 1
+    assert inventory.safe_repairable == ()
+    assert inventory.identity_blocked_repairable == (entry,)
+    assert inventory.migration_blockers == (entry,)
+
+    with pytest.raises(LaunchError) as exc_info:
+        require_migration_safe_locks(inventory, project_root=workspace)
+    assert exc_info.value.details["identity_unresolved_count"] == 1
+
+    bulk_repair = repair_locks(workspace)
+    assert bulk_repair["status"] == "blocked_identity"
+    assert bulk_repair["safe_repairable"] == 0
+    assert bulk_repair["identity_blocked"] == 1
+    assert "next_command" not in bulk_repair
+    assert lock_path.is_file()
+
+    from typer.testing import CliRunner
+
+    from taskledger.cli import app
+
+    human = CliRunner().invoke(app, ["--root", str(workspace), "repair", "locks"])
+    assert human.exit_code == 0, human.output
+    assert "Identity-blocked: 1 lock(s)" in human.output
+    assert "identity_status=unresolved" in human.output
+    assert "Next:" not in human.output
+    assert "Traceback" not in human.output
+
+    lock_report = CliRunner().invoke(app, ["--root", str(workspace), "doctor", "locks"])
+    assert "identity_unresolved: 1" in lock_report.output
+    assert "identity binding: unresolved" in lock_report.output
+    assert "task-0012  expired" in lock_report.output
+
+    lock_doctor = inspect_v2_locks(workspace)
+    summary = lock_doctor["summary"]
+    assert isinstance(summary, dict)
+    assert summary["expired"] == 1
+    assert summary["malformed"] == 0
+    assert summary["identity_unresolved"] == 1
+    doctor = inspect_v2_project(workspace)
+    expired_locks = doctor["expired_locks"]
+    assert isinstance(expired_locks, list)
+    assert expired_locks[0]["identity_status"] == "unresolved"
+    assert expired_locks[0]["lease_state"] == "expired"
+
+
+def test_active_ambiguous_lock_preserves_active_classification(
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    workspace = _workspace(tmp_path)
+    paths, _, _, migrated_uuid = _shadowed_migrated_allocation(workspace)
+    _write_ambiguous_runtime_lock(
+        paths,
+        task_id="task-0012",
+        expires_at="2099-12-31T23:59:59+00:00",
+        request=request,
+    )
+
+    inventory = build_lock_inventory(paths)
+    entry = inventory.entries[0]
+    assert entry.lock is not None
+    assert not entry.is_malformed
+    assert entry.is_active
+    assert not entry.is_expired
+    assert entry.classification != "expired"
+    assert entry.identity_unresolved
+    assert not entry.orphan_missing_task
+    assert entry not in inventory.safe_repairable
+    assert entry in inventory.migration_blockers
+
+    runs_directory = paths.tasks_dir / "task-0012" / "runs"
+    runs_directory.mkdir()
+    run = TaskRunRecord(
+        run_id="run-0002",
+        task_id=migrated_uuid,
+        run_type="implementation",
+        status="running",
+    )
+    write_markdown_front_matter(runs_directory / "run-0002.md", run.to_dict(), "")
+    lock_report = inspect_v2_locks(workspace)
+    mismatches = lock_report["run_lock_mismatches"]
+    assert isinstance(mismatches, list)
+    assert any(
+        isinstance(item, dict)
+        and item.get("task_id") == "task-0012"
+        and item.get("run_id") == "run-0002"
+        for item in mismatches
+    )
+
+
 def test_recovery_repairs_dangling_active_task_orphan_lock_and_partial_allocation(
     tmp_path: Path,
 ) -> None:
@@ -1036,6 +1655,12 @@ def test_recovery_repairs_dangling_active_task_orphan_lock_and_partial_allocatio
     activate_task(workspace, task.id, reason="test setup")
     start_planning(workspace, task.id)
     paths = resolve_v2_paths(workspace)
+    runs = list_runs_from_paths(paths, task.id)
+    assert len(runs) == 1
+    save_run(
+        workspace,
+        replace(runs[0], status="aborted", finished_at="2026-10-16T16:15:38Z"),
+    )
     lock_path = task_lock_path(paths, task.id)
     assert read_lock(lock_path) is not None
 

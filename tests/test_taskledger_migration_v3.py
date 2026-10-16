@@ -28,6 +28,7 @@ class _FakeInventory:
         self.active_count = len(entries)
         self.expired_count = 0
         self.malformed_count = 0
+        self.identity_unresolved_count = 0
         self.stale_count = 0
         self.migration_blockers = entries
 
