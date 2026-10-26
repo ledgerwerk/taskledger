@@ -610,6 +610,8 @@ taskledger implement command --allow-failure -- python -c "raise SystemExit(7)"
 
 Use `taskledger validate command -- ...` for durable validation execution evidence. A non-zero command is not automatically a failed acceptance criterion. Classify whether the target behavior was evaluated before recording `fail`; repair malformed cwd, import, fixture, quoting, or path-normalization probes and rerun them first.
 
+If a validation session times out, inspect `taskledger lock show --task TASK` and follow `next-action`. Resume the existing run with `taskledger validate resume --task TASK --reason "Reacquire validation lock."` when the lock was already removed, or add `--repair-expired-lock` when the matching validating lock is expired. Do not start another validation run or discard existing checks.
+
 When `[agent_logging].enabled = true` in `.ledger/taskledger/config.toml`, `taskledger`
 records CLI invocations and managed command outputs. Both managed wrappers execute
 the exact argv after `--` without a shell and from the CLI invocation directory, or

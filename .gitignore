@@ -210,7 +210,7 @@ __marimo__/
 
 taskledger/_version.py
 
-context_taskledger.md
+context_taskledger*.*
 context_taskledger.index.json
 *.unpack.py
 workspace/

@@ -86,6 +86,7 @@ AGENT_GOLDEN_PATH_COMMANDS: tuple[str, ...] = (
     "implement finish",
     "implement snapshot refresh",
     "validate start",
+    "validate resume",
     "validate status",
     "validate command",
     "validate check",
@@ -817,6 +818,15 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
     ),
     # ── validation ────────────────────────────────────────────────
     "validate start": CommandSpec(
+        STABLE_FOR_AGENTS,
+        "ledger_mutation",
+        PRIMARY,
+        PHASE_VALIDATION,
+        tier=TIER_CRITICAL,
+        ledger_effect=EFFECT_WRITE,
+        targeting=TARGETING_ACTIVE_DEFAULT,
+    ),
+    "validate resume": CommandSpec(
         STABLE_FOR_AGENTS,
         "ledger_mutation",
         PRIMARY,

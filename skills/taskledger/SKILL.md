@@ -40,7 +40,7 @@ plan start -> plan guidance -> plan template -> plan check -> plan upsert -> pla
 question add | question add-many | question answer | question answer-many | question status | question answers
 todo next | todo show | todo done | todo status
 implement start | implement resume | implement change | implement scan-changes | implement finish
-validate start | validate status | validate command | validate check | validate finish
+validate start | validate resume | validate status | validate command | validate check | validate finish
 review record
 handoff create | handoff review | handoff show | handoff claim | handoff release | handoff retarget | handoff close
 ```
@@ -378,6 +378,14 @@ A non-zero validation command is not automatically a failed acceptance criterion
 - If durable state is needed while repairing a probe, record the criterion as `not_run` with `--details` explaining the probe problem.
 - For path-set comparisons, normalize both sides against the same explicit project root before equality checks.
 
+If a validation lock expires while its run is still running, do not start a new validation run or discard its existing checks. Inspect `taskledger lock show --task TASK`, then:
+
+- If classification is `expired` and the lock matches the latest running validation run, run `taskledger validate resume --task TASK --repair-expired-lock --reason "Continue validation after timeout."`.
+- If an operator already removed the expired lock, run `taskledger validate resume --task TASK --reason "Reacquire validation lock after repair."`.
+- Continue with `taskledger validate status`, `taskledger validate check ...`, and `taskledger validate finish ...`.
+
+Resume reacquires the lock for the same run and preserves recorded validation evidence.
+
 ### Recovery Rules
 
 - If validation fails, record the failure and do not hide it.
@@ -504,11 +512,13 @@ Lock recovery decision tree:
    the todo loop. Do not run `implement resume` or repair the lock.
 4. If `classification` is `expired` and it is an implementation lock for a
    running run, run `taskledger implement resume --repair-expired-lock --task TASK --reason "..."`.
-5. If `classification` is `active_dead_local_process`, run
-   `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`, then `taskledger implement resume --task TASK --reason "..."`.
-6. If `classification` is `active_live_local_process` or `active_other_actor`,
+5. If `classification` is `expired` and the lock matches the latest running
+   validation run, run `taskledger validate resume --task TASK --repair-expired-lock --reason "..."`.
+6. If `classification` is `active_dead_local_process`, run
+   `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`, then resume the matching run with `implement resume` or `validate resume`.
+7. If `classification` is `active_live_local_process` or `active_other_actor`,
    do not repair; use a handoff or wait for the holder to release.
-7. If `classification` is `active_unverifiable_remote_or_unknown_process`, do
+8. If `classification` is `active_unverifiable_remote_or_unknown_process`, do
    not infer staleness from local process checks; inspect handoffs or ask the
    user before repairing.
 

@@ -380,6 +380,10 @@ def repair_lock_command(
             follow_up = (
                 "Resume the existing implementation run before starting new work:"
             )
+        elif run_type == "validation":
+            follow_up = (
+                "Resume the existing validation run before starting new validation:"
+            )
         else:
             follow_up = "Inspect the task's next action before continuing:"
         human += (

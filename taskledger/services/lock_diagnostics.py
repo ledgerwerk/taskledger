@@ -274,6 +274,13 @@ def _remediation_for_expired(lock: TaskLock, task_id: str | None) -> tuple[str, 
                 f'implementation lock."'
             ),
         )
+    if lock.stage == "validating":
+        return (
+            (
+                f"taskledger validate resume --task {target} "
+                f'--repair-expired-lock --reason "Reacquire expired validation lock."'
+            ),
+        )
     return (
         (
             f"taskledger repair lock --task {target} "
@@ -296,6 +303,17 @@ def _remediation_for_dead_local(
                 f"taskledger implement resume --task {target} "
                 f'--reason "Reacquire implementation lock after stale '
                 f'holder repair."'
+            ),
+        )
+    if lock.stage == "validating":
+        return (
+            (
+                f"taskledger repair lock --task {target} "
+                f'--reason "Holder PID {pid} is no longer running."'
+            ),
+            (
+                f"taskledger validate resume --task {target} "
+                f'--reason "Reacquire validation lock after stale holder repair."'
             ),
         )
     return (

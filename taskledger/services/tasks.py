@@ -1568,6 +1568,31 @@ def start_validation(
     )
 
 
+def resume_validation(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    run_id: str | None = None,
+    reason: str,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
+    repair_expired_lock: bool = False,
+) -> dict[str, object]:
+    from taskledger.services.validation_flow import (
+        resume_validation as _resume_validation,
+    )
+
+    return _resume_validation(
+        workspace_root,
+        task_ref,
+        run_id=run_id,
+        reason=reason,
+        actor=actor,
+        harness=harness,
+        repair_expired_lock=repair_expired_lock,
+    )
+
+
 def refresh_implementation_snapshot(
     workspace_root: Path,
     task_ref: str,
@@ -2037,6 +2062,28 @@ def _acquire_lock(
     return lock
 
 
+def _require_matching_active_lock(
+    workspace_root: Path,
+    *,
+    task_id: str,
+    expected_stage: str,
+    run_id: str,
+) -> TaskLock:
+    lock = _current_lock(workspace_root, task_id)
+    if (
+        lock is None
+        or lock.stage != expected_stage
+        or lock.run_id != run_id
+        or lock_is_expired(lock)
+    ):
+        raise _cli_error(
+            f"Task {task_id} has no matching active {expected_stage} lock "
+            f"for run {run_id}.",
+            EXIT_CODE_LOCK_CONFLICT,
+        )
+    return lock
+
+
 def _release_lock(
     workspace_root: Path,
     *,
@@ -2047,6 +2094,7 @@ def _release_lock(
     event_name: str,
     extra_data: dict[str, object] | None = None,
     delete_only: bool = False,
+    expected_lock_id: str | None = None,
 ) -> None:
     paths = resolve_v2_paths(workspace_root)
     lock_path = task_lock_path(paths, task.id)
@@ -2056,7 +2104,11 @@ def _release_lock(
             f"Task {task.id} has no active {expected_stage} lock to release.",
             EXIT_CODE_LOCK_CONFLICT,
         )
-    if lock.stage != expected_stage or lock.run_id != run_id:
+    if (
+        lock.stage != expected_stage
+        or lock.run_id != run_id
+        or (expected_lock_id is not None and lock.lock_id != expected_lock_id)
+    ):
         raise _cli_error(
             "Active lock does not match the expected stage/run.",
             EXIT_CODE_LOCK_CONFLICT,

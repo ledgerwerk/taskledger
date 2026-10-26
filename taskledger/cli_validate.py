@@ -7,6 +7,7 @@ import typer
 from taskledger.api.task_runs import (
     add_validation_check,
     finish_validation,
+    resume_validation,
     run_validation_command,
     show_task_run,
     start_validation,
@@ -167,7 +168,75 @@ def validation_command_command(
         raise typer.Exit(code=exit_code)
 
 
+def _register_validate_resume_command(app: typer.Typer) -> None:
+    @app.command("resume")
+    def resume_command(
+        ctx: typer.Context,
+        reason: Annotated[str, typer.Option("--reason")],
+        run_id: Annotated[
+            str | None,
+            typer.Option("--run", help="Existing validation run to resume."),
+        ] = None,
+        task_ref: TaskOption = None,
+        actor: Annotated[
+            str | None,
+            typer.Option("--actor", help="Actor type: user, agent, or system."),
+        ] = None,
+        actor_name: Annotated[str | None, typer.Option("--actor-name")] = None,
+        actor_role: Annotated[str | None, typer.Option("--actor-role")] = None,
+        harness: Annotated[str | None, typer.Option("--harness")] = None,
+        session_id: Annotated[str | None, typer.Option("--session-id")] = None,
+        repair_expired_lock: Annotated[
+            bool,
+            typer.Option(
+                "--repair-expired-lock",
+                help="Release the matching expired validating lock and reacquire it.",
+            ),
+        ] = False,
+    ) -> None:
+        """Resume an existing validation run by reacquiring its validating lock."""
+        state = cli_state_from_context(ctx)
+        try:
+            task = resolve_cli_task(state.cwd, task_ref)
+            resolved_actor, resolved_harness = resolve_cli_actor_harness(
+                actor=actor,
+                actor_name=actor_name,
+                actor_role=actor_role,
+                harness=harness,
+                session_id=session_id,
+                workspace_root=state.cwd,
+            )
+            payload = resume_validation(
+                state.cwd,
+                task.id,
+                run_id=run_id,
+                reason=reason,
+                actor=resolved_actor,
+                harness=resolved_harness,
+                repair_expired_lock=repair_expired_lock,
+            )
+        except LaunchError as exc:
+            emit_error(ctx, exc)
+            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
+        if payload.get("already_active"):
+            lock_payload = payload.get("lock")
+            lock_id = (
+                lock_payload.get("lock_id", "unknown")
+                if isinstance(lock_payload, dict)
+                else "unknown"
+            )
+            human = (
+                f"validation run {payload['run_id']} is already active "
+                "in this execution "
+                f"and owns lock {lock_id}. No resume or lock repair is required."
+            )
+        else:
+            human = f"resumed validation {payload['run_id']}"
+        emit_payload(ctx, payload, human=human)
+
+
 def register_validate_v2_commands(app: typer.Typer) -> None:
+    _register_validate_resume_command(app)
     app.command(
         "command",
         context_settings={

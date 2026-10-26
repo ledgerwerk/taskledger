@@ -124,6 +124,28 @@ def decide_expired_lock_action(
                 }
             ],
         )
+    validation_run = _find_run(runs, task.latest_validation_run)
+    if (
+        validation_run is not None
+        and validation_run.run_type == "validation"
+        and validation_run.status == "running"
+        and lock.run_id == validation_run.run_id
+        and lock.stage == "validating"
+    ):
+        return (
+            "expired-validation-lock-resume",
+            "Validation lock expired; resume to continue the run.",
+            {"kind": "task", "task_id": task.id, "run_id": validation_run.run_id},
+            [
+                {
+                    "kind": "expired_lock",
+                    "message": (
+                        f"Validation lock for run {validation_run.run_id} "
+                        "at stage validating has expired."
+                    ),
+                }
+            ],
+        )
     return (
         "repair-lock",
         "A stale or broken lock must be repaired before work can continue.",

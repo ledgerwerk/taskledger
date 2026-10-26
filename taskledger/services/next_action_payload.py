@@ -291,6 +291,10 @@ def _next_action_command(action: str) -> str | None:
         "expired-lock-resume": (
             "taskledger implement resume --repair-expired-lock --reason REASON"
         ),
+        "validate-resume": "taskledger validate resume --reason REASON",
+        "expired-validation-lock-resume": (
+            "taskledger validate resume --repair-expired-lock --reason REASON"
+        ),
         "todo-work": "taskledger implement checklist",
         "implement-finish": "taskledger implement finish --summary SUMMARY",
         "validate": "taskledger validate start",
@@ -316,6 +320,22 @@ def _implement_resume_command(task_id: str | None = None) -> str:
     )
 
 
+def _validation_resume_command(
+    task_id: str | None = None,
+    run_id: str | None = None,
+    *,
+    repair_expired_lock: bool = False,
+) -> str:
+    command = "taskledger validate resume"
+    if task_id is not None:
+        command += f" --task {task_id}"
+    if run_id is not None:
+        command += f" --run {run_id}"
+    if repair_expired_lock:
+        command += " --repair-expired-lock"
+    return command + ' --reason "..."'
+
+
 def _primary_command_for_next_item(
     action: str,
     next_item: dict[str, object] | None,
@@ -339,23 +359,40 @@ def _primary_command_for_next_item(
         version = next_item.get("version")
         if isinstance(version, int):
             return f"taskledger plan review --version {version}"
-    if kind == "task" and isinstance(item_id, str):
-        if action in ("implement-resume", "expired-lock-resume"):
-            return _implement_resume_command(item_id)
-        if action == "repair-run-state":
+    if kind == "task":
+        task_id = item_id if isinstance(item_id, str) else next_item.get("task_id")
+        if action in ("validate-resume", "expired-validation-lock-resume"):
             run_id = next_item.get("run_id")
-            if isinstance(run_id, str):
-                return (
-                    f"taskledger repair run --task {item_id} --run {run_id} "
-                    '--reason "Finish orphaned planning run."'
+            if isinstance(task_id, str):
+                return _validation_resume_command(
+                    task_id,
+                    run_id if isinstance(run_id, str) else None,
+                    repair_expired_lock=action == "expired-validation-lock-resume",
                 )
-        if action == "repair-active-stage":
-            return f"taskledger task show --task {item_id}"
+        if isinstance(item_id, str):
+            if action in ("implement-resume", "expired-lock-resume"):
+                return _implement_resume_command(item_id)
+            if action == "repair-run-state":
+                run_id = next_item.get("run_id")
+                if isinstance(run_id, str):
+                    return (
+                        f"taskledger repair run --task {item_id} --run {run_id} "
+                        '--reason "Finish orphaned planning run."'
+                    )
+        if action == "repair-active-stage" and isinstance(task_id, str):
+            return f"taskledger task show --task {task_id}"
     if kind == "handoff" and isinstance(item_id, str):
         return f"taskledger handoff show {item_id} --format markdown"
     if kind == "lock":
         task_id = next_item.get("task_id")
         if isinstance(task_id, str):
+            if action == "expired-validation-lock-resume":
+                run_id = next_item.get("run_id")
+                return _validation_resume_command(
+                    task_id,
+                    run_id if isinstance(run_id, str) else None,
+                    repair_expired_lock=True,
+                )
             if action == "expired-lock-resume":
                 return (
                     f"taskledger implement resume"
@@ -367,7 +404,31 @@ def _primary_command_for_next_item(
     return _next_action_command(action)
 
 
-def _commands_for_next_item(
+def _validation_resume_commands(
+    action: str, next_item: dict[str, object]
+) -> list[dict[str, object]] | None:
+    item_kind = next_item.get("kind")
+    is_expired = action == "expired-validation-lock-resume"
+    if action not in {"validate-resume", "expired-validation-lock-resume"}:
+        return None
+    if item_kind == "lock" and not is_expired:
+        return None
+    if item_kind not in {"task", "lock"}:
+        return None
+    task_value = next_item.get("id") or next_item.get("task_id")
+    if not isinstance(task_value, str):
+        return None
+    run_id = next_item.get("run_id")
+    command = _validation_resume_command(
+        task_value,
+        run_id if isinstance(run_id, str) else None,
+        repair_expired_lock=is_expired,
+    )
+    label = "Resume validation with expired lock" if is_expired else "Resume validation"
+    return [_command("resume", label, command, primary=True)]
+
+
+def _commands_for_next_item(  # noqa: C901
     action: str,
     next_item: dict[str, object] | None,
 ) -> list[dict[str, object]]:
@@ -407,6 +468,9 @@ def _commands_for_next_item(
 
     item_kind = next_item.get("kind")
     item_id = next_item.get("id")
+    validation_commands = _validation_resume_commands(action, next_item)
+    if validation_commands is not None:
+        return validation_commands
     if item_kind == "question" and isinstance(item_id, str):
         return [
             _command(

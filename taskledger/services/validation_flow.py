@@ -113,6 +113,107 @@ def start_validation(
     )
 
 
+def resume_validation(
+    workspace_root: Path,
+    task_ref: str,
+    *,
+    run_id: str | None = None,
+    reason: str,
+    actor: ActorRef | None = None,
+    harness: HarnessRef | None = None,
+    repair_expired_lock: bool = False,
+) -> dict[str, object]:
+    task = resolve_task(workspace_root, task_ref)
+    _tasks._ensure_not_archived(task, operation="resume validation for")
+    resume_reason = reason.strip()
+    if not resume_reason:
+        raise _tasks._cli_error(
+            "Validation resume requires --reason.", EXIT_CODE_BAD_INPUT
+        )
+    if task.status_stage != "implemented":
+        raise _tasks._cli_error(
+            "Validation resume requires implemented state.",
+            EXIT_CODE_INVALID_TRANSITION,
+        )
+    selected_run_id = run_id or task.latest_validation_run
+    if selected_run_id is None or selected_run_id != task.latest_validation_run:
+        raise _tasks._cli_error(
+            "Validation resume requires the latest validation run.",
+            EXIT_CODE_INVALID_TRANSITION,
+        )
+    run = _tasks._require_run(workspace_root, task, selected_run_id)
+    if run.run_type != "validation" or run.status != "running":
+        raise _tasks._cli_error(
+            "Validation resume requires a running validation run.",
+            EXIT_CODE_INVALID_TRANSITION,
+        )
+    if not run.based_on_implementation_run:
+        raise _tasks._cli_error(
+            "Validation run has no implementation basis and cannot be resumed.",
+            EXIT_CODE_INVALID_TRANSITION,
+        )
+    implementation_run = _tasks._require_run(
+        workspace_root, task, run.based_on_implementation_run
+    )
+    if (
+        run.based_on_implementation_run != task.latest_implementation_run
+        or implementation_run.run_type != "implementation"
+        or implementation_run.status != "finished"
+    ):
+        raise _tasks._cli_error(
+            "Validation run is not based on the task's current finished "
+            "implementation run.",
+            EXIT_CODE_INVALID_TRANSITION,
+        )
+    from taskledger.services.actors import resolve_effective_identity
+    from taskledger.services.run_recovery import reacquire_run_lock
+
+    resolved_actor, resolved_harness = resolve_effective_identity(
+        workspace_root,
+        actor=actor,
+        harness=harness,
+        cwd=workspace_root,
+        role="validator",
+    )
+    resumed = reacquire_run_lock(
+        workspace_root,
+        task=task,
+        run=run,
+        expected_stage="validating",
+        reason=resume_reason,
+        actor=resolved_actor,
+        harness=resolved_harness,
+        repair_expired_lock=repair_expired_lock,
+    )
+    payload = _tasks._lifecycle_payload(
+        "validate resume",
+        task,
+        warnings=[],
+        changed=not resumed.already_active,
+        run=run,
+        lock=resumed.lock,
+    )
+    payload["already_active"] = resumed.already_active
+    payload["repaired_expired_lock"] = resumed.repaired_expired_lock
+    payload["previous_lock_id"] = resumed.previous_lock_id
+    if not resumed.already_active:
+        _tasks._append_event(
+            workspace_root,
+            task.id,
+            "run.resumed",
+            {
+                "run_id": run.run_id,
+                "run_type": "validation",
+                "reason": resume_reason,
+                "repaired_expired_lock": resumed.repaired_expired_lock,
+                "previous_lock_id": resumed.previous_lock_id,
+                "new_lock_id": resumed.lock.lock_id,
+            },
+        )
+    payload["next_command"] = f"taskledger next-action --task {task.id}"
+    return payload
+
+
 def validation_status(
     workspace_root: Path,
     task_ref: str,
@@ -445,6 +546,12 @@ def finish_validation(
         expected_type="validation",
     )
     normalized_result = normalize_validation_result(result)
+    active_lock = _tasks._require_matching_active_lock(
+        workspace_root,
+        task_id=task.id,
+        expected_stage="validating",
+        run_id=run.run_id,
+    )
     if normalized_result == "passed":
         _ensure_validation_can_pass(workspace_root, task, run)
     target_stage: TaskStatusStage = (
@@ -488,6 +595,7 @@ def finish_validation(
         if normalized_result == "passed"
         else "stage.failed",
         extra_data={"result": normalized_result},
+        expected_lock_id=active_lock.lock_id,
     )
     _tasks._append_event(
         workspace_root,

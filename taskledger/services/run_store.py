@@ -114,8 +114,12 @@ def break_lock(
                 f"taskledger implement resume --task {task.id} "
                 '--reason "Reacquire implementation lock for existing running run."'
             )
-        else:
-            next_command = f"taskledger next-action --task {task.id}"
+        elif matching_run.run_type == "validation":
+            next_command = (
+                f"taskledger validate resume --task {task.id} "
+                f"--run {matching_run.run_id} "
+                '--reason "Reacquire validation lock for existing running run."'
+            )
         recovery_details = {
             "orphaned_run": {
                 "run_id": matching_run.run_id,

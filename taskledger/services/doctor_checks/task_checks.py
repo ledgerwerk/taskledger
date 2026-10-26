@@ -162,6 +162,22 @@ def _scan_task_integrity_phases(  # noqa: C901
                         '--reason "Finish orphaned planning run."'
                     )
                     note = "Planning run can be explicitly finished with repair run."
+                elif (
+                    run.run_type == "validation"
+                    and task is not None
+                    and run.run_id == task.latest_validation_run
+                    and task.status_stage == "implemented"
+                ):
+                    next_command = (
+                        "taskledger validate resume "
+                        f"--task {task.id} --run {run.run_id} "
+                        '--reason "Reacquire validation lock."'
+                    )
+                    note = (
+                        "Reacquire the missing validating lock for this running "
+                        "validation run; existing checks and command evidence "
+                        "will be preserved."
+                    )
                 elif run.run_type == "implementation":
                     if (
                         run.run_id == task.latest_implementation_run

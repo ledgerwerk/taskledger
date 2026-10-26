@@ -194,7 +194,39 @@ def next_action_for_task(
             ),
             None,
         )
-        if orphaned_planning_run is not None:
+        orphaned_validation_run = _optional_run(
+            workspace_root, task, task.latest_validation_run
+        )
+        if (
+            task.status_stage == "implemented"
+            and lock is None
+            and orphaned_validation_run is not None
+            and orphaned_validation_run.run_type == "validation"
+            and orphaned_validation_run.status == "running"
+        ):
+            run_id = orphaned_validation_run.run_id
+            next_item = _task_next_item(task)
+            next_item.update({"run_id": run_id, "run_type": "validation"})
+            recovery_command = (
+                f"taskledger validate resume --task {task.id} --run {run_id} "
+                '--reason "Reacquire validation lock."'
+            )
+            run_details = _running_run_details(task, orphaned_validation_run, lock)
+            run_details["suggested_command"] = recovery_command
+            blockers.append(
+                {
+                    "kind": "running_run",
+                    "message": (
+                        f"Validation run {run_id} is still marked running but has "
+                        "no matching active validating lock. Resume it, do not start a "
+                        "new run."
+                    ),
+                    **run_details,
+                }
+            )
+            action = "validate-resume"
+            reason = f"Validation run {run_id} is running without its validating lock."
+        elif orphaned_planning_run is not None:
             run_id = orphaned_planning_run.run_id
             recovery_command = (
                 f"taskledger repair run --task {task.id} --run {run_id} "
@@ -905,6 +937,101 @@ def _archived_task_capability(task: TaskRecord, action: str) -> dict[str, object
     }
 
 
+def _can_validate(
+    workspace_root: Path,
+    task: TaskRecord,
+    lock: TaskLock | None,
+    active_stage: str | None,
+) -> tuple[bool, str, list[dict[str, object]]]:
+    impl_run = _optional_run(workspace_root, task, task.latest_implementation_run)
+    running_validation = _optional_run(workspace_root, task, task.latest_validation_run)
+    has_running_validation = (
+        running_validation is not None
+        and running_validation.run_type == "validation"
+        and running_validation.status == "running"
+    )
+    ok = (
+        task.status_stage == "implemented"
+        and lock is None
+        and active_stage is None
+        and not _running_runs(workspace_root, task)
+        and not has_running_validation
+        and impl_run is not None
+        and impl_run.run_type == "implementation"
+        and impl_run.status == "finished"
+    )
+    reason = (
+        "Validation is ready."
+        if ok
+        else (
+            "Validation requires implemented state, a finished implementation run, "
+            "and no conflicting lock."
+        )
+    )
+    blocking: list[dict[str, object]] = []
+    if ok and impl_run is not None:
+        from taskledger.services.workspace_snapshot import (
+            compare_implementation_snapshot,
+        )
+
+        evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
+        if not evaluation.ok:
+            ok = False
+            reason = "Validation is blocked by implementation snapshot mismatch."
+            blocking.append(
+                {
+                    "kind": "implementation_snapshot",
+                    "message": evaluation.message,
+                    "reason_code": evaluation.reason_code,
+                    "command_hint": evaluation.command_hint,
+                    "details": evaluation.details,
+                }
+            )
+    if (
+        impl_run is None
+        or impl_run.run_type != "implementation"
+        or impl_run.status != "finished"
+    ):
+        blocking.append(
+            {
+                "kind": "implementation",
+                "message": "No finished implementation run is available.",
+            }
+        )
+    if lock is not None:
+        blocking.append(
+            {
+                "kind": "lock",
+                "message": f"Task has an active {lock.stage} lock from {lock.run_id}.",
+            }
+        )
+    if has_running_validation and running_validation is not None:
+        command_hint = (
+            f"taskledger validate resume --task {task.id} "
+            f'--run {running_validation.run_id} --reason "..."'
+        )
+        if (
+            lock is not None
+            and lock.run_id == running_validation.run_id
+            and lock.stage == "validating"
+            and lock_is_expired(lock)
+        ):
+            command_hint = command_hint.replace(
+                "--reason", "--repair-expired-lock --reason"
+            )
+        blocking.append(
+            {
+                "kind": "validation",
+                "message": (
+                    f"Validation run {running_validation.run_id} is already running; "
+                    "resume it instead of starting a new validation run."
+                ),
+                "command_hint": command_hint,
+            }
+        )
+    return ok, reason, blocking
+
+
 def can_perform(
     workspace_root: Path,
     task_ref: str,
@@ -1082,61 +1209,10 @@ def can_perform(
                 }
             )
     elif action == "validate":
-        impl_run = _optional_run(workspace_root, task, task.latest_implementation_run)
-        ok = (
-            task.status_stage == "implemented"
-            and lock is None
-            and active_stage is None
-            and impl_run is not None
-            and impl_run.run_type == "implementation"
-            and impl_run.status == "finished"
+        ok, reason, validation_blockers = _can_validate(
+            workspace_root, task, lock, active_stage
         )
-        reason = (
-            "Validation is ready."
-            if ok
-            else (
-                "Validation requires implemented state, a finished "
-                "implementation run, and no conflicting lock."
-            )
-        )
-        if ok and impl_run is not None:
-            from taskledger.services.workspace_snapshot import (
-                compare_implementation_snapshot,
-            )
-
-            evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
-            if not evaluation.ok:
-                ok = False
-                reason = "Validation is blocked by implementation snapshot mismatch."
-                blocking.append(
-                    {
-                        "kind": "implementation_snapshot",
-                        "message": evaluation.message,
-                        "reason_code": evaluation.reason_code,
-                        "command_hint": evaluation.command_hint,
-                        "details": evaluation.details,
-                    }
-                )
-        if (
-            impl_run is None
-            or impl_run.run_type != "implementation"
-            or impl_run.status != "finished"
-        ):
-            blocking.append(
-                {
-                    "kind": "implementation",
-                    "message": "No finished implementation run is available.",
-                }
-            )
-        if lock is not None:
-            blocking.append(
-                {
-                    "kind": "lock",
-                    "message": (
-                        f"Task has an active {lock.stage} lock from {lock.run_id}."
-                    ),
-                }
-            )
+        blocking.extend(validation_blockers)
     else:
         raise _cli_error(f"Unsupported action: {action}", EXIT_CODE_BAD_INPUT)
     return {

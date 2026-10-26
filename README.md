@@ -28,7 +28,7 @@ plan start -> plan guidance -> plan template -> plan check -> plan upsert -> pla
 question add | question add-many | question answer | question answer-many | question status | question answers
 todo next | todo show | todo done | todo status
 implement start | implement resume | implement change | implement scan-changes | implement finish
-validate start | validate status | validate command | validate check | validate finish
+validate start | validate resume | validate status | validate command | validate check | validate finish
 review record
 handoff create | handoff show | handoff claim | handoff close
 ```
@@ -83,6 +83,8 @@ taskledger validate check --criterion ac-0001 --status pass --evidence "pytest t
 ```
 
 Validation command failures must be classified before recording a criterion failure. A non-zero command is not automatically a failed acceptance criterion: distinguish a genuine target-behavior failure from a malformed probe or setup failure, repair the probe, and rerun it. Prefer `taskledger validate command -- ...` for durable command evidence, and normalize compared paths against the same explicit project root.
+
+If a validation run is still running after its lock expires, resume that same run with `taskledger validate resume --task TASK --repair-expired-lock --reason "Continue validation after timeout."`. If the expired lock was already removed, omit `--repair-expired-lock`; existing validation evidence is preserved.
 
 ### Which read command to use
 
