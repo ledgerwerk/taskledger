@@ -1,0 +1,1629 @@
+ .codecrate.toml                                  |   2 +-
+ .gitignore                                       |   2 +-
+ API.md                                           |   1 +
+ README.md                                        |   4 +-
+ docs/api.md                                      |   1 +
+ docs/command_contract.md                         |   1 +
+ docs/public_surface.md                           |   2 +-
+ docs/usage.md                                    |   2 +
+ skills/taskledger/SKILL.md                       |  20 +-
+ taskledger/api/task_runs.py                      |   2 +
+ taskledger/cli_repair.py                         |   4 +
+ taskledger/cli_validate.py                       |  69 +++++
+ taskledger/command_inventory.py                  |  10 +
+ taskledger/services/doctor.py                    |  16 +
+ taskledger/services/doctor_checks/task_checks.py |  16 +
+ taskledger/services/implementation_flow.py       |  71 ++---
+ taskledger/services/lock_diagnostics.py          |  18 ++
+ taskledger/services/navigation.py                | 186 ++++++++----
+ taskledger/services/next_action_model.py         |  22 ++
+ taskledger/services/next_action_payload.py       |  86 +++++-
+ taskledger/services/run_recovery.py              | 110 +++++++
+ taskledger/services/run_store.py                 |   8 +-
+ taskledger/services/tasks.py                     |  54 +++-
+ taskledger/services/validation_flow.py           | 108 +++++++
+ tests/test_command_inventory.py                  |   4 +-
+ tests/test_validation_lock_recovery.py           | 359 +++++++++++++++++++++++
+ 26 files changed, 1045 insertions(+), 133 deletions(-)
+
+diff --git a/.codecrate.toml b/.codecrate.toml
+index fe2ad6d..ee74dbf 100644
+--- a/.codecrate.toml
++++ b/.codecrate.toml
+@@ -7,7 +7,7 @@ respect_gitignore = true
+ gitignore_allow = ["taskledger/_version.py"]
+ exclude = ["*/.venv/*", "integration_tests", "todo.md"]
+ include = ["**/*.py", "**/*.toml", "**/*.rst", "**/*.md", "**/*.typed", "**/*.js", "**/*.css", "**/*.html", "**/*.conf"]
+-split_max_chars = 0
++split_max_chars = 5000000
+ manifest = false
+ layout = "full"
+ profile = "portable-agent"
+diff --git a/.gitignore b/.gitignore
+index 4d7fc62..8ce49c2 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -210,7 +210,7 @@ __marimo__/
+ 
+ taskledger/_version.py
+ 
+-context_taskledger.md
++context_taskledger*.*
+ context_taskledger.index.json
+ *.unpack.py
+ workspace/
+diff --git a/API.md b/API.md
+index cecf4ce..22df05e 100644
+--- a/API.md
++++ b/API.md
+@@ -173,6 +173,7 @@ payload = plan_guidance(Path.cwd(), "task-0001")
+ - `run_validation_command`
+ - `finish_implementation`
+ - `show_task_run`
++- `resume_validation`
+ - `start_validation`
+ - `add_validation_check`
+ - `validation_status`
+diff --git a/README.md b/README.md
+index 7fb4e83..1c9dafe 100644
+--- a/README.md
++++ b/README.md
+@@ -28,7 +28,7 @@ plan start -> plan guidance -> plan template -> plan check -> plan upsert -> pla
+ question add | question add-many | question answer | question answer-many | question status | question answers
+ todo next | todo show | todo done | todo status
+ implement start | implement resume | implement change | implement scan-changes | implement finish
+-validate start | validate status | validate command | validate check | validate finish
++validate start | validate resume | validate status | validate command | validate check | validate finish
+ review record
+ handoff create | handoff show | handoff claim | handoff close
+ ```
+@@ -84,6 +84,8 @@ taskledger validate check --criterion ac-0001 --status pass --evidence "pytest t
+ 
+ Validation command failures must be classified before recording a criterion failure. A non-zero command is not automatically a failed acceptance criterion: distinguish a genuine target-behavior failure from a malformed probe or setup failure, repair the probe, and rerun it. Prefer `taskledger validate command -- ...` for durable command evidence, and normalize compared paths against the same explicit project root.
+ 
++If a validation run is still running after its lock expires, resume that same run with `taskledger validate resume --task TASK --repair-expired-lock --reason "Continue validation after timeout."`. If the expired lock was already removed, omit `--repair-expired-lock`; existing validation evidence is preserved.
++
+ ### Which read command to use
+ 
+ | Need                       | Command                                             |
+diff --git a/docs/api.md b/docs/api.md
+index 2c4e00b..d3c71d8 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -142,6 +142,7 @@ payload = plan_guidance(Path.cwd(), "task-0001")
+ - `run_validation_command`
+ - `finish_implementation`
+ - `show_task_run`
++- `resume_validation`
+ - `start_validation`
+ - `add_validation_check`
+ - `validation_status`
+diff --git a/docs/command_contract.md b/docs/command_contract.md
+index 9033994..f8ca12e 100644
+--- a/docs/command_contract.md
++++ b/docs/command_contract.md
+@@ -192,6 +192,7 @@ Rules:
+ - Validation evidence is recorded through generic `validate check`.
+ 
+ - `validate command -- ...` records managed validation command evidence during an active validation run.
++- `validate resume --task TASK --reason "..."` restores the lock for the latest running validation run after a lock was removed; add `--repair-expired-lock` only for its matching expired validating lock. Resume preserves existing checks and command evidence and never starts a second run.
+ - A non-zero validation command does not create a `ValidationCheck`; explicitly classify and record criteria with `validate check`.
+ - A passing implementation command may be adopted explicitly as validation evidence with `validate check --from-implementation-check CHECK_ID` only when Taskledger reports an exact final/current workspace snapshot match.
+ - This is evidence reuse, not a generic command cache. Rerun validation when fresh execution or external runtime state matters.
+diff --git a/docs/public_surface.md b/docs/public_surface.md
+index f1ea6bb..89ac23d 100644
+--- a/docs/public_surface.md
++++ b/docs/public_surface.md
+@@ -24,7 +24,7 @@ the normal planning/approval path for agents.
+ - `question add`, `question add-many`, `question answer`, `question answer-many`, `question status`, `question answers`
+ - `todo next`, `todo show`, `todo done`, `todo status`
+ - `implement start`, `implement resume`, `implement change`, `implement scan-changes`, `implement finish`
+-- `validate start`, `validate status`, `validate command`, `validate check`, `validate finish`
++- `validate start`, `validate resume`, `validate status`, `validate command`, `validate check`, `validate finish`
+ - `review record`
+ - `handoff create`, `handoff show`, `handoff claim`, `handoff close`
+ 
+diff --git a/docs/usage.md b/docs/usage.md
+index 845eafc..77cb6be 100644
+--- a/docs/usage.md
++++ b/docs/usage.md
+@@ -610,6 +610,8 @@ taskledger implement command --allow-failure -- python -c "raise SystemExit(7)"
+ 
+ Use `taskledger validate command -- ...` for durable validation execution evidence. A non-zero command is not automatically a failed acceptance criterion. Classify whether the target behavior was evaluated before recording `fail`; repair malformed cwd, import, fixture, quoting, or path-normalization probes and rerun them first.
+ 
++If a validation session times out, inspect `taskledger lock show --task TASK` and follow `next-action`. Resume the existing run with `taskledger validate resume --task TASK --reason "Reacquire validation lock."` when the lock was already removed, or add `--repair-expired-lock` when the matching validating lock is expired. Do not start another validation run or discard existing checks.
++
+ When `[agent_logging].enabled = true` in `.ledger/taskledger/config.toml`, `taskledger`
+ records CLI invocations and managed command outputs. Both managed wrappers execute
+ the exact argv after `--` without a shell and from the CLI invocation directory, or
+diff --git a/skills/taskledger/SKILL.md b/skills/taskledger/SKILL.md
+index 425a101..9cb1040 100644
+--- a/skills/taskledger/SKILL.md
++++ b/skills/taskledger/SKILL.md
+@@ -40,7 +40,7 @@ plan start -> plan guidance -> plan template -> plan check -> plan upsert -> pla
+ question add | question add-many | question answer | question answer-many | question status | question answers
+ todo next | todo show | todo done | todo status
+ implement start | implement resume | implement change | implement scan-changes | implement finish
+-validate start | validate status | validate command | validate check | validate finish
++validate start | validate resume | validate status | validate command | validate check | validate finish
+ review record
+ handoff create | handoff review | handoff show | handoff claim | handoff release | handoff retarget | handoff close
+ ```
+@@ -378,6 +378,14 @@ A non-zero validation command is not automatically a failed acceptance criterion
+ - If durable state is needed while repairing a probe, record the criterion as `not_run` with `--details` explaining the probe problem.
+ - For path-set comparisons, normalize both sides against the same explicit project root before equality checks.
+ 
++If a validation lock expires while its run is still running, do not start a new validation run or discard its existing checks. Inspect `taskledger lock show --task TASK`, then:
++
++- If classification is `expired` and the lock matches the latest running validation run, run `taskledger validate resume --task TASK --repair-expired-lock --reason "Continue validation after timeout."`.
++- If an operator already removed the expired lock, run `taskledger validate resume --task TASK --reason "Reacquire validation lock after repair."`.
++- Continue with `taskledger validate status`, `taskledger validate check ...`, and `taskledger validate finish ...`.
++
++Resume reacquires the lock for the same run and preserves recorded validation evidence.
++
+ ### Recovery Rules
+ 
+ - If validation fails, record the failure and do not hide it.
+@@ -504,11 +512,13 @@ Lock recovery decision tree:
+    the todo loop. Do not run `implement resume` or repair the lock.
+ 4. If `classification` is `expired` and it is an implementation lock for a
+    running run, run `taskledger implement resume --repair-expired-lock --task TASK --reason "..."`.
+-5. If `classification` is `active_dead_local_process`, run
+-   `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`, then `taskledger implement resume --task TASK --reason "..."`.
+-6. If `classification` is `active_live_local_process` or `active_other_actor`,
++5. If `classification` is `expired` and the lock matches the latest running
++   validation run, run `taskledger validate resume --task TASK --repair-expired-lock --reason "..."`.
++6. If `classification` is `active_dead_local_process`, run
++   `taskledger repair lock --task TASK --reason "Holder PID ... is no longer running."`, then resume the matching run with `implement resume` or `validate resume`.
++7. If `classification` is `active_live_local_process` or `active_other_actor`,
+    do not repair; use a handoff or wait for the holder to release.
+-7. If `classification` is `active_unverifiable_remote_or_unknown_process`, do
++8. If `classification` is `active_unverifiable_remote_or_unknown_process`, do
+    not infer staleness from local process checks; inspect handoffs or ask the
+    user before repairing.
+ 
+diff --git a/taskledger/api/task_runs.py b/taskledger/api/task_runs.py
+index 9e7850b..29f92a7 100644
+--- a/taskledger/api/task_runs.py
++++ b/taskledger/api/task_runs.py
+@@ -9,6 +9,7 @@ from taskledger.services.tasks import (
+     refresh_implementation_snapshot,
+     restart_implementation,
+     resume_implementation,
++    resume_validation,
+     run_implementation_command,
+     run_validation_command,
+     scan_changes,
+@@ -33,6 +34,7 @@ __all__ = [
+     "refresh_implementation_snapshot",
+     "restart_implementation",
+     "resume_implementation",
++    "resume_validation",
+     "run_implementation_command",
+     "run_validation_command",
+     "scan_changes",
+diff --git a/taskledger/cli_repair.py b/taskledger/cli_repair.py
+index e32402e..832c480 100644
+--- a/taskledger/cli_repair.py
++++ b/taskledger/cli_repair.py
+@@ -380,6 +380,10 @@ def repair_lock_command(
+             follow_up = (
+                 "Resume the existing implementation run before starting new work:"
+             )
++        elif run_type == "validation":
++            follow_up = (
++                "Resume the existing validation run before starting new validation:"
++            )
+         else:
+             follow_up = "Inspect the task's next action before continuing:"
+         human += (
+diff --git a/taskledger/cli_validate.py b/taskledger/cli_validate.py
+index c7eb3c4..f576240 100644
+--- a/taskledger/cli_validate.py
++++ b/taskledger/cli_validate.py
+@@ -7,6 +7,7 @@ import typer
+ from taskledger.api.task_runs import (
+     add_validation_check,
+     finish_validation,
++    resume_validation,
+     run_validation_command,
+     show_task_run,
+     start_validation,
+@@ -167,7 +168,75 @@ def validation_command_command(
+         raise typer.Exit(code=exit_code)
+ 
+ 
++def _register_validate_resume_command(app: typer.Typer) -> None:
++    @app.command("resume")
++    def resume_command(
++        ctx: typer.Context,
++        reason: Annotated[str, typer.Option("--reason")],
++        run_id: Annotated[
++            str | None,
++            typer.Option("--run", help="Existing validation run to resume."),
++        ] = None,
++        task_ref: TaskOption = None,
++        actor: Annotated[
++            str | None,
++            typer.Option("--actor", help="Actor type: user, agent, or system."),
++        ] = None,
++        actor_name: Annotated[str | None, typer.Option("--actor-name")] = None,
++        actor_role: Annotated[str | None, typer.Option("--actor-role")] = None,
++        harness: Annotated[str | None, typer.Option("--harness")] = None,
++        session_id: Annotated[str | None, typer.Option("--session-id")] = None,
++        repair_expired_lock: Annotated[
++            bool,
++            typer.Option(
++                "--repair-expired-lock",
++                help="Release the matching expired validating lock and reacquire it.",
++            ),
++        ] = False,
++    ) -> None:
++        """Resume an existing validation run by reacquiring its validating lock."""
++        state = cli_state_from_context(ctx)
++        try:
++            task = resolve_cli_task(state.cwd, task_ref)
++            resolved_actor, resolved_harness = resolve_cli_actor_harness(
++                actor=actor,
++                actor_name=actor_name,
++                actor_role=actor_role,
++                harness=harness,
++                session_id=session_id,
++                workspace_root=state.cwd,
++            )
++            payload = resume_validation(
++                state.cwd,
++                task.id,
++                run_id=run_id,
++                reason=reason,
++                actor=resolved_actor,
++                harness=resolved_harness,
++                repair_expired_lock=repair_expired_lock,
++            )
++        except LaunchError as exc:
++            emit_error(ctx, exc)
++            raise typer.Exit(code=launch_error_exit_code(exc)) from exc
++        if payload.get("already_active"):
++            lock_payload = payload.get("lock")
++            lock_id = (
++                lock_payload.get("lock_id", "unknown")
++                if isinstance(lock_payload, dict)
++                else "unknown"
++            )
++            human = (
++                f"validation run {payload['run_id']} is already active "
++                "in this execution "
++                f"and owns lock {lock_id}. No resume or lock repair is required."
++            )
++        else:
++            human = f"resumed validation {payload['run_id']}"
++        emit_payload(ctx, payload, human=human)
++
++
+ def register_validate_v2_commands(app: typer.Typer) -> None:
++    _register_validate_resume_command(app)
+     app.command(
+         "command",
+         context_settings={
+diff --git a/taskledger/command_inventory.py b/taskledger/command_inventory.py
+index 856af91..acb5953 100644
+--- a/taskledger/command_inventory.py
++++ b/taskledger/command_inventory.py
+@@ -86,6 +86,7 @@ AGENT_GOLDEN_PATH_COMMANDS: tuple[str, ...] = (
+     "implement finish",
+     "implement snapshot refresh",
+     "validate start",
++    "validate resume",
+     "validate status",
+     "validate command",
+     "validate check",
+@@ -825,6 +826,15 @@ COMMAND_METADATA: dict[str, CommandSpec] = {
+         ledger_effect=EFFECT_WRITE,
+         targeting=TARGETING_ACTIVE_DEFAULT,
+     ),
++    "validate resume": CommandSpec(
++        STABLE_FOR_AGENTS,
++        "ledger_mutation",
++        PRIMARY,
++        PHASE_VALIDATION,
++        tier=TIER_CRITICAL,
++        ledger_effect=EFFECT_WRITE,
++        targeting=TARGETING_ACTIVE_DEFAULT,
++    ),
+     "validate status": CommandSpec(
+         STABLE_FOR_AGENTS,
+         "safe_read_only",
+diff --git a/taskledger/services/doctor.py b/taskledger/services/doctor.py
+index 0f4829e..ec23dc2 100644
+--- a/taskledger/services/doctor.py
++++ b/taskledger/services/doctor.py
+@@ -1143,6 +1143,22 @@ def _run_lock_mismatches(
+                         '--reason "Finish orphaned planning run."'
+                     )
+                     note = "Planning run can be explicitly finished with repair run."
++                elif (
++                    run.run_type == "validation"
++                    and task is not None
++                    and run.run_id == task.latest_validation_run
++                    and task.status_stage == "implemented"
++                ):
++                    next_command = (
++                        "taskledger validate resume "
++                        f"--task {task_id} --run {run.run_id} "
++                        '--reason "Reacquire validation lock."'
++                    )
++                    note = (
++                        "Reacquire the missing validating lock for this running "
++                        "validation run; existing checks and command evidence "
++                        "will be preserved."
++                    )
+                 elif run.run_type == "implementation":
+                     if (
+                         task is not None
+diff --git a/taskledger/services/doctor_checks/task_checks.py b/taskledger/services/doctor_checks/task_checks.py
+index c49b557..c739b4c 100644
+--- a/taskledger/services/doctor_checks/task_checks.py
++++ b/taskledger/services/doctor_checks/task_checks.py
+@@ -162,6 +162,22 @@ def _scan_task_integrity_phases(  # noqa: C901
+                         '--reason "Finish orphaned planning run."'
+                     )
+                     note = "Planning run can be explicitly finished with repair run."
++                elif (
++                    run.run_type == "validation"
++                    and task is not None
++                    and run.run_id == task.latest_validation_run
++                    and task.status_stage == "implemented"
++                ):
++                    next_command = (
++                        "taskledger validate resume "
++                        f"--task {task.id} --run {run.run_id} "
++                        '--reason "Reacquire validation lock."'
++                    )
++                    note = (
++                        "Reacquire the missing validating lock for this running "
++                        "validation run; existing checks and command evidence "
++                        "will be preserved."
++                    )
+                 elif run.run_type == "implementation":
+                     if (
+                         run.run_id == task.latest_implementation_run
+diff --git a/taskledger/services/implementation_flow.py b/taskledger/services/implementation_flow.py
+index 70c1acb..ed9cc6f 100644
+--- a/taskledger/services/implementation_flow.py
++++ b/taskledger/services/implementation_flow.py
+@@ -283,66 +283,31 @@ def resume_implementation(
+         cwd=workspace_root,
+         role="implementer",
+     )
+-    existing_lock = _tasks._current_lock(workspace_root, task.id)
+-    if existing_lock is not None:
+-        if repair_expired_lock and _tasks.lock_is_expired(existing_lock):
+-            if (
+-                existing_lock.run_id != run.run_id
+-                or existing_lock.stage != "implementing"
+-            ):
+-                raise _tasks._cli_error(
+-                    "Expired lock does not match the implementation run.",
+-                    _tasks.EXIT_CODE_LOCK_CONFLICT,
+-                )
+-            _tasks._release_expired_lock(
+-                workspace_root,
+-                task.id,
+-                existing_lock,
+-                reason=f"Expired lock released for resume: {resume_reason}",
+-            )
+-        elif _tasks.lock_is_expired(existing_lock):
+-            raise _tasks._stale_lock_error(task.id, existing_lock)
+-        else:
+-            from taskledger.services.lock_diagnostics import (
+-                lock_owned_by_current_execution,
+-            )
+-
+-            if (
+-                existing_lock.stage == "implementing"
+-                and existing_lock.run_id == run.run_id
+-                and lock_owned_by_current_execution(
+-                    existing_lock,
+-                    current_actor=resolved_actor,
+-                    current_harness=resolved_harness,
+-                )
+-            ):
+-                payload = _tasks._lifecycle_payload(
+-                    "implement resume",
+-                    task,
+-                    warnings=[],
+-                    changed=False,
+-                    run=run,
+-                    lock=existing_lock,
+-                )
+-                payload["already_active"] = True
+-                payload["next_command"] = f"taskledger next-action --task {task.id}"
+-                return payload
+-            raise _active_lock_blocks_resume_error(
+-                task.id,
+-                existing_lock,
+-                current_actor=resolved_actor,
+-                current_harness=resolved_harness,
+-            )
+-    _tasks._ensure_dependencies_done(workspace_root, task)
+-    lock = _tasks._acquire_lock(
++    from taskledger.services.run_recovery import reacquire_run_lock
++
++    resumed = reacquire_run_lock(
+         workspace_root,
+         task=task,
+-        stage="implementing",
+         run=run,
++        expected_stage="implementing",
+         reason=resume_reason,
+         actor=resolved_actor,
+         harness=resolved_harness,
++        repair_expired_lock=repair_expired_lock,
+     )
++    if resumed.already_active:
++        payload = _tasks._lifecycle_payload(
++            "implement resume",
++            task,
++            warnings=[],
++            changed=False,
++            run=run,
++            lock=resumed.lock,
++        )
++        payload["already_active"] = True
++        payload["next_command"] = f"taskledger next-action --task {task.id}"
++        return payload
++    lock = resumed.lock
+     updated = replace(
+         task,
+         latest_implementation_run=run.run_id,
+diff --git a/taskledger/services/lock_diagnostics.py b/taskledger/services/lock_diagnostics.py
+index 55fcb59..6e90721 100644
+--- a/taskledger/services/lock_diagnostics.py
++++ b/taskledger/services/lock_diagnostics.py
+@@ -274,6 +274,13 @@ def _remediation_for_expired(lock: TaskLock, task_id: str | None) -> tuple[str,
+                 f'implementation lock."'
+             ),
+         )
++    if lock.stage == "validating":
++        return (
++            (
++                f"taskledger validate resume --task {target} "
++                f'--repair-expired-lock --reason "Reacquire expired validation lock."'
++            ),
++        )
+     return (
+         (
+             f"taskledger repair lock --task {target} "
+@@ -298,6 +305,17 @@ def _remediation_for_dead_local(
+                 f'holder repair."'
+             ),
+         )
++    if lock.stage == "validating":
++        return (
++            (
++                f"taskledger repair lock --task {target} "
++                f'--reason "Holder PID {pid} is no longer running."'
++            ),
++            (
++                f"taskledger validate resume --task {target} "
++                f'--reason "Reacquire validation lock after stale holder repair."'
++            ),
++        )
+     return (
+         (
+             f"taskledger repair lock --task {target} "
+diff --git a/taskledger/services/navigation.py b/taskledger/services/navigation.py
+index b3c21ae..b6bf1d3 100644
+--- a/taskledger/services/navigation.py
++++ b/taskledger/services/navigation.py
+@@ -194,7 +194,39 @@ def next_action_for_task(
+             ),
+             None,
+         )
+-        if orphaned_planning_run is not None:
++        orphaned_validation_run = _optional_run(
++            workspace_root, task, task.latest_validation_run
++        )
++        if (
++            task.status_stage == "implemented"
++            and lock is None
++            and orphaned_validation_run is not None
++            and orphaned_validation_run.run_type == "validation"
++            and orphaned_validation_run.status == "running"
++        ):
++            run_id = orphaned_validation_run.run_id
++            next_item = _task_next_item(task)
++            next_item.update({"run_id": run_id, "run_type": "validation"})
++            recovery_command = (
++                f"taskledger validate resume --task {task.id} --run {run_id} "
++                '--reason "Reacquire validation lock."'
++            )
++            run_details = _running_run_details(task, orphaned_validation_run, lock)
++            run_details["suggested_command"] = recovery_command
++            blockers.append(
++                {
++                    "kind": "running_run",
++                    "message": (
++                        f"Validation run {run_id} is still marked running but has "
++                        "no matching active validating lock. Resume it, do not start a "
++                        "new run."
++                    ),
++                    **run_details,
++                }
++            )
++            action = "validate-resume"
++            reason = f"Validation run {run_id} is running without its validating lock."
++        elif orphaned_planning_run is not None:
+             run_id = orphaned_planning_run.run_id
+             recovery_command = (
+                 f"taskledger repair run --task {task.id} --run {run_id} "
+@@ -905,6 +937,101 @@ def _archived_task_capability(task: TaskRecord, action: str) -> dict[str, object
+     }
+ 
+ 
++def _can_validate(
++    workspace_root: Path,
++    task: TaskRecord,
++    lock: TaskLock | None,
++    active_stage: str | None,
++) -> tuple[bool, str, list[dict[str, object]]]:
++    impl_run = _optional_run(workspace_root, task, task.latest_implementation_run)
++    running_validation = _optional_run(workspace_root, task, task.latest_validation_run)
++    has_running_validation = (
++        running_validation is not None
++        and running_validation.run_type == "validation"
++        and running_validation.status == "running"
++    )
++    ok = (
++        task.status_stage == "implemented"
++        and lock is None
++        and active_stage is None
++        and not _running_runs(workspace_root, task)
++        and not has_running_validation
++        and impl_run is not None
++        and impl_run.run_type == "implementation"
++        and impl_run.status == "finished"
++    )
++    reason = (
++        "Validation is ready."
++        if ok
++        else (
++            "Validation requires implemented state, a finished implementation run, "
++            "and no conflicting lock."
++        )
++    )
++    blocking: list[dict[str, object]] = []
++    if ok and impl_run is not None:
++        from taskledger.services.workspace_snapshot import (
++            compare_implementation_snapshot,
++        )
++
++        evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
++        if not evaluation.ok:
++            ok = False
++            reason = "Validation is blocked by implementation snapshot mismatch."
++            blocking.append(
++                {
++                    "kind": "implementation_snapshot",
++                    "message": evaluation.message,
++                    "reason_code": evaluation.reason_code,
++                    "command_hint": evaluation.command_hint,
++                    "details": evaluation.details,
++                }
++            )
++    if (
++        impl_run is None
++        or impl_run.run_type != "implementation"
++        or impl_run.status != "finished"
++    ):
++        blocking.append(
++            {
++                "kind": "implementation",
++                "message": "No finished implementation run is available.",
++            }
++        )
++    if lock is not None:
++        blocking.append(
++            {
++                "kind": "lock",
++                "message": f"Task has an active {lock.stage} lock from {lock.run_id}.",
++            }
++        )
++    if has_running_validation and running_validation is not None:
++        command_hint = (
++            f"taskledger validate resume --task {task.id} "
++            f'--run {running_validation.run_id} --reason "..."'
++        )
++        if (
++            lock is not None
++            and lock.run_id == running_validation.run_id
++            and lock.stage == "validating"
++            and lock_is_expired(lock)
++        ):
++            command_hint = command_hint.replace(
++                "--reason", "--repair-expired-lock --reason"
++            )
++        blocking.append(
++            {
++                "kind": "validation",
++                "message": (
++                    f"Validation run {running_validation.run_id} is already running; "
++                    "resume it instead of starting a new validation run."
++                ),
++                "command_hint": command_hint,
++            }
++        )
++    return ok, reason, blocking
++
++
+ def can_perform(
+     workspace_root: Path,
+     task_ref: str,
+@@ -1082,61 +1209,10 @@ def can_perform(
+                 }
+             )
+     elif action == "validate":
+-        impl_run = _optional_run(workspace_root, task, task.latest_implementation_run)
+-        ok = (
+-            task.status_stage == "implemented"
+-            and lock is None
+-            and active_stage is None
+-            and impl_run is not None
+-            and impl_run.run_type == "implementation"
+-            and impl_run.status == "finished"
++        ok, reason, validation_blockers = _can_validate(
++            workspace_root, task, lock, active_stage
+         )
+-        reason = (
+-            "Validation is ready."
+-            if ok
+-            else (
+-                "Validation requires implemented state, a finished "
+-                "implementation run, and no conflicting lock."
+-            )
+-        )
+-        if ok and impl_run is not None:
+-            from taskledger.services.workspace_snapshot import (
+-                compare_implementation_snapshot,
+-            )
+-
+-            evaluation = compare_implementation_snapshot(workspace_root, task, impl_run)
+-            if not evaluation.ok:
+-                ok = False
+-                reason = "Validation is blocked by implementation snapshot mismatch."
+-                blocking.append(
+-                    {
+-                        "kind": "implementation_snapshot",
+-                        "message": evaluation.message,
+-                        "reason_code": evaluation.reason_code,
+-                        "command_hint": evaluation.command_hint,
+-                        "details": evaluation.details,
+-                    }
+-                )
+-        if (
+-            impl_run is None
+-            or impl_run.run_type != "implementation"
+-            or impl_run.status != "finished"
+-        ):
+-            blocking.append(
+-                {
+-                    "kind": "implementation",
+-                    "message": "No finished implementation run is available.",
+-                }
+-            )
+-        if lock is not None:
+-            blocking.append(
+-                {
+-                    "kind": "lock",
+-                    "message": (
+-                        f"Task has an active {lock.stage} lock from {lock.run_id}."
+-                    ),
+-                }
+-            )
++        blocking.extend(validation_blockers)
+     else:
+         raise _cli_error(f"Unsupported action: {action}", EXIT_CODE_BAD_INPUT)
+     return {
+diff --git a/taskledger/services/next_action_model.py b/taskledger/services/next_action_model.py
+index efbf68e..42818d2 100644
+--- a/taskledger/services/next_action_model.py
++++ b/taskledger/services/next_action_model.py
+@@ -124,6 +124,28 @@ def decide_expired_lock_action(
+                 }
+             ],
+         )
++    validation_run = _find_run(runs, task.latest_validation_run)
++    if (
++        validation_run is not None
++        and validation_run.run_type == "validation"
++        and validation_run.status == "running"
++        and lock.run_id == validation_run.run_id
++        and lock.stage == "validating"
++    ):
++        return (
++            "expired-validation-lock-resume",
++            "Validation lock expired; resume to continue the run.",
++            {"kind": "task", "task_id": task.id, "run_id": validation_run.run_id},
++            [
++                {
++                    "kind": "expired_lock",
++                    "message": (
++                        f"Validation lock for run {validation_run.run_id} "
++                        "at stage validating has expired."
++                    ),
++                }
++            ],
++        )
+     return (
+         "repair-lock",
+         "A stale or broken lock must be repaired before work can continue.",
+diff --git a/taskledger/services/next_action_payload.py b/taskledger/services/next_action_payload.py
+index 4c58560..aea901e 100644
+--- a/taskledger/services/next_action_payload.py
++++ b/taskledger/services/next_action_payload.py
+@@ -291,6 +291,10 @@ def _next_action_command(action: str) -> str | None:
+         "expired-lock-resume": (
+             "taskledger implement resume --repair-expired-lock --reason REASON"
+         ),
++        "validate-resume": "taskledger validate resume --reason REASON",
++        "expired-validation-lock-resume": (
++            "taskledger validate resume --repair-expired-lock --reason REASON"
++        ),
+         "todo-work": "taskledger implement checklist",
+         "implement-finish": "taskledger implement finish --summary SUMMARY",
+         "validate": "taskledger validate start",
+@@ -316,6 +320,22 @@ def _implement_resume_command(task_id: str | None = None) -> str:
+     )
+ 
+ 
++def _validation_resume_command(
++    task_id: str | None = None,
++    run_id: str | None = None,
++    *,
++    repair_expired_lock: bool = False,
++) -> str:
++    command = "taskledger validate resume"
++    if task_id is not None:
++        command += f" --task {task_id}"
++    if run_id is not None:
++        command += f" --run {run_id}"
++    if repair_expired_lock:
++        command += " --repair-expired-lock"
++    return command + ' --reason "..."'
++
++
+ def _primary_command_for_next_item(
+     action: str,
+     next_item: dict[str, object] | None,
+@@ -339,23 +359,40 @@ def _primary_command_for_next_item(
+         version = next_item.get("version")
+         if isinstance(version, int):
+             return f"taskledger plan review --version {version}"
+-    if kind == "task" and isinstance(item_id, str):
+-        if action in ("implement-resume", "expired-lock-resume"):
+-            return _implement_resume_command(item_id)
+-        if action == "repair-run-state":
++    if kind == "task":
++        task_id = item_id if isinstance(item_id, str) else next_item.get("task_id")
++        if action in ("validate-resume", "expired-validation-lock-resume"):
+             run_id = next_item.get("run_id")
+-            if isinstance(run_id, str):
+-                return (
+-                    f"taskledger repair run --task {item_id} --run {run_id} "
+-                    '--reason "Finish orphaned planning run."'
++            if isinstance(task_id, str):
++                return _validation_resume_command(
++                    task_id,
++                    run_id if isinstance(run_id, str) else None,
++                    repair_expired_lock=action == "expired-validation-lock-resume",
+                 )
+-        if action == "repair-active-stage":
+-            return f"taskledger task show --task {item_id}"
++        if isinstance(item_id, str):
++            if action in ("implement-resume", "expired-lock-resume"):
++                return _implement_resume_command(item_id)
++            if action == "repair-run-state":
++                run_id = next_item.get("run_id")
++                if isinstance(run_id, str):
++                    return (
++                        f"taskledger repair run --task {item_id} --run {run_id} "
++                        '--reason "Finish orphaned planning run."'
++                    )
++        if action == "repair-active-stage" and isinstance(task_id, str):
++            return f"taskledger task show --task {task_id}"
+     if kind == "handoff" and isinstance(item_id, str):
+         return f"taskledger handoff show {item_id} --format markdown"
+     if kind == "lock":
+         task_id = next_item.get("task_id")
+         if isinstance(task_id, str):
++            if action == "expired-validation-lock-resume":
++                run_id = next_item.get("run_id")
++                return _validation_resume_command(
++                    task_id,
++                    run_id if isinstance(run_id, str) else None,
++                    repair_expired_lock=True,
++                )
+             if action == "expired-lock-resume":
+                 return (
+                     f"taskledger implement resume"
+@@ -367,7 +404,31 @@ def _primary_command_for_next_item(
+     return _next_action_command(action)
+ 
+ 
+-def _commands_for_next_item(
++def _validation_resume_commands(
++    action: str, next_item: dict[str, object]
++) -> list[dict[str, object]] | None:
++    item_kind = next_item.get("kind")
++    is_expired = action == "expired-validation-lock-resume"
++    if action not in {"validate-resume", "expired-validation-lock-resume"}:
++        return None
++    if item_kind == "lock" and not is_expired:
++        return None
++    if item_kind not in {"task", "lock"}:
++        return None
++    task_value = next_item.get("id") or next_item.get("task_id")
++    if not isinstance(task_value, str):
++        return None
++    run_id = next_item.get("run_id")
++    command = _validation_resume_command(
++        task_value,
++        run_id if isinstance(run_id, str) else None,
++        repair_expired_lock=is_expired,
++    )
++    label = "Resume validation with expired lock" if is_expired else "Resume validation"
++    return [_command("resume", label, command, primary=True)]
++
++
++def _commands_for_next_item(  # noqa: C901
+     action: str,
+     next_item: dict[str, object] | None,
+ ) -> list[dict[str, object]]:
+@@ -407,6 +468,9 @@ def _commands_for_next_item(
+ 
+     item_kind = next_item.get("kind")
+     item_id = next_item.get("id")
++    validation_commands = _validation_resume_commands(action, next_item)
++    if validation_commands is not None:
++        return validation_commands
+     if item_kind == "question" and isinstance(item_id, str):
+         return [
+             _command(
+diff --git a/taskledger/services/run_recovery.py b/taskledger/services/run_recovery.py
+new file mode 100644
+index 0000000..106b864
+--- /dev/null
++++ b/taskledger/services/run_recovery.py
+@@ -0,0 +1,110 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++from pathlib import Path
++
++from taskledger.domain.lock import TaskLock
++from taskledger.domain.models import ActorRef, HarnessRef, TaskRecord, TaskRunRecord
++from taskledger.services import tasks as _tasks
++
++
++@dataclass(frozen=True)
++class ResumeLockResult:
++    lock: TaskLock
++    already_active: bool = False
++    repaired_expired_lock: bool = False
++    previous_lock_id: str | None = None
++
++
++def reacquire_run_lock(
++    workspace_root: Path,
++    *,
++    task: TaskRecord,
++    run: TaskRunRecord,
++    expected_stage: str,
++    reason: str,
++    actor: ActorRef,
++    harness: HarnessRef | None,
++    repair_expired_lock: bool,
++) -> ResumeLockResult:
++    """Reacquire the matching active-stage lock for an existing running run."""
++    existing = _tasks._current_lock(workspace_root, task.id)
++    previous_lock_id: str | None = None
++    if existing is not None:
++        matches = existing.run_id == run.run_id and existing.stage == expected_stage
++        if _tasks.lock_is_expired(existing):
++            if not repair_expired_lock:
++                raise _tasks._stale_lock_error(task.id, existing)
++            if not matches:
++                raise _tasks._cli_error(
++                    "Expired lock does not match the selected running run and stage.",
++                    _tasks.EXIT_CODE_LOCK_CONFLICT,
++                )
++            previous_lock_id = existing.lock_id
++            _tasks._release_expired_lock(
++                workspace_root,
++                task.id,
++                existing,
++                reason=f"Expired lock released for resume: {reason}",
++            )
++        else:
++            from taskledger.services.lock_diagnostics import (
++                lock_owned_by_current_execution,
++            )
++
++            if matches and lock_owned_by_current_execution(
++                existing, current_actor=actor, current_harness=harness
++            ):
++                return ResumeLockResult(lock=existing, already_active=True)
++            if expected_stage == "implementing":
++                from taskledger.services.implementation_flow import (
++                    _active_lock_blocks_resume_error,
++                )
++
++                raise _active_lock_blocks_resume_error(
++                    task.id,
++                    existing,
++                    current_actor=actor,
++                    current_harness=harness,
++                )
++            try:
++                from taskledger.services.lock_diagnostics import diagnose_lock
++
++                diagnostics = diagnose_lock(
++                    existing,
++                    task_id=task.id,
++                    current_actor=actor,
++                    current_harness=harness,
++                )
++                remediation = list(diagnostics.remediation)
++                summary = diagnostics.summary
++            except (ImportError, AttributeError):
++                remediation = []
++                summary = ""
++            error = _tasks._cli_error(
++                f"Cannot resume run {run.run_id}; task {task.id} has a non-expired "
++                f"{existing.stage} lock for run {existing.run_id}. {summary}",
++                _tasks.EXIT_CODE_LOCK_CONFLICT,
++            )
++            error.taskledger_remediation = remediation or [
++                f"taskledger lock show --task {task.id}"
++            ]
++            raise error
++
++    if expected_stage == "implementing":
++        _tasks._ensure_dependencies_done(workspace_root, task)
++
++    lock = _tasks._acquire_lock(
++        workspace_root,
++        task=task,
++        stage=expected_stage,
++        run=run,
++        reason=reason,
++        actor=actor,
++        harness=harness,
++    )
++    return ResumeLockResult(
++        lock=lock,
++        repaired_expired_lock=previous_lock_id is not None,
++        previous_lock_id=previous_lock_id,
++    )
+diff --git a/taskledger/services/run_store.py b/taskledger/services/run_store.py
+index 71c3477..7b26920 100644
+--- a/taskledger/services/run_store.py
++++ b/taskledger/services/run_store.py
+@@ -114,8 +114,12 @@ def break_lock(
+                 f"taskledger implement resume --task {task.id} "
+                 '--reason "Reacquire implementation lock for existing running run."'
+             )
+-        else:
+-            next_command = f"taskledger next-action --task {task.id}"
++        elif matching_run.run_type == "validation":
++            next_command = (
++                f"taskledger validate resume --task {task.id} "
++                f"--run {matching_run.run_id} "
++                '--reason "Reacquire validation lock for existing running run."'
++            )
+         recovery_details = {
+             "orphaned_run": {
+                 "run_id": matching_run.run_id,
+diff --git a/taskledger/services/tasks.py b/taskledger/services/tasks.py
+index db7cec3..8137505 100644
+--- a/taskledger/services/tasks.py
++++ b/taskledger/services/tasks.py
+@@ -1568,6 +1568,31 @@ def start_validation(
+     )
+ 
+ 
++def resume_validation(
++    workspace_root: Path,
++    task_ref: str,
++    *,
++    run_id: str | None = None,
++    reason: str,
++    actor: ActorRef | None = None,
++    harness: HarnessRef | None = None,
++    repair_expired_lock: bool = False,
++) -> dict[str, object]:
++    from taskledger.services.validation_flow import (
++        resume_validation as _resume_validation,
++    )
++
++    return _resume_validation(
++        workspace_root,
++        task_ref,
++        run_id=run_id,
++        reason=reason,
++        actor=actor,
++        harness=harness,
++        repair_expired_lock=repair_expired_lock,
++    )
++
++
+ def refresh_implementation_snapshot(
+     workspace_root: Path,
+     task_ref: str,
+@@ -2037,6 +2062,28 @@ def _acquire_lock(
+     return lock
+ 
+ 
++def _require_matching_active_lock(
++    workspace_root: Path,
++    *,
++    task_id: str,
++    expected_stage: str,
++    run_id: str,
++) -> TaskLock:
++    lock = _current_lock(workspace_root, task_id)
++    if (
++        lock is None
++        or lock.stage != expected_stage
++        or lock.run_id != run_id
++        or lock_is_expired(lock)
++    ):
++        raise _cli_error(
++            f"Task {task_id} has no matching active {expected_stage} lock "
++            f"for run {run_id}.",
++            EXIT_CODE_LOCK_CONFLICT,
++        )
++    return lock
++
++
+ def _release_lock(
+     workspace_root: Path,
+     *,
+@@ -2047,6 +2094,7 @@ def _release_lock(
+     event_name: str,
+     extra_data: dict[str, object] | None = None,
+     delete_only: bool = False,
++    expected_lock_id: str | None = None,
+ ) -> None:
+     paths = resolve_v2_paths(workspace_root)
+     lock_path = task_lock_path(paths, task.id)
+@@ -2056,7 +2104,11 @@ def _release_lock(
+             f"Task {task.id} has no active {expected_stage} lock to release.",
+             EXIT_CODE_LOCK_CONFLICT,
+         )
+-    if lock.stage != expected_stage or lock.run_id != run_id:
++    if (
++        lock.stage != expected_stage
++        or lock.run_id != run_id
++        or (expected_lock_id is not None and lock.lock_id != expected_lock_id)
++    ):
+         raise _cli_error(
+             "Active lock does not match the expected stage/run.",
+             EXIT_CODE_LOCK_CONFLICT,
+diff --git a/taskledger/services/validation_flow.py b/taskledger/services/validation_flow.py
+index f70ce5e..a9976cf 100644
+--- a/taskledger/services/validation_flow.py
++++ b/taskledger/services/validation_flow.py
+@@ -113,6 +113,107 @@ def start_validation(
+     )
+ 
+ 
++def resume_validation(
++    workspace_root: Path,
++    task_ref: str,
++    *,
++    run_id: str | None = None,
++    reason: str,
++    actor: ActorRef | None = None,
++    harness: HarnessRef | None = None,
++    repair_expired_lock: bool = False,
++) -> dict[str, object]:
++    task = resolve_task(workspace_root, task_ref)
++    _tasks._ensure_not_archived(task, operation="resume validation for")
++    resume_reason = reason.strip()
++    if not resume_reason:
++        raise _tasks._cli_error(
++            "Validation resume requires --reason.", EXIT_CODE_BAD_INPUT
++        )
++    if task.status_stage != "implemented":
++        raise _tasks._cli_error(
++            "Validation resume requires implemented state.",
++            EXIT_CODE_INVALID_TRANSITION,
++        )
++    selected_run_id = run_id or task.latest_validation_run
++    if selected_run_id is None or selected_run_id != task.latest_validation_run:
++        raise _tasks._cli_error(
++            "Validation resume requires the latest validation run.",
++            EXIT_CODE_INVALID_TRANSITION,
++        )
++    run = _tasks._require_run(workspace_root, task, selected_run_id)
++    if run.run_type != "validation" or run.status != "running":
++        raise _tasks._cli_error(
++            "Validation resume requires a running validation run.",
++            EXIT_CODE_INVALID_TRANSITION,
++        )
++    if not run.based_on_implementation_run:
++        raise _tasks._cli_error(
++            "Validation run has no implementation basis and cannot be resumed.",
++            EXIT_CODE_INVALID_TRANSITION,
++        )
++    implementation_run = _tasks._require_run(
++        workspace_root, task, run.based_on_implementation_run
++    )
++    if (
++        run.based_on_implementation_run != task.latest_implementation_run
++        or implementation_run.run_type != "implementation"
++        or implementation_run.status != "finished"
++    ):
++        raise _tasks._cli_error(
++            "Validation run is not based on the task's current finished "
++            "implementation run.",
++            EXIT_CODE_INVALID_TRANSITION,
++        )
++    from taskledger.services.actors import resolve_effective_identity
++    from taskledger.services.run_recovery import reacquire_run_lock
++
++    resolved_actor, resolved_harness = resolve_effective_identity(
++        workspace_root,
++        actor=actor,
++        harness=harness,
++        cwd=workspace_root,
++        role="validator",
++    )
++    resumed = reacquire_run_lock(
++        workspace_root,
++        task=task,
++        run=run,
++        expected_stage="validating",
++        reason=resume_reason,
++        actor=resolved_actor,
++        harness=resolved_harness,
++        repair_expired_lock=repair_expired_lock,
++    )
++    payload = _tasks._lifecycle_payload(
++        "validate resume",
++        task,
++        warnings=[],
++        changed=not resumed.already_active,
++        run=run,
++        lock=resumed.lock,
++    )
++    payload["already_active"] = resumed.already_active
++    payload["repaired_expired_lock"] = resumed.repaired_expired_lock
++    payload["previous_lock_id"] = resumed.previous_lock_id
++    if not resumed.already_active:
++        _tasks._append_event(
++            workspace_root,
++            task.id,
++            "run.resumed",
++            {
++                "run_id": run.run_id,
++                "run_type": "validation",
++                "reason": resume_reason,
++                "repaired_expired_lock": resumed.repaired_expired_lock,
++                "previous_lock_id": resumed.previous_lock_id,
++                "new_lock_id": resumed.lock.lock_id,
++            },
++        )
++    payload["next_command"] = f"taskledger next-action --task {task.id}"
++    return payload
++
++
+ def validation_status(
+     workspace_root: Path,
+     task_ref: str,
+@@ -445,6 +546,12 @@ def finish_validation(
+         expected_type="validation",
+     )
+     normalized_result = normalize_validation_result(result)
++    active_lock = _tasks._require_matching_active_lock(
++        workspace_root,
++        task_id=task.id,
++        expected_stage="validating",
++        run_id=run.run_id,
++    )
+     if normalized_result == "passed":
+         _ensure_validation_can_pass(workspace_root, task, run)
+     target_stage: TaskStatusStage = (
+@@ -488,6 +595,7 @@ def finish_validation(
+         if normalized_result == "passed"
+         else "stage.failed",
+         extra_data={"result": normalized_result},
++        expected_lock_id=active_lock.lock_id,
+     )
+     _tasks._append_event(
+         workspace_root,
+diff --git a/tests/test_command_inventory.py b/tests/test_command_inventory.py
+index 6d6405e..0ae9f6e 100644
+--- a/tests/test_command_inventory.py
++++ b/tests/test_command_inventory.py
+@@ -144,12 +144,12 @@ def test_all_commands_have_ledger_effect() -> None:
+ 
+ def test_critical_tier_count_under_26() -> None:
+     critical = [k for k, v in COMMAND_METADATA.items() if v.tier == TIER_CRITICAL]
+-    assert len(critical) <= 28, f"Too many critical: {len(critical)}"
++    assert len(critical) <= 29, f"Too many critical: {len(critical)}"
+ 
+ 
+ def test_agent_golden_path_is_explicit_and_budgeted() -> None:
+     """The normal agent path should stay much smaller than all stable commands."""
+-    assert len(AGENT_GOLDEN_PATH_COMMANDS) <= 45
++    assert len(AGENT_GOLDEN_PATH_COMMANDS) <= 46
+     assert len(AGENT_GOLDEN_PATH_COMMANDS) == len(set(AGENT_GOLDEN_PATH_COMMANDS))
+     assert set(AGENT_GOLDEN_PATH_COMMANDS) <= set(COMMAND_METADATA)
+ 
+diff --git a/tests/test_validation_lock_recovery.py b/tests/test_validation_lock_recovery.py
+new file mode 100644
+index 0000000..240bb1f
+--- /dev/null
++++ b/tests/test_validation_lock_recovery.py
+@@ -0,0 +1,359 @@
++from __future__ import annotations
++
++import json
++import sys
++from pathlib import Path
++
++import pytest
++import yaml
++from typer.testing import CliRunner
++
++from taskledger.cli import app
++from taskledger.storage.task_store import (
++    resolve_run,
++    resolve_v2_paths,
++    task_lock_path,
++)
++from tests.support.builders import create_implemented_task, init_workspace
++
++
++def test_finish_without_validation_lock_does_not_mutate_run_or_task(
++    tmp_path: Path,
++) -> None:
++    init_workspace(tmp_path)
++    task_id = create_implemented_task(tmp_path, slug="validation-finish-lock")
++    started = runner.invoke(
++        app, ["--json", "--root", str(tmp_path), "validate", "start"]
++    )
++    assert started.exit_code == 0, started.stdout
++    run_id = _json(started)["result"]["run_id"]
++    path = task_lock_path(resolve_v2_paths(tmp_path), task_id)
++    path.unlink()
++    run_before = resolve_run(tmp_path, task_id, str(run_id))
++
++    finished = runner.invoke(
++        app,
++        [
++            "--json",
++            "--root",
++            str(tmp_path),
++            "validate",
++            "finish",
++            "--result",
++            "blocked",
++            "--summary",
++            "Lock is missing.",
++        ],
++    )
++    assert finished.exit_code != 0
++    run_after = resolve_run(tmp_path, task_id, str(run_id))
++    assert run_after.status == "running"
++    assert run_after.finished_at == run_before.finished_at
++    assert run_after.result == run_before.result
++    from taskledger.storage.task_store import resolve_task
++
++    assert resolve_task(tmp_path, task_id).status_stage == "implemented"
++
++
++runner = CliRunner()
++
++
++def _start_validation(root: Path) -> tuple[str, str]:
++    task_id = create_implemented_task(root, slug="validation-recovery")
++    started = runner.invoke(app, ["--json", "--root", str(root), "validate", "start"])
++    assert started.exit_code == 0, started.stdout
++    run_id = _json(started)["result"]["run_id"]
++    return task_id, str(run_id)
++
++
++def test_expired_validation_lock_guides_resume_and_blocks_new_start(
++    tmp_path: Path,
++) -> None:
++    init_workspace(tmp_path)
++    task_id, run_id = _start_validation(tmp_path)
++    _expire_lock(tmp_path, task_id)
++
++    next_action = runner.invoke(app, ["--json", "--root", str(tmp_path), "next-action"])
++    assert next_action.exit_code == 0, next_action.stdout
++    next_result = _json(next_action)["result"]
++    assert next_result["action"] == "expired-validation-lock-resume"
++    assert "validate resume" in next_result["next_command"], next_result
++    assert "--repair-expired-lock" in next_result["next_command"]
++    assert run_id in next_result["next_command"], next_result.get("next_item")
++    assert "repair lock" not in next_result["next_command"]
++
++    lock_show = runner.invoke(
++        app, ["--json", "--root", str(tmp_path), "lock", "show", "--task", task_id]
++    )
++    assert lock_show.exit_code == 0, lock_show.stdout
++    assert "validate resume" in lock_show.stdout
++    assert "--repair-expired-lock" in lock_show.stdout
++
++    capability = runner.invoke(
++        app, ["--json", "--root", str(tmp_path), "can", "validate", "--task", task_id]
++    )
++    assert capability.exit_code == 0, capability.stdout
++    capability_result = _json(capability)["result"]
++    assert capability_result["ok"] is False
++    assert "validate resume" in str(capability_result["blocking"])
++
++
++def test_removed_validation_lock_is_resumable_and_doctor_guides_recovery(
++    tmp_path: Path,
++) -> None:
++    init_workspace(tmp_path)
++    task_id, run_id = _start_validation(tmp_path)
++    task_lock_path(resolve_v2_paths(tmp_path), task_id).unlink()
++
++    next_action = runner.invoke(app, ["--json", "--root", str(tmp_path), "next-action"])
++    assert next_action.exit_code == 0, next_action.stdout
++    next_result = _json(next_action)["result"]
++    assert next_result["action"] == "validate-resume"
++    assert "validate resume" in next_result["next_command"]
++    assert run_id in next_result["next_command"]
++
++    doctor = runner.invoke(app, ["--json", "--root", str(tmp_path), "doctor"])
++    assert doctor.exit_code == 0, doctor.stdout
++    assert "validate resume" in doctor.stdout
++
++    capability = runner.invoke(
++        app, ["--json", "--root", str(tmp_path), "can", "validate", "--task", task_id]
++    )
++    assert capability.exit_code == 0, capability.stdout
++    capability_result = _json(capability)["result"]
++    assert capability_result["ok"] is False
++    assert "validate resume" in str(capability_result["blocking"])
++
++    resumed = runner.invoke(
++        app,
++        [
++            "--json",
++            "--root",
++            str(tmp_path),
++            "validate",
++            "resume",
++            "--reason",
++            "Reacquire after diagnosed lock removal.",
++        ],
++    )
++    assert resumed.exit_code == 0, resumed.stdout
++    assert _json(resumed)["result"]["run_id"] == run_id
++
++
++def _json(result: object) -> dict[str, object]:
++    return json.loads(result.stdout)
++
++
++def _expire_lock(root: Path, task_id: str) -> None:
++    path = task_lock_path(resolve_v2_paths(root), task_id)
++    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
++    payload["expires_at"] = "2000-01-01T00:00:00+00:00"
++    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
++
++
++def test_resume_expired_validation_lock_preserves_run_evidence(tmp_path: Path) -> None:
++    init_workspace(tmp_path)
++    task_id = create_implemented_task(tmp_path, slug="validation-resume")
++    started = runner.invoke(
++        app, ["--json", "--root", str(tmp_path), "validate", "start"]
++    )
++    assert started.exit_code == 0, started.stdout
++    run_id = _json(started)["result"]["run_id"]
++
++    command = runner.invoke(
++        app,
++        [
++            "--root",
++            str(tmp_path),
++            "validate",
++            "command",
++            "--",
++            sys.executable,
++            "-c",
++            "print('evidence')",
++        ],
++    )
++    assert command.exit_code == 0, command.stdout
++    previous = resolve_run(tmp_path, task_id, str(run_id))
++    _expire_lock(tmp_path, task_id)
++
++    resumed = runner.invoke(
++        app,
++        [
++            "--json",
++            "--root",
++            str(tmp_path),
++            "validate",
++            "resume",
++            "--reason",
++            "Continue after validation timeout.",
++            "--repair-expired-lock",
++        ],
++    )
++    assert resumed.exit_code == 0, resumed.stdout
++    payload = _json(resumed)["result"]
++    assert payload["run_id"] == run_id
++    assert payload["repaired_expired_lock"] is True
++    current = resolve_run(tmp_path, task_id, str(run_id))
++    assert current.status == "running"
++    assert current.started_at == previous.started_at
++    assert current.checks == previous.checks
++    assert current.worklog == previous.worklog
++    assert current.artifact_refs == previous.artifact_refs
++
++    lock_path = task_lock_path(resolve_v2_paths(tmp_path), task_id)
++    lock = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
++    assert lock["stage"] == "validating"
++    assert lock["run_id"] == run_id
++    assert lock["expires_at"] != "2000-01-01T00:00:00+00:00"
++
++
++@pytest.mark.parametrize("mismatch", ["run_id", "stage"])
++def test_resume_refuses_mismatched_expired_lock(tmp_path: Path, mismatch: str) -> None:
++    init_workspace(tmp_path)
++    task_id, run_id = _start_validation(tmp_path)
++    path = task_lock_path(resolve_v2_paths(tmp_path), task_id)
++    lock = yaml.safe_load(path.read_text(encoding="utf-8"))
++    lock["expires_at"] = "2000-01-01T00:00:00+00:00"
++    lock[mismatch] = "run-unrelated" if mismatch == "run_id" else "implementing"
++    path.write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8")
++    before = path.read_bytes()
++
++    resumed = runner.invoke(
++        app,
++        [
++            "--json",
++            "--root",
++            str(tmp_path),
++            "validate",
++            "resume",
++            "--reason",
++            "Do not take an unrelated lock.",
++            "--repair-expired-lock",
++        ],
++    )
++    assert resumed.exit_code != 0
++    assert path.read_bytes() == before
++    assert resolve_run(tmp_path, task_id, run_id).status == "running"
++
++
++def test_same_execution_validation_resume_is_idempotent(tmp_path: Path) -> None:
++    init_workspace(tmp_path)
++    task_id = create_implemented_task(tmp_path, slug="validation-idempotent")
++    identity = [
++        "--actor",
++        "agent",
++        "--actor-name",
++        "validator",
++        "--actor-role",
++        "validator",
++        "--harness",
++        "pi",
++        "--session-id",
++        "session-1",
++    ]
++    started = runner.invoke(
++        app, ["--json", "--root", str(tmp_path), "validate", "start", *identity]
++    )
++    assert started.exit_code == 0, started.stdout
++    run_id = _json(started)["result"]["run_id"]
++    before_lock = yaml.safe_load(
++        task_lock_path(resolve_v2_paths(tmp_path), task_id).read_text(encoding="utf-8")
++    )
++
++    resumed = runner.invoke(
++        app,
++        [
++            "--json",
++            "--root",
++            str(tmp_path),
++            "validate",
++            "resume",
++            "--reason",
++            "Retry same execution.",
++            *identity,
++        ],
++    )
++    assert resumed.exit_code == 0, resumed.stdout
++    result = _json(resumed)["result"]
++    assert result["already_active"] is True
++    assert result["run_id"] == run_id
++    assert result["lock"]["lock_id"] == before_lock["lock_id"]
++
++
++def test_validation_resume_cannot_take_other_execution_live_lock(
++    tmp_path: Path,
++) -> None:
++    init_workspace(tmp_path)
++    task_id = create_implemented_task(tmp_path, slug="validation-other-owner")
++    owner = [
++        "--actor",
++        "agent",
++        "--actor-name",
++        "owner",
++        "--actor-role",
++        "validator",
++        "--harness",
++        "pi",
++        "--session-id",
++        "session-owner",
++    ]
++    started = runner.invoke(
++        app, ["--json", "--root", str(tmp_path), "validate", "start", *owner]
++    )
++    assert started.exit_code == 0, started.stdout
++    path = task_lock_path(resolve_v2_paths(tmp_path), task_id)
++    before = path.read_bytes()
++    other = [
++        "--actor",
++        "agent",
++        "--actor-name",
++        "other",
++        "--actor-role",
++        "validator",
++        "--harness",
++        "pi",
++        "--session-id",
++        "session-other",
++    ]
++
++    resumed = runner.invoke(
++        app,
++        [
++            "--json",
++            "--root",
++            str(tmp_path),
++            "validate",
++            "resume",
++            "--reason",
++            "Must not take another live lock.",
++            *other,
++        ],
++    )
++    assert resumed.exit_code != 0
++    assert path.read_bytes() == before
++
++
++def test_repair_lock_returns_validation_resume_follow_up(tmp_path: Path) -> None:
++    init_workspace(tmp_path)
++    task_id, run_id = _start_validation(tmp_path)
++    _expire_lock(tmp_path, task_id)
++
++    repaired = runner.invoke(
++        app,
++        [
++            "--root",
++            str(tmp_path),
++            "repair",
++            "lock",
++            "--task",
++            task_id,
++            "--reason",
++            "Remove diagnosed expired validation lock.",
++        ],
++    )
++    assert repaired.exit_code == 0, repaired.stdout
++    assert "matching validation run" in repaired.stdout
++    assert run_id in repaired.stdout
++    assert "taskledger validate resume" in repaired.stdout
++    assert "--repair-expired-lock" not in repaired.stdout

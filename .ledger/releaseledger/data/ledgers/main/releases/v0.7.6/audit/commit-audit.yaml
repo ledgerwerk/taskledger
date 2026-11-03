@@ -1,0 +1,92 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.7.6
+git_base_ref: v0.7.5
+git_base_sha: aa7440532a65f5a04d4eee29185ae5cba7a02cd2
+git_head_ref: HEAD
+git_head_sha: aa20277d7339d734363293882be90bc554ad66aa
+git_range: aa7440532a65f5a04d4eee29185ae5cba7a02cd2..aa20277d7339d734363293882be90bc554ad66aa
+commit_count: 2
+rows:
+- sha: 072fcf2f66663369540ca4a38026f4027b1aabee
+  source_ref: git:072fcf2f66663369540ca4a38026f4027b1aabee
+  short_sha: 072fcf2
+  changed_paths:
+  - .codecrate.toml
+  - .gitignore
+  - API.md
+  - README.md
+  - docs/api.md
+  - docs/command_contract.md
+  - docs/public_surface.md
+  - docs/usage.md
+  - skills/taskledger/SKILL.md
+  - taskledger/api/task_runs.py
+  - taskledger/cli_repair.py
+  - taskledger/cli_validate.py
+  - taskledger/command_inventory.py
+  - taskledger/services/doctor.py
+  - taskledger/services/doctor_checks/task_checks.py
+  - taskledger/services/implementation_flow.py
+  - taskledger/services/lock_diagnostics.py
+  - taskledger/services/navigation.py
+  - taskledger/services/next_action_model.py
+  - taskledger/services/next_action_payload.py
+  - taskledger/services/run_recovery.py
+  - taskledger/services/run_store.py
+  - taskledger/services/tasks.py
+  - taskledger/services/validation_flow.py
+  - tests/test_command_inventory.py
+  - tests/test_validation_lock_recovery.py
+  stats:
+    files_changed: 26
+    insertions: 1045
+    deletions: 133
+  inspected: true
+  inspected_paths:
+  - taskledger/cli_validate.py
+  - taskledger/services/doctor.py
+  - taskledger/services/doctor_checks/task_checks.py
+  - taskledger/services/implementation_flow.py
+  - taskledger/services/lock_diagnostics.py
+  - taskledger/services/navigation.py
+  - taskledger/services/next_action_model.py
+  - taskledger/services/next_action_payload.py
+  - taskledger/services/run_recovery.py
+  - taskledger/services/run_store.py
+  - taskledger/services/tasks.py
+  - taskledger/services/validation_flow.py
+  - tests/test_command_inventory.py
+  - tests/test_validation_lock_recovery.py
+  observed_behavior: Adds a validation resume command to reacquire a missing or expired
+    lock for an existing running validation while preserving its checks and command
+    evidence; validation cannot finish without its matching active lock.
+  public_impact: public
+  decision: accepted
+  stale: false
+  evidence_subject: 'feat: better timeout handling'
+  target_entry_key: validation-resume
+  target_entry_id: entry-0001
+  notes: ''
+- sha: aa20277d7339d734363293882be90bc554ad66aa
+  source_ref: git:aa20277d7339d734363293882be90bc554ad66aa
+  short_sha: aa20277
+  changed_paths:
+  - tests/test_recovery_repairs.py
+  stats:
+    files_changed: 1
+    insertions: 1
+    deletions: 1
+  inspected: true
+  inspected_paths:
+  - tests/test_recovery_repairs.py
+  observed_behavior: Normalizes a test's expected paths to POSIX separators so a recovery
+    assertion is platform independent; no product behavior changed.
+  public_impact: internal
+  decision: internal
+  stale: false
+  evidence_subject: 'fix: path'
+  notes: Test-only portability adjustment with no runtime impact.

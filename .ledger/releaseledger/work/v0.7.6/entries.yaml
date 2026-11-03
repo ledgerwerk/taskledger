@@ -1,0 +1,28 @@
+schema: releaseledger.entry-batch.v1
+operation: create
+schema_version: 1
+object_type: release_entry_batch
+release_version: v0.7.6
+git_base_ref: aa7440532a65f5a04d4eee29185ae5cba7a02cd2
+git_base_sha: aa7440532a65f5a04d4eee29185ae5cba7a02cd2
+git_head_ref: aa20277d7339d734363293882be90bc554ad66aa
+git_head_sha: aa20277d7339d734363293882be90bc554ad66aa
+include_merges: nontrivial
+entries:
+- kind: added
+  summary: Added recovery for interrupted validation runs while preserving existing checks and command evidence
+  status: accepted
+  source_refs:
+  - git:072fcf2f66663369540ca4a38026f4027b1aabee
+  paths:
+  - taskledger/cli_validate.py
+  - taskledger/services/validation_flow.py
+  - taskledger/services/run_recovery.py
+  - taskledger/services/navigation.py
+  - tests/test_validation_lock_recovery.py
+  sources:
+  - git:072fcf2f66663369540ca4a38026f4027b1aabee
+  prs: []
+  issues: []
+  contributors:
+  - '@holgern'

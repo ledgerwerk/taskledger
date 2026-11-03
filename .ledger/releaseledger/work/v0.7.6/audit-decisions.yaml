@@ -1,0 +1,41 @@
+rows:
+- sha: 072fcf2f66663369540ca4a38026f4027b1aabee
+  inspected: true
+  inspected_paths:
+  - taskledger/cli_validate.py
+  - taskledger/services/doctor.py
+  - taskledger/services/doctor_checks/task_checks.py
+  - taskledger/services/implementation_flow.py
+  - taskledger/services/lock_diagnostics.py
+  - taskledger/services/navigation.py
+  - taskledger/services/next_action_model.py
+  - taskledger/services/next_action_payload.py
+  - taskledger/services/run_recovery.py
+  - taskledger/services/run_store.py
+  - taskledger/services/tasks.py
+  - taskledger/services/validation_flow.py
+  - tests/test_command_inventory.py
+  - tests/test_validation_lock_recovery.py
+  observed_behavior: >-
+    Adds a validation resume command to reacquire a missing or expired lock for
+    an existing running validation while preserving its checks and command
+    evidence; validation cannot finish without its matching active lock.
+  public_impact: public
+  decision: accepted
+  target_entry_key: validation-resume
+  target_entry_id: null
+  notes: ''
+  stale: false
+- sha: aa20277d7339d734363293882be90bc554ad66aa
+  inspected: true
+  inspected_paths:
+  - tests/test_recovery_repairs.py
+  observed_behavior: >-
+    Normalizes a test's expected paths to POSIX separators so a recovery assertion
+    is platform independent; no product behavior changed.
+  public_impact: internal
+  decision: internal
+  target_entry_key: null
+  target_entry_id: null
+  notes: Test-only portability adjustment with no runtime impact.
+  stale: false

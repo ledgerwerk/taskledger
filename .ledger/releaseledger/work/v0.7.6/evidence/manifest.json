@@ -1,0 +1,62 @@
+{
+  "candidate_count": 2,
+  "candidates": [
+    {
+      "additions": 1045,
+      "deletions": 133,
+      "patch_file": "072fcf2.patch",
+      "patch_sha256": "6d13106727110ed69ed84fc7683945a30b8103da6acc717e69ae1b0859733127",
+      "paths": [
+        ".codecrate.toml",
+        ".gitignore",
+        "API.md",
+        "README.md",
+        "docs/api.md",
+        "docs/command_contract.md",
+        "docs/public_surface.md",
+        "docs/usage.md",
+        "skills/taskledger/SKILL.md",
+        "taskledger/api/task_runs.py",
+        "taskledger/cli_repair.py",
+        "taskledger/cli_validate.py",
+        "taskledger/command_inventory.py",
+        "taskledger/services/doctor.py",
+        "taskledger/services/doctor_checks/task_checks.py",
+        "taskledger/services/implementation_flow.py",
+        "taskledger/services/lock_diagnostics.py",
+        "taskledger/services/navigation.py",
+        "taskledger/services/next_action_model.py",
+        "taskledger/services/next_action_payload.py",
+        "taskledger/services/run_recovery.py",
+        "taskledger/services/run_store.py",
+        "taskledger/services/tasks.py",
+        "taskledger/services/validation_flow.py",
+        "tests/test_command_inventory.py",
+        "tests/test_validation_lock_recovery.py"
+      ],
+      "sha": "072fcf2f66663369540ca4a38026f4027b1aabee",
+      "short_sha": "072fcf2",
+      "source_ref": "git:072fcf2f66663369540ca4a38026f4027b1aabee"
+    },
+    {
+      "additions": 1,
+      "deletions": 1,
+      "patch_file": "aa20277.patch",
+      "patch_sha256": "718c6b6e6ea29c053236e9fb3dfbc16258a78aa945c389ed51d0c9fbfe367057",
+      "paths": [
+        "tests/test_recovery_repairs.py"
+      ],
+      "sha": "aa20277d7339d734363293882be90bc554ad66aa",
+      "short_sha": "aa20277",
+      "source_ref": "git:aa20277d7339d734363293882be90bc554ad66aa"
+    }
+  ],
+  "git_base_ref": "aa7440532a65f5a04d4eee29185ae5cba7a02cd2",
+  "git_base_sha": "aa7440532a65f5a04d4eee29185ae5cba7a02cd2",
+  "git_head_ref": "aa20277d7339d734363293882be90bc554ad66aa",
+  "git_head_sha": "aa20277d7339d734363293882be90bc554ad66aa",
+  "include_merges": "nontrivial",
+  "object_type": "git_evidence_manifest",
+  "release_version": "v0.7.6",
+  "schema_version": 1
+}
