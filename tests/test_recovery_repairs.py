@@ -712,7 +712,7 @@ def test_four_shadowed_allocations_recover_after_pointer_rebind(
         entry["source_path"] for entry in reviewed_plan["incomplete_allocations"]
     }
     assert reviewed_sources == {
-        str(paths.tasks_dir / legacy_id) for legacy_id in legacy_ids
+        (paths.tasks_dir / legacy_id).as_posix() for legacy_id in legacy_ids
     }
     result = repair_allocations(
         workspace,
