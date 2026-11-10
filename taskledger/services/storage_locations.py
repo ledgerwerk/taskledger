@@ -158,7 +158,7 @@ class StorageLocationReport:
                     "source": mount.get("source"),
                     "root": mount.get("root"),
                     "path": mount.get("path"),
-                    "binding": {"status": "valid"},
+                    "binding": mount.get("binding", {"status": "unknown"}),
                     "initialized": mount.get("initialized", False),
                 }
                 for name, mount in (self.mounts or {}).items()
@@ -326,18 +326,35 @@ def build_storage_location_report(
         and context.mode == "canonical"
         and context.layout is not None
     ):
-        mounts = {
-            name: {
+        validation_report = context.storage_validation
+        mounts: dict[str, dict[str, object]] = {}
+        for name, mount in context.layout.mounts.items():
+            validation_result = (
+                next(
+                    (
+                        result
+                        for result in validation_report.results
+                        if result.path == mount.path
+                    ),
+                    None,
+                )
+                if validation_report is not None
+                else None
+            )
+            binding: dict[str, str] = {"status": "unknown"}
+            if validation_result is not None:
+                binding["status"] = "valid" if validation_result.valid else "invalid"
+                if validation_result.reason is not None:
+                    binding["reason"] = validation_result.reason
+            mounts[name] = {
                 "storage": str(mount.storage),
                 "scope": str(mount.scope),
                 "root": str(mount.root) if mount.root is not None else None,
                 "path": str(mount.path),
-                "binding": {"status": "valid"},
+                "binding": binding,
                 "source": str(mount.source),
                 "initialized": mount.path.exists(),
             }
-            for name, mount in context.layout.mounts.items()
-        }
         active_lock_count = _active_lock_count(workspace_root)
         try:
             inventory = _build_lock_inventory(workspace_root)

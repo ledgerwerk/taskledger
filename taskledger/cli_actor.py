@@ -8,7 +8,9 @@ import typer
 
 from taskledger.cli_common import (
     cli_state_from_context,
+    emit_error,
     emit_payload,
+    launch_error_exit_code,
     resolve_workspace_root,
 )
 from taskledger.domain.models import ActiveActorState, ActiveHarnessState
@@ -17,6 +19,7 @@ from taskledger.domain.states import (
     normalize_actor_type,
     normalize_harness_kind,
 )
+from taskledger.errors import LaunchError
 from taskledger.services.actors import resolve_actor, resolve_harness
 from taskledger.storage.task_store import (
     clear_actor_state,
@@ -107,7 +110,11 @@ def actor_set_cmd(
         tool=tool,
         session_id=session_id,
     )
-    save_actor_state(workspace_root, actor_state)
+    try:
+        save_actor_state(workspace_root, actor_state)
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
 
     payload = {
         "kind": "actor_set",
@@ -128,7 +135,11 @@ def actor_clear_cmd(ctx: typer.Context) -> None:
     state = cli_state_from_context(ctx)
     workspace_root = resolve_workspace_root(state.cwd)
 
-    cleared = clear_actor_state(workspace_root)
+    try:
+        cleared = clear_actor_state(workspace_root)
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
 
     payload = {
         "kind": "actor_clear",
@@ -166,7 +177,11 @@ def harness_set_cmd(
         kind=normalized_kind,
         session_id=session_id,
     )
-    save_harness_state(workspace_root, harness_state)
+    try:
+        save_harness_state(workspace_root, harness_state)
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
 
     payload = {
         "kind": "harness_set",
@@ -185,7 +200,11 @@ def harness_clear_cmd(ctx: typer.Context) -> None:
     state = cli_state_from_context(ctx)
     workspace_root = resolve_workspace_root(state.cwd)
 
-    cleared = clear_harness_state(workspace_root)
+    try:
+        cleared = clear_harness_state(workspace_root)
+    except LaunchError as exc:
+        emit_error(ctx, exc)
+        raise typer.Exit(code=launch_error_exit_code(exc)) from exc
 
     payload = {
         "kind": "harness_clear",

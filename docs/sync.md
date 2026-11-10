@@ -42,15 +42,20 @@ taskledger sync git push
 
 ## Second PC bootstrap
 
-Indexes are checkout-local derived state and are not synchronized between PCs.
-After opening a project on a new machine, deleting the local cache, or allowing
-the cache to be evicted, read-only commands continue to use canonical records.
-The first mutating command creates the local Ledgercore cache binding and
-rebuilds the indexes automatically; no second `taskledger init` is required.
-If a non-empty unbound cache is found, Taskledger preserves it as an
-`indexes.quarantine-*` sibling before rebuilding. Use `taskledger repair index`
-for explicit cache health repair.
+The project UUID and durable data are portable. Copy or pull both the project checkout
+and its external `../ledger` store, preserving their sibling layout. On each PC,
+Ledgercore resolves `runtime`, `logs`, and `indexes` under that machine's configured
+user-data and cache roots; those local paths are not transferred with the project.
 
+After copying or pulling the project and data store, run `taskledger init` on the new
+PC before starting mutations. Init is idempotent: it preserves the project UUID and
+existing task numbering, creates missing canonical and machine-local runtime/log
+directories, then initializes or rebuilds the local indexes cache. A non-empty
+unbound cache is preserved as an `indexes.quarantine-*` sibling before rebuilding.
+
+If the project is already initialized on that PC and only the indexes cache is
+missing or evicted, the first mutation can initialize or rebuild it automatically.
+Use `taskledger repair index` for explicit cache health repair.
 Clone both repositories as siblings:
 
 ```bash

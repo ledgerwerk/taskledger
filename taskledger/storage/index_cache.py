@@ -95,6 +95,35 @@ def _expected_index_files_missing(context: TaskledgerProjectContext) -> bool:
     )
 
 
+def has_recoverable_unbound_indexes_cache(
+    context: TaskledgerProjectContext,
+) -> bool:
+    """Return whether an unbound non-empty cache meets automatic recovery gates."""
+    if not _safe_recovery_candidate(context):
+        return False
+    if context.layout is None:
+        return False
+
+    root = context.layout.mounts[INDEX_MOUNT].path
+    if root.is_symlink() or not root.is_dir():
+        return False
+    marker = root / ".ledger-project.toml"
+    if marker.exists() or marker.is_symlink():
+        return False
+
+    validation = _index_validation_result(context, root)
+    if (
+        validation is None
+        or validation.valid
+        or "unbound" not in (validation.reason or "").lower()
+    ):
+        return False
+    try:
+        return any(root.iterdir())
+    except OSError:
+        return False
+
+
 def _unique_quarantine_path(root: Path) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     while True:
@@ -194,4 +223,8 @@ def ensure_indexes_cache_for_mutation(
         return IndexCacheRecoveryResult(action, root, quarantine, counts)
 
 
-__all__ = ["IndexCacheRecoveryResult", "ensure_indexes_cache_for_mutation"]
+__all__ = [
+    "IndexCacheRecoveryResult",
+    "ensure_indexes_cache_for_mutation",
+    "has_recoverable_unbound_indexes_cache",
+]

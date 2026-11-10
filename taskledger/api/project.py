@@ -107,6 +107,11 @@ def init_project(
             for name in context.layout.mounts
         },
         "local_storage_override": local_storage_override,
+        **(
+            {"cache_recovery": context.cache_recovery.to_dict()}
+            if context.cache_recovery is not None
+            else {}
+        ),
     }
 
 

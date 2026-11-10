@@ -17,6 +17,7 @@ def scan_project_config(  # noqa: C901
     repair_hints: list[str],
 ) -> None:
     """Scan project configuration, legacy state, and storage layout."""
+    from taskledger.storage.index_cache import has_recoverable_unbound_indexes_cache
     from taskledger.storage.ledgercore_backend import locate_taskledger_project
     from taskledger.storage.project_config import load_canonical_project_config
     from taskledger.storage.project_context import load_project_context
@@ -49,6 +50,12 @@ def scan_project_config(  # noqa: C901
                         errors.append(
                             result.reason or f"Invalid storage binding: {result.path}"
                         )
+            if has_recoverable_unbound_indexes_cache(context):
+                repair_hints.append(
+                    "Indexes cache is unbound but appears recoverable. Run "
+                    "`taskledger init`, or use `taskledger repair index` after "
+                    "the project is initialized."
+                )
             if context.legacy_locator is not None:
                 warnings.append(
                     "Verified legacy Taskledger files remain at "

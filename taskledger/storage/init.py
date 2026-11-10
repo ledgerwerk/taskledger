@@ -255,7 +255,7 @@ def init_canonical_project_state(
             layout,
             initialize_config=True,
             initialize_data=True,
-            initialize_indexes=True,
+            initialize_indexes=False,
         )
         if local_storage_override:
             set_taskledger_mount_target(
@@ -321,7 +321,20 @@ def init_canonical_project_state(
             'ledger_branch_guard = "off"\n',
         )
         created.append(str(paths.state_path))
-    return load_project_context(root), created
+    from dataclasses import replace
+
+    from taskledger.storage.index_cache import ensure_indexes_cache_for_mutation
+
+    provisional_context = load_project_context(
+        root,
+        require_initialized=False,
+        allow_legacy=False,
+    )
+    cache_recovery = ensure_indexes_cache_for_mutation(provisional_context)
+    context = load_project_context(root)
+    if cache_recovery is not None:
+        context = replace(context, cache_recovery=cache_recovery)
+    return context, created
 
 
 def _validate_existing_canonical_taskledger_config(

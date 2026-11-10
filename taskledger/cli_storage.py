@@ -150,6 +150,8 @@ def _render_canonical_storage_where(payload: dict[str, object]) -> str:
         for name, mount in mounts.items():
             if isinstance(mount, dict):
                 initialized = "yes" if mount.get("initialized") else "no"
+                binding = mount.get("binding", {})
+                binding = binding if isinstance(binding, dict) else {}
                 lines.extend(
                     [
                         f"  {name}",
@@ -158,8 +160,12 @@ def _render_canonical_storage_where(payload: dict[str, object]) -> str:
                         f"    root: {mount.get('root')}",
                         f"    path: {mount.get('path')}",
                         f"    initialized: {initialized}",
+                        f"    binding: {binding.get('status', 'unknown')}",
                     ]
                 )
+                reason = binding.get("reason")
+                if isinstance(reason, str):
+                    lines.append(f"    reason: {reason}")
     # Backward-compat warnings.
     warnings = payload.get("warnings", [])
     if isinstance(warnings, list) and warnings:

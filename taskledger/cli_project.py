@@ -70,20 +70,23 @@ def init_command(
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
-    emit_payload(
-        ctx,
-        payload,
-        human="\n".join(
-            [
-                (
-                    "initialized taskledger: "
-                    f"{payload.get('root', payload.get('project_root', '?'))}"
-                ),
-                f"project name: {payload['project_name']}",
-                *[f"- {item}" for item in cast(list[str], payload["created"])],
-            ]
+    human_lines = [
+        (
+            "initialized taskledger: "
+            f"{payload.get('root', payload.get('project_root', '?'))}"
         ),
-    )
+        f"project name: {payload['project_name']}",
+        *[f"- {item}" for item in cast(list[str], payload["created"])],
+    ]
+    cache_recovery = payload.get("cache_recovery")
+    if isinstance(cache_recovery, dict):
+        action = cache_recovery.get("action")
+        if action is not None:
+            human_lines.append(f"indexes cache: {action}")
+        quarantine_path = cache_recovery.get("quarantine_path")
+        if quarantine_path is not None:
+            human_lines.append(f"quarantine: {quarantine_path}")
+    emit_payload(ctx, payload, human="\n".join(human_lines))
 
 
 def status_command(

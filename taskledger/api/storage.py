@@ -27,7 +27,9 @@ from taskledger.storage.taskledger_migration import require_no_active_taskledger
 
 
 def storage_where(workspace_root: Path) -> dict[str, object]:
-    return build_storage_location_report(workspace_root).to_dict()
+    return build_storage_location_report(
+        workspace_root, require_initialized=False
+    ).to_dict()
 
 
 def storage_path(workspace_root: Path, mount: str) -> dict[str, object]:

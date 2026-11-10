@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from typer.testing import CliRunner
+
 from taskledger.api.project import init_project
 from taskledger.api.storage import (
     storage_clear_override,
@@ -11,6 +14,7 @@ from taskledger.api.storage import (
     storage_validate,
     storage_where,
 )
+from taskledger.cli import app
 from taskledger.storage.init import init_canonical_project_state
 
 
@@ -68,3 +72,50 @@ def test_init_local_storage_override_preserves_shared_manifest(tmp_path: Path) -
     assert 'storage = "external"' in manifest
     assert 'storage = "user-data"' in local
     assert result["mounts"]["data"]["storage"] == "user-data"  # type: ignore[index]
+
+
+def test_storage_where_reports_invalid_indexes_without_mutating_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg-cache"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+    project = tmp_path / "project"
+    project.mkdir()
+    context, _ = init_canonical_project_state(project)
+    marker = context.paths.indexes_root / ".ledger-project.toml"
+    marker.unlink()
+    stale_file = context.paths.indexes_root / "stale-cache.json"
+    stale_file.write_text("stale\n", encoding="utf-8")
+    before = {
+        path.relative_to(context.paths.indexes_root).as_posix(): path.read_bytes()
+        for path in context.paths.indexes_root.rglob("*")
+        if path.is_file()
+    }
+
+    result = CliRunner().invoke(
+        app,
+        ["--root", str(project), "--json", "storage", "where"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)["result"]
+    assert payload["config"]["path"] == str(context.config_path)
+    assert payload["mounts"]["data"]["binding"]["status"] == "valid"
+    indexes_binding = payload["mounts"]["indexes"]["binding"]
+    assert indexes_binding["status"] == "invalid"
+    assert "unbound" in indexes_binding["reason"]
+    human = CliRunner().invoke(
+        app,
+        ["--root", str(project), "storage", "where"],
+    )
+    assert human.exit_code == 0, human.stdout
+    assert "binding: invalid" in human.stdout
+    assert "unbound" in human.stdout
+    after = {
+        path.relative_to(context.paths.indexes_root).as_posix(): path.read_bytes()
+        for path in context.paths.indexes_root.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+    assert not list(context.paths.indexes_root.parent.glob("indexes.quarantine-*"))

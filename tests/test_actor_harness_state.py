@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
+from taskledger import cli_actor
 from taskledger.cli import app
 from taskledger.domain.models import ActiveActorState, ActiveHarnessState
 from taskledger.errors import LaunchError
@@ -688,3 +690,40 @@ def test_resolve_harness_detects_github_actions(tmp_path: Path) -> None:
     assert harness.name == "github-actions"
     assert harness.kind == "ci"
     assert harness.session_id == "run-123"
+
+
+@pytest.mark.parametrize(
+    ("command", "storage_function"),
+    [
+        (("actor", "set", "--type", "agent", "--name", "broken"), "save_actor_state"),
+        (("actor", "clear"), "clear_actor_state"),
+        (("harness", "set", "--name", "broken"), "save_harness_state"),
+        (("harness", "clear"), "clear_harness_state"),
+    ],
+)
+def test_cli_identity_mutation_launch_errors_use_standard_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: tuple[str, ...],
+    storage_function: str,
+) -> None:
+    _init_project(tmp_path)
+
+    def fail_storage(*_args: object, **_kwargs: object) -> None:
+        raise LaunchError(
+            "TASKLEDGER_STORAGE_BINDING_INVALID: cache is unavailable",
+            remediation=["Run `taskledger init`."],
+        )
+
+    monkeypatch.setattr(cli_actor, storage_function, fail_storage)
+    result = runner.invoke(
+        app,
+        ["--json", "--root", str(tmp_path), *command],
+    )
+
+    assert result.exit_code == 4
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "TASKLEDGER_STORAGE_BINDING_INVALID"
+    assert "Run `taskledger init`." in payload["error"]["remediation"]
+    assert "Traceback" not in result.output
