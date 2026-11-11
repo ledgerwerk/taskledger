@@ -100,7 +100,7 @@ def test_storage_where_reports_invalid_indexes_without_mutating_cache(
 
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)["result"]
-    assert payload["config"]["path"] == str(context.config_path)
+    assert payload["config"]["path"] == context.config_path.as_posix()
     assert payload["mounts"]["data"]["binding"]["status"] == "valid"
     indexes_binding = payload["mounts"]["indexes"]["binding"]
     assert indexes_binding["status"] == "invalid"
