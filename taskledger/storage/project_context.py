@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -140,6 +140,7 @@ class TaskledgerProjectContext:
     loaded_project: Any | None = None
     storage_validation: Any | None = None
     cache_recovery: Any | None = None
+    local_state_recovery: Any | None = None
     local_overrides_present: bool = False
     # Compatibility fields are derived values, not configuration ownership.
     store_root: Path | None = None
@@ -441,25 +442,30 @@ def require_mutable_project_context(
                 require_initialized=False,
                 allow_legacy=allow_legacy,
             )
+    local_state_recovery = None
     cache_recovery = None
     if context.mode == "canonical":
         from taskledger.storage.index_cache import ensure_indexes_cache_for_mutation
+        from taskledger.storage.local_state import ensure_local_state_for_mutation
 
+        local_state_recovery = ensure_local_state_for_mutation(context)
         cache_recovery = ensure_indexes_cache_for_mutation(context)
         context = load_project_context(
             start,
             require_initialized=True,
             allow_legacy=allow_legacy,
         )
-        if cache_recovery is not None:
-            from dataclasses import replace
-
-            context = replace(context, cache_recovery=cache_recovery)
-            if cache_recovery.quarantine_path is not None:
-                logging.getLogger(__name__).warning(
-                    "Taskledger quarantined the unbound indexes cache at %s",
-                    cache_recovery.quarantine_path,
-                )
+        if local_state_recovery is not None or cache_recovery is not None:
+            context = replace(
+                context,
+                local_state_recovery=local_state_recovery,
+                cache_recovery=cache_recovery,
+            )
+        if cache_recovery is not None and cache_recovery.quarantine_path is not None:
+            logging.getLogger(__name__).warning(
+                "Taskledger quarantined the unbound indexes cache at %s",
+                cache_recovery.quarantine_path,
+            )
     if context.mode == "legacy":
         required = (
             context.paths.project_dir,

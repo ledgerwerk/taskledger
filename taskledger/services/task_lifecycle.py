@@ -44,7 +44,7 @@ from taskledger.storage.task_store import (
     list_runs,
     list_tasks,
     load_active_task_state,
-    require_v2_layout,
+    require_mutable_v2_layout,
     resolve_task,
     resolve_v2_paths,
     save_active_task_state,
@@ -288,10 +288,7 @@ def create_task(
     labels: tuple[str, ...] = (),
     owner: str | None = None,
 ) -> TaskRecord:
-    from taskledger.storage.project_context import require_mutable_project_context
-
-    require_mutable_project_context(workspace_root)
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     task_slug = _tasks._unique_slug(list_task_summaries(paths), slug or title)
     allocation = _allocate_task_identity(paths)
     task = TaskRecord(
@@ -328,10 +325,7 @@ def create_follow_up_task(
     copy_links: bool = False,
     reason: str | None = None,
 ) -> dict[str, object]:
-    from taskledger.storage.project_context import require_mutable_project_context
-
-    require_mutable_project_context(workspace_root)
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     parent = _tasks._task_with_sidecars(
         workspace_root,
         resolve_task(workspace_root, parent_ref),
@@ -476,10 +470,7 @@ def record_completed_task(
                 "Change summary must not be empty.", EXIT_CODE_BAD_INPUT
             )
 
-    from taskledger.storage.project_context import require_mutable_project_context
-
-    require_mutable_project_context(workspace_root)
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     task_slug = _tasks._unique_slug(list_task_summaries(paths), slug or title)
     now = utc_now_iso()
     resolved_completed_by = completed_by or _tasks._default_actor()

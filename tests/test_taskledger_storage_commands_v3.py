@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -83,6 +84,8 @@ def test_storage_where_reports_invalid_indexes_without_mutating_cache(
     project = tmp_path / "project"
     project.mkdir()
     context, _ = init_canonical_project_state(project)
+    shutil.rmtree(context.paths.runtime_root)
+    shutil.rmtree(context.paths.logs_root)
     marker = context.paths.indexes_root / ".ledger-project.toml"
     marker.unlink()
     stale_file = context.paths.indexes_root / "stale-cache.json"
@@ -102,6 +105,8 @@ def test_storage_where_reports_invalid_indexes_without_mutating_cache(
     payload = json.loads(result.stdout)["result"]
     assert payload["config"]["path"] == context.config_path.as_posix()
     assert payload["mounts"]["data"]["binding"]["status"] == "valid"
+    assert payload["mounts"]["runtime"]["initialized"] is False
+    assert payload["mounts"]["logs"]["initialized"] is False
     indexes_binding = payload["mounts"]["indexes"]["binding"]
     assert indexes_binding["status"] == "invalid"
     assert "unbound" in indexes_binding["reason"]
@@ -119,3 +124,5 @@ def test_storage_where_reports_invalid_indexes_without_mutating_cache(
     }
     assert after == before
     assert not list(context.paths.indexes_root.parent.glob("indexes.quarantine-*"))
+    assert not context.paths.runtime_root.exists()
+    assert not context.paths.logs_root.exists()

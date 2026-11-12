@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -283,6 +283,32 @@ def ensure_taskledger_ledger_registration(
     return manifest
 
 
+def initialize_taskledger_config_binding(layout: Any) -> Any:
+    """Initialize Taskledger's project-local config binding."""
+    return _call(lambda: initialize_config_binding(layout))
+
+
+def initialize_taskledger_mount_bindings(
+    layout: Any,
+    *,
+    mounts: Iterable[str],
+) -> dict[str, Any]:
+    """Initialize only the selected Taskledger storage bindings."""
+    results: dict[str, Any] = {}
+    for mount_name in mounts:
+        if mount_name not in layout.mounts:
+            raise ValueError(f"Unknown Taskledger mount: {mount_name}")
+        mount = layout.mounts[mount_name]
+        results[mount_name] = _call(
+            partial(
+                initialize_storage_binding,
+                mount,
+                require_empty=not (mount.path / ".ledger-project.toml").exists(),
+            )
+        )
+    return results
+
+
 def initialize_taskledger_bindings(
     layout: Any,
     *,
@@ -290,30 +316,18 @@ def initialize_taskledger_bindings(
     initialize_data: bool,
     initialize_indexes: bool,
 ) -> Any:
+    """Compatibility wrapper for the historical grouped mount initializer."""
     results: dict[str, Any] = {}
     if initialize_config:
-        results["config"] = _call(lambda: initialize_config_binding(layout))
+        results["config"] = initialize_taskledger_config_binding(layout)
+    mounts: list[str] = []
     if initialize_data:
-        for mount_name in (DATA_MOUNT, RUNTIME_MOUNT, LOGS_MOUNT):
-            mount = layout.mounts[mount_name]
-            results[mount_name] = _call(
-                partial(
-                    initialize_storage_binding,
-                    mount,
-                    require_empty=not (mount.path / ".ledger-project.toml").exists(),
-                )
-            )
+        mounts.extend((DATA_MOUNT, RUNTIME_MOUNT, LOGS_MOUNT))
     if initialize_indexes:
-        indexes_mount = layout.mounts[INDEX_MOUNT]
-        results[INDEX_MOUNT] = _call(
-            lambda: initialize_storage_binding(
-                indexes_mount,
-                require_empty=not (
-                    indexes_mount.path / ".ledger-project.toml"
-                ).exists(),
-            )
-        )
+        mounts.append(INDEX_MOUNT)
+    results.update(initialize_taskledger_mount_bindings(layout, mounts=mounts))
     return results
+
 
 
 def validate_taskledger_mount(mount: Any, *, allow_missing: bool = False) -> Any:

@@ -471,7 +471,7 @@ _CONFIG_KEY_HELP += tuple(
 
 
 def config_list(workspace_root: Path) -> dict[str, object]:
-    context = load_project_context(workspace_root)
+    context = load_project_context(workspace_root, require_initialized=False)
     if context.mode == "canonical":
         try:
             document = tomllib.loads(context.config_path.read_text(encoding="utf-8"))
@@ -490,7 +490,7 @@ def config_list(workspace_root: Path) -> dict[str, object]:
 
 
 def config_get(workspace_root: Path, *, key: str) -> dict[str, object]:
-    context = load_project_context(workspace_root)
+    context = load_project_context(workspace_root, require_initialized=False)
     if context.mode == "canonical":
         document = config_list(workspace_root)["config"]
         value: object = document

@@ -10,7 +10,11 @@ from taskledger.storage.artifact_policy import (
     bound_text_to_bytes,
 )
 from taskledger.storage.atomic import atomic_write_text
-from taskledger.storage.task_store import V2Paths, require_v2_layout, resolve_v2_paths
+from taskledger.storage.task_store import (
+    V2Paths,
+    require_mutable_v2_layout,
+    resolve_v2_paths,
+)
 
 
 def agent_logs_dir(paths: V2Paths) -> Path:
@@ -25,7 +29,7 @@ def append_agent_command_log(
     workspace_root: Path,
     record: AgentCommandLogRecord,
 ) -> Path:
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     logs_dir = agent_logs_dir(paths)
     logs_dir.mkdir(parents=True, exist_ok=True)
     agent_log_artifacts_dir(paths).mkdir(parents=True, exist_ok=True)
@@ -136,7 +140,7 @@ def write_agent_command_artifact(
     suffix: str,
     content: str,
 ) -> str:
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     artifacts_dir = agent_log_artifacts_dir(paths)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     safe_suffix = suffix.replace("/", "-").replace("\\", "-")

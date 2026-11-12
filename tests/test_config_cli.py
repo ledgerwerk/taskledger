@@ -57,6 +57,45 @@ def test_config_list_and_get_json(tmp_path: Path) -> None:
     assert gotten_payload["result"]["value"] == 3
 
 
+
+
+def test_config_reads_ignore_invalid_cache_without_repair(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg-cache"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+    _init_project(tmp_path)
+    from taskledger.storage.project_context import load_project_context
+
+    context = load_project_context(tmp_path)
+    indexes_root = context.paths.indexes_root
+    (indexes_root / ".ledger-project.toml").unlink()
+    (indexes_root / "stale-cache.json").write_text("stale\n", encoding="utf-8")
+    before = {
+        path.relative_to(indexes_root).as_posix(): path.read_bytes()
+        for path in indexes_root.rglob("*")
+        if path.is_file()
+    }
+
+    listed = runner.invoke(app, ["--root", str(tmp_path), "--json", "config", "list"])
+    gotten = runner.invoke(
+        app,
+        ["--root", str(tmp_path), "--json", "config", "get", "config_version"],
+    )
+
+    assert listed.exit_code == 0, listed.stdout
+    assert gotten.exit_code == 0, gotten.stdout
+    assert _json(listed)["ok"] is True
+    assert _json(gotten)["result"]["value"] == 3
+    after = {
+        path.relative_to(indexes_root).as_posix(): path.read_bytes()
+        for path in indexes_root.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+    assert not list(indexes_root.parent.glob("indexes.quarantine-*"))
+
 # specmason: req=REQ-0014 ac=AC-0129
 def test_config_keys_lists_known_paths(tmp_path: Path) -> None:
     _init_project(tmp_path)

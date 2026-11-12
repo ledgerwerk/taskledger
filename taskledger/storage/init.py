@@ -9,10 +9,14 @@ from taskledger.errors import LaunchError
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.common import write_text
 from taskledger.storage.ledgercore_backend import (
+    DATA_MOUNT,
+    LOGS_MOUNT,
+    RUNTIME_MOUNT,
     StorageBindingError,
     ensure_taskledger_ledger_registration,
-    initialize_taskledger_bindings,
+    initialize_taskledger_config_binding,
     initialize_taskledger_external_store,
+    initialize_taskledger_mount_bindings,
     load_taskledger_ledger_layout,
     locate_taskledger_project,
     read_ledger_manifest,
@@ -251,11 +255,10 @@ def init_canonical_project_state(
             data_root = layout.mounts["data"].root
             if data_root is not None:
                 created.append(str(data_root))
-        initialize_taskledger_bindings(
+        initialize_taskledger_config_binding(layout)
+        initialize_taskledger_mount_bindings(
             layout,
-            initialize_config=True,
-            initialize_data=True,
-            initialize_indexes=False,
+            mounts=(DATA_MOUNT, RUNTIME_MOUNT, LOGS_MOUNT),
         )
         if local_storage_override:
             set_taskledger_mount_target(
@@ -268,11 +271,9 @@ def init_canonical_project_state(
             layout = load_taskledger_ledger_layout(
                 root, validate_storage=False
             ).resolved_layout
-            initialize_taskledger_bindings(
+            initialize_taskledger_mount_bindings(
                 layout,
-                initialize_config=False,
-                initialize_data=True,
-                initialize_indexes=False,
+                mounts=(DATA_MOUNT, RUNTIME_MOUNT, LOGS_MOUNT),
             )
         if layout.tool_config_path is not None and not layout.tool_config_path.exists():
             atomic_write_text(

@@ -52,9 +52,24 @@ def scan_project_config(  # noqa: C901
                         )
             if has_recoverable_unbound_indexes_cache(context):
                 repair_hints.append(
-                    "Indexes cache is unbound but appears recoverable. Run "
-                    "`taskledger init`, or use `taskledger repair index` after "
-                    "the project is initialized."
+                    "Indexes cache is unbound but appears recoverable. A write command "
+                    "will rebuild it automatically. For explicit repair, run "
+                    "`taskledger repair index`."
+                )
+            if context.layout is None:
+                missing_local_mounts = []
+            else:
+                layout = context.layout
+                missing_local_mounts = [
+                    name
+                    for name in ("runtime", "logs")
+                    if name in layout.mounts and not layout.mounts[name].path.exists()
+                ]
+            if missing_local_mounts:
+                repair_hints.append(
+                    "Machine-local Taskledger state is absent. This is normal after "
+                    "moving the project to a new machine. The next write will "
+                    "initialize local runtime/log bindings."
                 )
             if context.legacy_locator is not None:
                 warnings.append(

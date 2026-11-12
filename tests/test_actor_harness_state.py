@@ -727,3 +727,44 @@ def test_cli_identity_mutation_launch_errors_use_standard_boundary(
     assert payload["error"]["code"] == "TASKLEDGER_STORAGE_BINDING_INVALID"
     assert "Run `taskledger init`." in payload["error"]["remediation"]
     assert "Traceback" not in result.output
+
+
+
+def test_cli_unsafe_local_state_error_is_structured_without_traceback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg-cache"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+    _init_project(tmp_path)
+    from taskledger.storage.project_context import load_project_context
+
+    context = load_project_context(tmp_path)
+    marker = context.paths.logs_root / ".ledger-project.toml"
+    marker.unlink()
+    unknown = context.paths.logs_root / "unknown.txt"
+    unknown.write_text("preserve me\n", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "--root",
+            str(tmp_path),
+            "harness",
+            "set",
+            "--name",
+            "pi",
+        ],
+    )
+
+    assert result.exit_code == 4
+    assert "Traceback" not in result.output
+    payload = json.loads(result.output)
+    error = payload["error"]
+    assert error["code"] == "TASKLEDGER_LOCAL_STATE_RECOVERY_UNSAFE"
+    assert error["details"]["mount"] == "logs"
+    assert error["details"]["reason"] == "non_empty_unbound"
+    assert error["remediation"]
+    assert unknown.read_text(encoding="utf-8") == "preserve me\n"
+    assert not marker.exists()

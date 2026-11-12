@@ -53,6 +53,7 @@ from taskledger.storage.frontmatter import (
     read_markdown_front_matter,
     write_markdown_front_matter,
 )
+from taskledger.storage.layout import require_mutable_v2_layout, require_v2_layout
 from taskledger.storage.locks import read_lock, remove_lock, update_lock, write_lock
 from taskledger.storage.paths import ProjectPaths
 from taskledger.storage.physical_runs import (
@@ -262,19 +263,6 @@ def initialize_legacy_v2_layout(workspace_root: Path) -> V2Paths:
                 atomic_write_text(index_path, "[]\n")
     return paths
 
-
-def require_v2_layout(workspace_root: Path) -> V2Paths:
-    """Resolve an initialized layout without creating directories or indexes."""
-    paths = resolve_v2_paths(workspace_root)
-    required = (paths.project_dir, paths.tasks_dir, paths.events_dir)
-    missing = [path for path in required if not path.exists()]
-    if missing:
-        raise LaunchError(
-            "Project state is not initialized. Missing: "
-            + ", ".join(str(path) for path in missing)
-            + ". Run `taskledger init`."
-        )
-    return paths
 
 
 def ensure_v2_layout(workspace_root: Path) -> V2Paths:
@@ -572,7 +560,7 @@ def save_active_task_state(
     workspace_root: Path,
     state: ActiveTaskState,
 ) -> ActiveTaskState:
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     from taskledger.storage.task_identity import identity_mutation_lock
 
     with identity_mutation_lock(paths):
@@ -622,7 +610,7 @@ def _save_active_task_state_unlocked(
 
 
 def clear_active_task_state(workspace_root: Path) -> ActiveTaskState | None:
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     from taskledger.storage.task_identity import identity_mutation_lock
 
     with identity_mutation_lock(paths):
@@ -644,13 +632,13 @@ def save_actor_state(
     workspace_root: Path,
     state: ActiveActorState,
 ) -> ActiveActorState:
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     write_yaml_object(paths.actor_path, state.to_dict())
     return state
 
 
 def clear_actor_state(workspace_root: Path) -> ActiveActorState | None:
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     state = load_actor_state(workspace_root)
     if paths.actor_path.exists():
         paths.actor_path.unlink()
@@ -669,13 +657,13 @@ def save_harness_state(
     workspace_root: Path,
     state: ActiveHarnessState,
 ) -> ActiveHarnessState:
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     write_yaml_object(paths.harness_path, state.to_dict())
     return state
 
 
 def clear_harness_state(workspace_root: Path) -> ActiveHarnessState | None:
-    paths = require_v2_layout(workspace_root)
+    paths = require_mutable_v2_layout(workspace_root)
     state = load_harness_state(workspace_root)
     if paths.harness_path.exists():
         paths.harness_path.unlink()
@@ -712,7 +700,7 @@ def resolve_task_or_active(
 
 
 def save_task(workspace_root: Path, task: TaskRecord) -> TaskRecord:
-    return save_task_from_paths(require_v2_layout(workspace_root), task)
+    return save_task_from_paths(require_mutable_v2_layout(workspace_root), task)
 
 
 def save_task_from_paths(paths: V2Paths, task: TaskRecord) -> TaskRecord:
@@ -848,7 +836,9 @@ def resolve_introduction_from_paths(paths: V2Paths, ref: str) -> IntroductionRec
 def save_introduction(
     workspace_root: Path, introduction: IntroductionRecord
 ) -> IntroductionRecord:
-    return save_introduction_from_paths(require_v2_layout(workspace_root), introduction)
+    return save_introduction_from_paths(
+        require_mutable_v2_layout(workspace_root), introduction
+    )
 
 
 def save_introduction_from_paths(
@@ -1385,7 +1375,9 @@ def load_requirements_from_paths(paths: V2Paths, task_id: str) -> RequirementCol
 def save_requirements(
     workspace_root: Path, collection: RequirementCollection
 ) -> RequirementCollection:
-    return save_requirements_from_paths(require_v2_layout(workspace_root), collection)
+    return save_requirements_from_paths(
+        require_mutable_v2_layout(workspace_root), collection
+    )
 
 
 def save_requirements_from_paths(

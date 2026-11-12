@@ -4,6 +4,10 @@ from pathlib import Path
 
 from taskledger.storage.init import init_canonical_project_state
 from taskledger.storage.project_context import load_project_context
+from taskledger.storage.task_store import (
+    require_mutable_v2_layout,
+    require_v2_layout,
+)
 
 
 def test_fresh_canonical_context_is_read_only_before_initialization(
@@ -71,3 +75,20 @@ def test_nested_canonical_context_uses_project_root(tmp_path: Path) -> None:
     nested.parent.mkdir()
     nested.write_text("", encoding="utf-8")
     assert load_project_context(nested).project_uuid == context.project_uuid
+
+
+
+def test_canonical_events_directory_is_not_a_readiness_gate(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    context, _ = init_canonical_project_state(project)
+    context.paths.events_dir.rmdir()
+
+    paths = require_v2_layout(project)
+    assert paths.events_dir == context.paths.events_dir
+    assert not paths.events_dir.exists()
+
+    mutable_paths = require_mutable_v2_layout(project)
+    assert mutable_paths.events_dir.is_dir()
