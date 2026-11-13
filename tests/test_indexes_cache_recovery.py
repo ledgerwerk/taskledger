@@ -325,8 +325,6 @@ def test_doctor_suggests_automatic_recovery_for_unbound_cache(
     assert not list(context.paths.indexes_root.parent.glob("indexes.quarantine-*"))
 
 
-
-
 def test_doctor_explains_missing_machine_local_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -344,6 +342,7 @@ def test_doctor_explains_missing_machine_local_state(
     )
     assert not context.paths.runtime_root.exists()
     assert not context.paths.logs_root.exists()
+
 
 @pytest.mark.skipif(not hasattr(Path, "symlink_to"), reason="symlinks unavailable")
 @pytest.mark.parametrize(
@@ -423,9 +422,12 @@ def test_local_state_recovery_initializes_missing_or_empty_mounts(
     assert context.paths.runtime_root.joinpath("checkouts", "main").is_dir()
     assert context.paths.events_dir.is_dir()
     assert context.paths.agent_logs_dir.is_dir()
-    assert ensure_local_state_for_mutation(
-        load_project_context(project, require_initialized=False)
-    ) is None
+    assert (
+        ensure_local_state_for_mutation(
+            load_project_context(project, require_initialized=False)
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize("mount_name", ["runtime", "logs"])
@@ -566,7 +568,6 @@ def test_concurrent_local_state_recovery_is_idempotent(
     )
 
 
-
 def test_mutable_context_recovers_local_mounts_and_cache_together(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -596,9 +597,6 @@ def test_mutable_context_recovers_local_mounts_and_cache_together(
     assert (original.paths.runtime_root / ".ledger-project.toml").is_file()
     assert (original.paths.logs_root / ".ledger-project.toml").is_file()
     assert len(list_tasks(project)) == 1
-
-
-
 
 
 def test_cross_machine_first_task_mutation_recovers_local_state_without_init(

@@ -729,7 +729,6 @@ def test_cli_identity_mutation_launch_errors_use_standard_boundary(
     assert "Traceback" not in result.output
 
 
-
 def test_cli_unsafe_local_state_error_is_structured_without_traceback(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -57,8 +57,6 @@ def test_config_list_and_get_json(tmp_path: Path) -> None:
     assert gotten_payload["result"]["value"] == 3
 
 
-
-
 def test_config_reads_ignore_invalid_cache_without_repair(
     tmp_path: Path,
     monkeypatch,
@@ -95,6 +93,7 @@ def test_config_reads_ignore_invalid_cache_without_repair(
     }
     assert after == before
     assert not list(indexes_root.parent.glob("indexes.quarantine-*"))
+
 
 # specmason: req=REQ-0014 ac=AC-0129
 def test_config_keys_lists_known_paths(tmp_path: Path) -> None:

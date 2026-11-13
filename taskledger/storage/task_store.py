@@ -264,7 +264,6 @@ def initialize_legacy_v2_layout(workspace_root: Path) -> V2Paths:
     return paths
 
 
-
 def ensure_v2_layout(workspace_root: Path) -> V2Paths:
     """Compatibility alias for explicit legacy initialization only."""
     from taskledger.storage.paths import probe_taskledger_project

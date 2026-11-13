@@ -329,7 +329,6 @@ def initialize_taskledger_bindings(
     return results
 
 
-
 def validate_taskledger_mount(mount: Any, *, allow_missing: bool = False) -> Any:
     """Validate one resolved mount through the Ledgercore adapter boundary."""
     return validate_storage_binding(mount, allow_missing=allow_missing)

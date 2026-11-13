@@ -77,7 +77,6 @@ def test_nested_canonical_context_uses_project_root(tmp_path: Path) -> None:
     assert load_project_context(nested).project_uuid == context.project_uuid
 
 
-
 def test_canonical_events_directory_is_not_a_readiness_gate(
     tmp_path: Path,
 ) -> None:
