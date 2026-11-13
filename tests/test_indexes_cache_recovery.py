@@ -52,6 +52,16 @@ def _expected_indexes(context) -> tuple[Path, ...]:
     )
 
 
+def _clear_machine_local_mounts(context) -> None:
+    for root in (
+        context.paths.runtime_root,
+        context.paths.logs_root,
+        context.paths.indexes_root,
+    ):
+        if root.exists():
+            shutil.rmtree(root)
+
+
 def test_reinit_recovers_non_empty_unbound_cache_before_first_task(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -108,6 +118,7 @@ def test_cross_machine_init_recovers_local_cache_and_preserves_external_tasks(
 
     before_init = load_project_context(project_b, require_initialized=False)
     stale_root = before_init.paths.indexes_root
+    _clear_machine_local_mounts(before_init)
     stale_root.mkdir(parents=True)
     (stale_root / "stale-cache.json").write_text("stale\n", encoding="utf-8")
 
@@ -628,6 +639,7 @@ def test_cross_machine_first_task_mutation_recovers_local_state_without_init(
     monkeypatch.setenv("LOCALAPPDATA", str(pc_b / "local-appdata"))
 
     before = load_project_context(project_b, require_initialized=False)
+    _clear_machine_local_mounts(before)
     assert not before.paths.runtime_root.exists()
     assert not before.paths.logs_root.exists()
     assert not before.paths.indexes_root.exists()
@@ -683,6 +695,7 @@ def test_cross_machine_harness_set_bootstraps_local_state(
     monkeypatch.setenv("LOCALAPPDATA", str(pc_b / "local-appdata"))
 
     before = load_project_context(project_b, require_initialized=False)
+    _clear_machine_local_mounts(before)
     assert not before.paths.runtime_root.exists()
     assert not before.paths.logs_root.exists()
     result = runner.invoke(
@@ -737,6 +750,7 @@ def test_cross_machine_read_only_commands_do_not_bootstrap_local_state(
     monkeypatch.setenv("LOCALAPPDATA", str(pc_b / "local-appdata"))
 
     context = load_project_context(project_b, require_initialized=False)
+    _clear_machine_local_mounts(context)
     assert list_tasks(project_b)
     location = storage_where(project_b)
     assert location["kind"] == "storage_location_report"
