@@ -610,6 +610,7 @@ def test_cross_machine_first_task_mutation_recovers_local_state_without_init(
     project_a.mkdir(parents=True)
     monkeypatch.setenv("XDG_CACHE_HOME", str(pc_a / "xdg-cache"))
     monkeypatch.setenv("XDG_DATA_HOME", str(pc_a / "xdg-data"))
+    monkeypatch.setenv("LOCALAPPDATA", str(pc_a / "local-appdata"))
     context_a, _ = init_canonical_project_state(
         project_a,
         project_name="cross-machine-test",
@@ -626,6 +627,7 @@ def test_cross_machine_first_task_mutation_recovers_local_state_without_init(
     shutil.copytree(pc_a / "ledger", pc_b / "ledger")
     monkeypatch.setenv("XDG_CACHE_HOME", str(pc_b / "xdg-cache"))
     monkeypatch.setenv("XDG_DATA_HOME", str(pc_b / "xdg-data"))
+    monkeypatch.setenv("LOCALAPPDATA", str(pc_b / "local-appdata"))
 
     before = load_project_context(project_b, require_initialized=False)
     assert not before.paths.runtime_root.exists()
@@ -664,6 +666,7 @@ def test_cross_machine_harness_set_bootstraps_local_state(
     project_a.mkdir(parents=True)
     monkeypatch.setenv("XDG_CACHE_HOME", str(pc_a / "xdg-cache"))
     monkeypatch.setenv("XDG_DATA_HOME", str(pc_a / "xdg-data"))
+    monkeypatch.setenv("LOCALAPPDATA", str(pc_a / "local-appdata"))
     init_canonical_project_state(
         project_a,
         project_name="cross-machine-harness-test",
@@ -679,6 +682,7 @@ def test_cross_machine_harness_set_bootstraps_local_state(
     shutil.copytree(pc_a / "ledger", pc_b / "ledger")
     monkeypatch.setenv("XDG_CACHE_HOME", str(pc_b / "xdg-cache"))
     monkeypatch.setenv("XDG_DATA_HOME", str(pc_b / "xdg-data"))
+    monkeypatch.setenv("LOCALAPPDATA", str(pc_b / "local-appdata"))
 
     before = load_project_context(project_b, require_initialized=False)
     assert not before.paths.runtime_root.exists()
@@ -716,6 +720,7 @@ def test_cross_machine_read_only_commands_do_not_bootstrap_local_state(
     project_a.mkdir(parents=True)
     monkeypatch.setenv("XDG_CACHE_HOME", str(pc_a / "xdg-cache"))
     monkeypatch.setenv("XDG_DATA_HOME", str(pc_a / "xdg-data"))
+    monkeypatch.setenv("LOCALAPPDATA", str(pc_a / "local-appdata"))
     init_canonical_project_state(
         project_a,
         project_name="cross-machine-read-test",
@@ -731,6 +736,7 @@ def test_cross_machine_read_only_commands_do_not_bootstrap_local_state(
     shutil.copytree(pc_a / "ledger", pc_b / "ledger")
     monkeypatch.setenv("XDG_CACHE_HOME", str(pc_b / "xdg-cache"))
     monkeypatch.setenv("XDG_DATA_HOME", str(pc_b / "xdg-data"))
+    monkeypatch.setenv("LOCALAPPDATA", str(pc_b / "local-appdata"))
 
     context = load_project_context(project_b, require_initialized=False)
     assert list_tasks(project_b)
