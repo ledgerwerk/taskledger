@@ -16,19 +16,13 @@ def ensure_plan_input_path_allowed(workspace_root: Path, input_path: Path) -> No
     paths = resolve_v2_paths(workspace_root)
     storage_root = paths.taskledger_root.resolve()
     candidate = _resolve_candidate(workspace_root, input_path)
-    default_storage_root = (workspace_root / ".taskledger").resolve()
-    if (
-        candidate == storage_root
-        or storage_root in candidate.parents
-        or candidate == default_storage_root
-        or default_storage_root in candidate.parents
-    ):
+    if candidate == storage_root or storage_root in candidate.parents:
         message = (
             "Refusing to read a plan input file from Taskledger storage. "
             "Export the proposed plan to a workspace file such as "
             "`./plan.revision.md`, edit and check that file, then submit it "
-            "with `taskledger plan upsert --auto-revise`. Never edit `.taskledger/` "
-            "files directly."
+            "with `taskledger plan upsert --auto-revise`. "
+            "Never edit Taskledger storage files directly."
         )
         error = LaunchError(message)
         error.taskledger_exit_code = EXIT_CODE_BAD_INPUT

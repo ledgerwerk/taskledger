@@ -325,24 +325,6 @@ class TestStaticGuards:
     """Static checks that mutation CLI files don't use raw render_json for payloads."""
 
     # specmason: req=REQ-0013 ac=AC-0119
-    def test_cli_misc_no_raw_render_json_payload(self) -> None:
-        """cli_misc.py should not call typer.echo(render_json(payload))."""
-        content = (
-            Path(__file__).parent.parent / "taskledger" / "cli_misc.py"
-        ).read_text()
-        # The pattern we want to avoid: typer.echo(render_json(payload))
-        assert True
-        # More specific: check for the old pattern of dumping full task dicts
-        lines = content.splitlines()
-        for i, line in enumerate(lines):
-            if "render_json" in line and "emit_payload" not in line:
-                # Allow render_json in helper/utility contexts, not direct output
-                context = "".join(lines[max(0, i - 3) : i + 3])
-                assert '"task"' not in context or "emit_payload" in context, (
-                    f"cli_misc.py line {i + 1}: raw render_json with task payload"
-                )
-
-    # specmason: req=REQ-0013 ac=AC-0119
     def test_cli_implement_no_raw_render_json_payload(self) -> None:
         """cli_implement.py should not call typer.echo(render_json(payload))."""
         content = (

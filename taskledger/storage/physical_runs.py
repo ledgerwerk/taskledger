@@ -9,11 +9,11 @@ from taskledger.domain.models import TaskRunRecord
 from taskledger.errors import LaunchError
 
 if TYPE_CHECKING:
-    from taskledger.storage.task_store import V2Paths
+    from taskledger.storage.paths import TaskledgerStoragePaths
 
 
 def list_physical_runs_from_paths(
-    paths: V2Paths, task_directory: Path
+    paths: TaskledgerStoragePaths, task_directory: Path
 ) -> list[TaskRunRecord]:
     """Read runs from one physical task directory without resolving its identity."""
     if task_directory.parent != paths.tasks_dir:
@@ -38,7 +38,7 @@ def list_physical_runs_from_paths(
     if not runs_directory.is_dir():
         return []
 
-    from taskledger.storage.task_store import _load_run
+    from taskledger.storage.record_reader import load_markdown_record
 
     runs: list[TaskRunRecord] = []
     for run_path in sorted(runs_directory.glob("*.md"), key=lambda path: path.name):
@@ -48,7 +48,7 @@ def list_physical_runs_from_paths(
                 code="TASKLEDGER_RUN_PATH_UNSAFE",
             )
         try:
-            runs.append(_load_run(run_path))
+            runs.append(load_markdown_record(run_path, TaskRunRecord.from_dict))
         except Exception as exc:
             raise LaunchError(
                 f"Unable to read physical run record {run_path}: {exc}",

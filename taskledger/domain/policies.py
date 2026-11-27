@@ -365,7 +365,7 @@ def plan_propose_decision(
                     "  # edit and check ./plan.revision.md\n"
                     "  taskledger plan upsert --auto-revise --file "
                     "./plan.revision.md\n\n"
-                    "Do not edit files under .taskledger/ directly."
+                    "Do not edit files under `.ledger/taskledger/` directly."
                 ),
                 details={
                     "remediation": (

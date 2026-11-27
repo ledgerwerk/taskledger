@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from taskledger.cli import app
 from taskledger.storage.frontmatter import read_markdown_front_matter
-from taskledger.storage.task_store import resolve_task
+from taskledger.storage.task_store import resolve_task, resolve_v2_paths
 from tests.support.builders import (
     create_done_task as build_done_task,
 )
@@ -106,7 +106,7 @@ def test_release_tag_persists_release_record(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout
 
-    path = tmp_path / ".taskledger" / "ledgers" / "main" / "releases" / "0.4.1.md"
+    path = resolve_v2_paths(tmp_path).releases_dir / "0.4.1.md"
     metadata, _ = read_markdown_front_matter(path)
     assert metadata["object_type"] == "release"
     assert metadata["version"] == "0.4.1"

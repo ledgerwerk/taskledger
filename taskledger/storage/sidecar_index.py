@@ -23,7 +23,7 @@ from taskledger.domain.models import (
 from taskledger.storage.common import write_json
 
 if TYPE_CHECKING:
-    from taskledger.storage.task_store import V2Paths
+    from taskledger.storage.paths import TaskledgerStoragePaths
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +164,7 @@ class TaskSidecarSummary:
         }
 
 
-def _sidecar_index_path(paths: V2Paths) -> Path:
+def _sidecar_index_path(paths: TaskledgerStoragePaths) -> Path:
     return paths.indexes_dir / SIDECAR_INDEX_FILENAME
 
 
@@ -238,7 +238,7 @@ def _compute_lock_summary(lock: TaskLock | None) -> LockSummary:
     )
 
 
-def rebuild_sidecar_index(paths: V2Paths) -> dict[str, int]:
+def rebuild_sidecar_index(paths: TaskledgerStoragePaths) -> dict[str, int]:
     from taskledger.storage.locks import lock_is_expired
     from taskledger.storage.task_store import (
         list_code_reviews_from_paths,
@@ -300,7 +300,7 @@ def rebuild_sidecar_index(paths: V2Paths) -> dict[str, int]:
 
 
 def load_sidecar_index(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
 ) -> dict[str, dict[str, object]]:
     """Load sidecar summaries, rebuilding a missing, malformed, or dirty index."""
     from taskledger.storage.common import try_load_json_object
@@ -327,7 +327,9 @@ def load_sidecar_index(
     return {key: value for key, value in entries.items() if isinstance(value, dict)}
 
 
-def get_sidecar_summary(paths: V2Paths, task_ref: str) -> dict[str, object] | None:
+def get_sidecar_summary(
+    paths: TaskledgerStoragePaths, task_ref: str
+) -> dict[str, object] | None:
     """Get a task's sidecar summary by UUID or current display reference."""
     from taskledger.errors import LaunchError
     from taskledger.storage.task_identity import task_identity_for_ref
@@ -341,7 +343,7 @@ def get_sidecar_summary(paths: V2Paths, task_ref: str) -> dict[str, object] | No
 
 
 def update_sidecar_summary(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     task_id: str,
     *,
     todos: list[TaskTodo] | None = None,

@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from taskledger.errors import LaunchError
+from taskledger.migrations.legacy_init import init_legacy_project_state
 from taskledger.search import (
     _discovery_tokens,
     _read_text_file,
@@ -13,7 +14,6 @@ from taskledger.search import (
     search_project,
     symbols_project,
 )
-from taskledger.storage.init import init_project_state
 from taskledger.storage.repos import add_repo
 
 
@@ -22,7 +22,7 @@ def setup_repo_with_files(
     name: str,
     files: dict[str, bytes | str],
 ) -> Path:
-    paths, _ = init_project_state(tmp_path)
+    paths, _ = init_legacy_project_state(tmp_path)
     repo_dir = tmp_path / name
     repo_dir.mkdir()
     for rel, data in files.items():
@@ -131,7 +131,7 @@ def test_discovery_tokens_and_discover_files(tmp_path: Path):
 
 
 def test_read_text_file_returns_none_on_decode_error(tmp_path: Path):
-    _paths, _ = init_project_state(tmp_path)
+    _paths, _ = init_legacy_project_state(tmp_path)
     p = tmp_path / "bin.txt"
     p.write_bytes(b"\xff\xfe\xff")
     assert _read_text_file(p) is None

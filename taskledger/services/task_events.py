@@ -7,7 +7,11 @@ from pathlib import Path
 
 from taskledger.domain.models import ActorRef, HarnessRef, TaskEvent, TaskLock
 from taskledger.storage.events import append_event, next_event_id
-from taskledger.storage.task_store import V2Paths, resolve_v2_paths, task_audit_dir
+from taskledger.storage.task_store import (
+    TaskledgerStoragePaths,
+    resolve_v2_paths,
+    task_audit_dir,
+)
 from taskledger.storage.yaml_store import write_yaml_object
 from taskledger.timeutils import utc_now_iso
 
@@ -74,7 +78,9 @@ def append_task_event(
     return event_id
 
 
-def write_broken_lock_audit(paths: V2Paths, task_id: str, lock: TaskLock) -> Path:
+def write_broken_lock_audit(
+    paths: TaskledgerStoragePaths, task_id: str, lock: TaskLock
+) -> Path:
     timestamp = lock.broken_at or utc_now_iso()
     filename = timestamp.replace(":", "").replace("-", "").replace("+00:00", "Z")
     path = task_audit_dir(paths, task_id) / f"broken-lock-{filename}.yaml"

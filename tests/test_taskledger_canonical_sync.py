@@ -97,9 +97,9 @@ def test_canonical_git_commit_limits_committed_paths(tmp_path: Path) -> None:
 
 def test_canonical_local_sync_aliases_are_rejected(tmp_path: Path) -> None:
     project = _init(tmp_path)
-    with pytest.raises(LaunchError, match="CANONICAL_SYNC_PATH_FIXED"):
+    with pytest.raises(LaunchError, match="TASKLEDGER_MIGRATION_REQUIRED"):
         git_sync_import_local(project)
-    with pytest.raises(LaunchError, match="CANONICAL_SYNC_PATH_FIXED"):
+    with pytest.raises(LaunchError, match="TASKLEDGER_MIGRATION_REQUIRED"):
         git_sync_export_local(project)
 
 

@@ -10,12 +10,12 @@ from typer.testing import CliRunner
 from taskledger.cli import app
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.task_store import (
-    ensure_v2_layout,
     list_plans,
     resolve_v2_paths,
     rewrite_task_refs,
 )
 from tests.support.builders import init_workspace
+from tests.support.project import ensure_project_layout
 
 pytestmark = [pytest.mark.cli, pytest.mark.integration, pytest.mark.slow]
 
@@ -40,7 +40,7 @@ def _init_project(tmp_path: Path) -> None:
 
 
 def _removed_index_paths(tmp_path: Path) -> tuple[Path, Path]:
-    indexes_dir = tmp_path / ".taskledger" / "ledgers" / "main" / "indexes"
+    indexes_dir = ensure_project_layout(tmp_path).indexes_dir
     return (
         indexes_dir / "plan_versions.json",
         indexes_dir / "latest_runs.json",
@@ -132,12 +132,13 @@ Use task bundles instead of derived task, plan, and run indexes.
 def test_task_create_uses_task_bundle_layout(tmp_path: Path) -> None:
     _init_project(tmp_path)
 
-    project_dir = tmp_path / ".taskledger" / "ledgers" / "main"
+    paths = ensure_project_layout(tmp_path)
+    project_dir = paths.ledger_dir
     assert (project_dir / "intros").is_dir()
     assert (project_dir / "releases").is_dir()
     assert (project_dir / "tasks").is_dir()
-    assert (project_dir / "events").is_dir()
-    assert (project_dir / "indexes").is_dir()
+    assert paths.events_dir.is_dir()
+    assert paths.indexes_dir.is_dir()
     for legacy_name in (
         "items",
         "memories",
@@ -201,7 +202,7 @@ def test_task_list_scans_task_markdown_without_indexes(tmp_path: Path) -> None:
         ],
     )
 
-    indexes_dir = tmp_path / ".taskledger" / "indexes"
+    indexes_dir = ensure_project_layout(tmp_path).indexes_dir
     for path in indexes_dir.glob("*.json"):
         path.unlink()
 
@@ -229,6 +230,7 @@ def test_task_list_ignores_removed_legacy_indexes(tmp_path: Path) -> None:
         == 0
     )
     for path in _removed_index_paths(tmp_path):
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{not valid json", encoding="utf-8")
 
     result = runner.invoke(app, ["--root", str(tmp_path), "task", "list"])
@@ -237,8 +239,8 @@ def test_task_list_ignores_removed_legacy_indexes(tmp_path: Path) -> None:
 
 
 # specmason: req=REQ-0051 ac=AC-0552
-def test_ensure_v2_layout_does_not_create_removed_indexes(tmp_path: Path) -> None:
-    ensure_v2_layout(tmp_path)
+def test_ensure_project_layout_does_not_create_removed_indexes(tmp_path: Path) -> None:
+    ensure_project_layout(tmp_path)
     for path in _removed_index_paths(tmp_path):
         assert not path.exists()
 
@@ -276,7 +278,7 @@ def test_implement_status_does_not_need_removed_indexes(tmp_path: Path) -> None:
 
 # specmason: req=REQ-0051 ac=AC-0552
 def test_reindex_does_not_create_removed_indexes(tmp_path: Path) -> None:
-    ensure_v2_layout(tmp_path)
+    ensure_project_layout(tmp_path)
     paths = resolve_v2_paths(tmp_path)
 
     rebuild_v2_indexes(paths)
@@ -303,7 +305,7 @@ def test_task_create_no_orphan_slug_directory(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout
 
-    tasks_dir = tmp_path / ".taskledger" / "ledgers" / "main" / "tasks"
+    tasks_dir = ensure_project_layout(tmp_path).tasks_dir
     child_names = [p.name for p in tasks_dir.iterdir()]
     # Only the canonical UUIDv7 task directory should exist.
     assert len(child_names) == 1, f"unexpected directories: {child_names}"
@@ -329,7 +331,7 @@ def test_repair_task_dirs_removes_orphans(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout
 
-    tasks_dir = tmp_path / ".taskledger" / "ledgers" / "main" / "tasks"
+    tasks_dir = ensure_project_layout(tmp_path).tasks_dir
     # Manually create an empty slug-like directory
     (tasks_dir / "orphan-parent").mkdir()
     assert (tasks_dir / "orphan-parent").exists()
@@ -359,7 +361,7 @@ def test_list_plans_skips_malformed_plan_files(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout
 
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     plans_dir = paths.tasks_dir / "task-0001" / "plans"
     plans_dir.mkdir(parents=True, exist_ok=True)
 
@@ -398,7 +400,7 @@ def test_list_plans_loads_valid_plan_with_malformed_sibling(tmp_path: Path) -> N
     )
     assert result.exit_code == 0, result.stdout
 
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     plans_dir = paths.tasks_dir / "task-0001" / "plans"
     plans_dir.mkdir(parents=True, exist_ok=True)
 
@@ -441,7 +443,7 @@ def test_rewrite_task_refs_updates_id_and_task_id(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout
 
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     task_dir = paths.tasks_dir / "task-0001"
 
     # Create a plan with task_id
@@ -495,7 +497,7 @@ def test_rewrite_task_refs_adds_missing_task_id(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout
 
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     task_dir = paths.tasks_dir / "task-0001"
 
     # Create a plan file missing task_id
@@ -534,7 +536,7 @@ def test_rewrite_task_refs_noop_on_same_id(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout
 
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     task_dir = paths.tasks_dir / "task-0001"
 
     plans_dir = task_dir / "plans"

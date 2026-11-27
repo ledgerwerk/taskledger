@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from ledgercore import StorageBinding, StorageMigrationItem, StorageMigrationPlan
 from ledgercore.manifest import parse_ledger_manifest_v3
@@ -43,7 +43,6 @@ from taskledger.storage.project_context import (
     INDEX_MOUNT,
     LOGS_MOUNT,
     RUNTIME_MOUNT,
-    TaskledgerProjectContext,
     load_project_context,
 )
 from taskledger.storage.task_layout import (
@@ -51,6 +50,10 @@ from taskledger.storage.task_layout import (
     inspect_task_directory_layout,
 )
 from taskledger.storage.yaml_store import write_yaml_object
+
+if TYPE_CHECKING:
+    from taskledger.migrations.legacy_project_context import LegacyProjectContext
+
 
 try:
     tomllib = importlib.import_module("tomllib")
@@ -568,11 +571,13 @@ def _resolve_target_layout(
 
 def _legacy_source(
     start: Path,
-) -> tuple[TaskledgerProjectContext, ProjectPaths]:
-    context = load_project_context(start, require_initialized=False, allow_legacy=True)
-    if context.mode != "legacy" or context.legacy_locator is None:
-        raise LaunchError("No legacy Taskledger project was found.")
-    return context, context.legacy_locator
+) -> tuple[LegacyProjectContext, ProjectPaths]:
+    from taskledger.migrations.legacy_project_context import (
+        load_legacy_project_context,
+    )
+
+    context = load_legacy_project_context(start)
+    return context, context.project_paths
 
 
 def _configured_legacy_source(
@@ -748,9 +753,7 @@ def _inspect_active_target_layout(
             ),
         )
     try:
-        context = load_project_context(
-            project_root, require_initialized=False, allow_legacy=False
-        )
+        context = load_project_context(project_root, require_initialized=False)
         if context.paths.data_root.resolve(strict=False) != target_data_root.resolve(
             strict=False
         ):

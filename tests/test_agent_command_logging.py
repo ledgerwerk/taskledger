@@ -41,7 +41,7 @@ def _init_project(tmp_path: Path) -> None:
 
 
 def _enable_agent_logging(tmp_path: Path) -> None:
-    config_path = tmp_path / "taskledger.toml"
+    config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8")
         + "\n"
@@ -52,6 +52,11 @@ def _enable_agent_logging(tmp_path: Path) -> None:
 
 
 def _artifact_text(workspace_root: Path, artifact_ref: str) -> str:
+    if artifact_ref.startswith("logs/"):
+        paths = resolve_v2_paths(workspace_root)
+        return (paths.events_dir.parent / artifact_ref.removeprefix("logs/")).read_text(
+            encoding="utf-8"
+        )
     paths = resolve_v2_paths(workspace_root)
     return (paths.project_dir / artifact_ref).read_text(encoding="utf-8")
 

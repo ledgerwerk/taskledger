@@ -21,17 +21,13 @@ from taskledger.storage.migrations import (
     MigrationNeeded,
     inspect_records_for_migration,
 )
-from taskledger.storage.paths import (
-    ProjectLocator,
-    ProjectPaths,
-    load_project_locator,
-    resolve_project_paths,
-)
+from taskledger.storage.paths import ProjectPaths
+from taskledger.storage.project_context import resolve_project_paths
 from taskledger.storage.task_ids import (
     IncompleteTaskAllocation,
 )
 from taskledger.storage.task_store import (
-    V2Paths,
+    TaskledgerStoragePaths,
     list_changes_from_paths,
     list_plans_from_paths,
     list_questions_from_paths,
@@ -48,8 +44,7 @@ class DoctorScanContext:
 
     workspace_root: Path
     resolved_paths: ProjectPaths
-    paths: V2Paths
-    locator: ProjectLocator  # ProjectLocator
+    paths: TaskledgerStoragePaths
     tasks: tuple[TaskRecord, ...]
     task_by_id: Mapping[str, TaskRecord]
     locks: tuple[TaskLock, ...]
@@ -67,7 +62,7 @@ class DoctorScanContext:
 
 
 def _append_identity_conflict_diagnostics(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     failure: Exception,
     diagnostics: list[dict[str, object]],
 ) -> None:
@@ -111,7 +106,7 @@ def _append_identity_conflict_diagnostics(
 
 
 def _scan_doctor_tasks(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     scan_errors: list[str],
     scan_diagnostics: list[dict[str, object]],
 ) -> tuple[
@@ -318,7 +313,6 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
     )
 
     resolved_paths = resolve_project_paths(workspace_root)
-    locator = load_project_locator(workspace_root)
     paths = resolve_v2_paths(workspace_root)
     scan_errors: list[str] = []
     scan_diagnostics: list[dict[str, object]] = []
@@ -489,7 +483,6 @@ def _build_scan_context(workspace_root: Path) -> DoctorScanContext:
         workspace_root=workspace_root,
         resolved_paths=resolved_paths,
         paths=paths,
-        locator=locator,
         tasks=tasks,
         task_by_id=task_by_id,
         locks=locks,
@@ -560,9 +553,9 @@ def _inspect_implementation_snapshots(
 
 
 def _count_task_records_readonly(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     tasks: tuple[TaskRecord, ...],
-    loader: Callable[[V2Paths, str], Sequence[object]],
+    loader: Callable[[TaskledgerStoragePaths, str], Sequence[object]],
     *,
     record_name: str,
     errors: list[str],
@@ -796,10 +789,7 @@ def _inspect_v2_project_phases(workspace_root: Path) -> dict[str, object]:
         with _timing.stage("project_config"):
             scan_project_config(
                 workspace_root=workspace_root,
-                resolved_paths=ctx.resolved_paths,
-                locator=ctx.locator,
                 errors=errors,
-                warnings=warnings,
                 repair_hints=repair_hints,
             )
     except Exception as exc:  # noqa: BLE001
@@ -1036,7 +1026,7 @@ def inspect_v2_project(workspace_root: Path) -> dict[str, object]:
 
 
 def _run_lock_mismatches(
-    paths: V2Paths, inventory: LockInventory
+    paths: TaskledgerStoragePaths, inventory: LockInventory
 ) -> tuple[list[dict[str, object]], list[str]]:
     from taskledger.domain.policies import derive_active_stage
     from taskledger.storage.common import try_load_json_object
@@ -1396,6 +1386,26 @@ def inspect_v2_locks(workspace_root: Path) -> dict[str, object]:
 
 
 def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
+    from taskledger.storage.project_context import load_project_context
+
+    try:
+        load_project_context(workspace_root, require_initialized=False)
+    except LaunchError as exc:
+        message = str(exc)
+        return {
+            "kind": "taskledger_schema_inspection",
+            "internal_layout": None,
+            "healthy": False,
+            "errors": [message],
+            "diagnostics": [
+                {
+                    "severity": "error",
+                    "code": exc.code,
+                    "message": message,
+                    "details": dict(exc.details),
+                }
+            ],
+        }
     project_diagnostics: list[dict[str, object]] = []
     try:
         payload = inspect_v2_project(workspace_root)
@@ -1414,9 +1424,9 @@ def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
             if diagnostic.get("severity") == "error" and (
                 "IDENTITY" in code or "RELATION" in code or "AMBIGUOUS" in code
             ):
-                message = diagnostic.get("message")
-                if isinstance(message, str):
-                    schema_errors.append(message)
+                diagnostic_message = diagnostic.get("message")
+                if isinstance(diagnostic_message, str):
+                    schema_errors.append(diagnostic_message)
     except Exception as exc:  # noqa: BLE001
         schema_errors = [str(exc)]
         project_diagnostics = [

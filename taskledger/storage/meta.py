@@ -1,4 +1,4 @@
-"""Read and write .taskledger/storage.yaml workspace metadata."""
+"""Read and write Taskledger storage metadata."""
 
 from __future__ import annotations
 

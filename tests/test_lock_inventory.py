@@ -12,7 +12,7 @@ from taskledger.services.lock_inventory import (
 )
 from taskledger.storage.locks import write_lock
 from taskledger.storage.task_store import (
-    V2Paths,
+    TaskledgerStoragePaths,
 )
 
 FAR_FUTURE = "2099-12-31T23:59:59+00:00"
@@ -48,8 +48,8 @@ def _lock(
     )
 
 
-def _make_v2_paths(workspace: Path) -> V2Paths:
-    """Build V2Paths pointing to a fresh workspace without walking parents."""
+def _make_v2_paths(workspace: Path) -> TaskledgerStoragePaths:
+    """Build paths without walking parent directories."""
     ledger_dir = workspace / ".taskledger" / "ledgers" / "main"
     indexes_dir = ledger_dir / "indexes"
     for d in (
@@ -59,7 +59,7 @@ def _make_v2_paths(workspace: Path) -> V2Paths:
         indexes_dir,
     ):
         d.mkdir(parents=True, exist_ok=True)
-    return V2Paths(
+    return TaskledgerStoragePaths(
         workspace_root=workspace,
         taskledger_root=workspace / ".taskledger",
         runtime_root=workspace / ".taskledger",
@@ -84,7 +84,7 @@ def _make_v2_paths(workspace: Path) -> V2Paths:
     )
 
 
-def _setup_project(tmp_path: Path) -> V2Paths:
+def _setup_project(tmp_path: Path) -> TaskledgerStoragePaths:
     """Create a minimal project structure with task directories."""
     paths = _make_v2_paths(tmp_path)
     task_dir = paths.tasks_dir / "task-0001"

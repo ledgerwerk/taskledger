@@ -12,7 +12,7 @@ from taskledger.domain.task import IntroductionRecord
 from taskledger.errors import LaunchError
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.common import load_json_array, write_json
-from taskledger.storage.task_store import V2Paths
+from taskledger.storage.paths import TaskledgerStoragePaths
 
 logger = logging.getLogger(__name__)
 
@@ -34,16 +34,21 @@ _ALL_DIRTY_INDEX_NAMES: tuple[DirtyIndexName, ...] = (
 )
 
 
-def _dirty_index_path(paths: V2Paths, index_name: DirtyIndexName) -> Path:
+def _dirty_index_path(
+    paths: TaskledgerStoragePaths, index_name: DirtyIndexName
+) -> Path:
     return paths.indexes_dir / f".{index_name}.dirty"
 
 
-def index_is_dirty(paths: V2Paths, index_name: DirtyIndexName) -> bool:
+def index_is_dirty(paths: TaskledgerStoragePaths, index_name: DirtyIndexName) -> bool:
     return _dirty_index_path(paths, index_name).exists()
 
 
 def mark_index_dirty(
-    paths: V2Paths, index_name: DirtyIndexName, *, task_id: str | None = None
+    paths: TaskledgerStoragePaths,
+    index_name: DirtyIndexName,
+    *,
+    task_id: str | None = None,
 ) -> None:
     marker = _dirty_index_path(paths, index_name)
     try:
@@ -53,7 +58,9 @@ def mark_index_dirty(
         logger.warning("Failed to mark %s dirty", index_name, exc_info=True)
 
 
-def clear_index_dirty(paths: V2Paths, index_name: DirtyIndexName) -> None:
+def clear_index_dirty(
+    paths: TaskledgerStoragePaths, index_name: DirtyIndexName
+) -> None:
     _dirty_index_path(paths, index_name).unlink(missing_ok=True)
 
 
@@ -73,7 +80,7 @@ def _update_index(
         return result
 
 
-def rebuild_v2_indexes(paths: V2Paths) -> dict[str, int]:
+def rebuild_v2_indexes(paths: TaskledgerStoragePaths) -> dict[str, int]:
     from taskledger.storage.locks import lock_is_expired
     from taskledger.storage.sidecar_index import rebuild_sidecar_index
     from taskledger.storage.task_index import rebuild_task_index
@@ -130,7 +137,7 @@ def rebuild_v2_indexes(paths: V2Paths) -> dict[str, int]:
     }
 
 
-def load_active_locks_from_index(paths: V2Paths) -> list[TaskLock]:
+def load_active_locks_from_index(paths: TaskledgerStoragePaths) -> list[TaskLock]:
     from dataclasses import replace
 
     from taskledger.storage.locks import lock_is_expired
@@ -174,8 +181,8 @@ def load_active_locks_from_index(paths: V2Paths) -> list[TaskLock]:
 
 
 def _rebuild_active_lock_index(
-    paths: V2Paths,
-    load_locks: Callable[[V2Paths], list[TaskLock]],
+    paths: TaskledgerStoragePaths,
+    load_locks: Callable[[TaskledgerStoragePaths], list[TaskLock]],
 ) -> list[TaskLock]:
     from taskledger.storage.locks import lock_is_expired
 
@@ -186,7 +193,7 @@ def _rebuild_active_lock_index(
 
 
 def _best_effort_update_index(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     index_name: DirtyIndexName,
     index_path: Path,
     update: Callable[[list[dict[str, object]]], None],
@@ -206,7 +213,7 @@ def _best_effort_update_index(
 
 
 def update_dependency_index_entry(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     task_id: str,
     requirement_task_ids: list[str],
 ) -> None:
@@ -255,7 +262,7 @@ def update_dependency_index_entry(
     )
 
 
-def remove_dependency_index_entry(paths: V2Paths, task_id: str) -> None:
+def remove_dependency_index_entry(paths: TaskledgerStoragePaths, task_id: str) -> None:
     """Remove one dependency entry by its stable task identity."""
     from taskledger.errors import LaunchError
     from taskledger.storage.task_identity import task_identity_for_ref
@@ -286,7 +293,7 @@ def remove_dependency_index_entry(paths: V2Paths, task_id: str) -> None:
 
 
 def update_introduction_index_entry(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     introduction: IntroductionRecord,
 ) -> None:
     """Update one entry in the introductions index."""
@@ -311,7 +318,9 @@ def update_introduction_index_entry(
     )
 
 
-def remove_introduction_index_entry(paths: V2Paths, introduction_id: str) -> None:
+def remove_introduction_index_entry(
+    paths: TaskledgerStoragePaths, introduction_id: str
+) -> None:
     """Remove one entry from the introductions index."""
 
     def update(entries: list[dict[str, object]]) -> None:
@@ -325,7 +334,9 @@ def remove_introduction_index_entry(paths: V2Paths, introduction_id: str) -> Non
     )
 
 
-def update_active_lock_index_entry(paths: V2Paths, lock: TaskLock) -> None:
+def update_active_lock_index_entry(
+    paths: TaskledgerStoragePaths, lock: TaskLock
+) -> None:
     """Insert or replace one active-lock index entry."""
     entry_data = lock.to_dict()
 
@@ -345,7 +356,7 @@ def update_active_lock_index_entry(paths: V2Paths, lock: TaskLock) -> None:
     )
 
 
-def remove_active_lock_index_entry(paths: V2Paths, task_id: str) -> None:
+def remove_active_lock_index_entry(paths: TaskledgerStoragePaths, task_id: str) -> None:
     """Remove an active-lock entry by stable UUID identity."""
     from taskledger.errors import LaunchError
     from taskledger.storage.task_identity import task_identity_for_ref

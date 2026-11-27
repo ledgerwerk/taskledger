@@ -11,17 +11,17 @@ from taskledger.storage.artifact_policy import (
 )
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.task_store import (
-    V2Paths,
+    TaskledgerStoragePaths,
     require_mutable_v2_layout,
     resolve_v2_paths,
 )
 
 
-def agent_logs_dir(paths: V2Paths) -> Path:
+def agent_logs_dir(paths: TaskledgerStoragePaths) -> Path:
     return paths.events_dir.parent / "agent-logs"
 
 
-def agent_log_artifacts_dir(paths: V2Paths) -> Path:
+def agent_log_artifacts_dir(paths: TaskledgerStoragePaths) -> Path:
     return agent_logs_dir(paths) / "artifacts"
 
 

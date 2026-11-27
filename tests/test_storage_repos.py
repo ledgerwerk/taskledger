@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from taskledger.errors import LaunchError
-from taskledger.storage.init import init_project_state
+from taskledger.migrations.legacy_init import init_legacy_project_state
 from taskledger.storage.repos import (
     ProjectRepo,
     add_repo,
@@ -23,7 +23,7 @@ from taskledger.storage.repos import (
 
 
 def _paths(tmp_path: Path):
-    paths, _ = init_project_state(tmp_path)
+    paths, _ = init_legacy_project_state(tmp_path)
     return paths
 
 

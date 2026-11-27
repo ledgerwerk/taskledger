@@ -525,7 +525,7 @@ def record_managed_shell_command(
 
 
 def _load_agent_logging_config(workspace_root: Path) -> AgentLoggingConfig:
-    from taskledger.storage.paths import resolve_project_paths
+    from taskledger.storage.project_context import resolve_project_paths
 
     paths = resolve_project_paths(workspace_root)
     overrides = load_project_config_overrides(paths)

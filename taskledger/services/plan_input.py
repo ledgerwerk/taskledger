@@ -23,7 +23,7 @@ import yaml
 
 from taskledger.domain.models import AcceptanceCriterion, TaskTodo
 from taskledger.errors import LaunchError
-from taskledger.storage.project_config import load_worker_pipeline_config
+from taskledger.services.worker_pipeline_config import load_worker_pipeline_config
 from taskledger.storage.worker_pipeline_config import WorkerPipelineConfig
 
 __all__ = [
@@ -605,7 +605,8 @@ def _todo_worker_step_id(
                 "todo_worker_step_requires_pipeline",
                 f"todos[{index - 1}].worker_step",
                 "Plan todo `worker_step` requires an enabled worker pipeline.",
-                "Remove `worker_step` or enable a worker pipeline in taskledger.toml.",
+                "Remove `worker_step` or enable a worker pipeline in "
+                "`.ledger/taskledger/config.toml`.",
             )
         )
         return worker_step_id

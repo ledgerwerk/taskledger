@@ -277,25 +277,21 @@ class TestLockInventory:
 class TestStorageWhereRendering:
     """Defect 5: Storage where is mode-aware."""
 
-    def test_legacy_storage_where_has_legacy_fields(self, tmp_path: Path) -> None:
-        """Legacy storage report includes workspace, config, storage paths."""
+    def test_storage_where_reports_canonical_fields(self, tmp_path: Path) -> None:
         init_workspace(tmp_path)
-        report = build_storage_location_report(tmp_path)
-        payload = report.to_dict()
+        payload = build_storage_location_report(tmp_path).to_dict()
 
-        assert payload["mode"] == "legacy"
-        assert "workspace_root" in payload
-        assert "config_path" in payload
-        assert "taskledger_dir" in payload
+        assert payload["mode"] == "canonical"
+        assert payload["project"]["root"] == str(tmp_path)
+        assert payload["manifest"]["path"] == str(tmp_path / ".ledger" / "ledger.toml")
+        assert "data" in payload["mounts"]
 
-    def test_legacy_storage_where_no_manifest_section(self, tmp_path: Path) -> None:
-        """Legacy report does not include canonical manifest section."""
+    def test_storage_where_includes_canonical_manifest(self, tmp_path: Path) -> None:
         init_workspace(tmp_path)
-        report = build_storage_location_report(tmp_path)
-        payload = report.to_dict()
+        payload = build_storage_location_report(tmp_path).to_dict()
 
-        # Legacy mode should not have manifest key.
-        assert "manifest" not in payload or payload.get("manifest") is None
+        assert payload["manifest"]["schema_version"] == 3
+        assert "workspace_root" not in payload
 
     def test_storage_where_lock_breakdown(self, tmp_path: Path) -> None:
         """Storage report includes lock breakdown with correct counts."""
@@ -319,16 +315,14 @@ class TestStorageWhereRendering:
 
 
 class TestGitPathState:
-    """Defect 6: Git warning is based on actual Git state."""
+    """Canonical storage reports mount diagnostics, not legacy Git paths."""
 
-    def test_storage_where_includes_git_state(self, tmp_path: Path) -> None:
-        """Storage report includes Git tracked/ignored state."""
+    def test_storage_where_includes_canonical_mount_state(self, tmp_path: Path) -> None:
         init_workspace(tmp_path)
-        report = build_storage_location_report(tmp_path)
-        payload = report.to_dict()
+        payload = build_storage_location_report(tmp_path).to_dict()
 
-        # In a fresh tmp dir, Git state should be detectable.
-        assert "git_tracked" in payload or "git" in payload
+        assert "data" in payload["mounts"]
+        assert "git_tracked" not in payload
 
 
 # ---------------------------------------------------------------------------
@@ -337,40 +331,33 @@ class TestGitPathState:
 
 
 class TestMigrationIdentity:
-    """Defect 4: Migration inspection is deterministic for missing UUID."""
+    """Migration inspection remains deterministic for legacy identity input."""
 
     def test_migration_inspect_missing_uuid_is_blocked(self, tmp_path: Path) -> None:
-        """Missing project UUID produces a blocker, not a random UUID."""
+        """Missing legacy project UUID produces a migration blocker."""
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.layout_migration import inspect_migration
 
-        init_workspace(tmp_path)
+        init_legacy_project_state(tmp_path)
         config_path = tmp_path / "taskledger.toml"
         _remove_project_uuid(config_path)
 
-        result = inspect_migration(tmp_path)
-        result_dict = result.to_dict()
-
-        # Should be blocked.
-        assert result_dict["status"] == "blocked"
-
-        # Should have PROJECT_UUID_MISSING issue.
-        issue_codes = [i["code"] for i in result_dict.get("issues", [])]
+        result = inspect_migration(tmp_path).to_dict()
+        assert result["status"] == "blocked"
+        issue_codes = [i["code"] for i in result.get("issues", [])]
         assert "PROJECT_UUID_MISSING" in issue_codes
-
-        # Project UUID should be None.
-        assert result_dict["project"]["uuid"] is None
+        assert result["project"]["uuid"] is None
 
     def test_migration_inspect_deterministic(self, tmp_path: Path) -> None:
-        """Two consecutive inspections return the same result."""
+        """Two consecutive legacy inspections return the same result."""
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.layout_migration import inspect_migration
 
-        init_workspace(tmp_path)
-        config_path = tmp_path / "taskledger.toml"
-        _remove_project_uuid(config_path)
+        init_legacy_project_state(tmp_path)
+        _remove_project_uuid(tmp_path / "taskledger.toml")
 
         first = inspect_migration(tmp_path).to_dict()
         second = inspect_migration(tmp_path).to_dict()
-
         assert first == second
 
 
@@ -380,44 +367,35 @@ class TestMigrationIdentity:
 
 
 class TestProjectIdentityRepair:
-    """P0: Project identity repair generates and persists UUID atomically."""
+    """Project identity repair reports canonical identity without mutation."""
 
-    def test_repair_project_identity_read_only(self, tmp_path: Path) -> None:
-        """Read-only mode reports missing UUID without mutation."""
+    def test_repair_project_identity_reports_canonical_uuid(
+        self, tmp_path: Path
+    ) -> None:
         init_workspace(tmp_path)
-        config_path = tmp_path / "taskledger.toml"
-        _remove_project_uuid(config_path)
 
         result = repair_project_identity(tmp_path, apply=False)
-        assert result["status"] == "missing"
+        assert result["status"] == "present"
         assert result["changed"] is False
-        assert result["project_uuid"] is None
-
-    def test_repair_project_identity_apply_generates_uuid(self, tmp_path: Path) -> None:
-        """Apply mode generates and persists a UUID."""
-        init_workspace(tmp_path)
-        config_path = tmp_path / "taskledger.toml"
-        _remove_project_uuid(config_path)
-
-        result = repair_project_identity(tmp_path, apply=True)
-        assert result["status"] == "generated"
-        assert result["changed"] is True
         assert result["project_uuid"] is not None
 
-        # Verify persistence.
-        from taskledger.storage.project_identity import load_project_uuid
-
-        persisted = load_project_uuid(config_path)
-        assert persisted == result["project_uuid"]
-
-    def test_repair_project_identity_idempotent(self, tmp_path: Path) -> None:
-        """Repair is idempotent when UUID already exists."""
+    def test_repair_project_identity_apply_does_not_mutate(
+        self, tmp_path: Path
+    ) -> None:
         init_workspace(tmp_path)
+        before = repair_project_identity(tmp_path, apply=False)["project_uuid"]
 
         result = repair_project_identity(tmp_path, apply=True)
         assert result["status"] == "present"
         assert result["changed"] is False
-        assert result["project_uuid"] is not None
+        assert result["project_uuid"] == before
+
+    def test_legacy_project_identity_requires_migration(self, tmp_path: Path) -> None:
+        from taskledger.migrations.legacy_init import init_legacy_project_state
+
+        init_legacy_project_state(tmp_path)
+        with pytest.raises(LaunchError, match="TASKLEDGER_MIGRATION_REQUIRED"):
+            repair_project_identity(tmp_path)
 
 
 # ---------------------------------------------------------------------------

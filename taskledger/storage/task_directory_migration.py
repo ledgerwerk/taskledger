@@ -20,6 +20,7 @@ from taskledger.storage.frontmatter import (
     read_markdown_front_matter,
     write_markdown_front_matter,
 )
+from taskledger.storage.paths import TaskledgerStoragePaths
 from taskledger.storage.task_identity import (
     LEGACY_GAP_CREATED_AT,
     TaskIdentity,
@@ -29,7 +30,6 @@ from taskledger.storage.task_identity import (
     scan_task_identity_inventory,
     task_identity_for_stored_ref,
 )
-from taskledger.storage.task_store import V2Paths, resolve_v2_paths
 
 _JOURNAL_NAME = "task-directory-migration-v5-to-v6.json"
 _LOCK_NAME = ".task-directory-uuidv7-migration.lock"
@@ -38,6 +38,7 @@ _LOCK_NAME = ".task-directory-uuidv7-migration.lock"
 def migrate_v5_task_directories_to_uuidv7(workspace_root: Path) -> None:
     """Migrate every canonical ledger before the global layout can advance."""
     from taskledger.storage.meta import read_storage_meta
+    from taskledger.storage.paths import probe_taskledger_project
     from taskledger.storage.project_context import load_project_context
     from taskledger.storage.task_layout import (
         discover_canonical_ledger_refs,
@@ -45,12 +46,17 @@ def migrate_v5_task_directories_to_uuidv7(workspace_root: Path) -> None:
     )
     from taskledger.storage.task_store import v2_paths_for_ledger_ref
 
-    context = load_project_context(
-        workspace_root, require_initialized=False, allow_legacy=True
-    )
-    if context.mode != "canonical":
-        _migrate_v5_task_directories_for_paths(resolve_v2_paths(workspace_root))
+    probe = probe_taskledger_project(workspace_root)
+    if probe.source == "legacy":
+        from taskledger.migrations.legacy_project_context import (
+            legacy_v2_paths,
+            load_legacy_project_context,
+        )
+
+        legacy_context = load_legacy_project_context(workspace_root)
+        _migrate_v5_task_directories_for_paths(legacy_v2_paths(legacy_context))
         return
+    context = load_project_context(workspace_root, require_initialized=False)
 
     ledger_refs = discover_canonical_ledger_refs(context)
     project_lock = (
@@ -124,7 +130,7 @@ def migrate_v5_task_directories_to_uuidv7(workspace_root: Path) -> None:
             )
 
 
-def _migrate_v5_task_directories_for_paths(paths: V2Paths) -> None:
+def _migrate_v5_task_directories_for_paths(paths: TaskledgerStoragePaths) -> None:
     """Migrate one ledger using its recoverable v5-to-v6 journal."""
     journal_path = paths.ledger_dir / _JOURNAL_NAME
     lock_path = paths.ledger_dir / _LOCK_NAME
@@ -180,7 +186,9 @@ def _migrate_v5_task_directories_for_paths(paths: V2Paths) -> None:
             raise LaunchError(f"UUIDv7 task-directory migration failed: {exc}") from exc
 
 
-def _build_rename_plan(paths: V2Paths) -> dict[str, list[dict[str, object]]]:
+def _build_rename_plan(
+    paths: TaskledgerStoragePaths,
+) -> dict[str, list[dict[str, object]]]:
     tasks_dir = paths.tasks_dir
     entries = (
         sorted(tasks_dir.iterdir(), key=lambda item: item.name)
@@ -289,7 +297,7 @@ def _build_rename_plan(paths: V2Paths) -> dict[str, list[dict[str, object]]]:
 
 
 def _plan_tombstones(
-    paths: V2Paths, used_uuids: set[str], used_legacy_ids: set[str]
+    paths: TaskledgerStoragePaths, used_uuids: set[str], used_legacy_ids: set[str]
 ) -> list[dict[str, object]]:
     tombstones_dir = paths.ledger_dir / "tombstones"
     if not tombstones_dir.exists():
@@ -355,7 +363,7 @@ def _plan_tombstones(
 
 
 def _plan_legacy_gap_reservations(
-    paths: V2Paths, existing_ids: set[str], used_uuids: set[str]
+    paths: TaskledgerStoragePaths, existing_ids: set[str], used_uuids: set[str]
 ) -> list[dict[str, object]]:
     missing_ids = missing_legacy_task_ids(existing_ids)
     if not missing_ids:
@@ -400,7 +408,7 @@ def _plan_legacy_gap_reservations(
     return reservations
 
 
-def _apply_renames(paths: V2Paths, journal: dict[str, object]) -> None:
+def _apply_renames(paths: TaskledgerStoragePaths, journal: dict[str, object]) -> None:
     task_renames = _journal_list(journal, "task_renames")
     for item in task_renames:
         source = paths.ledger_dir / str(item["old"])
@@ -440,7 +448,7 @@ def _apply_renames(paths: V2Paths, journal: dict[str, object]) -> None:
 
 
 def _rollback_migration(
-    paths: V2Paths, journal_path: Path, journal: dict[str, object]
+    paths: TaskledgerStoragePaths, journal_path: Path, journal: dict[str, object]
 ) -> None:
     relation_backfills = journal.get("relation_backfills", [])
     if not isinstance(relation_backfills, list):
@@ -512,7 +520,7 @@ def _rollback_migration(
 
 
 def _resolve_live_relation(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     source_path: Path,
     field: str,
@@ -552,7 +560,9 @@ def _resolve_live_relation(
     return identity
 
 
-def _prepare_task_relation_backfills(paths: V2Paths) -> list[dict[str, object]]:
+def _prepare_task_relation_backfills(
+    paths: TaskledgerStoragePaths,
+) -> list[dict[str, object]]:
     inventory = scan_task_identity_inventory(paths)
     updates: list[dict[str, object]] = []
     for identity in inventory.entries:
@@ -627,7 +637,7 @@ def _prepare_task_relation_backfills(paths: V2Paths) -> list[dict[str, object]]:
 
 
 def _backfill_task_relationship_uuids(
-    paths: V2Paths, journal_path: Path, journal: dict[str, object]
+    paths: TaskledgerStoragePaths, journal_path: Path, journal: dict[str, object]
 ) -> None:
     updates = _prepare_task_relation_backfills(paths)
     entries = journal.get("relation_backfills", [])
@@ -681,7 +691,7 @@ def _backfill_task_relationship_uuids(
 
 
 def _validate_migrated_storage(
-    paths: V2Paths, *, require_relation_uuids: bool = False
+    paths: TaskledgerStoragePaths, *, require_relation_uuids: bool = False
 ) -> None:
     if paths.tasks_dir.exists() and any(
         path.name.startswith("task-") for path in paths.tasks_dir.iterdir()
@@ -709,7 +719,9 @@ def _validate_migrated_storage(
     list_tasks_from_paths(paths)
 
 
-def _validate_completed_migration(paths: V2Paths, journal: dict[str, object]) -> None:
+def _validate_completed_migration(
+    paths: TaskledgerStoragePaths, journal: dict[str, object]
+) -> None:
     for item in _journal_list(journal, "task_renames"):
         source = paths.ledger_dir / str(item["old"])
         destination = paths.ledger_dir / str(item["new"])
@@ -745,28 +757,24 @@ def _validate_completed_migration(paths: V2Paths, journal: dict[str, object]) ->
     )
 
 
-def _mark_indexes_dirty(paths: V2Paths) -> None:
+def _mark_indexes_dirty(paths: TaskledgerStoragePaths) -> None:
     from taskledger.storage.indexes import mark_index_dirty
 
     for name in ("task_index", "sidecar_index", "dependencies", "active_locks"):
         mark_index_dirty(paths, name)
 
 
-def _mark_and_rebuild_indexes(paths: V2Paths) -> None:
+def _mark_and_rebuild_indexes(paths: TaskledgerStoragePaths) -> None:
     from taskledger.storage.indexes import rebuild_v2_indexes
 
     _mark_indexes_dirty(paths)
     rebuild_v2_indexes(paths)
 
 
-def _assert_no_active_locks(paths: V2Paths) -> None:
-    from taskledger.services.lock_inventory import (
-        build_lock_inventory,
-        require_migration_safe_locks,
-    )
+def _assert_no_active_locks(paths: TaskledgerStoragePaths) -> None:
+    from taskledger.storage.lock_records import require_migration_safe_locks
 
-    inventory = build_lock_inventory(paths)
-    require_migration_safe_locks(inventory, project_root=paths.workspace_root)
+    require_migration_safe_locks(paths, project_root=paths.workspace_root)
 
 
 def _assert_no_unmerged_git_paths(workspace_root: Path) -> None:
@@ -804,24 +812,12 @@ def _assert_no_unmerged_git_paths(workspace_root: Path) -> None:
         )
 
 
-def _project_uuid_for_paths(paths: V2Paths) -> str:
-    from taskledger.storage.project_identity import load_project_uuid
-
-    candidates = (
-        paths.workspace_root / ".ledger" / "taskledger" / "config.toml",
-        paths.workspace_root / ".taskledger.toml",
-        paths.workspace_root / "taskledger.toml",
-        paths.taskledger_root / "taskledger.toml",
-        paths.taskledger_root / "project.toml",
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            project_uuid = load_project_uuid(candidate)
-            if project_uuid is not None:
-                return project_uuid
-    raise LaunchError(
-        "Deterministic UUIDv7 task-directory migration requires a project UUID."
-    )
+def _project_uuid_for_paths(paths: TaskledgerStoragePaths) -> str:
+    if paths.project_uuid is None:
+        raise LaunchError(
+            "Deterministic UUIDv7 task-directory migration requires a project UUID."
+        )
+    return paths.project_uuid
 
 
 def _parse_legacy_id(value: str, path: Path) -> tuple[str, int]:

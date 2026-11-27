@@ -13,15 +13,15 @@ from taskledger.domain.models import (
     TaskRunRecord,
 )
 from taskledger.domain.sidecars import TaskTodo
+from taskledger.services.worker_pipeline_config import load_worker_pipeline_config
 from taskledger.storage.locks import lock_is_expired
-from taskledger.storage.project_config import load_worker_pipeline_config
-from taskledger.storage.task_store import V2Paths
+from taskledger.storage.task_store import TaskledgerStoragePaths
 
 
 def _scan_task_integrity_phases(  # noqa: C901
     *,
     workspace_root: Path,
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     tasks: list[TaskRecord],
     task_map: dict[str, TaskRecord],
     locks: list[TaskLock],
@@ -405,7 +405,7 @@ def _scan_task_integrity_phases(  # noqa: C901
 def scan_task_integrity(
     *,
     workspace_root: Path,
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     tasks: list[TaskRecord],
     task_map: dict[str, TaskRecord],
     locks: list[TaskLock],

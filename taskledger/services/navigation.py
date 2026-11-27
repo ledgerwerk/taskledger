@@ -56,8 +56,8 @@ from taskledger.services.tasks import (
 )
 from taskledger.services.validation import build_validation_gate_report
 from taskledger.services.worker_pipeline import determine_next_worker_step
+from taskledger.services.worker_pipeline_config import load_worker_pipeline_config
 from taskledger.storage.locks import lock_is_expired
-from taskledger.storage.project_config import load_worker_pipeline_config
 from taskledger.storage.task_store import (
     list_handoffs,
     list_plans,

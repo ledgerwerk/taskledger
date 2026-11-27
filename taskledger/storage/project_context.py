@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from taskledger.errors import LaunchError
-from taskledger.storage.ledger_config import LedgerConfig, load_ledger_config
+from taskledger.storage.ledger_config import LedgerConfig
 from taskledger.storage.ledgercore_backend import (
     DATA_MOUNT,
     INDEX_MOUNT,
@@ -19,17 +19,10 @@ from taskledger.storage.ledgercore_backend import (
     load_taskledger_ledger_layout,
     locate_taskledger_project,
 )
-from taskledger.storage.paths import (
-    DEFAULT_TASKLEDGER_DIR_NAME,
-    ProjectPaths,
-    load_project_locator,
-    project_paths_for_root,
-)
+from taskledger.storage.paths import ProjectPaths, probe_taskledger_project
 from taskledger.storage.project_config import (
     ProjectConfig,
     load_canonical_project_config,
-    load_project_config_document,
-    merge_project_config,
 )
 
 try:
@@ -37,10 +30,9 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     tomllib = importlib.import_module("tomli")
 
-ProjectMode = Literal["canonical", "legacy", "uninitialized"]
+ProjectMode = Literal["canonical"]
 InitializationStatus = Literal[
     "uninitialized",
-    "legacy",
     "schema_migration_required",
     "registration_missing",
     "registration_invalid",
@@ -64,7 +56,6 @@ CANONICAL_STORAGE_LAYOUT_VERSION = 6
 CANONICAL_MOUNT_NAMES = (DATA_MOUNT, RUNTIME_MOUNT, LOGS_MOUNT, INDEX_MOUNT)
 CANONICAL_DATA_RELATIVE_PATH = Path("data")
 CANONICAL_INDEX_RELATIVE_PATH = Path("indexes")
-LEGACY_CONFIG_FILENAMES = (".taskledger.toml", "taskledger.toml")
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,15 +105,6 @@ class TaskledgerPaths:
     def repo_index_path(self) -> Path:
         return self.repo_registry_path
 
-    @property
-    def taskledger_dir(self) -> Path:
-        """Deprecated compatibility alias for the resolved data mount."""
-        return self.data_root
-
-    @property
-    def events_dir_legacy(self) -> Path:
-        return self.events_dir
-
 
 @dataclass(frozen=True, slots=True)
 class TaskledgerProjectContext:
@@ -136,7 +118,6 @@ class TaskledgerProjectContext:
     paths: TaskledgerPaths
     initialization: TaskledgerInitializationState
     layout: Any | None
-    legacy_locator: ProjectPaths | None
     loaded_project: Any | None = None
     storage_validation: Any | None = None
     cache_recovery: Any | None = None
@@ -217,10 +198,6 @@ def paths_for_ledger_ref(
     context: TaskledgerProjectContext, ledger_ref: str
 ) -> TaskledgerPaths:
     """Build canonical mount paths for any physical ledger namespace."""
-    if context.mode != "canonical":
-        raise LaunchError(
-            "Arbitrary ledger paths require canonical Taskledger storage."
-        )
     paths = context.paths
     return _paths_for_mounts(
         context.project_root,
@@ -241,56 +218,6 @@ def _load_toml(path: Path) -> dict[str, object]:
     if not isinstance(value, dict):
         raise LaunchError(f"Ledger configuration {path} must contain a TOML table.")
     return cast(dict[str, object], value)
-
-
-def _legacy_context(project_paths: ProjectPaths) -> TaskledgerProjectContext:
-    data_root = project_paths.taskledger_dir
-    ledger = load_ledger_config(project_paths.config_path)
-    paths = _paths_for_mounts(
-        project_paths.workspace_root,
-        project_paths.config_path,
-        data_root,
-        data_root,
-        data_root,
-        data_root,
-        ledger.ref,
-    )
-    config = merge_project_config(
-        load_project_config_document(project_paths.config_path)
-    )
-    from taskledger.storage.project_identity import (
-        load_project_uuid,
-        project_name_or_default,
-    )
-
-    return TaskledgerProjectContext(
-        mode="legacy",
-        project_root=project_paths.workspace_root,
-        project_uuid=load_project_uuid(project_paths.config_path),
-        project_name=project_name_or_default(
-            project_paths.config_path, workspace_root=project_paths.workspace_root
-        ),
-        config_path=project_paths.config_path,
-        config=config,
-        ledger_state=ledger,
-        paths=paths,
-        initialization=TaskledgerInitializationState(
-            "legacy", "Legacy Taskledger layout detected; run taskledger migrate."
-        ),
-        layout=None,
-        legacy_locator=project_paths,
-    )
-
-
-def _legacy_marker_root(start: Path) -> Path | None:
-    current = start if start.is_dir() else start.parent
-    for candidate in (current, *current.parents):
-        taskledger_dir = candidate / DEFAULT_TASKLEDGER_DIR_NAME
-        if (taskledger_dir / "storage.yaml").exists() or (
-            taskledger_dir / "ledgers"
-        ).is_dir():
-            return candidate
-    return None
 
 
 def _validate_registration(layout: Any) -> None:
@@ -395,7 +322,6 @@ def _context_from_layout(
         paths=paths,
         initialization=init_state,
         layout=layout,
-        legacy_locator=None,
         loaded_project=loaded,
         storage_validation=bundle.validation_report,
         local_overrides_present=loaded.locator.local_config_path.exists(),
@@ -410,93 +336,70 @@ def load_project_context(
     start: Path,
     *,
     require_initialized: bool = True,
-    allow_legacy: bool = True,
 ) -> TaskledgerProjectContext:
-    """Load Taskledger context without creating or mutating any files."""
+    """Load canonical Taskledger context without creating or mutating files."""
     locator = locate_taskledger_project(start)
     if locator is not None and not locator.is_legacy:
         bundle = load_taskledger_ledger_layout(start)
         return _context_from_layout(
             start, bundle, require_initialized=require_initialized
         )
-    legacy_root = _legacy_marker_root(start)
-    if locator is not None and locator.is_legacy:
-        legacy_root = locator.project_root
-    if not allow_legacy or legacy_root is None:
+
+    probe = probe_taskledger_project(start)
+    if probe.source == "legacy":
         raise LaunchError(
-            "TASKLEDGER_NOT_INITIALIZED: Taskledger is not initialized for this "
-            "project. Run `taskledger init`.",
-            code="TASKLEDGER_NOT_INITIALIZED",
-            remediation=["Run `taskledger init`"],
-            details={"project_root": str(start.resolve())},
+            "TASKLEDGER_MIGRATION_REQUIRED: Legacy Taskledger state "
+            "is migration input. "
+            "Run `taskledger migrate plan`, review the plan, then run "
+            "`taskledger migrate apply`.",
+            code="TASKLEDGER_MIGRATION_REQUIRED",
+            remediation=[
+                "Run `taskledger migrate plan` and review the result",
+                "Run `taskledger migrate apply`",
+            ],
+            details={
+                "project_root": str(probe.project_root),
+                "legacy_config": (
+                    str(probe.tool_config_path) if probe.tool_config_path else None
+                ),
+            },
         )
-    legacy = load_project_locator(legacy_root)
-    return _legacy_context(
-        project_paths_for_root(
-            legacy.workspace_root, legacy.taskledger_dir, config_path=legacy.config_path
-        )
+    raise LaunchError(
+        "TASKLEDGER_NOT_INITIALIZED: Taskledger is not initialized for this "
+        "project. Run `taskledger init`.",
+        code="TASKLEDGER_NOT_INITIALIZED",
+        remediation=["Run `taskledger init`"],
+        details={"project_root": str(start.resolve())},
     )
 
 
-def require_mutable_project_context(
-    start: Path,
-    *,
-    allow_legacy: bool = True,
-) -> TaskledgerProjectContext:
-    """Require a real initialized project before any command may write state."""
-    context = load_project_context(
-        start,
-        require_initialized=False,
-        allow_legacy=allow_legacy,
-    )
-    if context.mode == "canonical" and context.paths.storage_meta_path.exists():
+def require_mutable_project_context(start: Path) -> TaskledgerProjectContext:
+    """Require a valid canonical project before any command may write state."""
+    context = load_project_context(start, require_initialized=False)
+    if context.paths.storage_meta_path.exists():
         from taskledger.storage.migrations import reconcile_storage_layout
 
         reconciliation = reconcile_storage_layout(start)
         if reconciliation.changed:
-            context = load_project_context(
-                start,
-                require_initialized=False,
-                allow_legacy=allow_legacy,
-            )
-    local_state_recovery = None
-    cache_recovery = None
-    if context.mode == "canonical":
-        from taskledger.storage.index_cache import ensure_indexes_cache_for_mutation
-        from taskledger.storage.local_state import ensure_local_state_for_mutation
+            context = load_project_context(start, require_initialized=False)
 
-        local_state_recovery = ensure_local_state_for_mutation(context)
-        cache_recovery = ensure_indexes_cache_for_mutation(context)
-        context = load_project_context(
-            start,
-            require_initialized=True,
-            allow_legacy=allow_legacy,
+    from taskledger.storage.index_cache import ensure_indexes_cache_for_mutation
+    from taskledger.storage.local_state import ensure_local_state_for_mutation
+
+    local_state_recovery = ensure_local_state_for_mutation(context)
+    cache_recovery = ensure_indexes_cache_for_mutation(context)
+    context = load_project_context(start, require_initialized=True)
+    if local_state_recovery is not None or cache_recovery is not None:
+        context = replace(
+            context,
+            local_state_recovery=local_state_recovery,
+            cache_recovery=cache_recovery,
         )
-        if local_state_recovery is not None or cache_recovery is not None:
-            context = replace(
-                context,
-                local_state_recovery=local_state_recovery,
-                cache_recovery=cache_recovery,
-            )
-        if cache_recovery is not None and cache_recovery.quarantine_path is not None:
-            logging.getLogger(__name__).warning(
-                "Taskledger quarantined the unbound indexes cache at %s",
-                cache_recovery.quarantine_path,
-            )
-    if context.mode == "legacy":
-        required = (
-            context.paths.project_dir,
-            context.paths.tasks_dir,
-            context.paths.events_dir,
-            context.paths.ledger_indexes_dir,
+    if cache_recovery is not None and cache_recovery.quarantine_path is not None:
+        logging.getLogger(__name__).warning(
+            "Taskledger quarantined the unbound indexes cache at %s",
+            cache_recovery.quarantine_path,
         )
-        missing = [path for path in required if not path.exists()]
-        if missing:
-            raise LaunchError(
-                "Legacy Taskledger project is not initialized. Missing: "
-                + ", ".join(str(path) for path in missing)
-                + ". Run `taskledger init`."
-            )
     return context
 
 
@@ -540,6 +443,19 @@ def canonical_mount_specs(
     }
 
 
+def resolve_project_paths(workspace_root: Path) -> ProjectPaths:
+    context = load_project_context(workspace_root, require_initialized=False)
+    return ProjectPaths(
+        workspace_root=context.project_root,
+        project_dir=context.paths.ledger_data_dir,
+        taskledger_dir=context.paths.data_root,
+        config_path=context.config_path,
+        releases_dir=context.paths.releases_dir,
+        repos_dir=context.paths.ledger_data_dir,
+        repo_index_path=context.paths.repo_registry_path,
+    )
+
+
 __all__ = [
     "CANONICAL_CONFIG_VERSION",
     "CANONICAL_LEDGER_CODE",
@@ -552,4 +468,5 @@ __all__ = [
     "_paths_for_mounts",
     "load_project_context",
     "require_mutable_project_context",
+    "resolve_project_paths",
 ]

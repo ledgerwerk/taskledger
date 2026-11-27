@@ -11,14 +11,10 @@ if TYPE_CHECKING:
     from taskledger.domain.models import TaskRecord
     from taskledger.storage.task_identity import TaskIdentity, _IdentitySource
     from taskledger.storage.task_ids import IncompleteTaskAllocation
-    from taskledger.storage.task_store import V2Paths
+    from taskledger.storage.task_store import TaskledgerStoragePaths
 from taskledger.errors import LaunchError
-from taskledger.storage.paths import load_project_locator
-from taskledger.storage.project_identity import (
-    ensure_project_uuid,
-    load_project_uuid,
-    normalize_project_uuid,
-)
+from taskledger.storage.project_context import load_project_context
+from taskledger.storage.project_identity import normalize_project_uuid
 
 
 def repair_project_identity(
@@ -27,80 +23,31 @@ def repair_project_identity(
     apply: bool = False,
     project_uuid: str | None = None,
 ) -> dict[str, object]:
-    """Inspect or repair missing project identity.
-
-    Read-only default: report identity status, config path, whether UUID is
-    missing.
-
-    Apply: atomically generate (or set explicit) UUID.
-    """
-    locator = load_project_locator(workspace_root)
-    config_path = locator.config_path
-    current_uuid = load_project_uuid(config_path)
-
-    if project_uuid is not None:
-        explicit_uuid = normalize_project_uuid(project_uuid)
-    else:
-        explicit_uuid = None
-
-    if current_uuid is not None and explicit_uuid is not None:
-        if current_uuid != explicit_uuid:
-            raise LaunchError(
-                f"Config already has project UUID {current_uuid}. "
-                "Cannot replace with a different UUID."
-            )
-        return {
-            "kind": "project_identity_repair",
-            "status": "present",
-            "config_path": str(config_path),
-            "project_uuid": current_uuid,
-            "changed": False,
-        }
-
-    if current_uuid is not None:
-        return {
-            "kind": "project_identity_repair",
-            "status": "present",
-            "config_path": str(config_path),
-            "project_uuid": current_uuid,
-            "changed": False,
-        }
-
-    # UUID is missing.
-    if not apply:
-        return {
-            "kind": "project_identity_repair",
-            "status": "missing",
-            "config_path": str(config_path),
-            "project_uuid": None,
-            "changed": False,
-            "action": "generate and persist a UUID",
-            "next_command": "taskledger repair project-identity --apply",
-        }
-
-    # Apply: generate or use explicit UUID.
-    if explicit_uuid is not None:
-        from taskledger.storage.atomic import atomic_write_text
-        from taskledger.storage.project_identity import insert_or_append_project_uuid
-
-        text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
-        updated = insert_or_append_project_uuid(text, explicit_uuid)
-        atomic_write_text(config_path, updated)
-        new_uuid = explicit_uuid
-    else:
-        new_uuid = ensure_project_uuid(config_path)
-
+    """Inspect the canonical Ledgercore project identity."""
+    del apply
+    context = load_project_context(workspace_root, require_initialized=False)
+    config_path = (
+        context.layout.manifest_path
+        if context.layout is not None
+        else context.config_path
+    )
+    current_uuid = context.project_uuid
+    explicit_uuid = normalize_project_uuid(project_uuid) if project_uuid else None
+    if current_uuid is None:
+        raise LaunchError(
+            "Canonical Ledgercore manifest is missing the project UUID. "
+            "Repair project identity with Ledgercore tooling."
+        )
+    if explicit_uuid is not None and current_uuid != explicit_uuid:
+        raise LaunchError(
+            f"Project already has UUID {current_uuid}. Cannot replace it."
+        )
     return {
         "kind": "project_identity_repair",
-        "status": "generated",
+        "status": "present",
         "config_path": str(config_path),
-        "project_uuid": new_uuid,
-        "previous_uuid": None,
-        "changed": True,
-        "next_commands": [
-            f"git add {config_path.name}",
-            "taskledger migrate inspect",
-        ],
+        "project_uuid": current_uuid,
+        "changed": False,
     }
 
 
@@ -220,7 +167,7 @@ def repair_locks(
 
 
 def _identity_source_payload(
-    paths: V2Paths, source: _IdentitySource
+    paths: TaskledgerStoragePaths, source: _IdentitySource
 ) -> dict[str, object]:
     payload: dict[str, object] = {
         "kind": source.source_kind,
@@ -237,7 +184,7 @@ def _identity_source_payload(
 
 
 def _classify_allocation_repair(
-    paths: V2Paths, allocation: IncompleteTaskAllocation
+    paths: TaskledgerStoragePaths, allocation: IncompleteTaskAllocation
 ) -> dict[str, object]:
     from taskledger.storage.task_identity import inspect_task_identity_sources
 
@@ -319,7 +266,7 @@ def _classify_allocation_repair(
 
 
 def _allocation_repair_plan_entry(
-    paths: V2Paths, allocation: IncompleteTaskAllocation
+    paths: TaskledgerStoragePaths, allocation: IncompleteTaskAllocation
 ) -> dict[str, object]:
     source_id = allocation.legacy_task_id or allocation.task_uuid
     quarantine_path = (
@@ -404,7 +351,7 @@ def _allocation_plan_fingerprint(
 
 
 def _validate_allocation_sources_for_apply(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     allocations: tuple[IncompleteTaskAllocation, ...],
     plans: list[dict[str, object]],
 ) -> None:
@@ -461,7 +408,7 @@ def _validate_allocation_sources_for_apply(
 
 
 def _verify_allocation_repair_postcondition(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     allocation: IncompleteTaskAllocation,
     plan: dict[str, object],
 ) -> None:
@@ -542,7 +489,7 @@ def _verify_allocation_repair_postcondition(
 
 def _apply_one_allocation_repair(
     workspace_root: Path,
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     allocation: IncompleteTaskAllocation,
     plan: dict[str, object],
     *,
@@ -1381,7 +1328,7 @@ def reconcile_allocation_tombstone(
 
 
 def _load_relation_repair_source(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     task_uuid: str,
     field: str,
@@ -1456,7 +1403,7 @@ def _load_relation_repair_source(
 
 
 def _resolve_relation_repair_target(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     source_path: Path,
     field: str,
@@ -1503,7 +1450,7 @@ def _resolve_relation_repair_target(
 
 
 def _task_relation_repair_plan(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     source_task: TaskRecord,
     source_path: Path,
@@ -1541,7 +1488,7 @@ def _task_relation_repair_plan(
 
 def _apply_task_relation_repair(
     workspace_root: Path,
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     source_task: TaskRecord,
     source_path: Path,

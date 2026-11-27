@@ -24,7 +24,7 @@ pytestmark = [pytest.mark.cli, pytest.mark.integration, pytest.mark.slow]
 
 
 def _enable_event_logging(tmp_path: Path) -> None:
-    config_path = tmp_path / "taskledger.toml"
+    config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8") + "\n[event_logging]\nenabled = true\n",
         encoding="utf-8",
@@ -126,7 +126,9 @@ def _setup_plan_review_task(tmp_path: Path) -> None:
 
 
 def _internal_plan_path(tmp_path: Path) -> Path:
-    matches = sorted((tmp_path / ".taskledger").glob("**/plan-v1.md"))
+    from taskledger.storage.task_store import resolve_v2_paths
+
+    matches = sorted(resolve_v2_paths(tmp_path).ledger_dir.glob("**/plan-v1.md"))
     assert matches
     return matches[0]
 
@@ -345,7 +347,7 @@ def test_plan_amend_drops_criteria_and_todos_and_records_event(tmp_path: Path) -
     assert "RELEASE.md" in show_v1["result"]["plan"]["files"]
     assert "RELEASE.md" not in show_v2["result"]["plan"]["files"]
 
-    event_files = sorted((tmp_path / ".taskledger").glob("**/events/*.ndjson"))
+    event_files = sorted(resolve_v2_paths(tmp_path).events_dir.glob("*.ndjson"))
     assert event_files
     events = []
     for path in event_files:

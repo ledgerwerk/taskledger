@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, cast
 
 from taskledger.domain.policies import derive_active_stage
-from taskledger.errors import LaunchError
 from taskledger.exchange import (
     export_project_payload,
     import_project_archive,
@@ -16,18 +15,12 @@ from taskledger.exchange import (
 )
 from taskledger.services.doctor import inspect_v2_project
 from taskledger.services.tree import TreeOptions, build_tree
-from taskledger.storage.init import init_canonical_project_state, init_project_state
-from taskledger.storage.ledgercore_backend import locate_taskledger_project
+from taskledger.storage.init import init_canonical_project_state
 from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.paths import (
-    load_project_locator,
     probe_taskledger_project,
-    resolve_project_paths,
 )
-from taskledger.storage.project_identity import (
-    load_project_uuid,
-    project_name_or_default,
-)
+from taskledger.storage.project_context import resolve_project_paths
 from taskledger.storage.task_store import (
     list_changes,
     list_introductions,
@@ -38,46 +31,19 @@ from taskledger.storage.task_store import (
     load_active_locks,
     load_active_task_state,
     resolve_task,
+    resolve_v2_paths,
 )
 
 
 def init_project(
     workspace_root: Path,
     *,
-    taskledger_dir: Path | None = None,
     project_name: str | None = None,
     create_sibling_store: bool = False,
     data_storage: str = "external",
     external_root: str | None = "../ledger",
     local_storage_override: bool = False,
 ) -> dict[str, object]:
-    if taskledger_dir is not None:
-        locator = locate_taskledger_project(workspace_root)
-        if locator is not None and locator.source == "canonical":
-            raise LaunchError(
-                "--taskledger-dir is a legacy layout option. Canonical projects use "
-                "Ledger workspace/cache roots from .ledger/ledger.local.toml, "
-                "LEDGER_WORKSPACE_ROOT, and LEDGER_CACHE_ROOT."
-            )
-        paths, created = init_project_state(
-            workspace_root,
-            taskledger_dir=taskledger_dir,
-            project_name=project_name,
-        )
-        resolved_project_name = project_name_or_default(
-            paths.config_path, workspace_root=paths.workspace_root
-        )
-        return {
-            "kind": "taskledger_init",
-            "mode": "legacy",
-            "root": str(paths.project_dir),
-            "project_dir": str(paths.project_dir),
-            "workspace_root": str(paths.workspace_root),
-            "config_path": str(paths.config_path),
-            "taskledger_dir": str(paths.taskledger_dir),
-            "project_name": resolved_project_name,
-            "created": created,
-        }
     context, created = init_canonical_project_state(
         workspace_root,
         project_name=project_name,
@@ -116,40 +82,17 @@ def init_project(
 
 
 def _project_counts_fast(workspace_root: Path) -> dict[str, int]:
-    """Fast count using file globbing instead of parsing all records."""
-    paths = resolve_project_paths(workspace_root)
-    ledgers_dir = paths.taskledger_dir / "ledgers"
-
-    tasks_count = 0
-    intros_count = 0
-    plans_count = 0
-    questions_count = 0
-    runs_count = 0
-    changes_count = 0
-
-    if ledgers_dir.exists():
-        for task_dir in ledgers_dir.glob("*/"):
-            if task_dir.is_dir():
-                tasks_count += 1
-                plans_count += len(list(task_dir.glob("plans/*.yaml")))
-                questions_count += len(list(task_dir.glob("questions/*.yaml")))
-                runs_count += len(list(task_dir.glob("runs/*.yaml")))
-                changes_count += len(list(task_dir.glob("changes/*.yaml")))
-
-        intros_dir = ledgers_dir / "introductions"
-        if intros_dir.exists():
-            intros_count = len(list(intros_dir.glob("*.yaml")))
-
-    locks_count = len(load_active_locks(workspace_root))
-
+    """Count canonical task bundles without parsing their records."""
+    paths = resolve_v2_paths(workspace_root)
+    task_dirs = [path.parent for path in paths.tasks_dir.glob("*/task.md")]
     return {
-        "tasks": tasks_count,
-        "introductions": intros_count,
-        "plans": plans_count,
-        "questions": questions_count,
-        "runs": runs_count,
-        "changes": changes_count,
-        "locks": locks_count,
+        "tasks": len(task_dirs),
+        "introductions": len(list(paths.introductions_dir.glob("*.md"))),
+        "plans": sum(len(list(path.glob("plans/*.md"))) for path in task_dirs),
+        "questions": sum(len(list(path.glob("questions/*.md"))) for path in task_dirs),
+        "runs": sum(len(list(path.glob("runs/*.md"))) for path in task_dirs),
+        "changes": sum(len(list(path.glob("changes/*.md"))) for path in task_dirs),
+        "locks": len(load_active_locks(workspace_root)),
     }
 
 
@@ -157,7 +100,7 @@ def _storage_status_fields(workspace_root: Path) -> dict[str, object]:
     from taskledger.storage.project_context import load_project_context
 
     context = load_project_context(workspace_root, require_initialized=False)
-    if context.mode != "canonical" or context.layout is None:
+    if context.layout is None:
         return {}
     return {
         "workspace_provider": context.workspace_provider,
@@ -425,14 +368,13 @@ def _active_task_status(workspace_root: Path) -> dict[str, object] | None:
 
 
 def _project_identity(workspace_root: Path) -> dict[str, object]:
-    locator = load_project_locator(workspace_root)
-    paths = resolve_project_paths(workspace_root)
+    from taskledger.storage.project_context import load_project_context
+
+    context = load_project_context(workspace_root)
     return {
-        "ledger_ref": paths.project_dir.name,
-        "project_uuid": load_project_uuid(locator.config_path),
-        "project_name": project_name_or_default(
-            locator.config_path, workspace_root=locator.workspace_root
-        ),
+        "ledger_ref": context.ledger_state.ref,
+        "project_uuid": context.project_uuid,
+        "project_name": context.project_name,
     }
 
 

@@ -20,7 +20,7 @@ from taskledger.errors import LaunchError
 from taskledger.ids import TASK_ID_FORMAT
 from taskledger.services.task_events import append_task_event, default_actor
 from taskledger.storage.events import load_events
-from taskledger.storage.task_store import V2Paths
+from taskledger.storage.task_store import TaskledgerStoragePaths
 from taskledger.storage.yaml_store import write_yaml_object
 from taskledger.timeutils import utc_now_iso
 
@@ -116,7 +116,9 @@ def _iter_strings(value: object) -> Iterator[str]:
             yield from _iter_strings(child)
 
 
-def _reference_candidates(paths: V2Paths, reference: str) -> tuple[Path, ...]:
+def _reference_candidates(
+    paths: TaskledgerStoragePaths, reference: str
+) -> tuple[Path, ...]:
     value = reference.strip().strip("`\"'")
     if not value:
         return ()
@@ -138,7 +140,7 @@ def _reference_candidates(paths: V2Paths, reference: str) -> tuple[Path, ...]:
 
 
 def _resolve_reference(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     reference: str,
     allowed_roots: tuple[Path, ...],
 ) -> Path | None:
@@ -216,7 +218,7 @@ def _within_retention(
 
 
 def _load_reference_records(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     tasks: list[TaskRecord],
     agent_logs: list[AgentCommandLogRecord],
 ) -> list[SerializableRecord]:
@@ -249,7 +251,7 @@ def _load_reference_records(
 
 
 def _build_artifact_candidates(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     tasks: list[TaskRecord],
     runs_by_task: dict[str, list[TaskRunRecord]],
@@ -364,7 +366,7 @@ def _build_artifact_candidates(
 
 
 def _build_runtime_candidates(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     tasks: list[TaskRecord],
     runs_by_task: dict[str, list[TaskRunRecord]],
@@ -460,7 +462,7 @@ def _tree_size(path: Path, unsafe_paths: list[str]) -> tuple[int, int]:
 
 
 def _build_cache_candidates(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     now: datetime,
     override: timedelta | None,
@@ -523,7 +525,7 @@ def _validate_candidate(candidate: GCCandidate) -> None:
 
 
 def garbage_collect(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     scope: GCScope = "all",
     task_id: str | None = None,

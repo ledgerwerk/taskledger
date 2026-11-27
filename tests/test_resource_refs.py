@@ -40,11 +40,11 @@ def test_parse_file_safe_alias_to_local(tmp_path: Path) -> None:
 
 def test_custom_ledger_code_derives_refs(tmp_path: Path) -> None:
     workspace = _init_project(tmp_path)
-    config_path = workspace / "taskledger.toml"
+    config_path = workspace / ".ledger" / "taskledger" / "config.toml"
     config_path.write_text(
         config_path.read_text(encoding="utf-8").replace(
-            '[ledger]\ncode = "tl"\nname = "taskledger"\n',
-            '[ledger]\ncode = "xx"\nname = "taskledger"\n',
+            "[ledger]\ncode = 'tl'\nname = 'taskledger'\n",
+            "[ledger]\ncode = 'xx'\nname = 'taskledger'\n",
         ),
         encoding="utf-8",
     )

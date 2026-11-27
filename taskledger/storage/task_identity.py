@@ -20,7 +20,7 @@ from taskledger.ids import TASK_ID_FORMAT, parse_uuid7, uuid7
 from taskledger.storage.frontmatter import read_markdown_front_matter
 
 if TYPE_CHECKING:
-    from taskledger.storage.task_store import V2Paths
+    from taskledger.storage.paths import TaskledgerStoragePaths
 
 IdentityState = Literal["live", "tombstone", "reserved", "incomplete"]
 IdentitySourceKind = Literal["uuid_task", "legacy_task", "tombstone", "reserved_gap"]
@@ -166,13 +166,15 @@ def _identity_conflict_error(
     )
 
 
-def inspect_task_identity_sources(paths: V2Paths) -> tuple[_IdentitySource, ...]:
+def inspect_task_identity_sources(
+    paths: TaskledgerStoragePaths,
+) -> tuple[_IdentitySource, ...]:
     """Inspect validated physical identity sources without enforcing uniqueness."""
     return (*_scan_task_directories(paths), *_scan_identity_tombstones(paths))
 
 
 def inspect_legacy_identity_claims(
-    paths: V2Paths, legacy_task_id: str
+    paths: TaskledgerStoragePaths, legacy_task_id: str
 ) -> tuple[_IdentitySource, ...]:
     """Inspect physical claimants for one legacy ID without enforcing uniqueness."""
     try:
@@ -193,7 +195,7 @@ def _cached_identity_mutation_lock(lock_path: str) -> FileLock:
     return FileLock(lock_path)
 
 
-def identity_mutation_lock(paths: V2Paths) -> FileLock:
+def identity_mutation_lock(paths: TaskledgerStoragePaths) -> FileLock:
     """Return the shared process lock for task identity mutations."""
     lock_path = paths.ledger_dir / ".task-identity-allocation.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -201,7 +203,7 @@ def identity_mutation_lock(paths: V2Paths) -> FileLock:
 
 
 def inspect_task_identity_conflicts(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
 ) -> tuple[dict[str, object], ...]:
     """Return every physical identity collision without enforcing uniqueness."""
     sources = inspect_task_identity_sources(paths)
@@ -240,7 +242,9 @@ def inspect_task_identity_conflicts(
     return tuple(conflicts)
 
 
-def scan_task_identity_inventory(paths: V2Paths) -> TaskIdentityInventory:
+def scan_task_identity_inventory(
+    paths: TaskledgerStoragePaths,
+) -> TaskIdentityInventory:
     """Scan canonical task bundles and identity tombstones once."""
     sources = list(inspect_task_identity_sources(paths))
     legacy_sources: dict[str, list[_IdentitySource]] = {}
@@ -316,7 +320,7 @@ def scan_task_identity_inventory(paths: V2Paths) -> TaskIdentityInventory:
     )
 
 
-def _scan_task_directories(paths: V2Paths) -> list[_IdentitySource]:
+def _scan_task_directories(paths: TaskledgerStoragePaths) -> list[_IdentitySource]:
     if not paths.tasks_dir.exists():
         return []
     entries = sorted(paths.tasks_dir.iterdir(), key=lambda item: item.name)
@@ -428,7 +432,7 @@ def _uuid_directory_source(entry: Path) -> _IdentitySource:
     )
 
 
-def _scan_identity_tombstones(paths: V2Paths) -> list[_IdentitySource]:
+def _scan_identity_tombstones(paths: TaskledgerStoragePaths) -> list[_IdentitySource]:
     tombstones_dir = paths.ledger_dir / "tombstones"
     if not tombstones_dir.exists():
         return []
@@ -468,7 +472,9 @@ def _scan_identity_tombstones(paths: V2Paths) -> list[_IdentitySource]:
     return sources
 
 
-def _legacy_tombstone_uuid(entry: Path, paths: V2Paths, project_uuid: str) -> UUID:
+def _legacy_tombstone_uuid(
+    entry: Path, paths: TaskledgerStoragePaths, project_uuid: str
+) -> UUID:
     task_id, _ = _parse_legacy_task_id(entry.stem, entry)
     document = _read_toml(entry)
     if (
@@ -521,7 +527,7 @@ def _directory_children_fingerprint(path: Path) -> tuple[tuple[str, int], ...]:
 @lru_cache(maxsize=128)
 @lru_cache(maxsize=128)
 def _cached_task_identity_inventory(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     tasks_fingerprint: tuple[tuple[str, int], ...],
     tombstones_fingerprint: tuple[tuple[str, int], ...],
 ) -> TaskIdentityInventory:
@@ -529,7 +535,7 @@ def _cached_task_identity_inventory(
     return scan_task_identity_inventory(paths)
 
 
-def task_identity_inventory(paths: V2Paths) -> TaskIdentityInventory:
+def task_identity_inventory(paths: TaskledgerStoragePaths) -> TaskIdentityInventory:
     """Return a cached identity inventory invalidated by canonical changes."""
     tasks_fingerprint = _directory_children_fingerprint(paths.tasks_dir)
     tombstones_fingerprint = _directory_children_fingerprint(
@@ -545,11 +551,11 @@ def invalidate_task_identity_inventory() -> None:
     _cached_task_identity_inventory.cache_clear()
 
 
-def task_uuid_from_ref(paths: V2Paths, ref: str) -> UUID:
+def task_uuid_from_ref(paths: TaskledgerStoragePaths, ref: str) -> UUID:
     return task_identity_for_ref(paths, ref).task_uuid
 
 
-def task_id_for_uuid(paths: V2Paths, task_uuid: UUID | str) -> str:
+def task_id_for_uuid(paths: TaskledgerStoragePaths, task_uuid: UUID | str) -> str:
     parsed = _parse_uuid(task_uuid)
     identity = task_identity_inventory(paths).by_uuid.get(parsed)
     if identity is None:
@@ -557,13 +563,13 @@ def task_id_for_uuid(paths: V2Paths, task_uuid: UUID | str) -> str:
     return identity.task_id
 
 
-def task_path_for_uuid(paths: V2Paths, task_uuid: UUID | str) -> Path:
+def task_path_for_uuid(paths: TaskledgerStoragePaths, task_uuid: UUID | str) -> Path:
     parsed = _parse_uuid(task_uuid)
     identity = task_identity_inventory(paths).by_uuid.get(parsed)
     return identity.path if identity is not None else paths.tasks_dir / str(parsed)
 
 
-def task_identity_for_ref(paths: V2Paths, ref: str) -> TaskIdentity:
+def task_identity_for_ref(paths: TaskledgerStoragePaths, ref: str) -> TaskIdentity:
     inventory = task_identity_inventory(paths)
     try:
         parsed_uuid = parse_uuid7(ref)
@@ -578,7 +584,9 @@ def task_identity_for_ref(paths: V2Paths, ref: str) -> TaskIdentity:
     return identity
 
 
-def legacy_task_identity_for_ref(paths: V2Paths, ref: str) -> TaskIdentity:
+def legacy_task_identity_for_ref(
+    paths: TaskledgerStoragePaths, ref: str
+) -> TaskIdentity:
     """Resolve a stored numeric reference using deterministic migration identity."""
     try:
         parts = TASK_ID_FORMAT.parse_parts(ref)
@@ -633,7 +641,7 @@ def legacy_task_identity_for_ref(paths: V2Paths, ref: str) -> TaskIdentity:
 
 
 def task_identity_for_stored_ref(
-    paths: V2Paths, *, task_id: str, task_uuid: str | None
+    paths: TaskledgerStoragePaths, *, task_id: str, task_uuid: str | None
 ) -> TaskIdentity:
     """Resolve a persisted task relationship, preferring its authoritative UUID."""
     if task_uuid is not None:
@@ -641,7 +649,9 @@ def task_identity_for_stored_ref(
     return legacy_task_identity_for_ref(paths, task_id)
 
 
-def allocate_task_identity(paths: V2Paths, *, max_attempts: int = 32) -> TaskAllocation:
+def allocate_task_identity(
+    paths: TaskledgerStoragePaths, *, max_attempts: int = 32
+) -> TaskAllocation:
     """Reserve a fresh UUIDv7 task directory and derive its current display ID."""
     if max_attempts < 1:
         raise ValueError("max_attempts must be positive")
@@ -700,22 +710,10 @@ def _parse_uuid(value: UUID | str) -> UUID:
         raise LaunchError(f"Invalid task UUID {value!r}; expected UUIDv7.") from exc
 
 
-def _project_uuid_for_paths(paths: V2Paths) -> str:
-    from taskledger.storage.project_identity import load_project_uuid
-
-    candidates = (
-        paths.workspace_root / ".ledger" / "taskledger" / "config.toml",
-        paths.workspace_root / ".taskledger.toml",
-        paths.workspace_root / "taskledger.toml",
-        paths.taskledger_root / "taskledger.toml",
-        paths.taskledger_root / "project.toml",
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            project_uuid = load_project_uuid(candidate)
-            if project_uuid is not None:
-                return project_uuid
-    raise LaunchError("Deterministic UUIDv7 migration requires a project UUID.")
+def _project_uuid_for_paths(paths: TaskledgerStoragePaths) -> str:
+    if paths.project_uuid is None:
+        raise LaunchError("Deterministic UUIDv7 migration requires a project UUID.")
+    return paths.project_uuid
 
 
 def _read_toml(path: Path) -> dict[str, object]:
@@ -735,7 +733,7 @@ def _read_toml(path: Path) -> dict[str, object]:
 
 
 def write_task_identity_tombstone(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     task_uuid: UUID | str,
     *,
     reason: str,

@@ -27,8 +27,9 @@ from taskledger.services.lock_diagnostics import (
     LockDiagnostics,
     diagnose_lock,
 )
-from taskledger.storage.locks import lock_is_expired, read_lock
-from taskledger.storage.task_store import V2Paths
+from taskledger.storage.lock_records import read_lock_records
+from taskledger.storage.locks import lock_is_expired
+from taskledger.storage.task_store import TaskledgerStoragePaths
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +244,7 @@ class LockInventory:
 
 
 def build_lock_inventory(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     current_actor: ActorRef | None = None,
 ) -> LockInventory:
@@ -258,11 +259,8 @@ def build_lock_inventory(
     )
 
     entries: list[LockInventoryEntry] = []
-    lock_paths = list(
-        (paths.runtime_root / "checkouts" / paths.ledger_ref / "locks").glob("*.yaml")
-    )
-    lock_paths.extend(paths.tasks_dir.glob("*/lock.yaml"))
-    for lock_path in sorted(lock_paths):
+    for record in read_lock_records(paths):
+        lock_path = record.path
         path_ref = (
             lock_path.stem
             if lock_path.parent.name == "locks"
@@ -273,14 +271,10 @@ def build_lock_inventory(
         )
         task_id = path_ref if path_ref.startswith("task-") else None
         task_uuid = path_uuid
-        lock: TaskLock | None = None
-        parse_error: str | None = None
-        try:
-            lock = read_lock(lock_path)
-        except Exception as exc:  # noqa: BLE001
-            parse_error = f"Failed to read lock {lock_path}: {exc}"
-            logger.warning("Malformed lock file %s: %s", lock_path, exc)
-
+        lock = record.lock
+        parse_error = record.parse_error
+        if parse_error is not None:
+            logger.warning("Malformed lock file %s: %s", lock_path, parse_error)
         identity = None
         identity_error: str | None = None
         identity_error_code: str | None = None

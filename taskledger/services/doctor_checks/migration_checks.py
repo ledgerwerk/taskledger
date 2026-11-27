@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from taskledger.domain.models import TaskRecord
-from taskledger.storage.task_store import V2Paths
+from taskledger.storage.task_store import TaskledgerStoragePaths
 
 
 def scan_migration_state(
     *,
     tasks: list[TaskRecord],
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     errors: list[str],
     warnings: list[str],
     repair_hints: list[str],

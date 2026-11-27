@@ -303,6 +303,7 @@ def _snapshot_exclusions(
     *,
     exclude_paths: tuple[Path, ...] = (),
 ) -> WorkspaceSnapshotExclusions:
+    # Legacy Taskledger state is migration input, never source snapshot content.
     roots: set[Path] = {git_worktree_root / ".taskledger"}
 
     from taskledger.storage.ledgercore_backend import locate_taskledger_project
@@ -314,7 +315,6 @@ def _snapshot_exclusions(
         context = load_project_context(
             workspace_root,
             require_initialized=False,
-            allow_legacy=True,
         )
     except LaunchError as exc:
         if locator is not None and not locator.is_legacy:

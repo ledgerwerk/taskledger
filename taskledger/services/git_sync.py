@@ -1,23 +1,16 @@
 from __future__ import annotations
 
-import json
 import os
 import shlex
-import shutil
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
 from taskledger.errors import LaunchError
-from taskledger.ids import slugify_project_ref
 from taskledger.services.doctor import inspect_v2_project
 from taskledger.services.doctor_checks.artifact_checks import find_oversized_artifacts
 from taskledger.services.git_utils import (
     git_root as _git_root,
-)
-from taskledger.services.git_utils import (
-    render_relative_or_absolute as _render_taskledger_dir_value,
 )
 from taskledger.services.git_utils import (
     run_git as _run_git,
@@ -25,13 +18,7 @@ from taskledger.services.git_utils import (
 from taskledger.services.git_utils import (
     status_path_token as _status_path_token,
 )
-from taskledger.storage.paths import load_project_locator
-from taskledger.storage.project_config import (
-    load_project_config_document,
-    update_taskledger_dir,
-)
 from taskledger.storage.project_context import load_project_context
-from taskledger.storage.project_identity import project_name_or_default
 from taskledger.storage.task_store import load_active_locks
 
 _HOOK_NAMES = ("post-merge", "post-checkout", "post-rewrite")
@@ -57,86 +44,47 @@ def build_git_sync_config(
     branch: str | None = None,
     allow_uninitialized: bool = False,
 ) -> GitSyncConfig:
-    locator = load_project_locator(workspace_root)
     context = load_project_context(workspace_root, require_initialized=False)
-    if context.mode == "canonical":
-        assert context.layout is not None
-        data_path = context.layout.mounts["data"].path.resolve()
-        repository = _git_root(data_path)
-        if repository is None:
-            if not allow_uninitialized:
-                raise LaunchError(
-                    "TASKLEDGER_STORAGE_NOT_GIT_BACKED: resolved data mount is not "
-                    "inside a Git worktree."
-                )
-            # Derive repo root from mount semantics for fresh canonical init.
-            # External mount: use the external root as repo root.
-            mount = context.layout.mounts["data"]
-            if mount.storage == "external" and mount.root is not None:
-                repository = Path(mount.root).resolve()
-            elif mount.storage == "project":
-                repository = Path(context.project_root).resolve()
-            else:
-                raise LaunchError(
-                    "TASKLEDGER_STORAGE_NOT_GIT_BACKED: cannot derive repository "
-                    f"root for storage type {mount.storage!r}."
-                )
-        sync_config = context.config.sync_git
-        if (
-            repo is not None
-            or project_path is not None
-            or sync_config.repo is not None
-            or sync_config.project_path is not None
-        ):
+    assert context.layout is not None
+    data_path = context.layout.mounts["data"].path.resolve()
+    repository = _git_root(data_path)
+    if repository is None:
+        if not allow_uninitialized:
             raise LaunchError(
-                "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: Canonical Taskledger storage "
-                "fixes the Git sync repository and project path. "
-                "Do not pass --repo or --project-path."
-                f"\nResolved data mount: {data_path}"
-                + (f"\nResolved repository root: {repository}" if repository else "")
+                "TASKLEDGER_STORAGE_NOT_GIT_BACKED: resolved data mount is not "
+                "inside a Git worktree."
             )
-        relative = data_path.relative_to(repository).as_posix()
-        return GitSyncConfig(
-            repo_path=repository,
-            project_path=relative,
-            remote=remote or sync_config.remote,
-            branch=branch or sync_config.branch,
-            allow_active_locks=sync_config.allow_active_locks,
-            hooks=sync_config.hooks,
+        mount = context.layout.mounts["data"]
+        if mount.storage == "external" and mount.root is not None:
+            repository = Path(mount.root).resolve()
+        elif mount.storage == "project":
+            repository = Path(context.project_root).resolve()
+        else:
+            raise LaunchError(
+                "TASKLEDGER_STORAGE_NOT_GIT_BACKED: cannot derive repository "
+                f"root for storage type {mount.storage!r}."
+            )
+    sync_config = context.config.sync_git
+    relative = data_path.relative_to(repository).as_posix()
+    if (
+        (repo is not None and repo.resolve() != repository)
+        or (project_path is not None and project_path != relative)
+        or sync_config.repo is not None
+        or sync_config.project_path is not None
+    ):
+        raise LaunchError(
+            "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: Git sync selectors must match "
+            "the resolved Taskledger data mount."
+            f"\nResolved data mount: {data_path}"
+            f"\nResolved repository root: {repository}"
         )
-    document = load_project_config_document(locator.config_path)
-    sync_table = document.get("sync")
-    sync_git_table: dict[str, object] = {}
-    if isinstance(sync_table, dict):
-        maybe_git = sync_table.get("git")
-        if isinstance(maybe_git, dict):
-            sync_git_table = maybe_git
-    repo_value = (
-        repo.as_posix() if repo is not None else _as_str(sync_git_table.get("repo"))
-    )
-    repo_path = (
-        (locator.workspace_root / ".." / "taskledger-state").resolve()
-        if repo_value is None
-        else _resolve_path(locator.workspace_root, Path(repo_value))
-    )
-    project_value = project_path or _as_str(sync_git_table.get("project_path"))
-    if project_value is None:
-        project_name = project_name_or_default(
-            locator.config_path, workspace_root=locator.workspace_root
-        )
-        project_value = slugify_project_ref(project_name, empty="project")
-    _validate_project_path(project_value)
     return GitSyncConfig(
-        repo_path=repo_path,
-        project_path=project_value,
-        remote=remote or _as_str(sync_git_table.get("remote")) or "origin",
-        branch=branch or _as_str(sync_git_table.get("branch")) or "main",
-        allow_active_locks=bool(sync_git_table.get("allow_active_locks"))
-        if isinstance(sync_git_table.get("allow_active_locks"), bool)
-        else False,
-        hooks=bool(sync_git_table.get("hooks"))
-        if isinstance(sync_git_table.get("hooks"), bool)
-        else False,
+        repo_path=repository,
+        project_path=relative,
+        remote=remote or sync_config.remote,
+        branch=branch or sync_config.branch,
+        allow_active_locks=sync_config.allow_active_locks,
+        hooks=sync_config.hooks,
     )
 
 
@@ -181,12 +129,12 @@ def git_sync_status(
         remote=remote,
         branch=branch,
     )
-    locator = load_project_locator(workspace_root)
+    context = load_project_context(workspace_root)
     storage_path = _storage_path(config)
-    taskledger_dir = locator.taskledger_dir.resolve()
+    taskledger_dir = context.paths.data_root.resolve()
     taskledger_dir_matches = storage_path.resolve() == taskledger_dir
-    active_lock_count = _active_lock_count(locator.workspace_root)
-    doctor = inspect_v2_project(locator.workspace_root)
+    active_lock_count = _active_lock_count(context.project_root)
+    doctor = inspect_v2_project(context.project_root)
     git_root = _git_root(config.repo_path)
     all_status_lines = _git_status_lines(config.repo_path)
     project_status_lines, outside_status_lines = _split_status_by_project(
@@ -197,7 +145,7 @@ def git_sync_status(
     warnings: list[str] = []
     if not taskledger_dir_matches:
         warnings.append(
-            "taskledger_dir does not point at the configured sync project path."
+            "Resolved data mount does not match the configured sync project path."
         )
     if active_lock_count:
         warnings.append(f"{active_lock_count} active lock(s) are present.")
@@ -239,120 +187,49 @@ def init_git_sync_repo(
     install_hooks: bool = False,
     force_hooks: bool = False,
 ) -> dict[str, object]:
-    canonical = load_project_context(workspace_root)
-    if canonical.mode == "canonical":
-        config = build_git_sync_config(
-            workspace_root,
-            repo=repo,
-            project_path=project_path,
-            remote=remote,
-            branch=branch,
-            allow_uninitialized=True,
-        )
-        if adopt_existing or mode != "move":
-            raise LaunchError(
-                "TASKLEDGER_STORAGE_TARGET_INVALID: canonical sync git init "
-                "does not move or adopt storage."
-            )
-        assert canonical.layout is not None
-        data_mount = canonical.layout.mounts["data"]
-        if data_mount.storage == "user-data":
-            raise LaunchError(
-                "TASKLEDGER_STORAGE_NOT_GIT_BACKED: user-data storage requires "
-                "an external Git-backed root."
-            )
-        target_storage = data_mount.path
-        _ensure_git_repo(
-            config.repo_path,
-            remote_url=None,
-            branch=config.branch,
-            allow_nonempty=True,
-        )
-        if remote_url:
-            configured_remote = _remote_url(config.repo_path, config.remote)
-            if configured_remote is None:
-                _run_git(
-                    config.repo_path,
-                    "remote",
-                    "add",
-                    config.remote,
-                    remote_url,
-                )
-            elif configured_remote != remote_url:
-                raise LaunchError("Configured Git remote does not match --remote-url.")
-        canonical_hooks_report = None
-        if install_hooks or config.hooks:
-            canonical_hooks_report = install_git_hooks(
-                workspace_root,
-                repo=config.repo_path,
-                project_path=config.project_path,
-                force=force_hooks,
-                quiet=True,
-            )
-        doctor = inspect_v2_project(workspace_root)
-        return {
-            "kind": "taskledger_sync_git_init",
-            "repo_path": config.repo_path.as_posix(),
-            "project_path": config.project_path,
-            "storage_path": target_storage.as_posix(),
-            "branch": config.branch,
-            "remote": config.remote,
-            "taskledger_dir_updated": False,
-            "doctor_healthy": bool(doctor["healthy"]),
-            "hooks": canonical_hooks_report,
-            "warnings": [],
-        }
     if mode not in {"move", "copy"}:
         raise LaunchError("mode must be one of: move, copy.")
+    if adopt_existing or mode != "move":
+        raise LaunchError(
+            "TASKLEDGER_STORAGE_TARGET_INVALID: canonical sync git init "
+            "does not move or adopt storage."
+        )
     config = build_git_sync_config(
         workspace_root,
         repo=repo,
         project_path=project_path,
         remote=remote,
         branch=branch,
+        allow_uninitialized=True,
     )
-    locator = load_project_locator(workspace_root)
-    original_config = locator.config_path.read_text(encoding="utf-8")
-    _ensure_git_repo(config.repo_path, remote_url=remote_url, branch=config.branch)
-    _write_sync_layout(config.repo_path)
-    target_storage = _storage_path(config)
-    current_storage = locator.taskledger_dir.resolve()
-    warnings: list[str] = []
-    if target_storage.exists() and _looks_like_storage_root(target_storage):
-        if not adopt_existing and current_storage != target_storage.resolve():
-            raise LaunchError(
-                "Sync target already has taskledger state. Use --adopt-existing."
-            )
-    elif target_storage.exists() and any(target_storage.iterdir()):
+    context = load_project_context(workspace_root)
+    assert context.layout is not None
+    data_mount = context.layout.mounts["data"]
+    if data_mount.storage == "user-data":
         raise LaunchError(
-            "Sync target exists and is not empty but is not a taskledger storage root."
+            "TASKLEDGER_STORAGE_NOT_GIT_BACKED: user-data storage requires "
+            "an external Git-backed root."
         )
-    elif current_storage != target_storage.resolve():
-        target_storage.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(current_storage, target_storage)
-        if mode == "move":
-            backup = _backup_path_for(current_storage)
-            current_storage.rename(backup)
-            warnings.append(
-                f"Original storage was moved to backup: {backup.as_posix()}"
-            )
-
-    configured_value = _render_taskledger_dir_value(
-        locator.workspace_root,
-        target_storage,
+    target_storage = data_mount.path
+    _ensure_git_repo(
+        config.repo_path,
+        remote_url=None,
+        branch=config.branch,
+        allow_nonempty=True,
     )
-    update_taskledger_dir(locator.config_path, configured_value)
-    doctor = inspect_v2_project(locator.workspace_root)
-    if not doctor["healthy"]:
-        from taskledger.storage.atomic import atomic_write_text
-
-        atomic_write_text(locator.config_path, original_config)
-        raise LaunchError(
-            "taskledger doctor failed after sync init:\n"
-            + "\n".join(str(item) for item in cast(list[object], doctor["errors"]))
-        )
-
-    hooks_report: dict[str, object] | None = None
+    if remote_url:
+        configured_remote = _remote_url(config.repo_path, config.remote)
+        if configured_remote is None:
+            _run_git(
+                config.repo_path,
+                "remote",
+                "add",
+                config.remote,
+                remote_url,
+            )
+        elif configured_remote != remote_url:
+            raise LaunchError("Configured Git remote does not match --remote-url.")
+    hooks_report = None
     if install_hooks or config.hooks:
         hooks_report = install_git_hooks(
             workspace_root,
@@ -361,6 +238,7 @@ def init_git_sync_repo(
             force=force_hooks,
             quiet=True,
         )
+    doctor = inspect_v2_project(workspace_root)
     return {
         "kind": "taskledger_sync_git_init",
         "repo_path": config.repo_path.as_posix(),
@@ -368,10 +246,10 @@ def init_git_sync_repo(
         "storage_path": target_storage.as_posix(),
         "branch": config.branch,
         "remote": config.remote,
-        "taskledger_dir_updated": True,
+        "taskledger_dir_updated": False,
         "doctor_healthy": bool(doctor["healthy"]),
         "hooks": hooks_report,
-        "warnings": warnings,
+        "warnings": [],
     }
 
 
@@ -384,63 +262,16 @@ def git_sync_import_local(
     branch: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, object]:
-    if load_project_context(workspace_root).mode == "canonical":
-        raise LaunchError(
-            "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Taskledger storage "
-            "has no local Git import path; use taskledger migrate."
-        )
-    config = build_git_sync_config(
-        workspace_root,
-        repo=repo,
-        project_path=project_path,
-        remote=remote,
-        branch=branch,
+    raise LaunchError(
+        "TASKLEDGER_MIGRATION_REQUIRED: Legacy Git storage transitions are no "
+        "longer supported by normal runtime. Use `taskledger migrate plan` and "
+        "`taskledger migrate apply` instead.",
+        code="TASKLEDGER_MIGRATION_REQUIRED",
+        remediation=[
+            "Run `taskledger migrate plan` and review the result",
+            "Run `taskledger migrate apply`",
+        ],
     )
-    locator = load_project_locator(workspace_root)
-    target_storage = _storage_path(config)
-    if not _looks_like_storage_root(target_storage):
-        raise LaunchError(
-            "Sync target does not look like a taskledger storage root: "
-            f"{target_storage}"
-        )
-    current_storage = locator.taskledger_dir.resolve()
-    taskledger_dir_updated = current_storage != target_storage.resolve()
-    if dry_run:
-        return {
-            "kind": "taskledger_sync_git_import_local",
-            "repo_path": config.repo_path.as_posix(),
-            "project_path": config.project_path,
-            "storage_path": target_storage.as_posix(),
-            "taskledger_dir_updated": taskledger_dir_updated,
-            "dry_run": True,
-            "doctor_healthy": None,
-            "warnings": [],
-        }
-    original_config = locator.config_path.read_text(encoding="utf-8")
-    if taskledger_dir_updated:
-        configured_value = _render_taskledger_dir_value(
-            locator.workspace_root, target_storage
-        )
-        update_taskledger_dir(locator.config_path, configured_value)
-    doctor = inspect_v2_project(locator.workspace_root)
-    if not doctor["healthy"]:
-        from taskledger.storage.atomic import atomic_write_text
-
-        atomic_write_text(locator.config_path, original_config)
-        raise LaunchError(
-            "taskledger doctor failed after sync import-local:\n"
-            + "\n".join(str(item) for item in cast(list[object], doctor["errors"]))
-        )
-    return {
-        "kind": "taskledger_sync_git_import_local",
-        "repo_path": config.repo_path.as_posix(),
-        "project_path": config.project_path,
-        "storage_path": target_storage.as_posix(),
-        "taskledger_dir_updated": taskledger_dir_updated,
-        "dry_run": False,
-        "doctor_healthy": bool(doctor["healthy"]),
-        "warnings": [],
-    }
 
 
 def _assert_artifacts_within_policy(workspace_root: Path) -> None:
@@ -473,34 +304,33 @@ def _git_sync_commit_with_config(
     workspace_root: Path,
     config: GitSyncConfig,
     *,
-    canonical: bool,
     message: str | None = None,
     allow_active_locks: bool = False,
     require_clean_repo: bool = False,
     include_outside_project: bool = False,
 ) -> dict[str, object]:
     """Commit using an already-resolved config (no public selector parsing)."""
-    locator = load_project_locator(workspace_root)
+    context = load_project_context(workspace_root)
     _assert_artifacts_within_policy(workspace_root)
     storage_path = _storage_path(config)
-    if locator.taskledger_dir.resolve() != storage_path.resolve():
+    if context.paths.data_root.resolve() != storage_path.resolve():
         raise LaunchError(
-            "taskledger_dir must point at sync repo project_path for sync git commit."
+            "Resolved Taskledger data mount must match the sync repo project path."
         )
-    doctor = inspect_v2_project(locator.workspace_root)
+    doctor = inspect_v2_project(context.project_root)
     if not doctor["healthy"]:
         raise LaunchError(
             "taskledger doctor reported issues:\n"
             + "\n".join(str(item) for item in cast(list[object], doctor["errors"]))
         )
-    active_lock_count = _active_lock_count(locator.workspace_root)
+    active_lock_count = _active_lock_count(context.project_root)
     allow_active = allow_active_locks or config.allow_active_locks
     if active_lock_count and not allow_active:
         raise LaunchError(
             f"{active_lock_count} active lock(s) detected. "
             "Use --allow-active-locks to continue."
         )
-    if canonical and include_outside_project:
+    if include_outside_project:
         raise LaunchError(
             "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Git commits are "
             "limited to the resolved Taskledger project path."
@@ -508,7 +338,7 @@ def _git_sync_commit_with_config(
     _ensure_git_repo(config.repo_path, remote_url=None, branch=config.branch)
     warnings: list[str] = []
     outside_dirty = _dirty_paths_outside_project(config.repo_path, config.project_path)
-    if outside_dirty and not include_outside_project:
+    if outside_dirty:
         if require_clean_repo:
             raise LaunchError(
                 "Sync repo has dirty paths outside project_path. "
@@ -517,47 +347,23 @@ def _git_sync_commit_with_config(
         warnings.append(
             f"{len(outside_dirty)} dirty path(s) outside project_path were ignored."
         )
-    export_paths: tuple[str, ...] = ()
-    if include_outside_project:
-        _run_git(config.repo_path, "add", "--all")
-        staged = _run_git(
-            config.repo_path,
-            "diff",
-            "--cached",
-            "--quiet",
-            "--exit-code",
-            check=False,
-        )
-        if outside_dirty:
-            warnings.append(
-                f"{len(outside_dirty)} dirty path(s) outside project_path "
-                "were included."
-            )
-    else:
-        export_paths = (
-            (config.project_path,)
-            if canonical
-            else _sync_export_paths(config.repo_path, config.project_path)
-        )
-        _run_git(config.repo_path, "add", "--all", "--", *export_paths)
-        staged = _run_git(
-            config.repo_path,
-            "diff",
-            "--cached",
-            "--quiet",
-            "--exit-code",
-            "--",
-            *export_paths,
-            check=False,
-        )
+    export_paths = (config.project_path,)
+    _run_git(config.repo_path, "add", "--all", "--", *export_paths)
+    staged = _run_git(
+        config.repo_path,
+        "diff",
+        "--cached",
+        "--quiet",
+        "--exit-code",
+        "--",
+        *export_paths,
+        check=False,
+    )
     committed = staged.returncode != 0
     commit_hash: str | None = None
     commit_message = message or f"Sync taskledger state for {config.project_path}"
     if committed:
-        commit_args = ["commit", "-m", commit_message]
-        if not include_outside_project:
-            commit_args.extend(["--", *export_paths])
-        _run_git(config.repo_path, *commit_args)
+        _run_git(config.repo_path, "commit", "-m", commit_message, "--", *export_paths)
         commit_hash = _run_git(config.repo_path, "rev-parse", "HEAD").stdout.strip()
     if active_lock_count and allow_active:
         warnings.append(
@@ -571,7 +377,7 @@ def _git_sync_commit_with_config(
         "committed": committed,
         "commit_hash": commit_hash,
         "active_lock_count": active_lock_count,
-        "include_outside_project": include_outside_project,
+        "include_outside_project": False,
         "outside_dirty_count": len(outside_dirty),
         "outside_status_lines": outside_dirty,
         "warnings": warnings,
@@ -590,7 +396,6 @@ def git_sync_commit(
     require_clean_repo: bool = False,
     include_outside_project: bool = False,
 ) -> dict[str, object]:
-    context = load_project_context(workspace_root)
     config = build_git_sync_config(
         workspace_root,
         repo=repo,
@@ -601,7 +406,6 @@ def git_sync_commit(
     return _git_sync_commit_with_config(
         workspace_root,
         config,
-        canonical=context.mode == "canonical",
         message=message,
         allow_active_locks=allow_active_locks,
         require_clean_repo=require_clean_repo,
@@ -620,24 +424,16 @@ def git_sync_export_local(
     allow_dirty: bool = False,
     allow_active_locks: bool = False,
 ) -> dict[str, object]:
-    if load_project_context(workspace_root).mode == "canonical":
-        raise LaunchError(
-            "TASKLEDGER_CANONICAL_SYNC_PATH_FIXED: canonical Taskledger storage "
-            "has no local Git export path; use taskledger migrate."
-        )
-    payload = git_sync_commit(
-        workspace_root,
-        repo=repo,
-        project_path=project_path,
-        remote=remote,
-        branch=branch,
-        message=message,
-        allow_active_locks=allow_active_locks,
+    raise LaunchError(
+        "TASKLEDGER_MIGRATION_REQUIRED: Legacy Git storage transitions are no "
+        "longer supported by normal runtime. Use `taskledger migrate plan` and "
+        "`taskledger migrate apply` instead.",
+        code="TASKLEDGER_MIGRATION_REQUIRED",
+        remediation=[
+            "Run `taskledger migrate plan` and review the result",
+            "Run `taskledger migrate apply`",
+        ],
     )
-    return {
-        **payload,
-        "kind": "taskledger_sync_git_export_local",
-    }
 
 
 def git_sync_pull(
@@ -649,8 +445,6 @@ def git_sync_pull(
     branch: str | None = None,
     allow_dirty: bool = False,
 ) -> dict[str, object]:
-    context = load_project_context(workspace_root)
-    canonical = context.mode == "canonical"
     config = build_git_sync_config(
         workspace_root,
         repo=repo,
@@ -658,38 +452,23 @@ def git_sync_pull(
         remote=remote,
         branch=branch,
     )
-    all_dirty = _git_status_lines(config.repo_path)
-    if all_dirty and (not allow_dirty or canonical):
-        suffix = (
-            " Canonical sibling-repository pulls do not support --allow-dirty."
-            if canonical
-            else ""
-        )
+    if _git_status_lines(config.repo_path):
         raise LaunchError(
             "sync git pull updates the whole sync repository and requires a clean "
-            "working tree. Commit or stash unrelated project state first, "
-            "or rerun with --allow-dirty." + suffix
+            "working tree. Commit or stash unrelated project state first. "
+            "Canonical sibling-repository pulls do not support --allow-dirty."
         )
     _run_git(config.repo_path, "pull", "--ff-only", config.remote, config.branch)
-    if canonical:
-        doctor = inspect_v2_project(workspace_root)
-        refreshed: dict[str, object] = {
-            "kind": "taskledger_sync_git_direct",
-            "repo_path": config.repo_path.as_posix(),
-            "project_path": config.project_path,
-            "storage_path": _storage_path(config).as_posix(),
-            "taskledger_dir_updated": False,
-            "doctor_healthy": bool(doctor["healthy"]),
-            "warnings": [],
-        }
-    else:
-        refreshed = git_sync_import_local(
-            workspace_root,
-            repo=config.repo_path,
-            project_path=config.project_path,
-            remote=config.remote,
-            branch=config.branch,
-        )
+    doctor = inspect_v2_project(workspace_root)
+    refreshed: dict[str, object] = {
+        "kind": "taskledger_sync_git_direct",
+        "repo_path": config.repo_path.as_posix(),
+        "project_path": config.project_path,
+        "storage_path": _storage_path(config).as_posix(),
+        "taskledger_dir_updated": False,
+        "doctor_healthy": bool(doctor["healthy"]),
+        "warnings": [],
+    }
     return {
         "kind": "taskledger_sync_git_pull",
         "repo_path": config.repo_path.as_posix(),
@@ -712,7 +491,6 @@ def git_sync_push(
     allow_dirty: bool = False,
     allow_active_locks: bool = False,
 ) -> dict[str, object]:
-    context = load_project_context(workspace_root)
     config = build_git_sync_config(
         workspace_root,
         repo=repo,
@@ -723,10 +501,8 @@ def git_sync_push(
     exported = _git_sync_commit_with_config(
         workspace_root,
         config,
-        canonical=context.mode == "canonical",
         message=message,
         allow_active_locks=allow_active_locks,
-        include_outside_project=context.mode != "canonical",
     )
     _run_git(config.repo_path, "push", config.remote, config.branch)
     return {
@@ -935,27 +711,6 @@ def _storage_path(config: GitSyncConfig) -> Path:
     return (config.repo_path / config.project_path).resolve()
 
 
-def _as_str(value: object) -> str | None:
-    return value if isinstance(value, str) else None
-
-
-def _resolve_path(root: Path, target: Path) -> Path:
-    expanded = target.expanduser()
-    if expanded.is_absolute():
-        return expanded.resolve()
-    return (root / expanded).resolve()
-
-
-def _validate_project_path(project_path: str) -> None:
-    candidate = Path(project_path)
-    if candidate.is_absolute():
-        raise LaunchError("sync.git project_path must be relative.")
-    if ".." in candidate.parts:
-        raise LaunchError("sync.git project_path must not contain '..'.")
-    if project_path.strip() in {"", ".", "./"}:
-        raise LaunchError("sync.git project_path must not be empty.")
-
-
 def _ensure_git_repo(
     repo_path: Path,
     *,
@@ -1028,40 +783,11 @@ def _ensure_branch(repo_path: Path, branch: str) -> None:
     )
 
 
-def _write_sync_layout(repo_path: Path) -> None:
-    readme = repo_path / "README.md"
-    if not readme.exists():
-        readme.write_text(
-            "# Taskledger sync state repository\n\n"
-            "This repository stores external taskledger state.\n",
-            encoding="utf-8",
-        )
-    gitignore = repo_path / ".gitignore"
-    if not gitignore.exists():
-        gitignore.write_text("*.tmp\n*.bak\n", encoding="utf-8")
-    meta_dir = repo_path / "meta"
-    meta_dir.mkdir(parents=True, exist_ok=True)
-    format_path = meta_dir / "format.json"
-    if not format_path.exists():
-        format_path.write_text(
-            json.dumps({"kind": "taskledger_sync_repo", "version": 1}, indent=2) + "\n",
-            encoding="utf-8",
-        )
-
-
 def _active_lock_count(workspace_root: Path) -> int:
     try:
         return len(load_active_locks(workspace_root))
     except LaunchError:
         return 0
-
-
-def _project_status_lines(repo_path: Path, project_path: str) -> list[str]:
-    project_status_lines, _ = _split_status_by_project(
-        _git_status_lines(repo_path),
-        project_path,
-    )
-    return project_status_lines
 
 
 def _git_status_lines(repo_path: Path) -> list[str]:
@@ -1138,35 +864,6 @@ def _ahead_behind(repo_path: Path) -> tuple[int | None, int | None]:
     behind = int(parts[0])
     ahead = int(parts[1])
     return (ahead, behind)
-
-
-def _sync_export_paths(repo_path: Path, project_path: str) -> tuple[str, ...]:
-    paths = [project_path]
-    for candidate in ("README.md", ".gitignore", "meta/format.json"):
-        if (repo_path / candidate).exists() or _is_tracked_path(repo_path, candidate):
-            paths.append(candidate)
-    return tuple(paths)
-
-
-def _is_tracked_path(repo_path: Path, relative_path: str) -> bool:
-    result = _run_git(
-        repo_path,
-        "ls-files",
-        "--error-unmatch",
-        "--",
-        relative_path,
-        check=False,
-    )
-    return result.returncode == 0
-
-
-def _looks_like_storage_root(path: Path) -> bool:
-    return path.exists() and (path / "storage.yaml").exists()
-
-
-def _backup_path_for(source: Path) -> Path:
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return source.with_name(f"{source.name}.moved-{timestamp}")
 
 
 def _dirty_paths_outside_project(repo_path: Path, project_path: str) -> list[str]:

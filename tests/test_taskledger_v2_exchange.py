@@ -43,31 +43,20 @@ def _init_project(tmp_path: Path) -> None:
 
 
 def _copy_project_uuid(src_root: Path, dst_root: Path) -> None:
-    """Make dst_root project use the same project_uuid as src_root.
+    """Initialize dst_root with the source project's canonical UUID."""
+    import shutil
 
-    Works for both canonical and legacy projects.
-    """
-    from shutil import copy2
+    from ledgercore import read_ledger_manifest
 
-    src_config = src_root / "taskledger.toml"
-    if src_config.exists():
-        copy2(src_config, dst_root / "taskledger.toml")
-        return
-    # Canonical: copy the manifest which holds the project UUID.
-    src_manifest = src_root / ".ledger" / "ledger.toml"
-    dst_ledger_dir = dst_root / ".ledger"
-    dst_ledger_dir.mkdir(parents=True, exist_ok=True)
-    copy2(src_manifest, dst_ledger_dir / "ledger.toml")
+    from taskledger.storage.init import init_canonical_project_state
 
-
-def _set_ledger_next_task_number(root: Path, value: int) -> None:
-    config_path = root / "taskledger.toml"
-    text = config_path.read_text(encoding="utf-8")
-    updated = text.replace(
-        "ledger_next_task_number = 1",
-        f"ledger_next_task_number = {value}",
+    source_manifest = read_ledger_manifest(src_root / ".ledger" / "ledger.toml")
+    shutil.rmtree(dst_root / ".ledger")
+    init_canonical_project_state(
+        dst_root,
+        project_uuid=source_manifest.project_uuid,
+        data_storage="project",
     )
-    config_path.write_text(updated, encoding="utf-8")
 
 
 def _json(result: Result) -> dict[str, Any]:
@@ -743,7 +732,7 @@ def test_export_import_preserves_agent_command_logs(tmp_path: Path) -> None:
     _init_project(dest_root)
     _copy_project_uuid(source_root, dest_root)
 
-    source_config = source_root / "taskledger.toml"
+    source_config = source_root / ".ledger" / "taskledger" / "config.toml"
     source_config.write_text(
         source_config.read_text(encoding="utf-8")
         + "\n[agent_logging]\nenabled = true\n",

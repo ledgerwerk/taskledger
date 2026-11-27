@@ -88,6 +88,7 @@ from taskledger.services.task_queries import (
 from taskledger.services.validation import (
     build_validation_gate_report as _build_validation_gate_report_impl,
 )
+from taskledger.services.worker_pipeline_config import load_worker_pipeline_config
 from taskledger.storage.artifact_policy import BoundedText, bound_text_to_bytes
 from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.indexes import (
@@ -99,7 +100,6 @@ from taskledger.storage.locks import (
     read_lock,
     update_lock,
 )
-from taskledger.storage.project_config import load_worker_pipeline_config
 from taskledger.storage.sidecar_index import load_sidecar_index
 from taskledger.storage.task_index import (
     TaskSummaryRecord,

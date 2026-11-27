@@ -11,7 +11,6 @@ from taskledger.api.tasks import activate_task, create_task, deactivate_task
 from taskledger.cli import app
 from taskledger.errors import NoActiveTask
 from taskledger.storage.task_store import (
-    ensure_v2_layout,
     load_active_task_state,
     resolve_active_task,
     resolve_task,
@@ -19,6 +18,7 @@ from taskledger.storage.task_store import (
 )
 from taskledger.storage.yaml_store import write_yaml_object
 from tests.support.builders import init_workspace
+from tests.support.project import ensure_project_layout
 
 pytestmark = [pytest.mark.cli, pytest.mark.integration, pytest.mark.slow]
 
@@ -62,7 +62,7 @@ def _json(result) -> dict[str, object]:
 
 # specmason: req=REQ-0001 ac=AC-0004
 def test_active_task_state_round_trips(tmp_path: Path) -> None:
-    ensure_v2_layout(tmp_path)
+    ensure_project_layout(tmp_path)
     task = create_task(tmp_path, title="Active", description="desc", slug="active")
 
     activated = activate_task(tmp_path, "active", reason="work")
@@ -344,7 +344,14 @@ def test_export_import_preserves_active_task(tmp_path: Path) -> None:
     source.mkdir()
     dest.mkdir()
     _init_project(source)
-    _init_project(dest)
+    from taskledger.storage.init import init_canonical_project_state
+    from taskledger.storage.project_context import load_project_context
+
+    init_canonical_project_state(
+        dest,
+        project_uuid=load_project_context(source).project_uuid,
+        data_storage="project",
+    )
     _create_task(source, "portable")
     activate = runner.invoke(
         app,
@@ -359,17 +366,12 @@ def test_export_import_preserves_active_task(tmp_path: Path) -> None:
     )
     assert export_result.exit_code == 0
 
-    # Copy project UUID to dest
-    from shutil import copy2
-
-    copy2(source / "taskledger.toml", dest / "taskledger.toml")
-
-    assert (
-        runner.invoke(
-            app,
-            ["--root", str(dest), "import", str(archive_path), "--replace"],
-        ).exit_code
-        == 0
+    import_result = runner.invoke(
+        app,
+        ["--root", str(dest), "import", str(archive_path), "--replace"],
+    )
+    assert import_result.exit_code == 0, (
+        f"{import_result.stdout}\n{import_result.stderr}"
     )
     active = _json(
         runner.invoke(app, ["--root", str(dest), "--json", "task", "active"])

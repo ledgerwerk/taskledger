@@ -13,16 +13,15 @@ from taskledger.errors import LaunchError
 from taskledger.services.doctor import inspect_v2_project
 from taskledger.storage.ledger_config import load_ledger_identity
 from taskledger.storage.meta import StorageMeta
-from taskledger.storage.paths import resolve_project_paths
 from taskledger.storage.project_config import (
     AgentLoggingConfig,
     EventLoggingConfig,
     ProjectConfig,
     PromptProfile,
-    load_project_config_overrides,
     merge_project_config,
     render_default_taskledger_toml,
 )
+from taskledger.storage.project_context import resolve_project_paths
 
 
 def _make_runner() -> CliRunner:
@@ -102,31 +101,32 @@ def test_init_project_name_option_overrides_basename(tmp_path: Path) -> None:
 
 
 # specmason: req=REQ-0041 ac=AC-0462
-def test_public_api_init_with_external_taskledger_dir_uses_directory_directly(
+def test_public_api_init_with_external_taskledger_dir_uses_ledgercore_mount(
     tmp_path: Path,
 ) -> None:
     workspace = tmp_path / "repo"
-    storage = tmp_path / "cloud" / "taskledger" / "repo"
     workspace.mkdir()
 
-    init_project_api(workspace, taskledger_dir=storage)
+    result = init_project_api(workspace, external_root="../cloud")
+    data_root = Path(result["mounts"]["data"]["path"])
 
-    config_text = (workspace / "taskledger.toml").read_text(encoding="utf-8")
-    assert storage.as_posix() in config_text
-    assert (storage / "storage.yaml").exists()
-    assert (storage / "ledgers" / "main" / "tasks").is_dir()
-    assert not (storage / ".taskledger").exists()
+    assert result["config_path"] == str(
+        workspace / ".ledger" / "taskledger" / "config.toml"
+    )
+    assert (data_root / "storage.yaml").exists()
+    assert (data_root / "ledgers" / "main" / "tasks").is_dir()
+    assert tmp_path / "cloud" in data_root.parents
     assert not (workspace / ".taskledger").exists()
+    assert not (workspace / "taskledger.toml").exists()
 
 
 # specmason: req=REQ-0041 ac=AC-0481
 def test_task_create_uses_configured_external_storage(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
-    storage = tmp_path / "cloud" / "taskledger" / "repo"
     workspace.mkdir()
 
-    init_project_api(workspace, taskledger_dir=storage)
-
+    init_result = init_project_api(workspace, external_root="../cloud")
+    data_root = Path(init_result["mounts"]["data"]["path"])
     result = runner.invoke(
         app,
         [
@@ -141,12 +141,12 @@ def test_task_create_uses_configured_external_storage(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0, result.stdout
-    assert any((storage / "ledgers" / "main" / "tasks").glob("*/task.md"))
+    assert any((data_root / "ledgers" / "main" / "tasks").glob("*/task.md"))
     assert not (workspace / ".taskledger" / "tasks").exists()
 
 
 # specmason: req=REQ-0041 ac=AC-0478
-def test_relative_taskledger_dir_is_relative_to_config_path(tmp_path: Path) -> None:
+def test_relative_legacy_taskledger_dir_requires_migration(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
     (workspace / "taskledger.toml").write_text(
@@ -154,9 +154,8 @@ def test_relative_taskledger_dir_is_relative_to_config_path(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
-    paths = resolve_project_paths(workspace)
-
-    assert paths.taskledger_dir == (tmp_path / "state" / "repo").resolve()
+    with pytest.raises(LaunchError, match="TASKLEDGER_MIGRATION_REQUIRED"):
+        resolve_project_paths(workspace)
 
 
 # specmason: req=REQ-0041 ac=AC-0455
@@ -186,29 +185,25 @@ def test_cli_discovers_taskledger_toml_from_subdirectory(
 
 
 # specmason: req=REQ-0041 ac=AC-0455
-def test_legacy_dot_taskledger_without_root_config_still_resolves(
-    tmp_path: Path,
-) -> None:
+def test_legacy_dot_taskledger_requires_migration(tmp_path: Path) -> None:
     _write_storage_root(tmp_path / ".taskledger")
 
-    paths = resolve_project_paths(tmp_path)
-
-    assert paths.taskledger_dir == (tmp_path / ".taskledger").resolve()
-    assert paths.config_path == tmp_path / "taskledger.toml"
+    with pytest.raises(LaunchError, match="TASKLEDGER_MIGRATION_REQUIRED"):
+        resolve_project_paths(tmp_path)
 
 
 # specmason: req=REQ-0041 ac=AC-0469
-def test_legacy_project_toml_is_used_as_fallback_config(tmp_path: Path) -> None:
+def test_legacy_project_toml_rejects_removed_context_setting(tmp_path: Path) -> None:
     legacy_dir = tmp_path / ".taskledger"
     _write_storage_root(legacy_dir)
     (legacy_dir / "project.toml").write_text(
         "default_source_max_chars = 42\n", encoding="utf-8"
     )
 
-    paths = resolve_project_paths(tmp_path)
+    from taskledger.migrations.legacy_project_context import load_legacy_project_context
 
-    assert paths.config_path == legacy_dir / "project.toml"
-    assert load_project_config_overrides(paths)["default_source_max_chars"] == 42
+    with pytest.raises(LaunchError, match="removed in Taskledger 0.8.0"):
+        load_legacy_project_context(tmp_path)
 
 
 # specmason: req=REQ-0041 ac=AC-0468
@@ -226,7 +221,7 @@ def test_invalid_taskledger_toml_returns_json_error(tmp_path: Path) -> None:
 
 
 # specmason: req=REQ-0041 ac=AC-0459
-def test_dot_taskledger_toml_wins_and_doctor_warns(tmp_path: Path) -> None:
+def test_multiple_legacy_root_configs_require_migration(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
     hidden_storage = tmp_path / "state-hidden"
@@ -242,25 +237,22 @@ def test_dot_taskledger_toml_wins_and_doctor_warns(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    paths = resolve_project_paths(workspace)
-    doctor = inspect_v2_project(workspace)
-
-    assert paths.taskledger_dir == hidden_storage.resolve()
-    assert any(
-        "Both taskledger.toml and .taskledger.toml exist" in warning
-        for warning in doctor["warnings"]
-    )
+    with pytest.raises(LaunchError, match="TASKLEDGER_MIGRATION_REQUIRED"):
+        resolve_project_paths(workspace)
 
 
 # specmason: req=REQ-0041 ac=AC-0458
-def test_doctor_warns_on_legacy_project_toml(tmp_path: Path) -> None:
+def test_doctor_reports_legacy_project_toml_requires_migration(
+    tmp_path: Path,
+) -> None:
     legacy_dir = tmp_path / ".taskledger"
     _write_storage_root(legacy_dir)
-    (legacy_dir / "project.toml").write_text("default_source_max_chars = 99\n")
+    (legacy_dir / "project.toml").write_text('project_name = "legacy-project"\n')
 
     doctor = inspect_v2_project(tmp_path)
 
-    assert any("Legacy config location" in warning for warning in doctor["warnings"])
+    assert not doctor["healthy"]
+    assert any("TASKLEDGER_MIGRATION_REQUIRED" in error for error in doctor["errors"])
 
 
 # --- prompt_profile tests ---

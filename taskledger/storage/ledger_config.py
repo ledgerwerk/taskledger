@@ -6,7 +6,7 @@ import importlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from ledgercore.refs import normalize_ref_token
 
@@ -80,7 +80,7 @@ def load_ledger_config(config_path: Path) -> LedgerConfig:
     """Load branch state from canonical data/state.toml or legacy config."""
     canonical = _canonical_context_for_config(config_path)
     if canonical is not None:
-        return _load_canonical_ledger_state(canonical.paths.state_path)
+        return _load_canonical_ledger_state(canonical)
     if not config_path.exists():
         return LedgerConfig()
     if not config_path.exists():
@@ -190,7 +190,7 @@ def update_ledger_config(config_path: Path, patch: LedgerConfigPatch) -> LedgerC
     """Atomically update canonical state.toml or legacy config keys."""
     canonical = _canonical_context_for_config(config_path)
     if canonical is not None:
-        return _update_canonical_ledger_state(canonical.paths.state_path, patch)
+        return _update_canonical_ledger_state(canonical, patch)
     current_text = ""
     if config_path.exists():
         try:
@@ -317,7 +317,7 @@ def _apply_ledger_patch(
     return result
 
 
-def _canonical_context_for_config(config_path: Path) -> Any:
+def _canonical_context_for_config(config_path: Path) -> Path | None:
     # Canonical tool configs live at .ledger/<tool_name>/config.toml.
     # Reject paths that are not config.toml or not under .ledger/.
     if config_path.name != "config.toml":
@@ -327,11 +327,16 @@ def _canonical_context_for_config(config_path: Path) -> Any:
     # Legacy .ledger/task/config.toml is not a canonical tool config.
     if config_path.parent.name == "task":
         return None
-    from taskledger.storage.project_context import load_project_context
 
-    return load_project_context(
-        config_path.parent.parent.parent, require_initialized=False, allow_legacy=False
+    from taskledger.storage.ledgercore_backend import (
+        DATA_MOUNT,
+        load_taskledger_ledger_layout,
     )
+
+    bundle = load_taskledger_ledger_layout(
+        config_path.parent.parent.parent, validate_storage=False
+    )
+    return Path(bundle.resolved_layout.mounts[DATA_MOUNT].path) / "state.toml"
 
 
 def _load_canonical_ledger_state(path: Path) -> LedgerConfig:

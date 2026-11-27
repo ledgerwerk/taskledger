@@ -1,6 +1,6 @@
 # Derived index files
 #
-# Index files under .taskledger/indexes/ are derived caches.
+# Index files under the Ledgercore-managed indexes mount are derived caches.
 # They are rebuilt from canonical Markdown/YAML records by 'taskledger repair index'.
 # They may be plain JSON arrays with no version metadata.
 # They are never the authoritative source of truth.
@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -50,17 +50,18 @@ from taskledger.domain.states import (
 )
 from taskledger.domain.task import is_archived_task
 from taskledger.errors import ActiveTaskNotFound, LaunchError, NoActiveTask
-from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.frontmatter import (
-    normalize_front_matter_newlines,
     read_markdown_front_matter,
     write_markdown_front_matter,
 )
 from taskledger.storage.layout import require_mutable_v2_layout, require_v2_layout
 from taskledger.storage.locks import read_lock, remove_lock, update_lock, write_lock
-from taskledger.storage.paths import ProjectPaths
+from taskledger.storage.paths import ProjectPaths, TaskledgerStoragePaths
 from taskledger.storage.physical_runs import (
     list_physical_runs_from_paths as _list_physical_runs_from_paths,
+)
+from taskledger.storage.record_reader import (
+    load_markdown_record as _load_markdown_record,
 )
 from taskledger.storage.yaml_store import load_yaml_object, write_yaml_object
 from taskledger.timeutils import utc_now_iso
@@ -113,36 +114,11 @@ def _requirement_id_from_task(task_id: str) -> str:
     return f"req-{task_id}"
 
 
-@dataclass(slots=True, frozen=True)
-class V2Paths:
-    workspace_root: Path
-    taskledger_root: Path
-    runtime_root: Path
-    ledger_ref: str
-    ledger_dir: Path
-    project_dir: Path  # alias for ledger_dir
-    introductions_dir: Path
-    releases_dir: Path
-    tasks_dir: Path
-    plans_dir: Path
-    questions_dir: Path
-    runs_dir: Path
-    changes_dir: Path
-    events_dir: Path
-    indexes_dir: Path
-    active_task_path: Path
-    actor_path: Path
-    harness_path: Path
-    active_locks_index_path: Path
-    dependencies_index_path: Path
-    introductions_index_path: Path
-
-
 def _v2_paths_from_taskledger_paths(
     context: TaskledgerProjectContext, paths: TaskledgerPaths
-) -> V2Paths:
+) -> TaskledgerStoragePaths:
     ledger_dir = paths.ledger_data_dir
-    return V2Paths(
+    return TaskledgerStoragePaths(
         workspace_root=context.project_root,
         taskledger_root=paths.data_root,
         runtime_root=paths.runtime_root,
@@ -164,31 +140,30 @@ def _v2_paths_from_taskledger_paths(
         active_locks_index_path=paths.active_locks_index_path,
         dependencies_index_path=paths.dependencies_index_path,
         introductions_index_path=paths.introductions_index_path,
+        project_uuid=context.project_uuid,
     )
 
 
-def v2_paths_from_context(context: TaskledgerProjectContext) -> V2Paths:
-    """Derive V2Paths from an already-loaded project context.
+def v2_paths_from_context(context: TaskledgerProjectContext) -> TaskledgerStoragePaths:
+    """Derive TaskledgerStoragePaths from an already-loaded project context.
 
     This avoids re-loading the context when it is already available,
     e.g. from a command-scoped runtime.
     """
-    if context.mode == "canonical":
-        return _v2_paths_from_taskledger_paths(context, context.paths)
-    return _resolve_legacy_v2_paths(context.project_root)
+    return _v2_paths_from_taskledger_paths(context, context.paths)
 
 
 def v2_paths_for_ledger_ref(
     context: TaskledgerProjectContext, ledger_ref: str
-) -> V2Paths:
-    """Derive a complete V2Paths object for any canonical ledger namespace."""
+) -> TaskledgerStoragePaths:
+    """Derive paths for any canonical ledger namespace."""
     from taskledger.storage.project_context import paths_for_ledger_ref
 
     paths = paths_for_ledger_ref(context, ledger_ref)
     return _v2_paths_from_taskledger_paths(context, paths)
 
 
-def resolve_v2_paths(workspace_root: Path) -> V2Paths:
+def resolve_v2_paths(workspace_root: Path) -> TaskledgerStoragePaths:
     from taskledger.errors import LaunchError
     from taskledger.storage.paths import probe_taskledger_project
     from taskledger.storage.project_context import load_project_context
@@ -206,98 +181,11 @@ def resolve_v2_paths(workspace_root: Path) -> V2Paths:
     return v2_paths_from_context(context)
 
 
-def _resolve_legacy_v2_paths(workspace_root: Path) -> V2Paths:
-    from taskledger.storage.ledger_config import load_ledger_config
-    from taskledger.storage.paths import load_project_locator
-
-    locator = load_project_locator(workspace_root)
-    taskledger_root = locator.taskledger_dir
-    config = load_ledger_config(locator.config_path)
-    ledger_dir = taskledger_root / "ledgers" / config.ref
-    indexes_dir = ledger_dir / "indexes"
-    return V2Paths(
-        workspace_root=workspace_root,
-        taskledger_root=taskledger_root,
-        runtime_root=taskledger_root,
-        ledger_ref=config.ref,
-        ledger_dir=ledger_dir,
-        project_dir=ledger_dir,
-        introductions_dir=ledger_dir / "intros",
-        releases_dir=ledger_dir / "releases",
-        tasks_dir=ledger_dir / "tasks",
-        plans_dir=ledger_dir / "plans",
-        questions_dir=ledger_dir / "questions",
-        runs_dir=ledger_dir / "runs",
-        changes_dir=ledger_dir / "changes",
-        events_dir=ledger_dir / "events",
-        indexes_dir=indexes_dir,
-        active_task_path=ledger_dir / "active-task.yaml",
-        actor_path=taskledger_root / "actor.yaml",
-        harness_path=taskledger_root / "harness.yaml",
-        active_locks_index_path=indexes_dir / "active_locks.json",
-        dependencies_index_path=indexes_dir / "dependencies.json",
-        introductions_index_path=indexes_dir / "introductions.json",
-    )
-
-
-def initialize_legacy_v2_layout(workspace_root: Path) -> V2Paths:
-    """Explicitly initialize the historical legacy layout for compatibility."""
-    try:
-        paths = resolve_v2_paths(workspace_root)
-    except LaunchError:
-        from taskledger.storage.paths import probe_taskledger_project
-
-        if probe_taskledger_project(workspace_root).source == "canonical":
-            raise
-        # This side effect is reserved for explicit legacy init/fixtures.
-        paths = _resolve_legacy_v2_paths(workspace_root)
-    for directory in (
-        paths.project_dir,
-        paths.introductions_dir,
-        paths.releases_dir,
-        paths.tasks_dir,
-        paths.events_dir,
-    ):
-        directory.mkdir(parents=True, exist_ok=True)
-    if not (paths.taskledger_root / "storage.yaml").exists():
-        from taskledger.storage.meta import StorageMeta
-        from taskledger.storage.yaml_store import write_yaml_object
-
-        write_yaml_object(
-            paths.taskledger_root / "storage.yaml",
-            StorageMeta(created_with_taskledger="legacy").to_dict(),
-        )
-    # Indexes are a rebuildable cache. Legacy mode keeps the historical eager
-    # files; canonical mode creates them only when an index writer requests it.
-    if paths.indexes_dir == paths.ledger_dir / "indexes":
-        paths.indexes_dir.mkdir(parents=True, exist_ok=True)
-        for index_path in (
-            paths.active_locks_index_path,
-            paths.dependencies_index_path,
-            paths.introductions_index_path,
-        ):
-            if not index_path.exists():
-                atomic_write_text(index_path, "[]\n")
-    return paths
-
-
-def ensure_v2_layout(workspace_root: Path) -> V2Paths:
-    """Compatibility alias for explicit legacy initialization only."""
-    from taskledger.storage.paths import probe_taskledger_project
-
-    if probe_taskledger_project(workspace_root).source == "canonical":
-        from taskledger.storage.project_context import require_mutable_project_context
-
-        require_mutable_project_context(workspace_root, allow_legacy=False)
-        return require_v2_layout(workspace_root)
-    return initialize_legacy_v2_layout(workspace_root)
-
-
 def list_tasks(workspace_root: Path) -> list[TaskRecord]:
     return list_tasks_from_paths(resolve_v2_paths(workspace_root))
 
 
-def list_tasks_from_paths(paths: V2Paths) -> list[TaskRecord]:
+def list_tasks_from_paths(paths: TaskledgerStoragePaths) -> list[TaskRecord]:
     from taskledger.storage.task_identity import task_identity_inventory
 
     inventory = task_identity_inventory(paths)
@@ -325,7 +213,7 @@ def list_tasks_by_visibility(
 
 
 def list_tasks_by_visibility_from_paths(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     visibility: TaskVisibility = "visible",
 ) -> list[TaskRecord]:
@@ -337,7 +225,9 @@ def list_tasks_by_visibility_from_paths(
     return [task for task in tasks if not is_archived_task(task)]
 
 
-def load_task_bundle_by_uuid(paths: V2Paths, task_uuid: str) -> TaskRecord:
+def load_task_bundle_by_uuid(
+    paths: TaskledgerStoragePaths, task_uuid: str
+) -> TaskRecord:
     """Load one UUID bundle without resolving aliases or scanning other tasks."""
     from taskledger.ids import parse_uuid7
 
@@ -357,7 +247,7 @@ def load_task_bundle_by_uuid(paths: V2Paths, task_uuid: str) -> TaskRecord:
 
 
 def load_task_bundle_details_by_uuid(
-    paths: V2Paths, task_uuid: str
+    paths: TaskledgerStoragePaths, task_uuid: str
 ) -> tuple[
     TaskRecord,
     list[PlanRecord],
@@ -488,7 +378,9 @@ def load_active_task_state(workspace_root: Path) -> ActiveTaskState | None:
     return load_active_task_state_from_paths(resolve_v2_paths(workspace_root))
 
 
-def active_task_state_from_bytes(paths: V2Paths, contents: bytes) -> ActiveTaskState:
+def active_task_state_from_bytes(
+    paths: TaskledgerStoragePaths, contents: bytes
+) -> ActiveTaskState:
     from taskledger.storage.yaml_store import load_yaml_object_bytes
 
     try:
@@ -504,7 +396,7 @@ def active_task_state_from_bytes(paths: V2Paths, contents: bytes) -> ActiveTaskS
         ) from exc
 
 
-def read_active_task_state_raw(paths: V2Paths) -> ActiveTaskState | None:
+def read_active_task_state_raw(paths: TaskledgerStoragePaths) -> ActiveTaskState | None:
     """Read the persisted pointer without resolving it through task identity."""
     path = paths.active_task_path
     if path.is_symlink():
@@ -527,7 +419,7 @@ def read_active_task_state_raw(paths: V2Paths) -> ActiveTaskState | None:
 
 
 def load_active_task_state_from_paths(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
 ) -> ActiveTaskState | None:
     if not paths.active_task_path.exists():
         return None
@@ -584,7 +476,7 @@ def save_active_task_state(
 
 
 def _save_active_task_state_unlocked(
-    workspace_root: Path, state: ActiveTaskState, paths: V2Paths
+    workspace_root: Path, state: ActiveTaskState, paths: TaskledgerStoragePaths
 ) -> ActiveTaskState:
     from taskledger.storage.task_identity import (
         AMBIGUOUS_LEGACY_TASK_REF,
@@ -719,7 +611,7 @@ def save_task(workspace_root: Path, task: TaskRecord) -> TaskRecord:
     return save_task_from_paths(require_mutable_v2_layout(workspace_root), task)
 
 
-def save_task_from_paths(paths: V2Paths, task: TaskRecord) -> TaskRecord:
+def save_task_from_paths(paths: TaskledgerStoragePaths, task: TaskRecord) -> TaskRecord:
     if task.task_uuid is None:
         from taskledger.storage.task_identity import (
             allocate_task_identity,
@@ -775,14 +667,18 @@ def list_introductions(workspace_root: Path) -> list[IntroductionRecord]:
     return list_introductions_from_paths(resolve_v2_paths(workspace_root))
 
 
-def list_introductions_from_paths(paths: V2Paths) -> list[IntroductionRecord]:
+def list_introductions_from_paths(
+    paths: TaskledgerStoragePaths,
+) -> list[IntroductionRecord]:
     return sorted(
         [_load_intro(path) for path in paths.introductions_dir.glob("intro-*.md")],
         key=lambda item: item.id,
     )
 
 
-def _normalize_release(paths: V2Paths, release: ReleaseRecord) -> ReleaseRecord:
+def _normalize_release(
+    paths: TaskledgerStoragePaths, release: ReleaseRecord
+) -> ReleaseRecord:
     from taskledger.storage.task_identity import (
         AMBIGUOUS_LEGACY_TASK_REF,
         task_identity_for_stored_ref,
@@ -809,7 +705,7 @@ def list_releases(workspace_root: Path) -> list[ReleaseRecord]:
     return list_releases_from_paths(resolve_v2_paths(workspace_root))
 
 
-def list_releases_from_paths(paths: V2Paths) -> list[ReleaseRecord]:
+def list_releases_from_paths(paths: TaskledgerStoragePaths) -> list[ReleaseRecord]:
     return sorted(
         [
             _normalize_release(paths, _load_release(path))
@@ -841,7 +737,9 @@ def resolve_introduction(workspace_root: Path, ref: str) -> IntroductionRecord:
     return resolve_introduction_from_paths(resolve_v2_paths(workspace_root), ref)
 
 
-def resolve_introduction_from_paths(paths: V2Paths, ref: str) -> IntroductionRecord:
+def resolve_introduction_from_paths(
+    paths: TaskledgerStoragePaths, ref: str
+) -> IntroductionRecord:
     normalized_ref = ref.strip().lower()
     for intro in list_introductions_from_paths(paths):
         if intro.id == ref or intro.slug == normalized_ref:
@@ -858,7 +756,7 @@ def save_introduction(
 
 
 def save_introduction_from_paths(
-    paths: V2Paths, introduction: IntroductionRecord
+    paths: TaskledgerStoragePaths, introduction: IntroductionRecord
 ) -> IntroductionRecord:
     path = paths.introductions_dir / f"{introduction.id}.md"
     _write_markdown_record(path, introduction.to_dict(), introduction.body)
@@ -910,7 +808,9 @@ def list_plans(workspace_root: Path, task_id: str) -> list[PlanRecord]:
     return list_plans_from_paths(paths, task_id)
 
 
-def list_plans_from_paths(paths: V2Paths, task_id: str) -> list[PlanRecord]:
+def list_plans_from_paths(
+    paths: TaskledgerStoragePaths, task_id: str
+) -> list[PlanRecord]:
     directory = task_plans_dir(paths, task_id)
     return _list_records(
         directory,
@@ -960,7 +860,9 @@ def list_questions(workspace_root: Path, task_id: str) -> list[QuestionRecord]:
     return list_questions_from_paths(paths, task_id)
 
 
-def list_questions_from_paths(paths: V2Paths, task_id: str) -> list[QuestionRecord]:
+def list_questions_from_paths(
+    paths: TaskledgerStoragePaths, task_id: str
+) -> list[QuestionRecord]:
     directory = task_questions_dir(paths, task_id)
     return _list_records(
         directory,
@@ -1007,7 +909,9 @@ def list_runs(workspace_root: Path, task_id: str) -> list[TaskRunRecord]:
     return list_runs_from_paths(paths, task_id)
 
 
-def list_runs_from_paths(paths: V2Paths, task_id: str) -> list[TaskRunRecord]:
+def list_runs_from_paths(
+    paths: TaskledgerStoragePaths, task_id: str
+) -> list[TaskRunRecord]:
     directory = task_runs_dir(paths, task_id)
     return _list_records(
         directory, pattern="*.md", loader=_load_run, sort_key=lambda item: item.run_id
@@ -1015,7 +919,7 @@ def list_runs_from_paths(paths: V2Paths, task_id: str) -> list[TaskRunRecord]:
 
 
 def list_physical_runs_from_paths(
-    paths: V2Paths, task_directory: Path
+    paths: TaskledgerStoragePaths, task_directory: Path
 ) -> list[TaskRunRecord]:
     """Read runs from one physical task bundle without resolving its identity."""
     return _list_physical_runs_from_paths(paths, task_directory)
@@ -1056,7 +960,9 @@ def list_changes(workspace_root: Path, task_id: str) -> list[CodeChangeRecord]:
     return list_changes_from_paths(paths, task_id)
 
 
-def list_changes_from_paths(paths: V2Paths, task_id: str) -> list[CodeChangeRecord]:
+def list_changes_from_paths(
+    paths: TaskledgerStoragePaths, task_id: str
+) -> list[CodeChangeRecord]:
     directory = task_changes_dir(paths, task_id)
     return _list_records(
         directory,
@@ -1088,7 +994,7 @@ def list_checks(workspace_root: Path, task_id: str) -> list[ImplementationCheckR
 
 
 def list_checks_from_paths(
-    paths: V2Paths, task_id: str
+    paths: TaskledgerStoragePaths, task_id: str
 ) -> list[ImplementationCheckRecord]:
     directory = task_checks_dir(paths, task_id)
     return sorted(
@@ -1122,7 +1028,7 @@ def list_code_reviews(workspace_root: Path, task_id: str) -> list[CodeReviewReco
 
 
 def list_code_reviews_from_paths(
-    paths: V2Paths, task_id: str
+    paths: TaskledgerStoragePaths, task_id: str
 ) -> list[CodeReviewRecord]:
     directory = task_reviews_dir(paths, task_id)
     return sorted(
@@ -1180,7 +1086,7 @@ def load_lock_records(workspace_root: Path) -> list[TaskLock]:
     return load_lock_records_from_paths(paths)
 
 
-def load_lock_records_from_paths(paths: V2Paths) -> list[TaskLock]:
+def load_lock_records_from_paths(paths: TaskledgerStoragePaths) -> list[TaskLock]:
     """Load all readable lock files from resolved paths (no expiry filter)."""
     from taskledger.storage.task_identity import (
         AMBIGUOUS_LEGACY_TASK_REF,
@@ -1221,10 +1127,6 @@ def load_lock_records_from_paths(paths: V2Paths) -> list[TaskLock]:
     return locks
 
 
-# Compatibility alias retained during transition.
-load_active_locks_from_paths = load_lock_records_from_paths
-
-
 def load_active_locks(workspace_root: Path) -> list[TaskLock]:
     """Load non-expired locks only (compatibility wrapper)."""
     from taskledger.storage.locks import lock_is_expired
@@ -1239,7 +1141,9 @@ def load_todos(workspace_root: Path, task_id: str) -> TodoCollection:
     return load_todos_from_paths(paths, task_id)
 
 
-def load_todos_from_paths(paths: V2Paths, task_id: str) -> TodoCollection:
+def load_todos_from_paths(
+    paths: TaskledgerStoragePaths, task_id: str
+) -> TodoCollection:
     directory = task_todos_dir(paths, task_id)
     records = sorted(
         [_load_record(p, TaskTodo.from_dict) for p in directory.glob("todo-*.md")],
@@ -1332,7 +1236,9 @@ def load_requirements(workspace_root: Path, task_id: str) -> RequirementCollecti
     return load_requirements_from_paths(resolve_v2_paths(workspace_root), task_id)
 
 
-def load_requirements_from_paths(paths: V2Paths, task_id: str) -> RequirementCollection:
+def load_requirements_from_paths(
+    paths: TaskledgerStoragePaths, task_id: str
+) -> RequirementCollection:
     directory = task_requirements_dir(paths, task_id)
     records = sorted(
         [
@@ -1397,7 +1303,7 @@ def save_requirements(
 
 
 def save_requirements_from_paths(
-    paths: V2Paths, collection: RequirementCollection
+    paths: TaskledgerStoragePaths, collection: RequirementCollection
 ) -> RequirementCollection:
     _ensure_task_bundle(paths, collection.task_id)
     directory = task_requirements_dir(paths, collection.task_id)
@@ -1449,17 +1355,17 @@ def save_requirements_from_paths(
     return collection
 
 
-def task_dir(paths: V2Paths, task_id: str) -> Path:
+def task_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     from taskledger.storage.task_identity import task_identity_for_ref
 
     return task_identity_for_ref(paths, task_id).path
 
 
-def task_markdown_path(paths: V2Paths, task_id: str) -> Path:
+def task_markdown_path(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "task.md"
 
 
-def task_lock_path(paths: V2Paths, task_id: str) -> Path:
+def task_lock_path(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     from taskledger.storage.task_identity import task_uuid_from_ref
 
     lock_dir = paths.runtime_root / "checkouts" / paths.ledger_ref / "locks"
@@ -1481,79 +1387,87 @@ def task_lock_path(paths: V2Paths, task_id: str) -> Path:
     return uuid_path
 
 
-def task_todos_dir(paths: V2Paths, task_id: str) -> Path:
+def task_todos_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "todos"
 
 
-def task_links_dir(paths: V2Paths, task_id: str) -> Path:
+def task_links_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "links"
 
 
-def task_requirements_dir(paths: V2Paths, task_id: str) -> Path:
+def task_requirements_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "requirements"
 
 
-def task_todos_path(paths: V2Paths, task_id: str) -> Path:
+def task_todos_path(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "todos.yaml"
 
 
-def task_links_path(paths: V2Paths, task_id: str) -> Path:
+def task_links_path(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "links.yaml"
 
 
-def task_requirements_path(paths: V2Paths, task_id: str) -> Path:
+def task_requirements_path(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "requirements.yaml"
 
 
-def todo_markdown_path(paths: V2Paths, task_id: str, todo_id: str) -> Path:
+def todo_markdown_path(
+    paths: TaskledgerStoragePaths, task_id: str, todo_id: str
+) -> Path:
     return task_todos_dir(paths, task_id) / f"{todo_id}.md"
 
 
-def link_markdown_path(paths: V2Paths, task_id: str, link_id: str) -> Path:
+def link_markdown_path(
+    paths: TaskledgerStoragePaths, task_id: str, link_id: str
+) -> Path:
     return task_links_dir(paths, task_id) / f"{link_id}.md"
 
 
-def requirement_markdown_path(paths: V2Paths, task_id: str, req_id: str) -> Path:
+def requirement_markdown_path(
+    paths: TaskledgerStoragePaths, task_id: str, req_id: str
+) -> Path:
     return task_requirements_dir(paths, task_id) / f"{req_id}.md"
 
 
-def task_plans_dir(paths: V2Paths, task_id: str) -> Path:
+def task_plans_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "plans"
 
 
-def task_questions_dir(paths: V2Paths, task_id: str) -> Path:
+def task_questions_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "questions"
 
 
-def task_runs_dir(paths: V2Paths, task_id: str) -> Path:
+def task_runs_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "runs"
 
 
-def task_changes_dir(paths: V2Paths, task_id: str) -> Path:
+def task_changes_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "changes"
 
 
-def task_checks_dir(paths: V2Paths, task_id: str) -> Path:
+def task_checks_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "checks"
 
 
-def task_reviews_dir(paths: V2Paths, task_id: str) -> Path:
+def task_reviews_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "reviews"
 
 
-def task_artifacts_dir(paths: V2Paths, task_id: str) -> Path:
+def task_artifacts_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "artifacts"
 
 
-def task_audit_dir(paths: V2Paths, task_id: str) -> Path:
+def task_audit_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "audit"
 
 
-def task_handoffs_dir(paths: V2Paths, task_id: str) -> Path:
+def task_handoffs_dir(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     return task_dir(paths, task_id) / "handoffs"
 
 
-def handoff_markdown_path(paths: V2Paths, task_id: str, handoff_id: str) -> Path:
+def handoff_markdown_path(
+    paths: TaskledgerStoragePaths, task_id: str, handoff_id: str
+) -> Path:
     return task_handoffs_dir(paths, task_id) / f"{handoff_id}.md"
 
 
@@ -1572,38 +1486,50 @@ def release_filename(version: str) -> str:
     return f"{normalized}.md"
 
 
-def release_markdown_path(paths: V2Paths | ProjectPaths, version: str) -> Path:
+def release_markdown_path(
+    paths: TaskledgerStoragePaths | ProjectPaths, version: str
+) -> Path:
     return paths.releases_dir / release_filename(version)
 
 
-def plan_markdown_path(paths: V2Paths, task_id: str, version: int) -> Path:
+def plan_markdown_path(
+    paths: TaskledgerStoragePaths, task_id: str, version: int
+) -> Path:
     return task_plans_dir(paths, task_id) / f"plan-v{version}.md"
 
 
-def question_markdown_path(paths: V2Paths, task_id: str, question_id: str) -> Path:
+def question_markdown_path(
+    paths: TaskledgerStoragePaths, task_id: str, question_id: str
+) -> Path:
     return task_questions_dir(paths, task_id) / f"{question_id}.md"
 
 
-def run_markdown_path(paths: V2Paths, task_id: str, run_id: str) -> Path:
+def run_markdown_path(paths: TaskledgerStoragePaths, task_id: str, run_id: str) -> Path:
     return task_runs_dir(paths, task_id) / f"{run_id}.md"
 
 
-def change_markdown_path(paths: V2Paths, task_id: str, change_id: str) -> Path:
+def change_markdown_path(
+    paths: TaskledgerStoragePaths, task_id: str, change_id: str
+) -> Path:
     return task_changes_dir(paths, task_id) / f"{change_id}.md"
 
 
-def check_markdown_path(paths: V2Paths, task_id: str, check_id: str) -> Path:
+def check_markdown_path(
+    paths: TaskledgerStoragePaths, task_id: str, check_id: str
+) -> Path:
     return task_checks_dir(paths, task_id) / f"{check_id}.md"
 
 
-def code_review_markdown_path(paths: V2Paths, task_id: str, review_id: str) -> Path:
+def code_review_markdown_path(
+    paths: TaskledgerStoragePaths, task_id: str, review_id: str
+) -> Path:
     return task_reviews_dir(paths, task_id) / f"{review_id}.md"
 
 
 def _load_task(
     path: Path,
     *,
-    paths: V2Paths | None = None,
+    paths: TaskledgerStoragePaths | None = None,
     task_id: str | None = None,
     task_uuid: str | None = None,
 ) -> TaskRecord:
@@ -1696,22 +1622,9 @@ def _load_code_review(path: Path) -> CodeReviewRecord:
 
 
 def _load_record(path: Path, parser: Callable[[dict[str, object]], T]) -> T:
-    metadata, body = read_markdown_front_matter(path)
-    metadata["body"] = normalize_front_matter_newlines(body).rstrip("\n")
-    metadata = _ensure_schema_compat(metadata)
-    return parser(metadata)
-
-
-def _ensure_schema_compat(record: dict) -> dict:
-    """Ensure record schema is compatible."""
-    version = record.get("schema_version", 1)
-    if version > TASKLEDGER_SCHEMA_VERSION:
-        raise LaunchError(
-            f"Record schema too new: {version} "
-            f"(current max: {TASKLEDGER_SCHEMA_VERSION}). "
-            "Please upgrade taskledger."
-        )
-    return record
+    return _load_markdown_record(
+        path, parser, front_matter_reader=read_markdown_front_matter
+    )
 
 
 def _write_markdown_record(path: Path, metadata: dict[str, object], body: str) -> None:
@@ -1726,7 +1639,9 @@ def _task_latest_impl_run(workspace_root: Path, task_id: str) -> str | None:
     return _task_latest_impl_run_from_paths(resolve_v2_paths(workspace_root), task_id)
 
 
-def _task_latest_impl_run_from_paths(paths: V2Paths, task_id: str) -> str | None:
+def _task_latest_impl_run_from_paths(
+    paths: TaskledgerStoragePaths, task_id: str
+) -> str | None:
     try:
         task = _load_task(task_markdown_path(paths, task_id), paths=paths)
         return task.latest_implementation_run
@@ -1735,7 +1650,7 @@ def _task_latest_impl_run_from_paths(paths: V2Paths, task_id: str) -> str | None
 
 
 def _ensure_task_bundle(
-    paths: V2Paths, task_id: str, *, bundle_dir: Path | None = None
+    paths: TaskledgerStoragePaths, task_id: str, *, bundle_dir: Path | None = None
 ) -> None:
     root = bundle_dir if bundle_dir is not None else task_dir(paths, task_id)
     for directory in (
@@ -1817,7 +1732,9 @@ def list_handoffs(workspace_root: Path, task_id: str) -> list[TaskHandoffRecord]
     return handoffs
 
 
-def list_handoffs_from_paths(paths: V2Paths, task_id: str) -> list[TaskHandoffRecord]:
+def list_handoffs_from_paths(
+    paths: TaskledgerStoragePaths, task_id: str
+) -> list[TaskHandoffRecord]:
     handoffs, errors = list_handoffs_with_errors_from_paths(paths, task_id)
     if errors:
         raise LaunchError(errors[0])
@@ -1834,7 +1751,7 @@ def list_handoffs_with_errors(
 
 
 def list_handoffs_with_errors_from_paths(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     task_id: str,
 ) -> tuple[list[TaskHandoffRecord], list[str]]:
     handoffs_dir = task_handoffs_dir(paths, task_id)
@@ -1932,7 +1849,7 @@ def save_lock(workspace_root: Path, task_id: str, lock: TaskLock) -> Path:
 
 
 def save_lock_from_paths(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     task_id: str,
     lock: TaskLock,
     *,
@@ -1982,7 +1899,7 @@ def save_lock_from_paths(
     return lock_path
 
 
-def remove_lock_from_paths(paths: V2Paths, task_id: str) -> None:
+def remove_lock_from_paths(paths: TaskledgerStoragePaths, task_id: str) -> None:
     lock_path = task_lock_path(paths, task_id)
     remove_lock(lock_path)
 

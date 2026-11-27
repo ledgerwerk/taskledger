@@ -49,10 +49,9 @@ def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
 # specmason: req=REQ-0056 ac=AC-0610
 def test_storage_where_reports_external_storage_details(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
-    storage = tmp_path / "state" / "repo"
     workspace.mkdir()
-
-    init_project_api(workspace, taskledger_dir=storage)
+    init_result = init_project_api(workspace, external_root="../state")
+    data_root = Path(str(init_result["mounts"]["data"]["path"]))
 
     result = runner.invoke(
         app,
@@ -62,63 +61,23 @@ def test_storage_where_reports_external_storage_details(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     data = payload["result"]
-    assert data["taskledger_dir"] == storage.resolve().as_posix()
-    assert data["inside_workspace"] is False
-    assert data["is_git_repo"] is False
-    assert data["ledger_ref"] == "main"
+    assert data["mode"] == "canonical"
+    assert data["mounts"]["data"]["path"] == data_root.as_posix()
+    assert data["mounts"]["data"]["storage"] == "external"
+    assert Path(data["mounts"]["data"]["path"]).is_relative_to(tmp_path / "state")
 
 
 # specmason: req=REQ-0056 ac=AC-0608
-def test_storage_move_copy_updates_config_and_preserves_project_uuid(
+def test_storage_move_requires_explicit_migration_for_legacy_projects(
     tmp_path: Path,
 ) -> None:
-    """Storage move is a legacy feature; use explicit legacy project."""
+    from taskledger.migrations.legacy_init import init_legacy_project_state
+
     workspace = tmp_path / "repo"
     target = tmp_path / "state" / "repo"
     workspace.mkdir()
-    taskledger_dir = workspace / ".taskledger"
-
-    init_project_api(workspace, taskledger_dir=taskledger_dir)
-    original_uuid = load_project_uuid(workspace / "taskledger.toml")
-
-    result = runner.invoke(
-        app,
-        [
-            "--root",
-            str(workspace),
-            "--json",
-            "storage",
-            "move",
-            "--to",
-            str(target),
-            "--mode",
-            "copy",
-        ],
-    )
-
-    assert result.exit_code == 0, result.stdout
-    payload = json.loads(result.stdout)
-    data = payload["result"]
-    assert data["source"] == taskledger_dir.resolve().as_posix()
-    assert data["target"] == target.resolve().as_posix()
-    assert data["backup_path"] is None
-    assert (target / "storage.yaml").exists()
-    assert (target / "ledgers" / "main" / "tasks").is_dir()
-    assert taskledger_dir.exists()
-    assert load_project_uuid(workspace / "taskledger.toml") == original_uuid
-
-
-# specmason: req=REQ-0056 ac=AC-0609
-def test_storage_move_refuses_non_empty_target(tmp_path: Path) -> None:
-    """Storage move is a legacy feature; use explicit legacy project."""
-    workspace = tmp_path / "repo"
-    target = tmp_path / "state" / "repo"
-    workspace.mkdir()
-    taskledger_dir = workspace / ".taskledger"
-    target.mkdir(parents=True)
-    (target / "keep.txt").write_text("occupied\n", encoding="utf-8")
-
-    init_project_api(workspace, taskledger_dir=taskledger_dir)
+    paths, _ = init_legacy_project_state(workspace)
+    original_uuid = load_project_uuid(paths.config_path)
 
     result = runner.invoke(
         app,
@@ -137,7 +96,45 @@ def test_storage_move_refuses_non_empty_target(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     payload = json.loads(result.stdout)
-    assert "Target exists and is not empty" in payload["error"]["message"]
+    assert payload["error"]["code"] == "TASKLEDGER_MIGRATION_REQUIRED"
+    assert paths.taskledger_dir.exists()
+    assert not target.exists()
+    assert load_project_uuid(paths.config_path) == original_uuid
+
+
+# specmason: req=REQ-0056 ac=AC-0609
+def test_storage_move_does_not_touch_legacy_target_before_migration(
+    tmp_path: Path,
+) -> None:
+    from taskledger.migrations.legacy_init import init_legacy_project_state
+
+    workspace = tmp_path / "repo"
+    target = tmp_path / "state" / "repo"
+    workspace.mkdir()
+    paths, _ = init_legacy_project_state(workspace)
+    target.mkdir(parents=True)
+    (target / "keep.txt").write_text("occupied\n", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        [
+            "--root",
+            str(workspace),
+            "--json",
+            "storage",
+            "move",
+            "--to",
+            str(target),
+            "--mode",
+            "copy",
+        ],
+    )
+
+    assert result.exit_code != 0
+    payload = json.loads(result.stdout)
+    assert payload["error"]["code"] == "TASKLEDGER_MIGRATION_REQUIRED"
+    assert paths.taskledger_dir.exists()
+    assert (target / "keep.txt").read_text(encoding="utf-8") == "occupied\n"
 
 
 # specmason: req=REQ-0056 ac=AC-0614
@@ -232,9 +229,9 @@ def test_sync_status_reports_git_changes_for_external_state_repo(
     tmp_path: Path,
 ) -> None:
     workspace = tmp_path / "repo"
-    storage = tmp_path / "state" / "repo"
     workspace.mkdir()
-    init_project_api(workspace, taskledger_dir=storage)
+    init_result = init_project_api(workspace, external_root="../state")
+    storage = Path(str(init_result["mounts"]["data"]["path"]))
 
     _git(storage, "init")
 
@@ -251,9 +248,9 @@ def test_sync_status_reports_git_changes_for_external_state_repo(
 # specmason: req=REQ-0056 ac=AC-0611
 def test_sync_commit_commits_external_state_repo(tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
-    storage = tmp_path / "state" / "repo"
     workspace.mkdir()
-    init_project_api(workspace, taskledger_dir=storage)
+    init_result = init_project_api(workspace, external_root="../state")
+    storage = Path(str(init_result["mounts"]["data"]["path"]))
 
     _git(storage, "init")
     _git(storage, "config", "user.email", "test@example.com")

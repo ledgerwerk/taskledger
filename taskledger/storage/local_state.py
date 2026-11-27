@@ -127,7 +127,7 @@ def ensure_local_state_for_mutation(
     context: TaskledgerProjectContext,
 ) -> LocalStateRecoveryResult | None:
     """Initialize safe, missing machine-local mounts before a canonical mutation."""
-    if context.mode != "canonical" or context.layout is None:
+    if context.layout is None:
         return None
     manifest = getattr(context.loaded_project, "manifest", None)
     if getattr(manifest, "schema_version", None) != 3:

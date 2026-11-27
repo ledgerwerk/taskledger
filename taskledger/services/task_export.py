@@ -30,6 +30,8 @@ _LANGUAGE_BY_SUFFIX: dict[str, str] = {
 }
 
 _SKIP_PREFIXES = (
+    # Exclude legacy Taskledger state from source exports.
+    # Migration handles it separately.
     ".git",
     ".taskledger",
     "__pycache__",

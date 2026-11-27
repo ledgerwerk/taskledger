@@ -18,7 +18,7 @@ from taskledger.services.tasks import (
     start_planning,
     start_validation,
 )
-from taskledger.storage.init import init_project_state
+from tests.support.project import ensure_project_layout
 
 DEFAULT_PLAN_TEXT = """---
 goal: Test goal.
@@ -38,7 +38,7 @@ Test plan.
 
 
 def init_workspace(workspace: Path) -> Path:
-    init_project_state(workspace)
+    ensure_project_layout(workspace)
     return workspace
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import subprocess
 from pathlib import Path
@@ -51,22 +52,31 @@ def _output(result: object) -> str:
     return f"{stdout}{stderr}"
 
 
-def _init_legacy_sync_workspace(
+def _init_sync_workspace(
     tmp_path: Path,
     *,
     workspace_name: str = "repo",
     sync_repo: Path | None = None,
     project_path: str = "project-a",
 ) -> tuple[Path, Path]:
-    """Create an explicit legacy project for sync testing."""
+    """Create a canonical project with its data mount inside a Git repository."""
     workspace = tmp_path / workspace_name
     if workspace.exists():
         raise AssertionError(f"workspace already exists: {workspace}")
     workspace.mkdir()
-    taskledger_dir = workspace / ".taskledger"
-    init_project_api(workspace, taskledger_dir=taskledger_dir)
     if sync_repo is None:
         sync_repo = tmp_path / "state-repo"
+    sync_repo.mkdir(parents=True, exist_ok=True)
+    if not (sync_repo / ".git").exists():
+        _git(sync_repo, "init", "-b", "main")
+    _git(sync_repo, "config", "user.email", "test@example.com")
+    _git(sync_repo, "config", "user.name", "Taskledger Test")
+    init_project_api(
+        workspace,
+        data_storage="external",
+        external_root=os.path.relpath(sync_repo / project_path, workspace),
+    )
+    resolved_project_path = _sync_project_path(workspace, sync_repo)
     init_result = runner.invoke(
         app,
         [
@@ -79,12 +89,10 @@ def _init_legacy_sync_workspace(
             "--repo",
             str(sync_repo),
             "--project-path",
-            project_path,
+            resolved_project_path,
         ],
     )
     assert init_result.exit_code == 0, _output(init_result)
-    _git(sync_repo, "config", "user.email", "test@example.com")
-    _git(sync_repo, "config", "user.name", "Taskledger Test")
     _git(sync_repo, "add", ".")
     staged_diff = _git(
         sync_repo,
@@ -99,8 +107,8 @@ def _init_legacy_sync_workspace(
     return workspace, sync_repo
 
 
-# Keep old name as alias for existing test references
-_init_sync_workspace = _init_legacy_sync_workspace
+def _sync_project_path(workspace: Path, sync_repo: Path) -> str:
+    return resolve_v2_paths(workspace).taskledger_root.relative_to(sync_repo).as_posix()
 
 
 # specmason: req=REQ-0057 ac=AC-0620
@@ -109,8 +117,7 @@ def test_sync_git_help_promotes_pull_and_push(
 ) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
-    taskledger_dir = workspace / ".taskledger"
-    init_project_api(workspace, taskledger_dir=taskledger_dir)
+    init_project_api(workspace)
 
     git_help = runner.invoke(app, ["--root", str(workspace), "sync", "git", "--help"])
     hooks_help = runner.invoke(
@@ -139,7 +146,8 @@ def test_sync_git_help_promotes_pull_and_push(
 # specmason: req=REQ-0057 ac=AC-0625
 def test_sync_git_status_splits_project_and_outside_dirty_state(tmp_path: Path) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
-    (sync_repo / "project-a" / "local-note.txt").write_text(
+    project_path = _sync_project_path(workspace, sync_repo)
+    (sync_repo / project_path / "local-note.txt").write_text(
         "project\n",
         encoding="utf-8",
     )
@@ -158,21 +166,22 @@ def test_sync_git_status_splits_project_and_outside_dirty_state(tmp_path: Path) 
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-a",
+            project_path,
         ],
     )
 
     assert result.exit_code == 0, _output(result)
     payload = json.loads(result.stdout)["result"]
     assert payload["kind"] == "taskledger_sync_git_status"
-    assert payload["project_path"] == "project-a"
+    assert payload["project_path"] == project_path
     assert payload["project_dirty"] is True
     assert payload["dirty"] is True
     assert payload["outside_dirty"] is True
     assert payload["outside_dirty_count"] == 1
     assert payload["status_lines"] == payload["project_status_lines"]
     assert any(
-        "project-a/local-note.txt" in line for line in payload["project_status_lines"]
+        f"{project_path}/local-note.txt" in line
+        for line in payload["project_status_lines"]
     )
     assert any("project-b" in line for line in payload["outside_status_lines"])
 
@@ -180,7 +189,8 @@ def test_sync_git_status_splits_project_and_outside_dirty_state(tmp_path: Path) 
 # specmason: req=REQ-0057 ac=AC-0618
 def test_sync_git_commit_ignores_unrelated_dirty_paths(tmp_path: Path) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
-    (sync_repo / "project-a" / "local-note.txt").write_text(
+    project_path = _sync_project_path(workspace, sync_repo)
+    (sync_repo / project_path / "local-note.txt").write_text(
         "project\n",
         encoding="utf-8",
     )
@@ -199,7 +209,7 @@ def test_sync_git_commit_ignores_unrelated_dirty_paths(tmp_path: Path) -> None:
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-a",
+            project_path,
             "--message",
             "Sync project-a",
         ],
@@ -218,7 +228,7 @@ def test_sync_git_commit_ignores_unrelated_dirty_paths(tmp_path: Path) -> None:
         "--format=",
         "HEAD",
     ).stdout.splitlines()
-    assert "project-a/local-note.txt" in show
+    assert f"{project_path}/local-note.txt" in show
     assert "project-b/other.txt" not in show
     assert "project-b" in _git(sync_repo, "status", "--short", "--", "project-b").stdout
 
@@ -239,6 +249,7 @@ def test_removed_sync_git_compatibility_commands_are_unregistered(
 # specmason: req=REQ-0057 ac=AC-0617
 def test_sync_git_cd_and_path_report_expected_locations(tmp_path: Path) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
+    project_path = _sync_project_path(workspace, sync_repo)
 
     cd_result = runner.invoke(
         app,
@@ -251,7 +262,7 @@ def test_sync_git_cd_and_path_report_expected_locations(tmp_path: Path) -> None:
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-a",
+            project_path,
         ],
     )
     assert cd_result.exit_code == 0, _output(cd_result)
@@ -271,15 +282,15 @@ def test_sync_git_cd_and_path_report_expected_locations(tmp_path: Path) -> None:
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-a",
+            project_path,
         ],
     )
     assert cd_json.exit_code == 0, _output(cd_json)
     cd_payload = json.loads(cd_json.stdout)["result"]
     assert cd_payload["kind"] == "taskledger_sync_git_paths"
     assert Path(cd_payload["repo_path"]) == sync_repo
-    assert cd_payload["project_path"] == "project-a"
-    assert Path(cd_payload["storage_path"]) == sync_repo / "project-a"
+    assert cd_payload["project_path"] == project_path
+    assert Path(cd_payload["storage_path"]) == sync_repo / project_path
 
     path_result = runner.invoke(
         app,
@@ -293,7 +304,7 @@ def test_sync_git_cd_and_path_report_expected_locations(tmp_path: Path) -> None:
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-a",
+            project_path,
             "--kind",
             "storage",
         ],
@@ -301,12 +312,13 @@ def test_sync_git_cd_and_path_report_expected_locations(tmp_path: Path) -> None:
     assert path_result.exit_code == 0, _output(path_result)
     path_payload = json.loads(path_result.stdout)["result"]
     assert path_payload["selected_kind"] == "storage"
-    assert Path(path_payload["selected_path"]) == sync_repo / "project-a"
+    assert Path(path_payload["selected_path"]) == sync_repo / project_path
 
 
 # specmason: req=REQ-0057 ac=AC-0622
 def test_sync_git_pull_fails_fast_for_dirty_shared_repo(tmp_path: Path) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
+    project_path = _sync_project_path(workspace, sync_repo)
     (sync_repo / "project-b").mkdir()
     (sync_repo / "project-b" / "other.txt").write_text("outside\n", encoding="utf-8")
 
@@ -321,7 +333,7 @@ def test_sync_git_pull_fails_fast_for_dirty_shared_repo(tmp_path: Path) -> None:
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-a",
+            project_path,
         ],
     )
 
@@ -332,15 +344,16 @@ def test_sync_git_pull_fails_fast_for_dirty_shared_repo(tmp_path: Path) -> None:
 
 
 # specmason: req=REQ-0057 ac=AC-0624
-def test_sync_git_push_commits_all_sync_repo_changes_and_pushes(tmp_path: Path) -> None:
+def test_sync_git_push_limits_commits_to_canonical_data_mount(tmp_path: Path) -> None:
     remote = tmp_path / "remote.git"
     _git(tmp_path, "init", "--bare", str(remote))
 
     workspace, sync_repo = _init_sync_workspace(tmp_path)
+    project_path = _sync_project_path(workspace, sync_repo)
     _git(sync_repo, "remote", "add", "origin", str(remote))
     _git(sync_repo, "push", "-u", "origin", "main")
 
-    (sync_repo / "project-a" / "local-note.txt").write_text(
+    (sync_repo / project_path / "local-note.txt").write_text(
         "project\n",
         encoding="utf-8",
     )
@@ -359,7 +372,7 @@ def test_sync_git_push_commits_all_sync_repo_changes_and_pushes(tmp_path: Path) 
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-a",
+            project_path,
         ],
     )
 
@@ -369,9 +382,9 @@ def test_sync_git_push_commits_all_sync_repo_changes_and_pushes(tmp_path: Path) 
     assert payload["committed"] is True
     assert payload["pushed"] is True
     assert payload["commit_hash"]
-    assert payload["include_outside_project"] is True
+    assert payload["include_outside_project"] is False
     assert payload["outside_dirty_count"] == 1
-    assert any("included" in warning for warning in payload["warnings"])
+    assert any("ignored" in warning for warning in payload["warnings"])
 
     pushed_files = _git(
         sync_repo,
@@ -380,11 +393,11 @@ def test_sync_git_push_commits_all_sync_repo_changes_and_pushes(tmp_path: Path) 
         "--format=",
         "HEAD",
     ).stdout.splitlines()
-    assert "project-a/local-note.txt" in pushed_files
-    assert "project-b/other.txt" in pushed_files
+    assert f"{project_path}/local-note.txt" in pushed_files
+    assert "project-b/other.txt" not in pushed_files
     assert (
         _git(sync_repo, "log", "-1", "--pretty=%s").stdout.strip()
-        == "Sync taskledger state for project-a"
+        == f"Sync taskledger state for {project_path}"
     )
 
 
@@ -394,6 +407,7 @@ def test_sync_git_pull_runs_git_pull_without_manual_cd(tmp_path: Path) -> None:
     _git(tmp_path, "init", "--bare", str(remote))
 
     workspace, sync_repo = _init_sync_workspace(tmp_path)
+    project_path = _sync_project_path(workspace, sync_repo)
     _git(sync_repo, "remote", "add", "origin", str(remote))
     _git(sync_repo, "push", "-u", "origin", "main")
     _git(remote, "symbolic-ref", "HEAD", "refs/heads/main")
@@ -402,8 +416,8 @@ def test_sync_git_pull_runs_git_pull_without_manual_cd(tmp_path: Path) -> None:
     _git(tmp_path, "clone", str(remote), str(other))
     _git(other, "config", "user.email", "test@example.com")
     _git(other, "config", "user.name", "Taskledger Test")
-    (other / "project-a").mkdir(exist_ok=True)
-    (other / "project-a" / "pulled-note.txt").write_text("remote\n", encoding="utf-8")
+    (other / project_path).mkdir(exist_ok=True)
+    (other / project_path / "pulled-note.txt").write_text("remote\n", encoding="utf-8")
     _git(other, "add", "--all")
     _git(other, "commit", "-m", "Remote state update")
     _git(other, "push", "origin", "main")
@@ -420,7 +434,7 @@ def test_sync_git_pull_runs_git_pull_without_manual_cd(tmp_path: Path) -> None:
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-a",
+            project_path,
         ],
     )
 
@@ -430,7 +444,7 @@ def test_sync_git_pull_runs_git_pull_without_manual_cd(tmp_path: Path) -> None:
     assert payload["pulled"] is True
     assert payload["doctor_healthy"] is True
     assert payload["warnings"] == []
-    assert (sync_repo / "project-a" / "pulled-note.txt").exists()
+    assert (sync_repo / project_path / "pulled-note.txt").exists()
 
 
 # specmason: req=REQ-0057 ac=AC-0621
@@ -438,6 +452,7 @@ def test_sync_git_hooks_install_rejects_cross_project_managed_hook(
     tmp_path: Path,
 ) -> None:
     workspace_a, sync_repo = _init_sync_workspace(tmp_path, workspace_name="repo-a")
+    project_path = _sync_project_path(workspace_a, sync_repo)
     install_result = runner.invoke(
         app,
         [
@@ -450,7 +465,7 @@ def test_sync_git_hooks_install_rejects_cross_project_managed_hook(
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-a",
+            project_path,
         ],
     )
     assert install_result.exit_code == 0, _output(install_result)
@@ -461,6 +476,7 @@ def test_sync_git_hooks_install_rejects_cross_project_managed_hook(
         sync_repo=sync_repo,
         project_path="project-b",
     )
+    project_path_b = _sync_project_path(workspace_b, sync_repo)
     conflict_result = runner.invoke(
         app,
         [
@@ -473,7 +489,7 @@ def test_sync_git_hooks_install_rejects_cross_project_managed_hook(
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-b",
+            project_path_b,
         ],
     )
 
@@ -549,6 +565,7 @@ def test_sync_git_push_rejects_oversized_artifact_before_commit(
     tmp_path: Path,
 ) -> None:
     workspace, sync_repo = _init_sync_workspace(tmp_path)
+    project_path = _sync_project_path(workspace, sync_repo)
     create_result = runner.invoke(
         app,
         ["--root", str(workspace), "task", "create", "Oversized artifact"],
@@ -574,7 +591,7 @@ def test_sync_git_push_rejects_oversized_artifact_before_commit(
             "--repo",
             str(sync_repo),
             "--project-path",
-            "project-a",
+            project_path,
         ],
     )
     assert result.exit_code != 0

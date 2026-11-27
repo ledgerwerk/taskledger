@@ -39,7 +39,7 @@ from taskledger.storage.locks import lock_is_expired
 from taskledger.storage.task_identity import TaskAllocation
 from taskledger.storage.task_index import list_task_summaries
 from taskledger.storage.task_store import (
-    V2Paths,
+    TaskledgerStoragePaths,
     clear_active_task_state,
     list_runs,
     list_tasks,
@@ -62,7 +62,7 @@ from taskledger.timeutils import utc_now_iso
 # ---------------------------------------------------------------------------
 
 
-def _allocate_task_identity(paths: V2Paths) -> TaskAllocation:
+def _allocate_task_identity(paths: TaskledgerStoragePaths) -> TaskAllocation:
     """Reserve a UUIDv7 task bundle and return its current display alias."""
     from taskledger.storage.task_identity import allocate_task_identity
 

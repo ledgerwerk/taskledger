@@ -10,7 +10,6 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 from filelock import FileLock
 
@@ -22,15 +21,15 @@ from taskledger.domain._model_utils import (
 from taskledger.domain.states import TaskStatusStage
 from taskledger.domain.task import TaskRecord
 from taskledger.storage.common import write_json
+from taskledger.storage.paths import TaskledgerStoragePaths
 from taskledger.storage.task_store import (
-    V2Paths,
+    TaskVisibility,
     list_tasks_from_paths,
     task_markdown_path,
 )
 
 logger = logging.getLogger(__name__)
 
-TaskVisibility = Literal["visible", "archived", "all"]
 
 TASK_INDEX_FILENAME = "tasks.json"
 TASK_INDEX_SCHEMA_VERSION = 2
@@ -116,7 +115,7 @@ class TaskSummaryRecord:
         )
 
 
-def _task_index_path(paths: V2Paths) -> Path:
+def _task_index_path(paths: TaskledgerStoragePaths) -> Path:
     return paths.indexes_dir / TASK_INDEX_FILENAME
 
 
@@ -160,7 +159,7 @@ def _index_envelope(
     }
 
 
-def rebuild_task_index(paths: V2Paths) -> dict[str, int]:
+def rebuild_task_index(paths: TaskledgerStoragePaths) -> dict[str, int]:
     """Rebuild tasks.json from canonical Markdown task files."""
     from taskledger.timeutils import utc_now_iso
 
@@ -185,7 +184,7 @@ def rebuild_task_index(paths: V2Paths) -> dict[str, int]:
     return {"tasks": len(entries)}
 
 
-def _read_index(paths: V2Paths) -> dict[str, object] | None:
+def _read_index(paths: TaskledgerStoragePaths) -> dict[str, object] | None:
     """Read the task index file. Returns None if missing or malformed."""
     from taskledger.storage.common import try_load_json_object
 
@@ -193,7 +192,7 @@ def _read_index(paths: V2Paths) -> dict[str, object] | None:
 
 
 def list_task_summaries(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     visibility: TaskVisibility = "visible",
     statuses: set[str] | None = None,
@@ -242,7 +241,7 @@ def list_task_summaries(
 
 
 def resolve_task_summary(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     ref: str,
     *,
     include_archived: bool = False,
@@ -286,7 +285,7 @@ def resolve_task_summary(
 
 
 def _best_effort_update_task_index(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     task_id: str,
     update: Callable[[list[dict[str, object]]], None],
 ) -> None:
@@ -317,7 +316,7 @@ def _best_effort_update_task_index(
         logger.warning("Failed to update task index for %s", task_id, exc_info=True)
 
 
-def update_task_index_entry(paths: V2Paths, task: TaskRecord) -> None:
+def update_task_index_entry(paths: TaskledgerStoragePaths, task: TaskRecord) -> None:
     """Write through one task summary without a synchronous index rebuild."""
 
     path = task_markdown_path(paths, task.task_uuid or task.id)
@@ -349,7 +348,7 @@ def update_task_index_entry(paths: V2Paths, task: TaskRecord) -> None:
     _best_effort_update_task_index(paths, task.id, update)
 
 
-def remove_task_index_entry(paths: V2Paths, task_id: str) -> None:
+def remove_task_index_entry(paths: TaskledgerStoragePaths, task_id: str) -> None:
     """Remove one task summary by stable identity when it is resolvable."""
     from taskledger.errors import LaunchError
     from taskledger.storage.task_identity import task_identity_for_ref

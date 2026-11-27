@@ -57,7 +57,7 @@ from taskledger.storage.task_identity import (
 )
 from taskledger.storage.task_ids import write_task_id_tombstone
 from taskledger.storage.task_store import (
-    V2Paths,
+    TaskledgerStoragePaths,
     list_physical_runs_from_paths,
     list_runs_from_paths,
     load_active_task_state,
@@ -192,7 +192,7 @@ def _shadowed_migrated_allocation(
 
 
 def _write_ambiguous_runtime_lock(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     task_id: str,
     expires_at: str,

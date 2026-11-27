@@ -20,7 +20,7 @@ from taskledger.storage.task_identity import (
     scan_task_identity_inventory,
 )
 from taskledger.storage.task_store import (
-    V2Paths,
+    TaskledgerStoragePaths,
     resolve_v2_paths,
     v2_paths_for_ledger_ref,
 )
@@ -28,7 +28,7 @@ from taskledger.storage.task_store import (
 PROJECT_UUID = "d1fb158a-6755-4b26-8fbe-aef47f5a6d3a"
 
 
-def _legacy_project(root: Path) -> tuple[Path, V2Paths]:
+def _legacy_project(root: Path) -> tuple[Path, TaskledgerStoragePaths]:
     root.mkdir(parents=True, exist_ok=True)
     init_canonical_project_state(
         root,
@@ -40,7 +40,7 @@ def _legacy_project(root: Path) -> tuple[Path, V2Paths]:
     return root, paths
 
 
-def _add_task(paths: V2Paths, task_id: str, created_at: str) -> bytes:
+def _add_task(paths: TaskledgerStoragePaths, task_id: str, created_at: str) -> bytes:
     task = TaskRecord(
         id=task_id,
         slug=f"slug-{task_id}",
@@ -192,7 +192,7 @@ def test_layout5_migration_rolls_back_renames_when_index_rebuild_fails(
     write_markdown_front_matter(child_path, metadata, body)
     original = child_path.read_bytes()
 
-    def fail_rebuild(_paths: V2Paths) -> None:
+    def fail_rebuild(_paths: TaskledgerStoragePaths) -> None:
         raise RuntimeError("injected rebuild failure")
 
     monkeypatch.setattr(
@@ -435,7 +435,7 @@ def test_layout5_migration_converts_every_canonical_ledger_before_version_bump(
     tmp_path: Path,
 ) -> None:
     root, main_paths = _legacy_project(tmp_path / "multi-ledger")
-    context = load_project_context(root, require_initialized=False, allow_legacy=False)
+    context = load_project_context(root, require_initialized=False)
     feature_paths = v2_paths_for_ledger_ref(context, "clean-start")
     feature_paths.tasks_dir.mkdir(parents=True)
     _add_task(main_paths, "task-0001", "2024-11-01T10:00:00+00:00")
@@ -457,7 +457,7 @@ def test_multi_ledger_failure_keeps_version_five_and_retry_resumes(
     tmp_path: Path,
 ) -> None:
     root, main_paths = _legacy_project(tmp_path / "multi-ledger-lock")
-    context = load_project_context(root, require_initialized=False, allow_legacy=False)
+    context = load_project_context(root, require_initialized=False)
     feature_paths = v2_paths_for_ledger_ref(context, "clean-start")
     feature_paths.tasks_dir.mkdir(parents=True)
     _add_task(main_paths, "task-0001", "2024-12-01T10:00:00+00:00")
@@ -498,7 +498,7 @@ def test_layout6_physical_drift_is_read_only_until_mutation_reconciles(
     assert (paths.tasks_dir / "task-0001").is_dir()
     assert not (paths.ledger_dir / "task-directory-migration-v5-to-v6.json").exists()
 
-    load_project_context(root, require_initialized=False, allow_legacy=False)
+    load_project_context(root, require_initialized=False)
     assert (paths.tasks_dir / "task-0001").is_dir()
     assert not (paths.ledger_dir / "task-directory-migration-v5-to-v6.json").exists()
 

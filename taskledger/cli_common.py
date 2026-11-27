@@ -22,7 +22,7 @@ from taskledger.storage.task_store import TaskRecord, resolve_task_or_active
 
 if TYPE_CHECKING:
     from taskledger.storage.project_context import TaskledgerProjectContext
-    from taskledger.storage.task_store import V2Paths
+    from taskledger.storage.task_store import TaskledgerStoragePaths
 
 
 @dataclass(slots=True)
@@ -34,29 +34,24 @@ class CommandRuntime:
     """
 
     workspace_root: Path
-    _contexts: dict[tuple[bool, bool], TaskledgerProjectContext] = field(
-        default_factory=dict
-    )
-    _paths: V2Paths | None = None
+    _contexts: dict[bool, TaskledgerProjectContext] = field(default_factory=dict)
+    _paths: TaskledgerStoragePaths | None = None
 
     def project_context(
         self,
         *,
         require_initialized: bool = True,
-        allow_legacy: bool = True,
     ) -> TaskledgerProjectContext:
         from taskledger.storage.project_context import load_project_context
 
-        key = (require_initialized, allow_legacy)
-        if key not in self._contexts:
-            self._contexts[key] = load_project_context(
+        if require_initialized not in self._contexts:
+            self._contexts[require_initialized] = load_project_context(
                 self.workspace_root,
                 require_initialized=require_initialized,
-                allow_legacy=allow_legacy,
             )
-        return self._contexts[key]
+        return self._contexts[require_initialized]
 
-    def paths(self) -> V2Paths:
+    def paths(self) -> TaskledgerStoragePaths:
         from taskledger.storage.task_store import v2_paths_from_context
 
         if self._paths is None:

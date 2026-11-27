@@ -8,7 +8,7 @@ from ledgercore.refs import LedgerResourceRef, parse_resource_ref
 
 from taskledger.errors import LaunchError
 from taskledger.storage.ledger_config import load_ledger_identity
-from taskledger.storage.paths import load_project_locator
+from taskledger.storage.project_context import load_project_context
 
 TASKLEDGER_RESOURCE_KINDS = frozenset(
     {
@@ -35,8 +35,8 @@ class RefContext:
 
 
 def ref_context_for_workspace(workspace_root: Path) -> RefContext:
-    locator = load_project_locator(workspace_root)
-    identity = load_ledger_identity(locator.config_path)
+    context = load_project_context(workspace_root)
+    identity = load_ledger_identity(context.config_path)
     return RefContext(
         ledger_code=identity.code,
         allowed_ledgers=frozenset({identity.code}),

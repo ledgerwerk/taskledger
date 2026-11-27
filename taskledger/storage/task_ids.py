@@ -13,7 +13,8 @@ from typing import Literal
 from taskledger.errors import LaunchError
 from taskledger.ids import TASK_ID_FORMAT, parse_uuid7
 from taskledger.storage.frontmatter import read_markdown_front_matter
-from taskledger.storage.task_store import V2Paths, require_mutable_v2_layout
+from taskledger.storage.layout import require_mutable_v2_layout
+from taskledger.storage.paths import TaskledgerStoragePaths
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,7 +77,7 @@ def allocation_source_fingerprint(path: Path) -> str:
 
 
 def discover_incomplete_task_allocations(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
 ) -> tuple[IncompleteTaskAllocation, ...]:
     """Discover incomplete physical directories without a clean identity inventory."""
     display_ids: dict[Path, str] = {}
@@ -160,7 +161,7 @@ def _parse_canonical_task_id(value: str, *, path: Path) -> tuple[str, int]:
 
 
 def _scan_task_allocations(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
 ) -> tuple[list[TaskIdAllocation], list[Path], list[IncompleteTaskAllocation]]:
     allocations: list[TaskIdAllocation] = []
     empty_reservations: list[Path] = []
@@ -232,7 +233,7 @@ def _scan_task_allocations(
     return allocations, empty_reservations, incomplete_allocations
 
 
-def inspect_task_id_inventory(paths: V2Paths) -> TaskIdInventory:
+def inspect_task_id_inventory(paths: TaskledgerStoragePaths) -> TaskIdInventory:
     allocations, empty_reservations, incomplete_allocations = _scan_task_allocations(
         paths
     )
@@ -267,7 +268,7 @@ def inspect_task_id_inventory(paths: V2Paths) -> TaskIdInventory:
 
 
 def write_task_id_tombstone(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     task_id: str,
     *,
     reason: str,
@@ -331,7 +332,7 @@ def write_task_id_tombstone(
         return tombstone_path
 
 
-def scan_task_id_inventory(paths: V2Paths) -> TaskIdInventory:
+def scan_task_id_inventory(paths: TaskledgerStoragePaths) -> TaskIdInventory:
     inventory = inspect_task_id_inventory(paths)
     if inventory.incomplete_allocations:
         allocation = inventory.incomplete_allocations[0]
@@ -339,11 +340,11 @@ def scan_task_id_inventory(paths: V2Paths) -> TaskIdInventory:
     return inventory
 
 
-def next_task_id(paths: V2Paths) -> str:
+def next_task_id(paths: TaskledgerStoragePaths) -> str:
     return scan_task_id_inventory(paths).next_task_id
 
 
-def reserve_task_directory(paths: V2Paths, task_id: str) -> Path:
+def reserve_task_directory(paths: TaskledgerStoragePaths, task_id: str) -> Path:
     from taskledger.storage.task_identity import identity_mutation_lock
 
     task_dir = paths.tasks_dir / task_id
@@ -368,7 +369,7 @@ def allocate_task_directory(
 
 
 def allocate_task_directory_from_paths(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     max_attempts: int = 32,
 ) -> tuple[str, Path]:
@@ -386,7 +387,9 @@ def allocate_task_directory_from_paths(
     )
 
 
-def reserve_task_directories(paths: V2Paths, task_ids: list[str]) -> None:
+def reserve_task_directories(
+    paths: TaskledgerStoragePaths, task_ids: list[str]
+) -> None:
     """Reserve imported task directories with exclusive creation."""
     from taskledger.storage.task_identity import identity_mutation_lock
 

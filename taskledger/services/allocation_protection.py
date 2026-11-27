@@ -6,11 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from taskledger.domain.models import ActiveTaskState, TaskRunRecord
-from taskledger.storage.task_store import V2Paths, list_physical_runs_from_paths
+from taskledger.storage.task_store import (
+    TaskledgerStoragePaths,
+    list_physical_runs_from_paths,
+)
 
 
 def inspect_allocation_protection(
-    paths: V2Paths, actions: list[dict[str, Any]]
+    paths: TaskledgerStoragePaths, actions: list[dict[str, Any]]
 ) -> list[dict[str, object]]:
     """Collect active pointers, locks, and physical running runs blocking repair."""
     from taskledger.services.lock_inventory import build_lock_inventory

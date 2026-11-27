@@ -14,7 +14,7 @@ from taskledger.timeutils import utc_now_iso
 
 if TYPE_CHECKING:
     from taskledger.storage.task_ids import IncompleteTaskAllocation
-    from taskledger.storage.task_store import V2Paths
+    from taskledger.storage.task_store import TaskledgerStoragePaths
 
 _JOURNAL_SCHEMA_VERSION = 1
 _EVENT_NAME = "repair.task_allocation_quarantined"
@@ -46,7 +46,9 @@ def _load_journal(journal_path: Path) -> dict[str, Any]:
     return payload
 
 
-def _ensure_ledger_path(paths: V2Paths, path: Path, *, must_exist: bool | None) -> Path:
+def _ensure_ledger_path(
+    paths: TaskledgerStoragePaths, path: Path, *, must_exist: bool | None
+) -> Path:
     ledger_root = paths.ledger_dir.resolve()
     try:
         relative = path.absolute().relative_to(paths.ledger_dir.absolute())
@@ -87,7 +89,7 @@ def _fingerprint(path: Path) -> str:
 
 
 def _plan_action(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     allocation: IncompleteTaskAllocation,
     entry: dict[str, object],
     *,
@@ -133,7 +135,9 @@ def _plan_action(
     }
 
 
-def _assert_unprotected(paths: V2Paths, actions: list[dict[str, Any]]) -> None:
+def _assert_unprotected(
+    paths: TaskledgerStoragePaths, actions: list[dict[str, Any]]
+) -> None:
     blockers = inspect_allocation_protection(paths, actions)
     if blockers:
         raise LaunchError(
@@ -143,7 +147,7 @@ def _assert_unprotected(paths: V2Paths, actions: list[dict[str, Any]]) -> None:
         )
 
 
-def _verify_local_action(paths: V2Paths, action: dict[str, Any]) -> None:
+def _verify_local_action(paths: TaskledgerStoragePaths, action: dict[str, Any]) -> None:
     import importlib
 
     from taskledger.storage.task_identity import inspect_task_identity_sources
@@ -204,7 +208,9 @@ def _verify_local_action(paths: V2Paths, action: dict[str, Any]) -> None:
         )
 
 
-def _conflict_identity_payload(paths: V2Paths, source: Any) -> dict[str, object]:
+def _conflict_identity_payload(
+    paths: TaskledgerStoragePaths, source: Any
+) -> dict[str, object]:
     payload: dict[str, object] = {
         "task_uuid": str(source.task_uuid),
         "legacy_task_id": source.legacy_task_id,
@@ -234,7 +240,7 @@ def _read_conflict_tombstone(path: Path) -> dict[str, object]:
 
 
 def _migration_receipt_evidence(
-    paths: V2Paths, legacy_task_id: str, owner: Any
+    paths: TaskledgerStoragePaths, legacy_task_id: str, owner: Any
 ) -> dict[str, object] | None:
     receipt_path = paths.ledger_dir / "task-directory-migration-v5-to-v6.json"
     if not receipt_path.is_file() or receipt_path.is_symlink():
@@ -271,7 +277,7 @@ def _migration_receipt_evidence(
 
 
 def _plan_legacy_conflict_action(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     conflict: dict[str, object],
     *,
     allow_unverifiable: bool,
@@ -423,7 +429,7 @@ def _plan_legacy_conflict_action(
 
 
 def plan_identity_conflict_recovery(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     allow_unverifiable: bool = False,
     tombstone_id: str | None = None,
@@ -552,7 +558,7 @@ def plan_identity_conflict_recovery(
 
 
 def _validate_identity_conflict_action_inputs(
-    paths: V2Paths, action: dict[str, Any]
+    paths: TaskledgerStoragePaths, action: dict[str, Any]
 ) -> None:
     from taskledger.storage.task_identity import inspect_legacy_identity_claims
 
@@ -599,7 +605,9 @@ def _validate_identity_conflict_action_inputs(
         )
 
 
-def _verify_identity_conflict_action(paths: V2Paths, action: dict[str, Any]) -> None:
+def _verify_identity_conflict_action(
+    paths: TaskledgerStoragePaths, action: dict[str, Any]
+) -> None:
     from taskledger.storage.task_identity import inspect_legacy_identity_claims
 
     legacy_task_id = str(action["legacy_task_id"])
@@ -674,7 +682,7 @@ def _verify_identity_conflict_action(paths: V2Paths, action: dict[str, Any]) -> 
 
 
 def _rollback_identity_conflict_transaction(
-    paths: V2Paths, journal_path: Path, journal: dict[str, Any]
+    paths: TaskledgerStoragePaths, journal_path: Path, journal: dict[str, Any]
 ) -> list[str]:
     import base64
 
@@ -763,7 +771,7 @@ def _rollback_identity_conflict_transaction(
 
 def _append_identity_conflict_events(
     workspace_root: Path,
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     journal_path: Path,
     journal: dict[str, Any],
 ) -> list[str]:
@@ -849,7 +857,7 @@ def _append_identity_conflict_events(
 
 def apply_identity_conflict_repair_batch(
     workspace_root: Path,
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     plan_id: str,
     reason: str,
@@ -1171,7 +1179,7 @@ def _remaining_conflicts(
 
 
 def _rollback_transaction(
-    paths: V2Paths, journal_path: Path, journal: dict[str, Any]
+    paths: TaskledgerStoragePaths, journal_path: Path, journal: dict[str, Any]
 ) -> list[str]:
     import importlib
 
@@ -1270,7 +1278,7 @@ def _rollback_transaction(
 
 def _append_transaction_events(
     workspace_root: Path,
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     journal_path: Path,
     journal: dict[str, Any],
 ) -> list[str]:
@@ -1425,7 +1433,9 @@ def _result_from_journal(
     }
 
 
-def _validate_reviewed_survivor(paths: V2Paths, action: dict[str, Any]) -> None:
+def _validate_reviewed_survivor(
+    paths: TaskledgerStoragePaths, action: dict[str, Any]
+) -> None:
     survivor = action.get("survivor")
     if not isinstance(survivor, dict):
         return
@@ -1441,7 +1451,7 @@ def _validate_reviewed_survivor(paths: V2Paths, action: dict[str, Any]) -> None:
 
 def apply_allocation_repair_batch(
     workspace_root: Path,
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     allocations: tuple[IncompleteTaskAllocation, ...],
     entries: list[dict[str, object]],
     *,
@@ -1647,7 +1657,9 @@ def apply_allocation_repair_batch(
         ) | ({"audit_errors": audit_errors} if audit_errors else {})
 
 
-def list_allocation_repair_transactions(paths: V2Paths) -> dict[str, object]:
+def list_allocation_repair_transactions(
+    paths: TaskledgerStoragePaths,
+) -> dict[str, object]:
     txn_root = paths.ledger_dir / "_recovery" / "allocation-repair-transactions"
     transactions: list[dict[str, object]] = []
     if txn_root.exists():
@@ -1672,7 +1684,7 @@ def list_allocation_repair_transactions(paths: V2Paths) -> dict[str, object]:
 
 
 def _plan_identity_conflict_transaction_recovery(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     transaction_id: str,
     journal_path: Path,
     journal: dict[str, Any],
@@ -1749,7 +1761,9 @@ def _plan_identity_conflict_transaction_recovery(
     }
 
 
-def plan_allocation_recovery(paths: V2Paths, transaction_id: str) -> dict[str, object]:
+def plan_allocation_recovery(
+    paths: TaskledgerStoragePaths, transaction_id: str
+) -> dict[str, object]:
     from uuid import UUID
 
     try:
@@ -1833,7 +1847,7 @@ def plan_allocation_recovery(paths: V2Paths, transaction_id: str) -> dict[str, o
 
 def recover_allocation_repair_transaction(
     workspace_root: Path,
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     transaction_id: str,
     *,
     apply: bool,

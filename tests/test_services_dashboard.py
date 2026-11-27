@@ -12,16 +12,16 @@ from taskledger.domain.models import (
 )
 from taskledger.services.dashboard import dashboard, render_dashboard_text
 from taskledger.storage.task_store import (
-    ensure_v2_layout,
     save_active_task_state,
     save_task,
     save_todos,
 )
+from tests.support.project import ensure_project_layout
 
 
 def _create_task_and_activate(tmp_path: Path) -> TaskRecord:
     """Create a minimal task and set it as active."""
-    ensure_v2_layout(tmp_path)
+    ensure_project_layout(tmp_path)
     task = TaskRecord(
         id="task-0001",
         slug="test-task",

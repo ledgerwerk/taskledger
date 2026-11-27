@@ -410,13 +410,15 @@ class TestAllLedgers:
         assert result.exit_code == 0, result.output
 
         # Read config before
-        config_before = (tmp_path / "taskledger.toml").read_text()
+        config_before = (
+            tmp_path / ".ledger" / "taskledger" / "config.toml"
+        ).read_text()
 
         # Run tree --all-ledgers
         _tree(tmp_path, "--all-ledgers")
 
         # Config should be unchanged
-        config_after = (tmp_path / "taskledger.toml").read_text()
+        config_after = (tmp_path / ".ledger" / "taskledger" / "config.toml").read_text()
         assert config_before == config_after
 
 

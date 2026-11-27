@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 from taskledger.errors import LaunchError
 from taskledger.services.doctor import inspect_v2_project
-from taskledger.services.git_utils import (
-    check_git_path_state as _check_git_path_state,
-)
 from taskledger.services.git_utils import (
     git_root as _git_root,
 )
@@ -17,21 +12,10 @@ from taskledger.services.git_utils import (
     relative_to_git_root as _relative_to,
 )
 from taskledger.services.git_utils import (
-    render_relative_or_absolute as _render_taskledger_dir_value,
-)
-from taskledger.services.git_utils import (
     run_git as _run_git,
 )
 from taskledger.services.lock_inventory import LockInventory, build_lock_inventory
-from taskledger.storage.ledger_config import load_ledger_config
-from taskledger.storage.ledgercore_backend import locate_taskledger_project
-from taskledger.storage.paths import DEFAULT_TASKLEDGER_DIR_NAME, load_project_locator
-from taskledger.storage.project_config import update_taskledger_dir
 from taskledger.storage.project_context import load_project_context
-from taskledger.storage.project_identity import (
-    load_project_uuid,
-    project_name_or_default,
-)
 
 
 @dataclass(slots=True, frozen=True)
@@ -68,7 +52,7 @@ class StorageLocationReport:
     active_lock_count: int
     has_active_locks: bool
     warnings: tuple[str, ...]
-    mode: str = "legacy"
+    mode: str = "canonical"
     project_root: str | None = None
     project_uuid_source: str | None = None
     manifest_path: str | None = None
@@ -92,114 +76,65 @@ class StorageLocationReport:
     next_commands: tuple[str, ...] | None = None
 
     def to_dict(self) -> dict[str, object]:
+        mounts = {
+            name: {
+                "storage": mount.get("storage"),
+                "source": mount.get("source"),
+                "root": mount.get("root"),
+                "path": mount.get("path"),
+                "binding": mount.get("binding", {"status": "unknown"}),
+                "initialized": mount.get("initialized", False),
+            }
+            for name, mount in (self.mounts or {}).items()
+        }
         payload: dict[str, object] = {
             "kind": "storage_location_report",
+            "schema_version": 2,
             "mode": self.mode,
-            "workspace_root": self.workspace_root,
-            "project_root": self.project_root or self.workspace_root,
-            "config_path": self.config_path,
-            "project_uuid": self.project_uuid,
-            "project_name": self.project_name,
-            "ledger_ref": self.ledger_ref,
+            "project": {
+                "root": self.project_root or self.workspace_root,
+                "uuid": self.project_uuid,
+                "name": self.project_name,
+            },
+            "manifest": {"path": self.manifest_path, "schema_version": 3},
+            "local_overrides": {
+                "path": self.local_config_path,
+                "exists": self.local_config_path is not None,
+                "active": self.local_config_path is not None,
+            },
+            "config": {"path": self.config_path, "binding": {"status": "valid"}},
+            "mounts": mounts,
             "active_lock_count": self.active_lock_count,
-            "has_active_locks": self.has_active_locks,
             "warnings": list(self.warnings),
         }
-        # Lock breakdown (backward-compatible additions).
-        locks_section: dict[str, object] = {
-            "active_count": self.active_lock_count,
-        }
         if self.lock_file_count is not None:
-            locks_section["lock_file_count"] = self.lock_file_count
+            locks_section: dict[str, object] = {
+                "active_count": self.active_lock_count,
+                "lock_file_count": self.lock_file_count,
+                "status": (
+                    "invalid"
+                    if self.malformed_lock_count
+                    else "attention"
+                    if self.active_lock_count or self.expired_lock_count
+                    else "clean"
+                ),
+            }
             payload["lock_file_count"] = self.lock_file_count
-        if self.expired_lock_count is not None:
-            locks_section["expired_count"] = self.expired_lock_count
-            payload["expired_lock_count"] = self.expired_lock_count
-        if self.stale_lock_count is not None:
-            locks_section["stale_count"] = self.stale_lock_count
-        if self.malformed_lock_count is not None:
-            locks_section["malformed_count"] = self.malformed_lock_count
-            payload["malformed_lock_count"] = self.malformed_lock_count
-        if self.unverifiable_lock_count is not None:
-            locks_section["unverifiable_count"] = self.unverifiable_lock_count
-        if self.lock_file_count is not None:
-            locks_section["status"] = (
-                "invalid"
-                if self.malformed_lock_count
-                else "attention"
-                if self.active_lock_count or self.expired_lock_count
-                else "clean"
-            )
             payload["locks"] = locks_section
+            if self.expired_lock_count is not None:
+                locks_section["expired_count"] = self.expired_lock_count
+                payload["expired_lock_count"] = self.expired_lock_count
+            if self.stale_lock_count is not None:
+                locks_section["stale_count"] = self.stale_lock_count
+            if self.malformed_lock_count is not None:
+                locks_section["malformed_count"] = self.malformed_lock_count
+                payload["malformed_lock_count"] = self.malformed_lock_count
+            if self.unverifiable_lock_count is not None:
+                locks_section["unverifiable_count"] = self.unverifiable_lock_count
         if self.issues:
             payload["issues"] = [issue.to_dict() for issue in self.issues]
         if self.next_commands:
             payload["next_commands"] = list(self.next_commands)
-        if self.mode == "legacy":
-            payload.update(
-                {
-                    "taskledger_dir": self.taskledger_dir,
-                    "inside_workspace": self.inside_workspace,
-                    "is_git_repo": self.is_git_repo,
-                    "git_root": self.git_root,
-                }
-            )
-            if self.git_tracked is not None:
-                payload["git"] = {
-                    "root": self.git_root,
-                    "tracked": self.git_tracked,
-                    "ignored": self.git_ignored,
-                    "ignore_source": self.git_ignore_source,
-                }
-        else:
-            mounts = {
-                name: {
-                    "storage": mount.get("storage"),
-                    "source": mount.get("source"),
-                    "root": mount.get("root"),
-                    "path": mount.get("path"),
-                    "binding": mount.get("binding", {"status": "unknown"}),
-                    "initialized": mount.get("initialized", False),
-                }
-                for name, mount in (self.mounts or {}).items()
-            }
-            payload = {
-                "kind": "storage_location_report",
-                "schema_version": 2,
-                "mode": self.mode,
-                "project": {
-                    "root": self.project_root or self.workspace_root,
-                    "uuid": self.project_uuid,
-                    "name": self.project_name,
-                },
-                "manifest": {
-                    "path": self.manifest_path,
-                    "schema_version": 3,
-                },
-                "local_overrides": {
-                    "path": self.local_config_path,
-                    "exists": self.local_config_path is not None,
-                    "active": self.local_config_path is not None,
-                },
-                "config": {
-                    "path": self.config_path,
-                    "binding": {"status": "valid"},
-                },
-                "mounts": mounts,
-                "active_lock_count": self.active_lock_count,
-                "warnings": list(self.warnings),
-            }
-            if self.lock_file_count is not None:
-                payload["lock_file_count"] = self.lock_file_count
-                payload["locks"] = locks_section
-            if self.expired_lock_count is not None:
-                payload["expired_lock_count"] = self.expired_lock_count
-            if self.malformed_lock_count is not None:
-                payload["malformed_lock_count"] = self.malformed_lock_count
-            if self.issues:
-                payload["issues"] = [issue.to_dict() for issue in self.issues]
-            if self.next_commands:
-                payload["next_commands"] = list(self.next_commands)
         return payload
 
 
@@ -312,122 +247,43 @@ class SyncCommitReport:
 def build_storage_location_report(
     workspace_root: Path, *, require_initialized: bool = True
 ) -> StorageLocationReport:
-    try:
-        context = load_project_context(
-            workspace_root, require_initialized=require_initialized
-        )
-    except LaunchError:
-        locator = locate_taskledger_project(workspace_root)
-        if locator is not None and locator.source == "canonical":
-            raise
-        context = None
-    if (
-        context is not None
-        and context.mode == "canonical"
-        and context.layout is not None
-    ):
-        validation_report = context.storage_validation
-        mounts: dict[str, dict[str, object]] = {}
-        for name, mount in context.layout.mounts.items():
-            validation_result = (
-                next(
-                    (
-                        result
-                        for result in validation_report.results
-                        if result.path == mount.path
-                    ),
-                    None,
-                )
-                if validation_report is not None
-                else None
+    context = load_project_context(
+        workspace_root, require_initialized=require_initialized
+    )
+    assert context.layout is not None
+    validation_report = context.storage_validation
+    mounts: dict[str, dict[str, object]] = {}
+    for name, mount in context.layout.mounts.items():
+        validation_result = (
+            next(
+                (
+                    result
+                    for result in validation_report.results
+                    if result.path == mount.path
+                ),
+                None,
             )
-            binding: dict[str, str] = {"status": "unknown"}
-            if validation_result is not None:
-                binding["status"] = "valid" if validation_result.valid else "invalid"
-                if validation_result.reason is not None:
-                    binding["reason"] = validation_result.reason
-            mounts[name] = {
-                "storage": str(mount.storage),
-                "scope": str(mount.scope),
-                "root": str(mount.root) if mount.root is not None else None,
-                "path": str(mount.path),
-                "binding": binding,
-                "source": str(mount.source),
-                "initialized": mount.path.exists(),
-            }
-        active_lock_count = _active_lock_count(workspace_root)
-        try:
-            inventory = _build_lock_inventory(workspace_root)
-            lock_file_count = inventory.lock_file_count
-            expired_lock_count = inventory.expired_count
-            stale_lock_count = inventory.stale_count
-            malformed_lock_count = inventory.malformed_count
-            unverifiable_lock_count = inventory.unverifiable_count
-        except LaunchError:
-            lock_file_count = None
-            expired_lock_count = None
-            stale_lock_count = None
-            malformed_lock_count = None
-            unverifiable_lock_count = None
-        warnings = (
-            [f"{active_lock_count} active lock(s) are present."]
-            if active_lock_count
-            else []
-        )
-        store_root = context.store_root
-        git_root = _git_root(context.paths.data_root)
-        relative_path = (
-            _relative_to(context.paths.data_root, git_root)
-            if git_root is not None
+            if validation_report is not None
             else None
         )
-        return StorageLocationReport(
-            workspace_root=context.project_root.as_posix(),
-            config_path=context.config_path.as_posix(),
-            taskledger_dir=context.paths.data_root.as_posix(),
-            project_uuid=context.project_uuid,
-            project_name=context.project_name,
-            ledger_ref=context.ledger_state.ref,
-            inside_workspace=False,
-            is_git_repo=git_root is not None,
-            git_root=git_root.as_posix() if git_root is not None else None,
-            active_lock_count=active_lock_count,
-            has_active_locks=active_lock_count > 0,
-            warnings=tuple(warnings),
-            mode="canonical",
-            project_root=context.project_root.as_posix(),
-            project_uuid_source="manifest",
-            manifest_path=context.layout.manifest_path.as_posix(),
-            local_config_path=context.layout.local_config_path.as_posix(),
-            checkout_id=context.layout.checkout_id,
-            mounts=mounts,
-            workspace_provider=context.workspace_provider,
-            store_root=store_root.as_posix() if store_root else None,
-            store_marker=context.store_marker_path.as_posix()
-            if context.store_marker_path
-            else None,
-            binding=context.binding_path.as_posix() if context.binding_path else None,
-            relative_path=relative_path,
-            lock_file_count=lock_file_count,
-            expired_lock_count=expired_lock_count,
-            stale_lock_count=stale_lock_count,
-            malformed_lock_count=malformed_lock_count,
-            unverifiable_lock_count=unverifiable_lock_count,
-        )
-    legacy_locator = load_project_locator(workspace_root)
-    taskledger_dir = legacy_locator.taskledger_dir
-    config_path = legacy_locator.config_path
-    project_uuid = load_project_uuid(config_path)
-    project_name = project_name_or_default(
-        config_path,
-        workspace_root=legacy_locator.workspace_root,
-    )
-    ledger_ref = load_ledger_config(config_path).ref
-    inside_workspace = _is_within(taskledger_dir, legacy_locator.workspace_root)
-    git_root = _git_root(taskledger_dir)
-    active_lock_count = _active_lock_count(legacy_locator.workspace_root)
+        binding: dict[str, str] = {"status": "unknown"}
+        if validation_result is not None:
+            binding["status"] = "valid" if validation_result.valid else "invalid"
+            if validation_result.reason is not None:
+                binding["reason"] = validation_result.reason
+        mounts[name] = {
+            "storage": str(mount.storage),
+            "scope": str(mount.scope),
+            "root": str(mount.root) if mount.root is not None else None,
+            "path": str(mount.path),
+            "binding": binding,
+            "source": str(mount.source),
+            "initialized": mount.path.exists(),
+        }
+
+    active_lock_count = _active_lock_count(workspace_root)
     try:
-        inventory = _build_lock_inventory(legacy_locator.workspace_root)
+        inventory = _build_lock_inventory(workspace_root)
         lock_file_count = inventory.lock_file_count
         expired_lock_count = inventory.expired_count
         stale_lock_count = inventory.stale_count
@@ -439,49 +295,48 @@ def build_storage_location_report(
         stale_lock_count = None
         malformed_lock_count = None
         unverifiable_lock_count = None
-    legacy_warnings: list[str] = []
-    # Git-aware in-workspace diagnostics.
-    git_tracked: bool | None = None
-    git_ignored: bool | None = None
-    git_ignore_source: str | None = None
-    if inside_workspace:
-        git_state = _check_git_path_state(taskledger_dir)
-        git_tracked = git_state.tracked
-        git_ignored = git_state.ignored
-        git_ignore_source = git_state.ignore_source
-        if git_state.tracked:
-            legacy_warnings.append(
-                "Durable runtime state is tracked by Git. "
-                "Run `git rm -r --cached -- .taskledger`."
-            )
-        elif not git_state.ignored:
-            legacy_warnings.append(
-                "Add `.taskledger/` to `.gitignore` to prevent accidental tracking."
-            )
-        # If ignored and untracked: no warning needed (safe).
-    if active_lock_count:
-        legacy_warnings.append(f"{active_lock_count} active lock(s) are present.")
+
+    warnings = (
+        [f"{active_lock_count} active lock(s) are present."]
+        if active_lock_count
+        else []
+    )
+    data_root = context.paths.data_root
+    store_root = context.store_root
+    git_root = _git_root(data_root)
+    relative_path = _relative_to(data_root, git_root) if git_root is not None else None
     return StorageLocationReport(
-        workspace_root=legacy_locator.workspace_root.as_posix(),
-        config_path=config_path.as_posix(),
-        taskledger_dir=taskledger_dir.as_posix(),
-        project_uuid=project_uuid,
-        project_name=project_name,
-        ledger_ref=ledger_ref,
-        inside_workspace=inside_workspace,
+        workspace_root=context.project_root.as_posix(),
+        config_path=context.config_path.as_posix(),
+        taskledger_dir=data_root.as_posix(),
+        project_uuid=context.project_uuid,
+        project_name=context.project_name,
+        ledger_ref=context.ledger_state.ref,
+        inside_workspace=_is_within(data_root, context.project_root),
         is_git_repo=git_root is not None,
         git_root=git_root.as_posix() if git_root is not None else None,
         active_lock_count=active_lock_count,
         has_active_locks=active_lock_count > 0,
-        warnings=tuple(legacy_warnings),
+        warnings=tuple(warnings),
+        mode="canonical",
+        project_root=context.project_root.as_posix(),
+        project_uuid_source="manifest",
+        manifest_path=context.layout.manifest_path.as_posix(),
+        local_config_path=context.layout.local_config_path.as_posix(),
+        checkout_id=context.layout.checkout_id,
+        mounts=mounts,
+        workspace_provider=context.workspace_provider,
+        store_root=store_root.as_posix() if store_root else None,
+        store_marker=(
+            context.store_marker_path.as_posix() if context.store_marker_path else None
+        ),
+        binding=context.binding_path.as_posix() if context.binding_path else None,
+        relative_path=relative_path,
         lock_file_count=lock_file_count,
         expired_lock_count=expired_lock_count,
         stale_lock_count=stale_lock_count,
         malformed_lock_count=malformed_lock_count,
         unverifiable_lock_count=unverifiable_lock_count,
-        git_tracked=git_tracked,
-        git_ignored=git_ignored,
-        git_ignore_source=git_ignore_source,
     )
 
 
@@ -538,140 +393,39 @@ def move_taskledger_storage(
     adopt_existing: bool = False,
     force: bool = False,
 ) -> StorageMoveReport:
-    try:
-        context = load_project_context(workspace_root)
-    except LaunchError:
-        context = None
-    if context is not None and context.mode == "canonical":
-        raise LaunchError(
-            "Canonical Taskledger storage has one fixed sibling location. "
-            "Use `taskledger migrate` to convert a legacy or superseded layout."
-        )
-    if mode not in {"copy", "move"}:
-        raise LaunchError("mode must be one of: copy, move.")
-    locator = load_project_locator(workspace_root)
-    source = locator.taskledger_dir
-    target_path = _resolve_target(locator.workspace_root, target)
-    default_source = locator.workspace_root / DEFAULT_TASKLEDGER_DIR_NAME
-    if source == target_path:
-        raise LaunchError("Source and target taskledger_dir are identical.")
-    if not source.exists():
-        raise LaunchError(
-            "Current taskledger_dir does not exist: "
-            f"{source.as_posix()}. Run taskledger init first."
-        )
-    if source != default_source and not force:
-        raise LaunchError(
-            "Current config already points to a non-default taskledger_dir. "
-            "Use --force to migrate from an existing external location."
-        )
-    if target_path.exists():
-        if any(target_path.iterdir()):
-            if not adopt_existing:
-                raise LaunchError(
-                    "Target exists and is not empty. "
-                    "Use --adopt-existing to point at it explicitly."
-                )
-        else:
-            adopt_existing = False
-    if adopt_existing:
-        _verify_adoptable_target(target_path)
-    else:
-        shutil.copytree(source, target_path, dirs_exist_ok=target_path.exists())
-
-    original_config_text = locator.config_path.read_text(encoding="utf-8")
-    configured_value = _render_taskledger_dir_value(locator.workspace_root, target_path)
-    update_taskledger_dir(locator.config_path, configured_value)
-    doctor = inspect_v2_project(locator.workspace_root)
-    if not doctor["healthy"]:
-        from taskledger.storage.atomic import atomic_write_text
-
-        atomic_write_text(locator.config_path, original_config_text)
-        raise LaunchError(
-            "taskledger doctor failed after updating taskledger_dir:\n"
-            + "\n".join(str(item) for item in doctor["errors"])  # type: ignore[attr-defined]
-        )
-
-    backup_path: Path | None = None
-    warnings: list[str] = []
-    if mode == "move":
-        backup_path = _backup_path_for(source)
-        source.rename(backup_path)
-        warnings.append(
-            "Original storage was preserved at "
-            f"{backup_path.as_posix()} as a recoverable backup."
-        )
-
-    target_git_root = _git_root(target_path)
-    next_commands = [
-        f"git add {locator.config_path.name}",
-    ]
-    if target_git_root is not None:
-        next_commands.append(f"git -C {target_git_root.as_posix()} status --short")
-    return StorageMoveReport(
-        source=source.as_posix(),
-        target=target_path.as_posix(),
-        mode=mode,
-        config_path=locator.config_path.as_posix(),
-        project_uuid=load_project_uuid(locator.config_path),
-        project_name=project_name_or_default(
-            locator.config_path,
-            workspace_root=locator.workspace_root,
-        ),
-        ledger_ref=load_ledger_config(locator.config_path).ref,
-        inside_workspace=_is_within(target_path, locator.workspace_root),
-        adopted_existing=adopt_existing,
-        backup_path=backup_path.as_posix() if backup_path is not None else None,
-        doctor_healthy=bool(doctor["healthy"]),
-        doctor_errors=tuple(str(item) for item in doctor["errors"]),  # type: ignore[attr-defined]
-        next_commands=tuple(next_commands),
-        warnings=tuple(warnings),
+    del target, mode, adopt_existing, force
+    load_project_context(workspace_root)
+    raise LaunchError(
+        "Canonical Taskledger storage has a fixed Ledgercore mount. "
+        "Use `taskledger migrate` for legacy storage transitions."
     )
 
 
 def build_sync_status_report(workspace_root: Path) -> SyncStatusReport:
     location = build_storage_location_report(workspace_root)
-    if location.mode == "canonical":
-        mounts = location.to_dict().get("mounts", {})
-        included = [
-            Path(str(mounts[name]["path"]))
-            for name in ("data",)
-            if isinstance(mounts, dict)
-            and isinstance(mounts.get(name), dict)
-            and Path(str(mounts[name]["path"])).exists()
-        ]
-        roots = {_git_root(path) for path in included}
-        roots.discard(None)
-        git_root = next(iter(roots), None) if len(roots) == 1 else None
-        status_lines = tuple(
-            line for path in included for line in _git_status_lines(path)
-        )
-        warnings = list(location.warnings)
-        if len(roots) > 1 or not roots:
-            warnings.append(
-                "Canonical Taskledger data is not represented by one sync repository."
-            )
-        return SyncStatusReport(
-            taskledger_dir=location.taskledger_dir,
-            git_root=git_root.as_posix() if git_root else None,
-            relative_path=_relative_to(included[0], git_root)
-            if included and git_root
-            else None,
-            clean=not status_lines,
-            status_lines=status_lines,
-            active_lock_count=location.active_lock_count,
-            warnings=tuple(dict.fromkeys(warnings)),
-        )
-    taskledger_dir = Path(location.taskledger_dir)
-    git_root = _git_root(taskledger_dir)
-    status_lines = tuple(_git_status_lines(taskledger_dir))
+    mounts = location.to_dict().get("mounts", {})
+    included = [
+        Path(str(mounts["data"]["path"]))
+        for name in ("data",)
+        if isinstance(mounts, dict)
+        and isinstance(mounts.get(name), dict)
+        and Path(str(mounts[name]["path"])).exists()
+    ]
+    roots = {_git_root(path) for path in included}
+    roots.discard(None)
+    git_root = next(iter(roots), None) if len(roots) == 1 else None
+    status_lines = tuple(line for path in included for line in _git_status_lines(path))
     warnings = list(location.warnings)
-    if git_root is None:
-        warnings.append("Resolved taskledger_dir is not in a Git repository.")
+    if len(roots) > 1 or not roots:
+        warnings.append(
+            "Canonical Taskledger data is not represented by one sync repository."
+        )
     return SyncStatusReport(
         taskledger_dir=location.taskledger_dir,
-        git_root=git_root.as_posix() if git_root is not None else None,
-        relative_path=_relative_to(taskledger_dir, git_root) if git_root else None,
+        git_root=git_root.as_posix() if git_root else None,
+        relative_path=_relative_to(included[0], git_root)
+        if included and git_root
+        else None,
         clean=not status_lines,
         status_lines=status_lines,
         active_lock_count=location.active_lock_count,
@@ -722,27 +476,6 @@ def _active_lock_count(workspace_root: Path) -> int:
         return inventory.active_count
     except LaunchError:
         return 0
-
-
-def _resolve_target(workspace_root: Path, target: Path) -> Path:
-    expanded = target.expanduser()
-    if expanded.is_absolute():
-        return expanded.resolve()
-    return (workspace_root / expanded).resolve()
-
-
-def _verify_adoptable_target(target: Path) -> None:
-    if not target.exists():
-        raise LaunchError("Cannot adopt a missing target directory.")
-    if not (target / "storage.yaml").exists():
-        raise LaunchError(
-            f"Target {target.as_posix()} does not look like a taskledger storage root."
-        )
-
-
-def _backup_path_for(source: Path) -> Path:
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return source.with_name(f"{source.name}.moved-{timestamp}")
 
 
 def _tracked_in_workspace_git(workspace_root: Path, taskledger_dir: Path) -> bool:

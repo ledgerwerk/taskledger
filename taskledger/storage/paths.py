@@ -47,37 +47,34 @@ class ProjectPaths:
     repo_index_path: Path
 
 
+@dataclass(slots=True, frozen=True)
+class TaskledgerStoragePaths:
+    workspace_root: Path
+    taskledger_root: Path
+    runtime_root: Path
+    ledger_ref: str
+    ledger_dir: Path
+    project_dir: Path
+    introductions_dir: Path
+    releases_dir: Path
+    tasks_dir: Path
+    plans_dir: Path
+    questions_dir: Path
+    runs_dir: Path
+    changes_dir: Path
+    events_dir: Path
+    indexes_dir: Path
+    active_task_path: Path
+    actor_path: Path
+    harness_path: Path
+    active_locks_index_path: Path
+    dependencies_index_path: Path
+    introductions_index_path: Path
+    project_uuid: str | None = None
+
+
 def resolve_taskledger_root(workspace_root: Path) -> Path:
     return load_project_locator(workspace_root).taskledger_dir
-
-
-def resolve_project_paths(workspace_root: Path) -> ProjectPaths:
-    if probe_taskledger_project(workspace_root).source == "none":
-        raise LaunchError(
-            "TASKLEDGER_NOT_INITIALIZED: Taskledger is not initialized for this "
-            "project. Run `taskledger init`.",
-            code="TASKLEDGER_NOT_INITIALIZED",
-            remediation=["Run `taskledger init`"],
-        )
-    from taskledger.storage.project_context import load_project_context
-
-    context = load_project_context(workspace_root, require_initialized=False)
-    if context is not None and context.mode == "canonical":
-        return ProjectPaths(
-            workspace_root=context.project_root,
-            project_dir=context.paths.ledger_data_dir,
-            taskledger_dir=context.paths.data_root,
-            config_path=context.config_path,
-            releases_dir=context.paths.releases_dir,
-            repos_dir=context.paths.ledger_data_dir,
-            repo_index_path=context.paths.repo_registry_path,
-        )
-    locator = load_project_locator(workspace_root)
-    return project_paths_for_root(
-        locator.workspace_root,
-        locator.taskledger_dir,
-        config_path=locator.config_path,
-    )
 
 
 def discover_workspace_root(start: Path) -> Path:
@@ -180,13 +177,20 @@ def load_project_locator(
                     taskledger_dir=canonical.project_root / ".ledger" / "taskledger",
                     source="canonical",
                 )
-            from taskledger.storage.project_context import load_project_context
+            from taskledger.storage.ledgercore_backend import (
+                DATA_MOUNT,
+                load_taskledger_ledger_layout,
+            )
 
-            context = load_project_context(start_path, require_initialized=False)
+            bundle = load_taskledger_ledger_layout(start_path, validate_storage=False)
+            layout = bundle.resolved_layout
             return ProjectLocator(
-                workspace_root=context.project_root,
-                config_path=context.config_path,
-                taskledger_dir=context.paths.data_root,
+                workspace_root=canonical.project_root,
+                config_path=(
+                    layout.tool_config_path
+                    or canonical.project_root / ".ledger" / "taskledger" / "config.toml"
+                ),
+                taskledger_dir=layout.mounts[DATA_MOUNT].path,
                 source="canonical",
             )
     config_path = find_project_config(start_path)

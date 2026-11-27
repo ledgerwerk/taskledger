@@ -104,7 +104,7 @@ def storage_validate(
     if strict:
         # Check that all mount paths are accessible
         try:
-            from taskledger.storage.paths import resolve_project_paths
+            from taskledger.storage.project_context import resolve_project_paths
 
             paths = resolve_project_paths(workspace_root)
             for mount_name in ("data", "runtime", "logs", "indexes"):

@@ -11,7 +11,7 @@ from taskledger.errors import LaunchError
 
 if TYPE_CHECKING:
     from taskledger.storage.project_context import TaskledgerProjectContext
-    from taskledger.storage.task_store import V2Paths
+    from taskledger.storage.task_store import TaskledgerStoragePaths
 
 TaskDirectoryLayoutKind = Literal["empty", "legacy", "uuid", "mixed", "invalid"]
 
@@ -154,7 +154,7 @@ def _inspect_task_directories(
 
 
 def _inspect_migration_journal(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
 ) -> tuple[str | None, Path | None, list[str]]:
     from taskledger.storage.task_directory_migration import (
         _JOURNAL_NAME,
@@ -197,7 +197,7 @@ def _directory_layout_kind(
 
 
 def inspect_ledger_task_directory_layout(
-    paths: V2Paths, *, declared_version: int | None = None
+    paths: TaskledgerStoragePaths, *, declared_version: int | None = None
 ) -> LedgerTaskDirectoryLayout:
     """Inspect one ledger's task directories and migration journal without mutation."""
     legacy_dirs, uuid_dirs, invalid_entries = _inspect_task_directories(paths.tasks_dir)
@@ -235,9 +235,7 @@ def inspect_task_directory_layout(
     from taskledger.storage.project_context import load_project_context
     from taskledger.storage.task_store import v2_paths_for_ledger_ref
 
-    context = load_project_context(
-        workspace_root, require_initialized=False, allow_legacy=False
-    )
+    context = load_project_context(workspace_root, require_initialized=False)
     meta = read_storage_meta(context.project_root)
     declared_version = meta.storage_layout_version if meta is not None else None
     ledger_layouts = tuple(

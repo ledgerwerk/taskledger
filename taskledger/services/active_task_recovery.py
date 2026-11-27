@@ -23,7 +23,7 @@ from taskledger.storage.task_identity import (
 )
 from taskledger.storage.task_ids import allocation_source_fingerprint
 from taskledger.storage.task_store import (
-    V2Paths,
+    TaskledgerStoragePaths,
     active_task_state_from_bytes,
     read_active_task_state_raw,
     resolve_v2_paths,
@@ -127,7 +127,7 @@ def _classify_legacy_reference(
 
 
 def _source_details(
-    paths: V2Paths, state: ActiveTaskState
+    paths: TaskledgerStoragePaths, state: ActiveTaskState
 ) -> tuple[list[dict[str, object]], str, list[Any]]:
     """Classify the raw pointer using validated physical sources only."""
     try:
@@ -180,7 +180,7 @@ def _source_details(
 
 
 def _protection_state(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     state: ActiveTaskState,
     candidates: list[dict[str, object]],
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
@@ -236,7 +236,7 @@ def _protection_state(
     return locks, runs
 
 
-def inspect_active_task_reference(paths: V2Paths) -> dict[str, object]:
+def inspect_active_task_reference(paths: TaskledgerStoragePaths) -> dict[str, object]:
     """Inspect active-task YAML independently of strict task resolution."""
     try:
         state = read_active_task_state_raw(paths)
@@ -283,7 +283,9 @@ def inspect_active_task_reference(paths: V2Paths) -> dict[str, object]:
     }
 
 
-def _target_task(paths: V2Paths, target_uuid: str) -> tuple[str, Path, str]:
+def _target_task(
+    paths: TaskledgerStoragePaths, target_uuid: str
+) -> tuple[str, Path, str]:
     try:
         parsed_uuid = parse_uuid7(target_uuid)
     except ValueError as exc:
@@ -416,7 +418,10 @@ def _fsync_directory(path: Path) -> None:
 
 
 def _append_active_repair_event(
-    workspace_root: Path, paths: V2Paths, journal_path: Path, journal: dict[str, object]
+    workspace_root: Path,
+    paths: TaskledgerStoragePaths,
+    journal_path: Path,
+    journal: dict[str, object],
 ) -> list[str]:
     from taskledger.services.event_logging import event_logging_enabled
     from taskledger.services.task_events import append_task_event

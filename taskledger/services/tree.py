@@ -11,9 +11,9 @@ from taskledger.domain.models import ReleaseRecord, TaskLock, TaskRecord
 from taskledger.domain.policies import derive_active_stage
 from taskledger.storage.frontmatter import read_markdown_front_matter
 from taskledger.storage.locks import lock_is_expired
-from taskledger.storage.paths import load_project_locator
+from taskledger.storage.project_context import load_project_context
 from taskledger.storage.task_store import (
-    V2Paths,
+    TaskledgerStoragePaths,
     list_changes,
     list_plans,
     list_questions,
@@ -46,7 +46,7 @@ class TreeOptions:
 
 
 def build_tree(workspace_root: Path, options: TreeOptions) -> dict[str, Any]:
-    locator = load_project_locator(workspace_root)
+    context = load_project_context(workspace_root)
     v2 = resolve_v2_paths(workspace_root)
     active_state = load_active_task_state(workspace_root)
     active_task_id = active_state.task_id if active_state else None
@@ -60,10 +60,10 @@ def build_tree(workspace_root: Path, options: TreeOptions) -> dict[str, Any]:
     ledgers: list[dict[str, Any]] = []
     payload: dict[str, Any] = {
         "kind": "taskledger_tree",
-        "workspace_root": str(locator.workspace_root),
-        "config_path": str(locator.config_path),
-        "taskledger_dir": str(locator.taskledger_dir),
-        "current_ledger_ref": _current_ledger_ref(locator.config_path),
+        "workspace_root": str(context.project_root),
+        "config_path": str(context.config_path),
+        "taskledger_dir": str(context.paths.data_root),
+        "current_ledger_ref": context.ledger_state.ref,
         "scope": scope,
         "include_all_ledgers": options.include_all_ledgers,
         "include_archived": options.include_archived,
@@ -74,7 +74,7 @@ def build_tree(workspace_root: Path, options: TreeOptions) -> dict[str, Any]:
     if options.include_all_ledgers:
         ledgers_dir = v2.ledger_dir.parent
         if ledgers_dir.exists():
-            current_ref = _current_ledger_ref(locator.config_path)
+            current_ref = context.ledger_state.ref
             for ledger_path in sorted(ledgers_dir.iterdir()):
                 if ledger_path.is_dir():
                     ref = ledger_path.name
@@ -83,6 +83,7 @@ def build_tree(workspace_root: Path, options: TreeOptions) -> dict[str, Any]:
                     ledger_data = _build_ledger(
                         workspace_root,
                         ref,
+                        ledger_dir=ledger_path,
                         is_current=is_current,
                         active_task_id=active_task_id if is_current else None,
                         task_ref=options.task_ref if is_current else None,
@@ -96,6 +97,7 @@ def build_tree(workspace_root: Path, options: TreeOptions) -> dict[str, Any]:
         ledger_data = _build_ledger(
             workspace_root,
             v2.ledger_ref,
+            ledger_dir=v2.ledger_dir,
             is_current=True,
             active_task_id=active_task_id,
             task_ref=options.task_ref,
@@ -107,15 +109,8 @@ def build_tree(workspace_root: Path, options: TreeOptions) -> dict[str, Any]:
     return payload
 
 
-def _current_ledger_ref(config_path: Path) -> str:
-    from taskledger.storage.ledger_config import load_ledger_config
-
-    config = load_ledger_config(config_path)
-    return config.ref
-
-
 def _ledger_records(
-    ledger_dir: Path, paths: V2Paths
+    ledger_dir: Path, paths: TaskledgerStoragePaths
 ) -> tuple[list[TaskRecord], list[ReleaseRecord]]:
     ledger_paths = replace(
         paths,
@@ -154,6 +149,7 @@ def _load_release_record(path: Path) -> ReleaseRecord:
 def _build_ledger(
     workspace_root: Path,
     ledger_ref: str,
+    ledger_dir: Path,
     *,
     is_current: bool,
     active_task_id: str | None,
@@ -206,7 +202,7 @@ def _build_ledger(
         "ref": ledger_ref,
         "is_current": is_current,
         "parent_ref": None,
-        "ledger_dir": f".taskledger/ledgers/{ledger_ref}",
+        "ledger_dir": str(ledger_dir),
         "active_task_id": active_task_id,
         "next_task_id": next_task_id,
         "task_count": len(tasks),

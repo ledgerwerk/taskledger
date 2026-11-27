@@ -305,7 +305,7 @@ def test_implement_command_allow_failure_keeps_wrapper_exit_zero(
 # specmason: req=REQ-0064 ac=AC-0710
 def test_planning_guidance_is_recommended_then_not_repeated(tmp_path: Path) -> None:
     _init_project(tmp_path)
-    config = tmp_path / "taskledger.toml"
+    config = tmp_path / ".ledger" / "taskledger" / "config.toml"
     config.write_text(
         config.read_text(encoding="utf-8")
         + "\n"

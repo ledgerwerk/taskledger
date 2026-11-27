@@ -32,15 +32,23 @@ def require_no_active_taskledger_locks(project_root: Path) -> None:
     probe = probe_taskledger_project(project_root)
     if probe.source == "canonical" and not probe.registration_present:
         return
-    from taskledger.services.lock_inventory import (
-        build_lock_inventory,
-        require_migration_safe_locks,
-    )
-    from taskledger.storage.task_store import resolve_v2_paths
+    if probe.source == "legacy":
+        from taskledger.migrations.legacy_project_context import (
+            legacy_v2_paths,
+            load_legacy_project_context,
+        )
 
-    paths = resolve_v2_paths(project_root)
-    inventory = build_lock_inventory(paths)
-    require_migration_safe_locks(inventory, project_root=project_root)
+        paths = legacy_v2_paths(load_legacy_project_context(project_root))
+    else:
+        from taskledger.storage.project_context import load_project_context
+        from taskledger.storage.task_store import v2_paths_from_context
+
+        context = load_project_context(project_root, require_initialized=False)
+        paths = v2_paths_from_context(context)
+
+    from taskledger.storage.lock_records import require_migration_safe_locks
+
+    require_migration_safe_locks(paths, project_root=project_root)
 
 
 def execute_taskledger_migration(

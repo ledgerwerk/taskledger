@@ -31,12 +31,12 @@ def ledger_status_command(ctx: typer.Context) -> None:
             load_ledger_config,
             load_ledger_identity,
         )
-        from taskledger.storage.paths import load_project_locator
+        from taskledger.storage.project_context import load_project_context
         from taskledger.storage.task_store import list_tasks, resolve_v2_paths
 
-        locator = load_project_locator(state.cwd)
-        config = load_ledger_config(locator.config_path)
-        identity = load_ledger_identity(locator.config_path)
+        context = load_project_context(state.cwd)
+        config = load_ledger_config(context.config_path)
+        identity = load_ledger_identity(context.config_path)
         paths = resolve_v2_paths(state.cwd)
         tasks = list_tasks(state.cwd)
         from taskledger.storage.task_store import load_active_task_state
@@ -88,14 +88,11 @@ def ledger_list_command(ctx: typer.Context) -> None:
     assert isinstance(state, CLIState)
     try:
         from taskledger.storage.ledger_config import load_ledger_config
-        from taskledger.storage.paths import (
-            load_project_locator,
-            resolve_taskledger_root,
-        )
+        from taskledger.storage.project_context import load_project_context
 
-        locator = load_project_locator(state.cwd)
-        config = load_ledger_config(locator.config_path)
-        root = resolve_taskledger_root(state.cwd)
+        context = load_project_context(state.cwd)
+        config = load_ledger_config(context.config_path)
+        root = context.paths.data_root
     except LaunchError as exc:
         emit_error(ctx, exc)
         raise typer.Exit(code=launch_error_exit_code(exc)) from exc
@@ -172,21 +169,16 @@ def ledger_fork_command(
             update_ledger_config,
             validate_ledger_ref,
         )
-        from taskledger.storage.paths import (
-            load_project_locator,
-            resolve_taskledger_root,
-        )
         from taskledger.storage.project_context import load_project_context
 
         validate_ledger_ref(ref)
-        locator = load_project_locator(state.cwd)
-        config = load_ledger_config(locator.config_path)
+        context = load_project_context(state.cwd)
+        config = load_ledger_config(context.config_path)
 
         if ref == config.ref:
             raise LaunchError(f"Cannot fork ledger '{ref}' onto itself.")
 
-        root = resolve_taskledger_root(state.cwd)
-        context = load_project_context(state.cwd, require_initialized=False)
+        root = context.paths.data_root
         new_ledger_dir = root / "ledgers" / ref
         new_logs_dir = context.paths.logs_root / "ledgers" / ref
         new_indexes_dir = context.paths.indexes_root / "ledgers" / ref
@@ -223,7 +215,7 @@ def ledger_fork_command(
         # Update config to point to the new ledger
         previous_ref = config.ref
         updated = update_ledger_config(
-            locator.config_path,
+            context.config_path,
             LedgerConfigPatch(
                 ref=ref,
                 parent_ref=previous_ref,
@@ -239,12 +231,12 @@ def ledger_fork_command(
         "previous_ledger_ref": previous_ref,
         "ledger_ref": updated.ref,
         "ledger_parent_ref": updated.parent_ref,
-        "config_path": str(locator.config_path),
+        "config_path": str(context.config_path),
     }
     human_lines = [
         "LEDGER FORK",
         f"  forked ledger {previous_ref} -> {ref}",
-        f"  config updated: {locator.config_path}",
+        f"  config updated: {context.config_path}",
     ]
     emit_payload(ctx, payload, human="\n".join(human_lines))
 
@@ -268,15 +260,12 @@ def ledger_switch_command(
             update_ledger_config,
             validate_ledger_ref,
         )
-        from taskledger.storage.paths import (
-            load_project_locator,
-            resolve_taskledger_root,
-        )
+        from taskledger.storage.project_context import load_project_context
 
         validate_ledger_ref(ref)
-        locator = load_project_locator(state.cwd)
-        config = load_ledger_config(locator.config_path)
-        root = resolve_taskledger_root(state.cwd)
+        context = load_project_context(state.cwd)
+        config = load_ledger_config(context.config_path)
+        root = context.paths.data_root
         target_dir = root / "ledgers" / ref
 
         if not target_dir.exists():
@@ -299,7 +288,7 @@ def ledger_switch_command(
 
         previous_ref = config.ref
         updated = update_ledger_config(
-            locator.config_path,
+            context.config_path,
             LedgerConfigPatch(ref=ref),
         )
     except LaunchError as exc:
@@ -311,12 +300,12 @@ def ledger_switch_command(
         "kind": "ledger_switched",
         "previous_ledger_ref": previous_ref,
         "ledger_ref": updated.ref,
-        "config_path": str(locator.config_path),
+        "config_path": str(context.config_path),
     }
     human_lines = [
         "LEDGER SWITCH",
         f"  switched {previous_ref} -> {ref}",
-        f"  config updated: {locator.config_path}",
+        f"  config updated: {context.config_path}",
     ]
     emit_payload(ctx, payload, human="\n".join(human_lines))
 
@@ -337,15 +326,12 @@ def ledger_adopt_command(
         from taskledger.storage.ledger_config import (
             load_ledger_config,
         )
-        from taskledger.storage.paths import (
-            load_project_locator,
-            resolve_taskledger_root,
-        )
+        from taskledger.storage.project_context import load_project_context
         from taskledger.storage.task_store import list_tasks
 
-        locator = load_project_locator(state.cwd)
-        config = load_ledger_config(locator.config_path)
-        root = resolve_taskledger_root(state.cwd)
+        context = load_project_context(state.cwd)
+        config = load_ledger_config(context.config_path)
+        root = context.paths.data_root
         source_dir = root / "ledgers" / from_ledger
         if not source_dir.exists():
             raise LaunchError(f"Source ledger '{from_ledger}' does not exist.")
@@ -426,15 +412,12 @@ def ledger_doctor_command(ctx: typer.Context) -> None:
     assert isinstance(state, CLIState)
     try:
         from taskledger.storage.ledger_config import load_ledger_config
-        from taskledger.storage.paths import (
-            load_project_locator,
-            resolve_taskledger_root,
-        )
+        from taskledger.storage.project_context import load_project_context
         from taskledger.storage.task_store import list_tasks
 
-        locator = load_project_locator(state.cwd)
-        config = load_ledger_config(locator.config_path)
-        root = resolve_taskledger_root(state.cwd)
+        context = load_project_context(state.cwd)
+        config = load_ledger_config(context.config_path)
+        root = context.paths.data_root
         ledger_dir = root / "ledgers" / config.ref
     except LaunchError as exc:
         emit_error(ctx, exc)

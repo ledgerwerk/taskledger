@@ -118,7 +118,10 @@ kind = "validate"
 
 def _setup_implemented_review_task(workspace: Path) -> None:
     init_workspace(workspace)
-    _append_pipeline_config(workspace / "taskledger.toml", _review_pipeline_config())
+    _append_pipeline_config(
+        workspace / ".ledger" / "taskledger" / "config.toml",
+        _review_pipeline_config(),
+    )
     assert (
         runner.invoke(
             app,
@@ -222,7 +225,10 @@ Drive review-step routing from closed worker handoffs once implementation is don
 
 def _setup_guided_implementation_task(workspace: Path) -> None:
     init_workspace(workspace)
-    _append_pipeline_config(workspace / "taskledger.toml", _enabled_pipeline_config())
+    _append_pipeline_config(
+        workspace / ".ledger" / "taskledger" / "config.toml",
+        _enabled_pipeline_config(),
+    )
     assert (
         runner.invoke(
             app,
@@ -345,7 +351,10 @@ def test_pipeline_commands_print_no_config_message(tmp_path: Path) -> None:
 # specmason: req=REQ-0071 ac=AC-0797
 def test_pipeline_commands_print_disabled_message(tmp_path: Path) -> None:
     init_workspace(tmp_path)
-    _append_pipeline_config(tmp_path / "taskledger.toml", _disabled_pipeline_config())
+    _append_pipeline_config(
+        tmp_path / ".ledger" / "taskledger" / "config.toml",
+        _disabled_pipeline_config(),
+    )
 
     for command in (["pipeline", "show"], ["pipeline", "list"], ["pipeline", "next"]):
         result = runner.invoke(app, ["--root", str(tmp_path), *command])
@@ -356,7 +365,10 @@ def test_pipeline_commands_print_disabled_message(tmp_path: Path) -> None:
 # specmason: req=REQ-0071 ac=AC-0805
 def test_pipeline_show_and_list_render_enabled_config(tmp_path: Path) -> None:
     init_workspace(tmp_path)
-    _append_pipeline_config(tmp_path / "taskledger.toml", _enabled_pipeline_config())
+    _append_pipeline_config(
+        tmp_path / ".ledger" / "taskledger" / "config.toml",
+        _enabled_pipeline_config(),
+    )
 
     show_result = runner.invoke(
         app,
@@ -378,7 +390,10 @@ def test_pipeline_show_and_list_render_enabled_config(tmp_path: Path) -> None:
 # specmason: req=REQ-0071 ac=AC-0804
 def test_pipeline_next_returns_planner_before_plan_acceptance(tmp_path: Path) -> None:
     init_workspace(tmp_path)
-    _append_pipeline_config(tmp_path / "taskledger.toml", _enabled_pipeline_config())
+    _append_pipeline_config(
+        tmp_path / ".ledger" / "taskledger" / "config.toml",
+        _enabled_pipeline_config(),
+    )
     assert (
         runner.invoke(
             app,

@@ -15,9 +15,6 @@ MODULE_LINE_WHITELIST: dict[str, str] = {
     "taskledger/storage/layout_migration.py": (
         "Unified topology and internal-layout migration status/apply orchestration."
     ),
-    "taskledger/storage/task_store.py": (
-        "Canonical per-ledger path resolution remains with established v2 store APIs."
-    ),
 }
 
 FUNCTION_LINE_WHITELIST: dict[str, str] = {
@@ -35,9 +32,6 @@ FUNCTION_LINE_WHITELIST: dict[str, str] = {
     "taskledger/storage/layout_migration.py::_inspect_migration_phases": (
         "Migration inspect logic covers candidate discovery,"
         " config analysis, and issue assembly."
-    ),
-    "taskledger/services/doctor.py::_inspect_v2_project_phases": (
-        "Project doctor phases collect independent corruption-tolerant diagnostics."
     ),
 }
 
@@ -266,21 +260,6 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/doctor.py::inspect_v2_schema:except-3": (
         "Schema doctor records failures while scanning canonical task records."
     ),
-    "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-1": (
-        "Project scan continues past config load errors."
-    ),
-    "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-2": (
-        "Project scan continues past project UUID load errors."
-    ),
-    "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-3": (
-        "Project scan continues past ledger config load errors."
-    ),
-    "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-4": (
-        "Project scan continues past task metadata load errors."
-    ),
-    "taskledger/services/doctor_checks/project_scan.py::scan_project_config:except-5": (
-        "Project scan continues past run metadata load errors."
-    ),
     (
         "taskledger/services/doctor_checks/task_checks.py::"
         "_scan_task_integrity_phases:except-1"
@@ -289,10 +268,10 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
         "Tree command handles task ref resolution errors by returning empty."
     ),
     "taskledger/services/lock_inventory.py::build_lock_inventory:except-1": (
-        "Lock inventory preserves malformed lock read failures for diagnostics."
-    ),
-    "taskledger/services/lock_inventory.py::build_lock_inventory:except-2": (
         "Lock inventory preserves lock diagnosis failures for diagnostics."
+    ),
+    "taskledger/storage/lock_records.py::read_lock_records:except-1": (
+        "Lock reader preserves malformed record failures for migration diagnostics."
     ),
     "taskledger/services/planning_flow.py::upsert_plan:except-1": (
         "Auto-revision reports recovery when run creation partially succeeds."

@@ -25,10 +25,14 @@ from taskledger.storage.meta import StorageMeta, read_storage_meta, write_storag
 
 
 def _task_file_by_id(workspace_root: Path, task_id: str) -> Path:
+    from taskledger.migrations.legacy_project_context import (
+        legacy_v2_paths,
+        load_legacy_project_context,
+    )
     from taskledger.storage.task_identity import task_identity_inventory
-    from taskledger.storage.task_store import resolve_v2_paths
 
-    inventory = task_identity_inventory(resolve_v2_paths(workspace_root))
+    context = load_legacy_project_context(workspace_root)
+    inventory = task_identity_inventory(legacy_v2_paths(context))
     return inventory.by_task_id[task_id].path / "task.md"
 
 
@@ -281,19 +285,19 @@ class TestSidecarVersionEnforcement:
 class TestInitWritesStorageYaml:
     # specmason: req=REQ-0054 ac=AC-0565
     def test_init_creates_storage_yaml(self, tmp_path: Path) -> None:
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
 
-        _paths, created = init_project_state(tmp_path)
+        _paths, created = init_legacy_project_state(tmp_path)
         storage_yaml = tmp_path / ".taskledger" / "storage.yaml"
         assert storage_yaml.exists()
         assert any("storage.yaml" in c for c in created)
 
     # specmason: req=REQ-0054 ac=AC-0565
     def test_init_idempotent(self, tmp_path: Path) -> None:
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
 
-        init_project_state(tmp_path)
-        _paths, created2 = init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
+        _paths, created2 = init_legacy_project_state(tmp_path)
         assert not any("storage.yaml" in c for c in created2)
 
 
@@ -321,10 +325,10 @@ class TestMigrationFramework:
 
     # specmason: req=REQ-0054 ac=AC-0566
     def test_scan_records_empty_on_fresh_workspace(self, tmp_path: Path) -> None:
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.migrations import scan_records_for_migration
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         needed = scan_records_for_migration(tmp_path)
         assert needed == []
 
@@ -351,9 +355,9 @@ class TestMigrateCLI:
         from typer.testing import CliRunner
 
         from taskledger.cli import app
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         runner = CliRunner()
         result = runner.invoke(app, ["--root", str(tmp_path), "migrate", "status"])
         assert result.exit_code == 0
@@ -385,9 +389,9 @@ class TestMigrateCLI:
         from typer.testing import CliRunner
 
         from taskledger.cli import app
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         runner = CliRunner()
         result = runner.invoke(
             app, ["--root", str(tmp_path), "migrate", "apply", "--dry-run"]
@@ -412,32 +416,28 @@ class TestMigrateCLI:
 class TestDoctorSchemaLayoutVersion:
     # specmason: req=REQ-0054 ac=AC-0563
     def test_doctor_schema_missing_storage_yaml(self, tmp_path: Path) -> None:
-        from taskledger.storage.init import init_project_state
-
-        init_project_state(tmp_path)
-        # Remove storage.yaml
-        storage_yaml = tmp_path / ".taskledger" / "storage.yaml"
-        if storage_yaml.exists():
-            storage_yaml.unlink()
-
         from taskledger.services.doctor import inspect_v2_schema
+        from taskledger.storage.init import init_canonical_project_state
+
+        init_canonical_project_state(tmp_path, data_storage="project")
+        storage_yaml = tmp_path / ".ledger" / "taskledger" / "data" / "storage.yaml"
+        storage_yaml.unlink()
 
         result = inspect_v2_schema(tmp_path)
         assert not result["healthy"]
-        assert any("storage.yaml" in e for e in result["errors"])
+        assert any("storage.yaml" in error for error in result["errors"])
 
     # specmason: req=REQ-0054 ac=AC-0563
     def test_doctor_schema_up_to_date(self, tmp_path: Path) -> None:
         from taskledger.services.doctor import inspect_v2_schema
-        from taskledger.storage.init import init_project_state
+        from taskledger.storage.init import init_canonical_project_state
 
-        init_project_state(tmp_path)
+        init_canonical_project_state(tmp_path, data_storage="project")
         result = inspect_v2_schema(tmp_path)
-        # Should not have storage layout errors if up to date
         layout_errors = [
-            e
-            for e in result["errors"]
-            if "layout" in e.lower() or "storage" in e.lower()
+            error
+            for error in result["errors"]
+            if "layout" in error.lower() or "storage" in error.lower()
         ]
         assert layout_errors == []
 
@@ -445,10 +445,10 @@ class TestDoctorSchemaLayoutVersion:
     def test_inspect_records_for_migration_reports_malformed_markdown(
         self, tmp_path: Path
     ) -> None:
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.migrations import inspect_records_for_migration
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         task_dir = tmp_path / ".taskledger" / "ledgers" / "main" / "tasks" / "task-0001"
         task_dir.mkdir(parents=True, exist_ok=True)
         task_path = task_dir / "task.md"
@@ -461,10 +461,10 @@ class TestDoctorSchemaLayoutVersion:
     # specmason: req=REQ-0054 ac=AC-0564
     def test_doctor_schema_reports_malformed_task_record(self, tmp_path: Path) -> None:
         from taskledger.services.doctor import inspect_v2_schema
-        from taskledger.storage.init import init_project_state
+        from taskledger.storage.init import init_canonical_project_state
 
-        init_project_state(tmp_path)
-        task_dir = tmp_path / ".taskledger" / "ledgers" / "main" / "tasks" / "task-0001"
+        context, _ = init_canonical_project_state(tmp_path, data_storage="project")
+        task_dir = context.paths.tasks_dir / "task-0001"
         task_dir.mkdir(parents=True, exist_ok=True)
         task_path = task_dir / "task.md"
         task_path.write_text("---\nobject_type: task\nslug: [\n---\n", encoding="utf-8")
@@ -491,14 +491,14 @@ class TestBranchScopedLedgerMigration:
         import yaml
 
         from taskledger.domain.models import ActiveTaskState
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.meta import StorageMeta, write_storage_meta
         from taskledger.storage.migrations import apply_layout_migrations
 
         # Initialize workspace
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         root = tmp_path / ".taskledger"
-        config_path = tmp_path / ".taskledger.toml"
+        config_path = tmp_path / "taskledger.toml"
 
         # Create a task in the current ledger
         ledger_dir = root / "ledgers" / "main"
@@ -591,11 +591,11 @@ Test Task
         self, tmp_path: Path
     ) -> None:
         """Test migrate status detects legacy root state."""
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.meta import StorageMeta, write_storage_meta
         from taskledger.storage.migrations import required_layout_migrations
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         root = tmp_path / ".taskledger"
 
         # Create legacy root tasks directory
@@ -617,11 +617,11 @@ Test Task
         self, tmp_path: Path
     ) -> None:
         """Test migration is no-op for already-correct branch-scoped v2 workspace."""
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.meta import StorageMeta, write_storage_meta
         from taskledger.storage.migrations import apply_layout_migrations
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         root = tmp_path / ".taskledger"
         ledger_dir = root / "ledgers" / "main"
 
@@ -680,12 +680,12 @@ Test Task
         from datetime import datetime, timezone
 
         from taskledger.domain.models import TaskRecord
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.frontmatter import write_markdown_front_matter
-        from taskledger.storage.init import init_project_state
         from taskledger.storage.meta import StorageMeta, write_storage_meta
         from taskledger.storage.migrations import apply_layout_migrations
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         root = tmp_path / ".taskledger"
         ledger_dir = root / "ledgers" / "main"
 
@@ -748,12 +748,12 @@ Test Task
         from datetime import datetime, timezone
 
         from taskledger.domain.models import TaskRecord
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.frontmatter import write_markdown_front_matter
-        from taskledger.storage.init import init_project_state
         from taskledger.storage.meta import StorageMeta, write_storage_meta
         from taskledger.storage.migrations import apply_layout_migrations
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         root = tmp_path / ".taskledger"
         ledger_dir = root / "ledgers" / "main"
 
@@ -819,12 +819,12 @@ Test Task
         from datetime import datetime, timezone
 
         from taskledger.domain.models import TaskRecord
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.frontmatter import write_markdown_front_matter
-        from taskledger.storage.init import init_project_state
         from taskledger.storage.meta import StorageMeta, write_storage_meta
         from taskledger.storage.migrations import apply_layout_migrations
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         root = tmp_path / ".taskledger"
         ledger_dir = root / "ledgers" / "main"
 
@@ -884,11 +884,11 @@ Test Task
         self, tmp_path: Path
     ) -> None:
         """Test that root indexes are removed and ledger indexes rebuilt."""
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.meta import StorageMeta, write_storage_meta
         from taskledger.storage.migrations import apply_layout_migrations
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         root = tmp_path / ".taskledger"
         ledger_dir = root / "ledgers" / "main"
 
@@ -915,11 +915,11 @@ Test Task
         import yaml
 
         from taskledger.domain.models import ActiveTaskState, ActorRef
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.meta import StorageMeta, write_storage_meta
         from taskledger.storage.migrations import apply_layout_migrations
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         root = tmp_path / ".taskledger"
         ledger_dir = root / "ledgers" / "main"
 
@@ -970,11 +970,11 @@ Test Task
         import yaml
 
         from taskledger.domain.models import ActiveTaskState, ActorRef
-        from taskledger.storage.init import init_project_state
+        from taskledger.migrations.legacy_init import init_legacy_project_state
         from taskledger.storage.meta import StorageMeta, write_storage_meta
         from taskledger.storage.migrations import apply_layout_migrations
 
-        init_project_state(tmp_path)
+        init_legacy_project_state(tmp_path)
         root = tmp_path / ".taskledger"
         ledger_dir = root / "ledgers" / "main"
 

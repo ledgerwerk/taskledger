@@ -5,7 +5,7 @@ from pathlib import Path
 from taskledger.domain.models import TaskRecord
 from taskledger.domain.run import TaskRunRecord
 from taskledger.errors import LaunchError
-from taskledger.storage.project_config import load_worker_pipeline_config
+from taskledger.services.worker_pipeline_config import load_worker_pipeline_config
 from taskledger.storage.task_store import (
     list_code_reviews,
     list_handoffs,

@@ -54,7 +54,7 @@ def _index_validation_result(
 
 
 def _safe_recovery_candidate(context: TaskledgerProjectContext) -> bool:
-    if context.mode != "canonical" or context.layout is None:
+    if context.layout is None:
         return False
     if context.initialization.status != "ready":
         return False

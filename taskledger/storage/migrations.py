@@ -277,6 +277,25 @@ def scan_records_for_migration(
     return needed
 
 
+def _migration_v2_paths(workspace_root: Path) -> Any:
+    from taskledger.storage.paths import probe_taskledger_project
+
+    probe = probe_taskledger_project(workspace_root)
+    if probe.source == "legacy":
+        from taskledger.migrations.legacy_project_context import (
+            legacy_v2_paths,
+            load_legacy_project_context,
+        )
+
+        return legacy_v2_paths(load_legacy_project_context(workspace_root))
+
+    from taskledger.storage.project_context import load_project_context
+    from taskledger.storage.task_store import v2_paths_from_context
+
+    context = load_project_context(workspace_root, require_initialized=False)
+    return v2_paths_from_context(context)
+
+
 def inspect_records_for_migration(
     workspace_root: Path,
 ) -> tuple[list[MigrationNeeded], list[MigrationScanIssue]]:
@@ -285,9 +304,7 @@ def inspect_records_for_migration(
     Returns records whose schema_version is below the current target and any
     malformed Markdown/frontmatter records encountered during the scan.
     """
-    from taskledger.storage.task_store import resolve_v2_paths
-
-    paths = resolve_v2_paths(workspace_root)
+    paths = _migration_v2_paths(workspace_root)
     needed: list[MigrationNeeded] = []
     issues: list[MigrationScanIssue] = []
     if not paths.tasks_dir.exists():
@@ -339,12 +356,12 @@ def apply_layout_migrations(
             if any(
                 migration.name == "uuidv7-task-directories" for migration in migrations
             ):
-                from taskledger.storage.project_context import load_project_context
+                from taskledger.storage.paths import probe_taskledger_project
 
-                context = load_project_context(
-                    workspace_root, require_initialized=False, allow_legacy=True
-                )
-                if context.mode == "canonical":
+                if probe_taskledger_project(workspace_root).source == "canonical":
+                    from taskledger.storage.project_context import load_project_context
+
+                    load_project_context(workspace_root, require_initialized=False)
                     physical = inspect_storage_layout(workspace_root)
                     if not physical.current:
                         raise LaunchError(
@@ -583,7 +600,6 @@ def _migrate_v2_unscoped_state_to_branch_scoped_ledgers(workspace_root: Path) ->
     """
     from taskledger.storage.indexes import rebuild_v2_indexes
     from taskledger.storage.paths import load_project_locator
-    from taskledger.storage.task_store import resolve_v2_paths
 
     locator = load_project_locator(workspace_root)
     root = locator.taskledger_dir
@@ -646,7 +662,7 @@ def _migrate_v2_unscoped_state_to_branch_scoped_ledgers(workspace_root: Path) ->
         shutil.rmtree(root_indexes)
 
     # Rebuild target ledger indexes from canonical records
-    rebuild_v2_indexes(resolve_v2_paths(workspace_root))
+    rebuild_v2_indexes(_migration_v2_paths(workspace_root))
 
 
 def _scan_file(

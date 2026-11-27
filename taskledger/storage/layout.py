@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING
 from taskledger.errors import LaunchError
 
 if TYPE_CHECKING:
-    from taskledger.storage.task_store import V2Paths
+    from taskledger.storage.paths import TaskledgerStoragePaths
 
 
-def require_v2_layout(workspace_root: Path) -> V2Paths:
+def require_v2_layout(workspace_root: Path) -> TaskledgerStoragePaths:
     """Resolve durable project state without creating directories or indexes."""
     from taskledger.storage.paths import probe_taskledger_project
     from taskledger.storage.task_store import resolve_v2_paths
@@ -33,19 +33,10 @@ def require_v2_layout(workspace_root: Path) -> V2Paths:
     return paths
 
 
-def require_mutable_v2_layout(
-    workspace_root: Path,
-    *,
-    allow_legacy: bool = True,
-) -> V2Paths:
-    """Prepare mutable project state and return its V2 storage paths."""
+def require_mutable_v2_layout(workspace_root: Path) -> TaskledgerStoragePaths:
+    """Prepare mutable canonical project state and return its storage paths."""
     from taskledger.storage.project_context import require_mutable_project_context
     from taskledger.storage.task_store import v2_paths_from_context
 
-    context = require_mutable_project_context(
-        workspace_root,
-        allow_legacy=allow_legacy,
-    )
-    if context.mode == "canonical":
-        return v2_paths_from_context(context)
-    return require_v2_layout(workspace_root)
+    context = require_mutable_project_context(workspace_root)
+    return v2_paths_from_context(context)

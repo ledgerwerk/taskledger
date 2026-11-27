@@ -13,12 +13,13 @@ from pathlib import Path
 
 from taskledger.domain.models import TaskRecord
 from taskledger.services.tasks import resolve_task
-from taskledger.storage.paths import probe_taskledger_project, resolve_project_paths
+from taskledger.storage.paths import probe_taskledger_project
 from taskledger.storage.project_config import (
     PromptProfile,
     load_project_config_overrides,
     merge_project_config,
 )
+from taskledger.storage.project_context import resolve_project_paths
 
 
 def load_workflow_guidance(

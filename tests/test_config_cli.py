@@ -110,7 +110,8 @@ def test_config_keys_lists_known_paths(tmp_path: Path) -> None:
     key_names = {item["key"] for item in keys if isinstance(item, dict)}
     assert "prompt_profiles.<profile>.plan_body_detail" in key_names
     assert "prompt_profiles.<profile>.question_policy" in key_names
-    assert "default_memory_update_mode" in key_names
+    assert "default_memory_update_mode" not in key_names
+    assert "artifact_max_bytes" in key_names
 
 
 # specmason: req=REQ-0014 ac=AC-0126
@@ -270,6 +271,23 @@ def test_config_set_rejects_invalid_values_with_json_error(tmp_path: Path) -> No
     error_payload = _json(invalid_set)
     assert error_payload["ok"] is False
     assert "must be positive" in error_payload["error"]["message"]
+
+    invalid_type_set = runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_path),
+            "--json",
+            "config",
+            "set",
+            "prompt_profiles.planning.require_files",
+            "yes",
+        ],
+    )
+    assert invalid_type_set.exit_code == 1
+    type_error = _json(invalid_type_set)
+    assert type_error["ok"] is False
+    assert "must be a boolean" in type_error["error"]["message"]
 
     get_result = runner.invoke(
         app,

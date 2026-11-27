@@ -29,7 +29,6 @@ from taskledger.services.doctor import (
     inspect_v2_schema,
 )
 from taskledger.storage.task_store import (
-    ensure_v2_layout,
     save_active_task_state,
     save_change,
     save_handoff,
@@ -40,12 +39,13 @@ from taskledger.storage.task_store import (
     save_todos,
     task_dir,
 )
+from tests.support.project import ensure_project_layout
 
 
 @pytest.fixture(autouse=True)
 def _initialized_doctor_project(tmp_path: Path) -> None:
-    """Doctor unit tests operate on an explicitly initialized legacy fixture."""
-    ensure_v2_layout(tmp_path)
+    """Doctor unit tests operate on an explicitly initialized canonical fixture."""
+    ensure_project_layout(tmp_path)
 
 
 def _actor() -> ActorRef:
@@ -101,7 +101,7 @@ def _write_lock_yaml(lock_path: Path, lock: TaskLock) -> None:
 
 def _setup_project(tmp_path: Path) -> None:
     """Create a minimal healthy v2 project."""
-    ensure_v2_layout(tmp_path)
+    ensure_project_layout(tmp_path)
     task = _task()
     save_task(tmp_path, task)
     # Ensure storage.yaml exists for doctor schema checks
@@ -145,7 +145,7 @@ def test_inspect_project_with_active_task(tmp_path: Path) -> None:
 # specmason: req=REQ-0017 ac=AC-0198
 def test_inspect_project_reports_malformed_handoff_record(tmp_path: Path) -> None:
     _setup_project(tmp_path)
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     handoff_dir = task_dir(paths, "task-0001") / "handoffs"
     handoff_dir.mkdir(parents=True, exist_ok=True)
     (handoff_dir / "handoff-0001.md").write_text(
@@ -162,7 +162,7 @@ def test_inspect_project_reports_malformed_handoff_record(tmp_path: Path) -> Non
 # specmason: req=REQ-0017 ac=AC-0199
 def test_inspect_project_warns_for_unsupported_legacy_sidecar(tmp_path: Path) -> None:
     _setup_project(tmp_path)
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     (task_dir(paths, "task-0001") / "todos.yaml").write_text(
         "schema_version: 1\nobject_type: todos\ntask_id: task-0001\ntodos: []\n",
         encoding="utf-8",
@@ -179,7 +179,7 @@ def test_inspect_project_warns_for_unsupported_legacy_sidecar(tmp_path: Path) ->
 
 # specmason: req=REQ-0017 ac=AC-0197
 def test_inspect_project_active_task_missing(tmp_path: Path) -> None:
-    ensure_v2_layout(tmp_path)
+    ensure_project_layout(tmp_path)
     save_active_task_state(
         tmp_path, ActiveTaskState(task_id="task-9999", activated_by=_actor())
     )
@@ -508,7 +508,7 @@ def test_doctor_accepts_cancelled_resumable_implementation_run_without_lock(
 def test_inspect_lock_without_running_run(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     from taskledger.storage.task_store import task_lock_path
 
     lock = _lock(stage="planning", run_id="run-0001")
@@ -628,7 +628,7 @@ def test_inspect_validation_run_references_non_impl_run(tmp_path: Path) -> None:
 
 # specmason: req=REQ-0017 ac=AC-0190
 def test_inspect_lock_references_missing_task(tmp_path: Path) -> None:
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     from taskledger.storage.task_store import task_lock_path
 
     lock = _lock(task_id="task-9999", stage="planning", run_id="run-0001")
@@ -643,7 +643,7 @@ def test_inspect_lock_references_non_running_run(tmp_path: Path) -> None:
     save_task(tmp_path, task)
     run = _run(run_id="run-0001", status="finished")
     save_run(tmp_path, run)
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     from taskledger.storage.task_store import task_lock_path
 
     lock = _lock(stage="planning", run_id=run.run_id)
@@ -658,7 +658,7 @@ def test_inspect_lock_stage_run_type_mismatch(tmp_path: Path) -> None:
     save_task(tmp_path, task)
     run = _run(run_id="run-0001", run_type="implementation", status="running")
     save_run(tmp_path, run)
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     from taskledger.storage.task_store import task_lock_path
 
     lock = _lock(stage="planning", run_id=run.run_id)
@@ -673,7 +673,7 @@ def test_inspect_expired_lock(tmp_path: Path) -> None:
     save_task(tmp_path, task)
     run = _run(run_id="run-0001", run_type="planning", status="running")
     save_run(tmp_path, run)
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     from taskledger.storage.task_store import task_lock_path
 
     lock = _lock(
@@ -690,7 +690,7 @@ def test_inspect_expired_lock(tmp_path: Path) -> None:
 def test_inspect_lock_references_missing_run(tmp_path: Path) -> None:
     task = _task()
     save_task(tmp_path, task)
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     from taskledger.storage.task_store import task_lock_path
 
     lock = _lock(stage="planning", run_id="run-9999")
@@ -719,7 +719,7 @@ def test_inspect_v2_indexes_all_present(tmp_path: Path) -> None:
     _setup_project(tmp_path)
     from taskledger.storage.indexes import rebuild_v2_indexes
 
-    rebuild_v2_indexes(ensure_v2_layout(tmp_path))
+    rebuild_v2_indexes(ensure_project_layout(tmp_path))
     result = inspect_v2_indexes(tmp_path)
     assert result["healthy"] is True
     assert result["missing_indexes"] == []
@@ -730,8 +730,8 @@ def test_inspect_v2_indexes_ignores_removed_legacy_indexes(tmp_path: Path) -> No
     _setup_project(tmp_path)
     from taskledger.storage.indexes import rebuild_v2_indexes
 
-    rebuild_v2_indexes(ensure_v2_layout(tmp_path))
-    indexes_dir = ensure_v2_layout(tmp_path).indexes_dir
+    rebuild_v2_indexes(ensure_project_layout(tmp_path))
+    indexes_dir = ensure_project_layout(tmp_path).indexes_dir
     for name in ("tasks.json", "plan_versions.json", "latest_runs.json"):
         (indexes_dir / name).write_text("{not valid json", encoding="utf-8")
 
@@ -745,7 +745,7 @@ def test_inspect_v2_indexes_ignores_removed_legacy_indexes(tmp_path: Path) -> No
 
 # specmason: req=REQ-0017 ac=AC-0185
 def test_inspect_v2_indexes_event_error(tmp_path: Path) -> None:
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     # Write invalid event data
     events_dir = paths.events_dir
     bad_file = events_dir / "bad.md"
@@ -784,7 +784,7 @@ def test_inspect_counts_include_plans_and_questions(tmp_path: Path) -> None:
 def test_doctor_warns_about_empty_orphan_slug_dir(tmp_path: Path) -> None:
     task = _task(slug="my-feature")
     save_task(tmp_path, task)
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     orphan_dir = paths.tasks_dir / "my-feature"
     orphan_dir.mkdir()
     result = inspect_v2_project(tmp_path)
@@ -798,7 +798,7 @@ def test_doctor_warns_about_empty_orphan_slug_dir(tmp_path: Path) -> None:
 def test_doctor_warns_about_non_empty_legacy_sidecar(tmp_path: Path) -> None:
     task = _task(slug="my-feature")
     save_task(tmp_path, task)
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     sidecar_dir = paths.tasks_dir / "my-feature"
     sidecar_dir.mkdir()
     (sidecar_dir / "some-file.yaml").write_text("some content")
@@ -823,7 +823,7 @@ def test_doctor_paths_are_structured_read_only_and_continue_after_identity_confl
     from taskledger.storage.project_identity import ensure_project_uuid
 
     ensure_project_uuid(tmp_path / "taskledger.toml")
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     original_task_path = next(
         task_path
         for task_path in paths.tasks_dir.glob("*/task.md")
@@ -910,13 +910,16 @@ def test_doctor_no_warning_for_canonical_task_dir(tmp_path: Path) -> None:
 def test_doctor_reports_oversized_artifact_without_reading_content(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    paths = ensure_v2_layout(tmp_path)
+    paths = ensure_project_layout(tmp_path)
     save_task(tmp_path, _task())
     artifact = task_dir(paths, "task-0001") / "artifacts" / "run-0001-command-0001.log"
     artifact.parent.mkdir(parents=True, exist_ok=True)
     artifact.write_bytes(b"x" * 11)
-    (tmp_path / "taskledger.toml").write_text(
-        "artifact_max_bytes = 10\n", encoding="utf-8"
+    config_path = tmp_path / ".ledger" / "taskledger" / "config.toml"
+    config_text = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        config_text.replace("[ledger]\n", "artifact_max_bytes = 10\n\n[ledger]\n"),
+        encoding="utf-8",
     )
 
     original_read_bytes = Path.read_bytes

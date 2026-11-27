@@ -30,9 +30,9 @@ def find_oversized_artifacts(
     if hasattr(paths, "ledger_ref"):
         from taskledger.errors import LaunchError
         from taskledger.storage.task_identity import task_identity_for_ref
-        from taskledger.storage.task_store import V2Paths
+        from taskledger.storage.task_store import TaskledgerStoragePaths
 
-        resolved_paths = cast(V2Paths, paths)
+        resolved_paths = cast(TaskledgerStoragePaths, paths)
 
         def resolve_task_identity(task_ref: str) -> tuple[str | None, str | None]:
             try:

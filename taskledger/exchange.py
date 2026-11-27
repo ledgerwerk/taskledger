@@ -47,17 +47,13 @@ from taskledger.storage.atomic import atomic_write_text
 from taskledger.storage.events import append_event, load_events
 from taskledger.storage.indexes import rebuild_v2_indexes
 from taskledger.storage.locks import write_lock
-from taskledger.storage.paths import load_project_locator
 from taskledger.storage.project_context import load_project_context
 from taskledger.storage.project_identity import (
     assert_same_project_uuid,
-    load_project_uuid,
     normalize_project_uuid,
-    project_name_or_default,
-    project_slug_or_default,
 )
 from taskledger.storage.task_store import (
-    V2Paths,
+    TaskledgerStoragePaths,
     load_active_locks,
     load_active_task_state,
     overwrite_plan,
@@ -600,8 +596,7 @@ def _prepare_import_task_uuids(
         return prepared
     project_uuid = payload.get("project_uuid")
     if not isinstance(project_uuid, str) or not project_uuid:
-        locator = load_project_locator(workspace_root)
-        project_uuid = load_project_uuid(locator.config_path) or ""
+        project_uuid = load_project_context(workspace_root).project_uuid or ""
     if not project_uuid:
         raise LaunchError(
             "Import payload is missing the project UUID required for task identity."
@@ -892,7 +887,7 @@ def _import_releases(raw_v2: dict[str, object], workspace_root: Path) -> None:
         save_release(workspace_root, ReleaseRecord.from_dict(item))
 
 
-def _clear_v2_state(paths: V2Paths) -> None:
+def _clear_v2_state(paths: TaskledgerStoragePaths) -> None:
     for entry in paths.tasks_dir.iterdir():
         if entry.is_symlink() or not entry.is_dir():
             entry.unlink()
@@ -939,17 +934,13 @@ def write_project_archive(
 ) -> dict[str, object]:
     """Export current-ledger state into a gzip-compressed tar archive."""
     paths = require_v2_layout(workspace_root)
-    locator = load_project_locator(workspace_root)
-    artifact_limit = load_project_context(workspace_root).config.artifact_max_bytes
-    project_uuid = load_project_uuid(locator.config_path)
+    context = load_project_context(workspace_root)
+    artifact_limit = context.config.artifact_max_bytes
+    project_uuid = context.project_uuid
     if project_uuid is None:
         raise LaunchError("Project manifest does not define a project UUID.")
-    project_name = project_name_or_default(
-        locator.config_path, workspace_root=locator.workspace_root
-    )
-    project_slug = project_slug_or_default(
-        locator.config_path, workspace_root=locator.workspace_root
-    )
+    project_name = context.project_name
+    project_slug = slugify_project_ref(project_name, empty="project")
     selection = resolve_export_selection(workspace_root, task_refs)
     selected_task_ids = set(selection.task_ids)
 
@@ -992,7 +983,7 @@ def write_project_archive(
             if selection.scope == "tasks"
             else _default_archive_path(project_slug, paths.ledger_ref)
         )
-        output_path = locator.workspace_root / default_archive_path
+        output_path = context.project_root / default_archive_path
     if output_path.exists():
         if overwrite:
             output_path.unlink()
@@ -1170,8 +1161,7 @@ def import_project_archive(
         ledger_ref = (
             str(payload.get("ledger_ref", "")) if isinstance(payload, dict) else ""
         )
-    locator = load_project_locator(workspace_root)
-    local_uuid = load_project_uuid(locator.config_path)
+    local_uuid = load_project_context(workspace_root).project_uuid
     if local_uuid is None:
         raise LaunchError("Project manifest does not define a project UUID.")
     assert_same_project_uuid(archive_uuid, local_uuid)
@@ -1295,14 +1285,13 @@ def _assert_payload_project_uuid(
     if raw_uuid is None:
         return
     payload_uuid = normalize_project_uuid(raw_uuid)
-    locator = load_project_locator(workspace_root)
-    local_uuid = load_project_uuid(locator.config_path)
+    local_uuid = load_project_context(workspace_root).project_uuid
     if local_uuid is None:
         raise LaunchError("Project manifest does not define a project UUID.")
     assert_same_project_uuid(payload_uuid, local_uuid)
 
 
-def _normalize_import_lock(paths: V2Paths, lock: TaskLock) -> TaskLock:
+def _normalize_import_lock(paths: TaskledgerStoragePaths, lock: TaskLock) -> TaskLock:
     from taskledger.storage.task_identity import task_identity_for_stored_ref
 
     identity = task_identity_for_stored_ref(
@@ -1314,7 +1303,10 @@ def _normalize_import_lock(paths: V2Paths, lock: TaskLock) -> TaskLock:
 
 
 def _import_locks(
-    paths: V2Paths, raw_v2: dict[str, object], *, lock_policy: ImportLockPolicy
+    paths: TaskledgerStoragePaths,
+    raw_v2: dict[str, object],
+    *,
+    lock_policy: ImportLockPolicy,
 ) -> None:
     imported_locks = [
         _normalize_import_lock(paths, TaskLock.from_dict(item))
@@ -1330,7 +1322,7 @@ def _import_locks(
         _write_imported_lock_audit(paths, lock)
 
 
-def _write_imported_lock_audit(paths: V2Paths, lock: TaskLock) -> None:
+def _write_imported_lock_audit(paths: TaskledgerStoragePaths, lock: TaskLock) -> None:
     path = task_audit_dir(paths, lock.task_id) / f"imported-lock-{lock.lock_id}.yaml"
     payload = lock.to_dict()
     payload["imported_as_active"] = False
@@ -1436,7 +1428,7 @@ def _default_task_archive_path(
     return Path(filename)
 
 
-def _relative_artifact_path(paths: V2Paths, source_path: Path) -> str:
+def _relative_artifact_path(paths: TaskledgerStoragePaths, source_path: Path) -> str:
     try:
         return source_path.relative_to(paths.project_dir).as_posix()
     except ValueError:
@@ -1444,7 +1436,7 @@ def _relative_artifact_path(paths: V2Paths, source_path: Path) -> str:
 
 
 def _collect_artifact_members(
-    paths: V2Paths,
+    paths: TaskledgerStoragePaths,
     *,
     selected_task_ids: set[str] | None = None,
     max_bytes: int = MAX_ARTIFACT_MEMBER_BYTES,
