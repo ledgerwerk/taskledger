@@ -1439,6 +1439,7 @@ def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
         )
         for item in needed
     )
+    internal_layout: dict[str, object] | None = None
     # Check storage.yaml layout version
     try:
         from taskledger.storage.meta import read_storage_meta
@@ -1463,9 +1464,49 @@ def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
             )
     except Exception as exc:  # noqa: BLE001
         schema_errors.append(f"Cannot read storage.yaml: {exc}")
+    try:
+        if (workspace_root / ".ledger" / "ledger.toml").is_file():
+            from taskledger.storage.task_layout import inspect_task_directory_layout
+
+            layout_inspection = inspect_task_directory_layout(workspace_root)
+            internal_layout = layout_inspection.to_dict()
+            if not layout_inspection.current:
+                if layout_inspection.repairable:
+                    affected = ", ".join(layout_inspection.legacy_ledgers)
+                    if not affected:
+                        affected = "storage metadata"
+                    code = "TASK_DIRECTORY_LAYOUT_DRIFT"
+                    message = (
+                        "Physical task-directory layout requires reconciliation "
+                        f"(declared {layout_inspection.declared_version}, expected "
+                        f"{layout_inspection.target_version}; affected: {affected})."
+                    )
+                else:
+                    code = "TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED"
+                    message = "Physical task-directory layout contains unsafe entries."
+                schema_errors.append(message)
+                project_diagnostics.append(
+                    {
+                        "severity": "error",
+                        "code": code,
+                        "message": message,
+                        "details": internal_layout,
+                    }
+                )
+    except Exception as exc:  # noqa: BLE001
+        message = f"Unable to inspect physical task-directory layout: {exc}"
+        schema_errors.append(message)
+        project_diagnostics.append(
+            {
+                "severity": "error",
+                "code": "TASK_DIRECTORY_LAYOUT_INSPECTION_FAILED",
+                "message": message,
+            }
+        )
 
     return {
         "kind": "taskledger_schema_inspection",
+        "internal_layout": internal_layout,
         "healthy": not schema_errors,
         "errors": schema_errors,
         "diagnostics": project_diagnostics

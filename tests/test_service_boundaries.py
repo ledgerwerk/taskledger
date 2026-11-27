@@ -12,6 +12,12 @@ MODULE_LINE_WHITELIST: dict[str, str] = {
     "taskledger/services/tasks.py": (
         "Temporary compatibility facade while workflow services are extracted."
     ),
+    "taskledger/storage/layout_migration.py": (
+        "Unified topology and internal-layout migration status/apply orchestration."
+    ),
+    "taskledger/storage/task_store.py": (
+        "Canonical per-ledger path resolution remains with established v2 store APIs."
+    ),
 }
 
 FUNCTION_LINE_WHITELIST: dict[str, str] = {
@@ -192,6 +198,17 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/services/doctor.py::inspect_v2_schema:except-2": (
         "Doctor schema inspection records unreadable storage metadata as an error."
     ),
+    "taskledger/services/doctor.py::inspect_v2_schema:except-4": (
+        "Schema doctor records physical task-directory inspection failures."
+    ),
+    (
+        "taskledger/storage/task_directory_migration.py::"
+        "_migrate_v5_task_directories_for_paths:except-1"
+    ): ("Task-directory migration rolls back a failed per-ledger transaction."),
+    (
+        "taskledger/storage/task_directory_migration.py::"
+        "_migrate_v5_task_directories_for_paths:except-2"
+    ): ("Task-directory migration reports rollback failure with its recovery journal."),
     "taskledger/services/doctor.py::inspect_v2_indexes:except-1": (
         "Doctor index inspection degrades gracefully when event loading fails."
     ),
@@ -388,14 +405,6 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
     "taskledger/storage/task_store.py::remove_lock_from_paths:except-2": (
         "remove_lock_from_paths sidecar summary update degrades gracefully."
     ),
-    (
-        "taskledger/storage/task_directory_migration.py::"
-        "migrate_v5_task_directories_to_uuidv7:except-1"
-    ): ("Task-directory migration rolls back state when migration phases fail."),
-    (
-        "taskledger/storage/task_directory_migration.py::"
-        "migrate_v5_task_directories_to_uuidv7:except-2"
-    ): ("Task-directory migration reports when rollback itself fails."),
     (
         "taskledger/services/active_task_recovery.py::"
         "_append_active_repair_event:except-1"

@@ -213,6 +213,26 @@ def _paths_for_mounts(
     )
 
 
+def paths_for_ledger_ref(
+    context: TaskledgerProjectContext, ledger_ref: str
+) -> TaskledgerPaths:
+    """Build canonical mount paths for any physical ledger namespace."""
+    if context.mode != "canonical":
+        raise LaunchError(
+            "Arbitrary ledger paths require canonical Taskledger storage."
+        )
+    paths = context.paths
+    return _paths_for_mounts(
+        context.project_root,
+        context.config_path,
+        paths.data_root,
+        paths.runtime_root,
+        paths.logs_root,
+        paths.indexes_root,
+        ledger_ref,
+    )
+
+
 def _load_toml(path: Path) -> dict[str, object]:
     try:
         value = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -429,14 +449,11 @@ def require_mutable_project_context(
         require_initialized=False,
         allow_legacy=allow_legacy,
     )
-    if context.mode == "canonical":
-        from taskledger.storage.meta import read_storage_meta
+    if context.mode == "canonical" and context.paths.storage_meta_path.exists():
+        from taskledger.storage.migrations import reconcile_storage_layout
 
-        meta = read_storage_meta(start)
-        if meta is not None and meta.storage_layout_version == 5:
-            from taskledger.storage.migrations import apply_layout_migrations
-
-            apply_layout_migrations(start, meta.storage_layout_version)
+        reconciliation = reconcile_storage_layout(start)
+        if reconciliation.changed:
             context = load_project_context(
                 start,
                 require_initialized=False,

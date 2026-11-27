@@ -14,11 +14,16 @@ from taskledger.storage.init import init_canonical_project_state
 from taskledger.storage.locks import write_lock
 from taskledger.storage.meta import StorageMeta, read_storage_meta, write_storage_meta
 from taskledger.storage.migrations import apply_layout_migrations
+from taskledger.storage.project_context import load_project_context
 from taskledger.storage.task_identity import (
     deterministic_legacy_task_uuid,
     scan_task_identity_inventory,
 )
-from taskledger.storage.task_store import V2Paths, resolve_v2_paths
+from taskledger.storage.task_store import (
+    V2Paths,
+    resolve_v2_paths,
+    v2_paths_for_ledger_ref,
+)
 
 PROJECT_UUID = "d1fb158a-6755-4b26-8fbe-aef47f5a6d3a"
 
@@ -424,3 +429,119 @@ def test_layout5_migration_fails_with_source_and_field_for_reserved_relation(
     assert relation_source.endswith("/task.md")
     assert (paths.tasks_dir / "task-0002" / "task.md").read_bytes() == original
     assert (paths.tasks_dir / "task-0004").is_dir()
+
+
+def test_layout5_migration_converts_every_canonical_ledger_before_version_bump(
+    tmp_path: Path,
+) -> None:
+    root, main_paths = _legacy_project(tmp_path / "multi-ledger")
+    context = load_project_context(root, require_initialized=False, allow_legacy=False)
+    feature_paths = v2_paths_for_ledger_ref(context, "clean-start")
+    feature_paths.tasks_dir.mkdir(parents=True)
+    _add_task(main_paths, "task-0001", "2024-11-01T10:00:00+00:00")
+    _add_task(feature_paths, "task-0001", "2024-11-02T10:00:00+00:00")
+
+    _migrate(root)
+
+    assert _storage_version(root) == 6
+    for paths in (main_paths, feature_paths):
+        assert not any(
+            path.name.startswith("task-") for path in paths.tasks_dir.iterdir()
+        )
+        inventory = scan_task_identity_inventory(paths)
+        assert len(inventory.entries) == 1
+        assert inventory.entries[0].task_id == "task-0001"
+
+
+def test_multi_ledger_failure_keeps_version_five_and_retry_resumes(
+    tmp_path: Path,
+) -> None:
+    root, main_paths = _legacy_project(tmp_path / "multi-ledger-lock")
+    context = load_project_context(root, require_initialized=False, allow_legacy=False)
+    feature_paths = v2_paths_for_ledger_ref(context, "clean-start")
+    feature_paths.tasks_dir.mkdir(parents=True)
+    _add_task(main_paths, "task-0001", "2024-12-01T10:00:00+00:00")
+    _add_task(feature_paths, "task-0001", "2024-12-02T10:00:00+00:00")
+    lock_path = feature_paths.tasks_dir / "task-0001" / "lock.yaml"
+    lock_path.write_text("active: true\n", encoding="utf-8")
+
+    with pytest.raises(LaunchError, match="migration is blocked"):
+        _migrate(root)
+
+    assert _storage_version(root) == 5
+    assert (main_paths.tasks_dir / "task-0001").is_dir()
+    assert (feature_paths.tasks_dir / "task-0001").is_dir()
+
+    lock_path.unlink()
+    _migrate(root)
+
+    assert _storage_version(root) == 6
+    for paths in (main_paths, feature_paths):
+        assert not any(
+            path.name.startswith("task-") for path in paths.tasks_dir.iterdir()
+        )
+
+
+def test_layout6_physical_drift_is_read_only_until_mutation_reconciles(
+    tmp_path: Path,
+) -> None:
+    from taskledger.storage.migrations import reconcile_storage_layout
+
+    root, paths = _legacy_project(tmp_path / "layout6-drift")
+    _add_task(paths, "task-0001", "2025-01-01T10:00:00+00:00")
+    write_storage_meta(root, StorageMeta(storage_layout_version=6))
+
+    dry_run = reconcile_storage_layout(root, dry_run=True)
+
+    assert dry_run.changed is False
+    assert dry_run.applied == ("uuidv7-task-directories-reconcile",)
+    assert (paths.tasks_dir / "task-0001").is_dir()
+    assert not (paths.ledger_dir / "task-directory-migration-v5-to-v6.json").exists()
+
+    load_project_context(root, require_initialized=False, allow_legacy=False)
+    assert (paths.tasks_dir / "task-0001").is_dir()
+    assert not (paths.ledger_dir / "task-directory-migration-v5-to-v6.json").exists()
+
+    created = create_task(root, title="new", description="", slug="new")
+
+    assert created.id == "task-0002"
+    assert not (paths.tasks_dir / "task-0001").exists()
+    assert _storage_version(root) == 6
+    assert read_storage_meta(root).last_migrated_at is not None
+
+
+def test_doctor_reports_layout6_task_directory_drift(tmp_path: Path) -> None:
+    from taskledger.services.doctor import inspect_v2_schema
+
+    root, paths = _legacy_project(tmp_path / "doctor-layout-drift")
+    _add_task(paths, "task-0001", "2025-01-01T10:00:00+00:00")
+    write_storage_meta(root, StorageMeta(storage_layout_version=6))
+
+    result = inspect_v2_schema(root)
+
+    diagnostic = next(
+        item
+        for item in result["diagnostics"]
+        if item["code"] == "TASK_DIRECTORY_LAYOUT_DRIFT"
+    )
+    assert result["healthy"] is False
+    assert diagnostic["details"]["legacy_ledgers"] == ["main"]
+    assert (paths.tasks_dir / "task-0001").is_dir()
+
+
+def test_doctor_reports_unrecoverable_task_directory_layout(tmp_path: Path) -> None:
+    from taskledger.services.doctor import inspect_v2_schema
+
+    root, paths = _legacy_project(tmp_path / "doctor-layout-invalid")
+    write_storage_meta(root, StorageMeta(storage_layout_version=6))
+    (paths.tasks_dir / "unexpected.txt").write_text("invalid\n", encoding="utf-8")
+
+    result = inspect_v2_schema(root)
+
+    diagnostic = next(
+        item
+        for item in result["diagnostics"]
+        if item["code"] == "TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED"
+    )
+    assert result["healthy"] is False
+    assert diagnostic["details"]["invalid_ledgers"] == ["main"]

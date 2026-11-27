@@ -46,6 +46,10 @@ from taskledger.storage.project_context import (
     TaskledgerProjectContext,
     load_project_context,
 )
+from taskledger.storage.task_layout import (
+    TaskDirectoryLayoutInspection,
+    inspect_task_directory_layout,
+)
 from taskledger.storage.yaml_store import write_yaml_object
 
 try:
@@ -145,6 +149,8 @@ class TaskledgerMigrationInspection:
     request_sibling_ledger_root: Path | None = None
     request_create_sibling_store: bool = False
     request_adopt_sibling_store: bool = False
+    internal_layout: TaskDirectoryLayoutInspection | None = None
+    internal_layout_status: str = "not_inspected"
 
     @property
     def blockers(self) -> tuple[str, ...]:
@@ -247,6 +253,10 @@ class TaskledgerMigrationInspection:
                 if self.current_registration is not None
                 else "missing; will be added",
                 "classification": self.target_classification,
+                "internal_layout": (
+                    self.internal_layout.to_dict() if self.internal_layout else None
+                ),
+                "internal_layout_status": self.internal_layout_status,
                 "fingerprint": _tree_fingerprint(self.target_data_root),
                 "authoritative_files": len(_authoritative_files(self.target_data_root)),
             },
@@ -719,6 +729,73 @@ def _is_legacy_sibling_root(path: Path) -> bool:
         if child.is_dir() and (child / "storage.yaml").is_file():
             return True
     return False
+
+
+def _inspect_active_target_layout(
+    project_root: Path,
+    target_data_root: Path,
+    current_registration: Mapping[str, object] | None,
+) -> tuple[TaskDirectoryLayoutInspection | None, str, MigrationIssue | None]:
+    if current_registration is None:
+        return (
+            None,
+            "pending_activation_migration",
+            _issue(
+                "info",
+                "INTERNAL_LAYOUT_PENDING_ACTIVATION",
+                "The target is not the registered active Taskledger store; "
+                "internal layout reconciliation remains pending activation.",
+            ),
+        )
+    try:
+        context = load_project_context(
+            project_root, require_initialized=False, allow_legacy=False
+        )
+        if context.paths.data_root.resolve(strict=False) != target_data_root.resolve(
+            strict=False
+        ):
+            return (
+                None,
+                "pending_activation_migration",
+                _issue(
+                    "info",
+                    "INTERNAL_LAYOUT_PENDING_ACTIVATION",
+                    "The migration target is not the active canonical Taskledger "
+                    "store; internal layout reconciliation remains pending activation.",
+                ),
+            )
+        inspection = inspect_task_directory_layout(project_root)
+    except LaunchError as exc:
+        issue = _issue(
+            "blocker",
+            "TASK_DIRECTORY_LAYOUT_INSPECTION_FAILED",
+            f"Cannot inspect the active Taskledger physical layout: {exc}",
+            "Run `taskledger doctor schema` and resolve the storage diagnostics.",
+        )
+        return None, "inspection_failed", issue
+
+    if inspection.current:
+        return inspection, "current", None
+    if inspection.repairable:
+        affected = ", ".join(inspection.legacy_ledgers)
+        issue = _issue(
+            "warning",
+            "TASK_DIRECTORY_LAYOUT_DRIFT",
+            f"Storage metadata declares layout {inspection.declared_version}, but "
+            f"legacy task directories remain in ledger(s): {affected}.",
+            "Run `taskledger migrate apply`.",
+            details={"internal_layout": inspection.to_dict()},
+        )
+        return inspection, "reconciliation_required", issue
+
+    issue = _issue(
+        "blocker",
+        "TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED",
+        "Taskledger physical storage layout contains unsafe or unrecoverable entries.",
+        "Run `taskledger doctor schema` and review the reported ledger details.",
+        details={"internal_layout": inspection.to_dict()},
+    )
+    return inspection, "recovery_required", issue
 
 
 def _inspect_migration_phases(  # noqa: C901
@@ -1321,17 +1398,22 @@ def _inspect_migration_phases(  # noqa: C901
     }:
         items = _copy_items(source_data, source_logs, target_data)
     # Check for valid completion receipt
-    has_valid_receipt = False
-    if target_data is not None and target_data.is_dir():
-        migrations_dir = target_data / "migrations"
-        if migrations_dir.is_dir():
-            receipts = list(migrations_dir.glob("*.json"))
-            has_valid_receipt = len(receipts) > 0
-    migration_required = not (
+    internal_layout: TaskDirectoryLayoutInspection | None = None
+    internal_layout_status = "not_inspected"
+    if target_classification in {"IDENTICAL_SOURCE", "COMPLETE_CANONICAL"}:
+        (
+            internal_layout,
+            internal_layout_status,
+            internal_layout_issue,
+        ) = _inspect_active_target_layout(root, target_data, current_registration)
+        if internal_layout_issue is not None:
+            issues.append(internal_layout_issue)
+    topology_current = (
         target_classification in {"IDENTICAL_SOURCE", "COMPLETE_CANONICAL"}
         and current_registration is not None
-        and has_valid_receipt
     )
+    internal_current = internal_layout_status == "current"
+    migration_required = not (topology_current and internal_current)
     ready = not any(issue.severity == "blocker" for issue in issues) and (
         source_data is not None or target_classification == "COMPLETE_CANONICAL"
     )
@@ -1362,6 +1444,8 @@ def _inspect_migration_phases(  # noqa: C901
         source_selection_reason=source_reason,
         source_candidates=tuple(candidates),
         target_classification=target_classification,
+        internal_layout=internal_layout,
+        internal_layout_status=internal_layout_status,
         would_create_sibling_store=create_sibling_store and not sibling_root.exists(),
         request_source_data_root=source_data_root,
         request_sibling_ledger_root=sibling_ledger_root,
@@ -1543,6 +1627,34 @@ def _ledgercore_migration_plan(
     )
 
 
+def _write_internal_layout_reconciliation_receipt(
+    target_data_root: Path,
+    reconciliation: Mapping[str, object],
+    internal_layout: TaskDirectoryLayoutInspection,
+) -> Path | None:
+    if not reconciliation.get("changed"):
+        return None
+    migrations_dir = target_data_root / "migrations"
+    migrations_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    receipt = migrations_dir / f"{stamp}-task-directory-layout-reconciliation.json"
+    atomic_write_text(
+        receipt,
+        json.dumps(
+            {
+                "schema_version": 1,
+                "object_type": "task_directory_layout_reconciliation",
+                "reconciliation": dict(reconciliation),
+                "internal_layout": internal_layout.to_dict(),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+    )
+    return receipt
+
+
 def _apply_migration_phases(
     inspection: TaskledgerMigrationInspection,
     *,
@@ -1583,12 +1695,70 @@ def _apply_migration_phases(
         fresh.source_kind == "canonical-0.4-sibling"
         or fresh.target_classification == "IDENTICAL_SOURCE"
     ):
+        if fresh.internal_layout_status not in {"current", "reconciliation_required"}:
+            canonical_sibling_root = (fresh.project_root / ".." / "ledger").resolve(
+                strict=False
+            )
+            migration_only_override = fresh.sibling_root != canonical_sibling_root
+            receipts = sorted((fresh.target_data_root / "migrations").glob("*.json"))
+            return {
+                "kind": "migration_apply",
+                "status": (
+                    "applied"
+                    if migration_only_override
+                    else "pending_activation_migration"
+                ),
+                "inspection": fresh.to_dict(),
+                "receipt": str(receipts[-1]) if receipts else None,
+                "internal_layout_status": fresh.internal_layout_status,
+                "canonical_activation": False,
+                "source_retired": False,
+                "warnings": [
+                    (
+                        "The target is not the active canonical store; internal layout "
+                        "migration remains pending activation."
+                    )
+                ],
+            }
+        from taskledger.storage.migrations import (
+            reconcile_storage_layout,
+            require_current_storage_layout,
+        )
+
+        reconciliation_result = reconcile_storage_layout(fresh.project_root)
+        verified_layout = require_current_storage_layout(fresh.project_root)
+        fresh = inspect_migration(
+            fresh.project_root,
+            source_checkout=fresh.source_checkout_id,
+            source_data_root=fresh.source_data_root,
+            project_uuid=fresh.project_uuid,
+            sibling_ledger_root=fresh.sibling_root,
+        )
+        if fresh.migration_required:
+            raise LaunchError(
+                "Canonical migration apply did not converge to up_to_date.",
+                code="TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE",
+                details={"inspection": fresh.to_dict()},
+            )
+        reconciliation_receipt = _write_internal_layout_reconciliation_receipt(
+            fresh.target_data_root,
+            reconciliation_result.to_dict(),
+            verified_layout,
+        )
         receipts = sorted((fresh.target_data_root / "migrations").glob("*.json"))
         return {
             "kind": "migration_apply",
-            "status": "applied",
+            "status": "applied" if reconciliation_result.changed else "up_to_date",
             "inspection": fresh.to_dict(),
-            "receipt": str(receipts[-1]) if receipts else None,
+            "internal_layout": verified_layout.to_dict(),
+            "internal_layout_reconciliation": reconciliation_result.to_dict(),
+            "receipt": (
+                str(reconciliation_receipt)
+                if reconciliation_receipt is not None
+                else str(receipts[-1])
+                if receipts
+                else None
+            ),
             "canonical_activation": True,
             "source_retired": False,
             "next_commands": [
@@ -1699,7 +1869,7 @@ def _apply_migration_phases(
             "last_migrated_at": datetime.now(timezone.utc).isoformat(),
         },
     )
-    verification_report = {
+    verification_report: dict[str, object] = {
         "target_exists": target.is_dir(),
         "binding": (target / ".ledger-project.toml").is_file(),
         "state": (target / "state.toml").is_file(),
@@ -1735,6 +1905,7 @@ def _apply_migration_phases(
                     "inspection": fresh.to_dict(),
                     "backup": str(backup_path),
                     "verified": verification_report,
+                    "internal_layout_status": "pending_activation_migration",
                     "canonical_activation": False,
                     "identity": {
                         "canonical_uuid": fresh.canonical_project_uuid,
@@ -1754,6 +1925,7 @@ def _apply_migration_phases(
             "backup": str(backup_path),
             "receipt": str(receipt),
             "verification": verification_report,
+            "internal_layout_status": "pending_activation_migration",
             "canonical_activation": False,
             "source_retired": False,
             "next_commands": [
@@ -1763,8 +1935,9 @@ def _apply_migration_phases(
             ],
             "warnings": [
                 (
-                    "Migration-only destination override was used; canonical "
-                    "project activation was not changed."
+                    "Migration-only destination override was used; "
+                    "canonical activation was not changed and internal "
+                    "layout conversion remains pending activation."
                 )
             ],
         }
@@ -1795,6 +1968,21 @@ def _apply_migration_phases(
         fresh.project_uuid or "",
         fresh.current_registration,
     )
+    from taskledger.storage.migrations import (
+        reconcile_storage_layout,
+        require_current_storage_layout,
+    )
+
+    layout_reconciliation = reconcile_storage_layout(fresh.project_root)
+    verified_layout = require_current_storage_layout(fresh.project_root)
+    verification_report["internal_layout"] = verified_layout.to_dict()
+    fresh = inspect_migration(
+        fresh.project_root,
+        source_checkout=fresh.source_checkout_id,
+        source_data_root=fresh.source_data_root,
+        project_uuid=fresh.project_uuid,
+        sibling_ledger_root=fresh.sibling_root,
+    )
     context = load_project_context(fresh.project_root)
     from taskledger.storage.indexes import rebuild_v2_indexes
     from taskledger.storage.task_store import resolve_v2_paths
@@ -1812,6 +2000,7 @@ def _apply_migration_phases(
                 "inspection": fresh.to_dict(),
                 "backup": str(backup_path),
                 "verified": verification_report,
+                "internal_layout_reconciliation": layout_reconciliation.to_dict(),
                 "identity": {
                     "canonical_uuid": fresh.canonical_project_uuid,
                     "legacy_uuid": fresh.legacy_project_uuid,
@@ -1839,6 +2028,8 @@ def _apply_migration_phases(
         "backup": str(backup_path),
         "receipt": str(receipt),
         "verification": verification_report,
+        "internal_layout": verified_layout.to_dict(),
+        "internal_layout_reconciliation": layout_reconciliation.to_dict(),
         "canonical_activation": True,
         "source_retired": retire_source,
         "next_commands": [

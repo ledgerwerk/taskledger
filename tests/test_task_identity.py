@@ -220,3 +220,26 @@ def test_uuid_identity_allocation_is_unique_and_inventory_backed(
     assert len(inventory.entries) == 4
     assert len({entry.task_id for entry in inventory.entries}) == 4
     assert all(entry.state == "reserved" for entry in inventory.entries)
+
+
+def test_legacy_task_directory_allocation_error_has_migration_details(
+    tmp_path: Path,
+) -> None:
+    project = _init(tmp_path)
+    paths = resolve_v2_paths(project)
+    (paths.tasks_dir / "task-0001").mkdir()
+
+    with pytest.raises(LaunchError) as caught:
+        allocate_task_identity(paths)
+
+    assert caught.value.code == "TASKLEDGER_TASK_DIRECTORY_MIGRATION_REQUIRED"
+    assert caught.value.exit_code == 4
+    assert caught.value.details == {
+        "ledger_ref": "main",
+        "tasks_dir": str(paths.tasks_dir),
+    }
+    assert caught.value.remediation == [
+        "Run `taskledger migrate status`.",
+        "Run `taskledger migrate apply`.",
+        "Run `taskledger doctor schema` if migration does not converge.",
+    ]

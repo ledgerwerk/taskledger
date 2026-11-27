@@ -651,7 +651,17 @@ def allocate_task_identity(paths: V2Paths, *, max_attempts: int = 32) -> TaskAll
             identity.path.name.startswith("task-") for identity in inventory.entries
         ):
             raise LaunchError(
-                "Legacy task directories must be migrated before UUID allocation."
+                "Legacy task directories must be migrated before UUID allocation.",
+                code="TASKLEDGER_TASK_DIRECTORY_MIGRATION_REQUIRED",
+                remediation=[
+                    "Run `taskledger migrate status`.",
+                    "Run `taskledger migrate apply`.",
+                    "Run `taskledger doctor schema` if migration does not converge.",
+                ],
+                details={
+                    "ledger_ref": paths.ledger_ref,
+                    "tasks_dir": str(paths.tasks_dir),
+                },
             )
         for _ in range(max_attempts):
             task_uuid = parse_uuid7(uuid7())

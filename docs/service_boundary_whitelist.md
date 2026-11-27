@@ -16,6 +16,16 @@ constants.
   - Target split direction: Continue reducing to a smaller compatibility
     facade and move residual helpers into focused modules.
 
+- `taskledger/storage/layout_migration.py`
+
+  - Current reason: Unified topology and internal-layout migration status/apply orchestration.
+  - Target split direction: Extract the physical-layout reconciliation adapter from migration orchestration.
+
+- `taskledger/storage/task_store.py`
+
+  - Current reason: Canonical per-ledger path resolution remains with established v2 store APIs.
+  - Target split direction: Keep ledger path construction focused as path helpers move to owning storage modules.
+
 ## Current split status
 
 Implemented in this tranche:

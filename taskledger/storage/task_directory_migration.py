@@ -36,8 +36,96 @@ _LOCK_NAME = ".task-directory-uuidv7-migration.lock"
 
 
 def migrate_v5_task_directories_to_uuidv7(workspace_root: Path) -> None:
-    """Rename numeric task bundles to deterministic UUIDv7 storage paths."""
-    paths = resolve_v2_paths(workspace_root)
+    """Migrate every canonical ledger before the global layout can advance."""
+    from taskledger.storage.meta import read_storage_meta
+    from taskledger.storage.project_context import load_project_context
+    from taskledger.storage.task_layout import (
+        discover_canonical_ledger_refs,
+        inspect_ledger_task_directory_layout,
+    )
+    from taskledger.storage.task_store import v2_paths_for_ledger_ref
+
+    context = load_project_context(
+        workspace_root, require_initialized=False, allow_legacy=True
+    )
+    if context.mode != "canonical":
+        _migrate_v5_task_directories_for_paths(resolve_v2_paths(workspace_root))
+        return
+
+    ledger_refs = discover_canonical_ledger_refs(context)
+    project_lock = (
+        context.paths.data_root / "migrations" / ".task-directory-uuidv7-project.lock"
+    )
+    project_lock.parent.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(project_lock)):
+        meta = read_storage_meta(context.project_root)
+        declared_version = meta.storage_layout_version if meta is not None else None
+        ledger_paths = {
+            ledger_ref: v2_paths_for_ledger_ref(context, ledger_ref)
+            for ledger_ref in ledger_refs
+        }
+        inspections = {
+            ledger_ref: inspect_ledger_task_directory_layout(
+                paths, declared_version=declared_version
+            )
+            for ledger_ref, paths in ledger_paths.items()
+        }
+        blocked = {
+            ledger_ref: inspection.to_dict()
+            for ledger_ref, inspection in inspections.items()
+            if not inspection.repairable
+        }
+        if blocked:
+            reasons = []
+            for ledger_ref, inspection in inspections.items():
+                if inspection.repairable:
+                    continue
+                if inspection.kind == "mixed":
+                    reasons.append(
+                        f"{ledger_ref}: Mixed numeric and UUID task directories "
+                        "without a recoverable migration journal."
+                    )
+                else:
+                    reasons.append(
+                        f"{ledger_ref}: " + "; ".join(inspection.invalid_entries)
+                    )
+            raise LaunchError(
+                "Canonical task-directory migration found unsafe ledger layouts. "
+                + " ".join(reasons),
+                code="TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED",
+                details={"ledgers": blocked},
+            )
+
+        _assert_no_unmerged_git_paths(context.project_root)
+        for paths in ledger_paths.values():
+            _assert_no_active_locks(paths)
+            journal = _read_journal(paths.ledger_dir / _JOURNAL_NAME)
+            if journal is None or journal.get("status") == "rolled_back":
+                _build_rename_plan(paths)
+            elif journal.get("status") == "complete":
+                _validate_completed_migration(paths, journal)
+
+        for paths in ledger_paths.values():
+            _migrate_v5_task_directories_for_paths(paths)
+
+        final = [
+            inspect_ledger_task_directory_layout(
+                paths, declared_version=declared_version
+            )
+            for paths in ledger_paths.values()
+        ]
+        if any(not inspection.is_current for inspection in final):
+            raise LaunchError(
+                "All-ledger task-directory migration did not reach layout 6.",
+                code="TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE",
+                details={
+                    "ledgers": [inspection.to_dict() for inspection in final],
+                },
+            )
+
+
+def _migrate_v5_task_directories_for_paths(paths: V2Paths) -> None:
+    """Migrate one ledger using its recoverable v5-to-v6 journal."""
     journal_path = paths.ledger_dir / _JOURNAL_NAME
     lock_path = paths.ledger_dir / _LOCK_NAME
     lock_path.parent.mkdir(parents=True, exist_ok=True)

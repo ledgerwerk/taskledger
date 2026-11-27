@@ -12,6 +12,11 @@ from typing import Any
 from taskledger.domain.states import TASKLEDGER_STORAGE_LAYOUT_VERSION
 from taskledger.errors import LaunchError
 from taskledger.storage.ledger_config import load_ledger_config
+from taskledger.storage.meta import StorageMeta
+from taskledger.storage.task_layout import (
+    TaskDirectoryLayoutInspection,
+    inspect_task_directory_layout,
+)
 
 Record = dict[str, Any]
 MigrationFunc = Callable[[Path], None]
@@ -48,6 +53,28 @@ class MigrationScanIssue:
     path: Path
     object_type: str
     message: str
+
+
+@dataclass(frozen=True, slots=True)
+class StorageLayoutReconciliation:
+    changed: bool
+    declared_version_before: int | None
+    declared_version_after: int | None
+    applied: tuple[str, ...]
+    repaired_drift: bool
+    inspection_before: TaskDirectoryLayoutInspection
+    inspection_after: TaskDirectoryLayoutInspection
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "changed": self.changed,
+            "declared_version_before": self.declared_version_before,
+            "declared_version_after": self.declared_version_after,
+            "applied": list(self.applied),
+            "repaired_drift": self.repaired_drift,
+            "inspection_before": self.inspection_before.to_dict(),
+            "inspection_after": self.inspection_after.to_dict(),
+        }
 
 
 LAYOUT_MIGRATIONS: tuple[LayoutMigration, ...] = (
@@ -105,6 +132,144 @@ def required_layout_migrations(current: int, target: int) -> list[LayoutMigratio
     return migrations
 
 
+def inspect_storage_layout(workspace_root: Path) -> TaskDirectoryLayoutInspection:
+    """Return read-only physical layout inspection for every canonical ledger."""
+    return inspect_task_directory_layout(workspace_root)
+
+
+def require_current_storage_layout(
+    workspace_root: Path,
+) -> TaskDirectoryLayoutInspection:
+    """Require all canonical ledgers to satisfy the current physical layout."""
+    inspection = inspect_storage_layout(workspace_root)
+    if not inspection.current:
+        code = (
+            "TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE"
+            if inspection.repairable
+            else "TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED"
+        )
+        raise LaunchError(
+            "Taskledger physical storage layout is not current.",
+            code=code,
+            details={"internal_layout": inspection.to_dict()},
+        )
+    return inspection
+
+
+def _write_migration_metadata(
+    workspace_root: Path, meta: StorageMeta, version: int
+) -> StorageMeta:
+    from taskledger.storage.meta import write_storage_meta
+
+    try:
+        from taskledger._version import __version__ as tl_version
+    except ImportError:
+        tl_version = "unknown"
+    from taskledger.timeutils import utc_now_iso
+
+    updated = type(meta)(
+        storage_layout_version=version,
+        record_schema_version=meta.record_schema_version,
+        created_with_taskledger=meta.created_with_taskledger,
+        created_at=meta.created_at,
+        last_migrated_with_taskledger=tl_version,
+        last_migrated_at=utc_now_iso(),
+    )
+    write_storage_meta(workspace_root, updated)
+    return updated
+
+
+def reconcile_storage_layout(
+    workspace_root: Path, *, dry_run: bool = False
+) -> StorageLayoutReconciliation:
+    """Apply safe layout migrations and repair known physical metadata drift."""
+    from taskledger.storage.meta import read_storage_meta
+
+    meta = read_storage_meta(workspace_root)
+    if meta is None:
+        raise LaunchError(
+            "Missing storage metadata; cannot reconcile Taskledger layout.",
+            code="TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE",
+        )
+    declared_version = meta.storage_layout_version
+    if declared_version > TASKLEDGER_STORAGE_LAYOUT_VERSION:
+        raise LaunchError(
+            f"Storage layout {declared_version} is newer than supported "
+            f"{TASKLEDGER_STORAGE_LAYOUT_VERSION}.",
+            code="TASKLEDGER_STORAGE_LAYOUT_OLD",
+        )
+
+    before = inspect_storage_layout(workspace_root)
+    if not before.repairable:
+        raise LaunchError(
+            "Taskledger storage layout requires explicit recovery.",
+            code="TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED",
+            details={"internal_layout": before.to_dict()},
+        )
+
+    if dry_run:
+        if declared_version < TASKLEDGER_STORAGE_LAYOUT_VERSION:
+            applied = tuple(
+                migration.name
+                for migration in required_layout_migrations(
+                    declared_version, TASKLEDGER_STORAGE_LAYOUT_VERSION
+                )
+            )
+        elif not before.current:
+            applied = ("uuidv7-task-directories-reconcile",)
+        else:
+            applied = ()
+        return StorageLayoutReconciliation(
+            changed=False,
+            declared_version_before=declared_version,
+            declared_version_after=declared_version,
+            applied=applied,
+            repaired_drift=False,
+            inspection_before=before,
+            inspection_after=before,
+        )
+
+    applied_names: list[str] = []
+    repaired_drift = False
+    if declared_version < TASKLEDGER_STORAGE_LAYOUT_VERSION:
+        applied_names.extend(apply_layout_migrations(workspace_root, declared_version))
+    elif not before.current:
+        from taskledger.storage.task_directory_migration import (
+            migrate_v5_task_directories_to_uuidv7,
+        )
+
+        migrate_v5_task_directories_to_uuidv7(workspace_root)
+        repaired_drift = True
+        applied_names.append("uuidv7-task-directories-reconcile")
+
+    after = inspect_storage_layout(workspace_root)
+    if not after.current:
+        code = (
+            "TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE"
+            if after.repairable
+            else "TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED"
+        )
+        raise LaunchError(
+            "Storage layout reconciliation did not converge.",
+            code=code,
+            details={"internal_layout": after.to_dict()},
+        )
+    if repaired_drift:
+        _write_migration_metadata(workspace_root, meta, declared_version)
+    final_meta = read_storage_meta(workspace_root)
+    return StorageLayoutReconciliation(
+        changed=bool(applied_names),
+        declared_version_before=declared_version,
+        declared_version_after=(
+            final_meta.storage_layout_version if final_meta is not None else None
+        ),
+        applied=tuple(applied_names),
+        repaired_drift=repaired_drift,
+        inspection_before=before,
+        inspection_after=after,
+    )
+
+
 def scan_records_for_migration(
     workspace_root: Path,
 ) -> list[MigrationNeeded]:
@@ -157,7 +322,7 @@ def apply_layout_migrations(
 
     Returns list of migration names that were applied (or would be applied in dry_run).
     """
-    from taskledger.storage.meta import read_storage_meta, write_storage_meta
+    from taskledger.storage.meta import read_storage_meta
 
     migrations = required_layout_migrations(
         current_version, TASKLEDGER_STORAGE_LAYOUT_VERSION
@@ -171,22 +336,26 @@ def apply_layout_migrations(
     if not dry_run and applied:
         meta = read_storage_meta(workspace_root)
         if meta is not None:
-            try:
-                from taskledger._version import __version__ as tl_version
-            except ImportError:
-                tl_version = "unknown"
-            from taskledger.timeutils import utc_now_iso
+            if any(
+                migration.name == "uuidv7-task-directories" for migration in migrations
+            ):
+                from taskledger.storage.project_context import load_project_context
 
-            updated = type(meta)(
-                storage_layout_version=TASKLEDGER_STORAGE_LAYOUT_VERSION,
-                record_schema_version=meta.record_schema_version,
-                created_with_taskledger=meta.created_with_taskledger,
-                created_at=meta.created_at,
-                last_migrated_with_taskledger=tl_version,
-                last_migrated_at=utc_now_iso(),
+                context = load_project_context(
+                    workspace_root, require_initialized=False, allow_legacy=True
+                )
+                if context.mode == "canonical":
+                    physical = inspect_storage_layout(workspace_root)
+                    if not physical.current:
+                        raise LaunchError(
+                            "Task-directory migration completed without satisfying "
+                            "the all-ledger physical layout invariant.",
+                            code="TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE",
+                            details={"internal_layout": physical.to_dict()},
+                        )
+            _write_migration_metadata(
+                workspace_root, meta, TASKLEDGER_STORAGE_LAYOUT_VERSION
             )
-            write_storage_meta(workspace_root, updated)
-
     return applied
 
 

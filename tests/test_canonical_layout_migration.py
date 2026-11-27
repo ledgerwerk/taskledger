@@ -110,6 +110,7 @@ def test_migration_override_copies_without_canonical_activation(
     )
     assert result["status"] == "applied"
     assert result["canonical_activation"] is False
+    assert result["internal_layout_status"] == "pending_activation_migration"
     assert result["inspection"]["target"]["data"] == str(
         destination / "taskledger" / UUID / "data"
     )
@@ -178,6 +179,8 @@ def test_migration_rehomes_existing_direct_sibling_project(tmp_path: Path) -> No
     target = sibling / "taskledger" / UUID / "data"
     assert result["status"] == "applied"
     assert (target / ".ledger-project.toml").is_file()
+    assert result["internal_layout"]["current"] is True
+    assert result["inspection"]["status"] == "up_to_date"
     assert direct.is_dir()
     context = load_project_context(project)
     assert context.paths.data_root == target

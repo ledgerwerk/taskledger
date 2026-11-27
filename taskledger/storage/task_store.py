@@ -16,7 +16,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 if TYPE_CHECKING:
-    from taskledger.storage.project_context import TaskledgerProjectContext
+    from taskledger.storage.project_context import (
+        TaskledgerPaths,
+        TaskledgerProjectContext,
+    )
 
 from taskledger import timing as _timing
 from taskledger.domain.models import (
@@ -135,6 +138,35 @@ class V2Paths:
     introductions_index_path: Path
 
 
+def _v2_paths_from_taskledger_paths(
+    context: TaskledgerProjectContext, paths: TaskledgerPaths
+) -> V2Paths:
+    ledger_dir = paths.ledger_data_dir
+    return V2Paths(
+        workspace_root=context.project_root,
+        taskledger_root=paths.data_root,
+        runtime_root=paths.runtime_root,
+        ledger_ref=paths.ledger_ref,
+        ledger_dir=ledger_dir,
+        project_dir=ledger_dir,
+        introductions_dir=paths.introductions_dir,
+        releases_dir=paths.releases_dir,
+        tasks_dir=paths.tasks_dir,
+        plans_dir=ledger_dir / "plans",
+        questions_dir=ledger_dir / "questions",
+        runs_dir=ledger_dir / "runs",
+        changes_dir=ledger_dir / "changes",
+        events_dir=paths.events_dir,
+        indexes_dir=paths.ledger_indexes_dir,
+        active_task_path=paths.active_task_path,
+        actor_path=paths.actor_path,
+        harness_path=paths.harness_path,
+        active_locks_index_path=paths.active_locks_index_path,
+        dependencies_index_path=paths.dependencies_index_path,
+        introductions_index_path=paths.introductions_index_path,
+    )
+
+
 def v2_paths_from_context(context: TaskledgerProjectContext) -> V2Paths:
     """Derive V2Paths from an already-loaded project context.
 
@@ -142,33 +174,18 @@ def v2_paths_from_context(context: TaskledgerProjectContext) -> V2Paths:
     e.g. from a command-scoped runtime.
     """
     if context.mode == "canonical":
-        taskledger_root = context.paths.data_root
-        ledger_dir = context.paths.ledger_data_dir
-        indexes_dir = context.paths.ledger_indexes_dir
-        return V2Paths(
-            workspace_root=context.project_root,
-            taskledger_root=taskledger_root,
-            runtime_root=context.paths.runtime_root,
-            ledger_ref=context.ledger_state.ref,
-            ledger_dir=ledger_dir,
-            project_dir=ledger_dir,
-            introductions_dir=context.paths.introductions_dir,
-            releases_dir=context.paths.releases_dir,
-            tasks_dir=context.paths.tasks_dir,
-            plans_dir=ledger_dir / "plans",
-            questions_dir=ledger_dir / "questions",
-            runs_dir=ledger_dir / "runs",
-            changes_dir=ledger_dir / "changes",
-            events_dir=context.paths.events_dir,
-            indexes_dir=indexes_dir,
-            active_task_path=context.paths.active_task_path,
-            actor_path=context.paths.actor_path,
-            harness_path=context.paths.harness_path,
-            active_locks_index_path=context.paths.active_locks_index_path,
-            dependencies_index_path=context.paths.dependencies_index_path,
-            introductions_index_path=context.paths.introductions_index_path,
-        )
+        return _v2_paths_from_taskledger_paths(context, context.paths)
     return _resolve_legacy_v2_paths(context.project_root)
+
+
+def v2_paths_for_ledger_ref(
+    context: TaskledgerProjectContext, ledger_ref: str
+) -> V2Paths:
+    """Derive a complete V2Paths object for any canonical ledger namespace."""
+    from taskledger.storage.project_context import paths_for_ledger_ref
+
+    paths = paths_for_ledger_ref(context, ledger_ref)
+    return _v2_paths_from_taskledger_paths(context, paths)
 
 
 def resolve_v2_paths(workspace_root: Path) -> V2Paths:
