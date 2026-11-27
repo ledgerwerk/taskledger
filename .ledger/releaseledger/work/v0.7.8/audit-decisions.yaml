@@ -1,0 +1,27 @@
+rows:
+- sha: f96f3935070c01542893ab76c012d025dd09d839
+  inspected: true
+  inspected_paths:
+  - docs/service_boundary_whitelist.md
+  - taskledger/errors.py
+  - taskledger/services/doctor.py
+  - taskledger/storage/layout_migration.py
+  - taskledger/storage/migrations.py
+  - taskledger/storage/project_context.py
+  - taskledger/storage/task_directory_migration.py
+  - taskledger/storage/task_identity.py
+  - taskledger/storage/task_layout.py
+  - taskledger/storage/task_store.py
+  - tests/test_canonical_internal_layout_migration.py
+  - tests/test_canonical_layout_migration.py
+  - tests/test_service_boundaries.py
+  - tests/test_task_directory_migration.py
+  - tests/test_task_identity.py
+  - tests/test_task_layout.py
+  observed_behavior: "Canonical migration now inspects every ledger task-directory layout, reconciles legacy directories across ledgers before advancing storage metadata, and reports drift or unsafe layouts through migration and doctor diagnostics."
+  public_impact: public
+  decision: accepted
+  target_entry_key: null
+  target_entry_id: null
+  notes: ''
+  stale: false

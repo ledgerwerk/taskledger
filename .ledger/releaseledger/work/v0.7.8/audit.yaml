@@ -1,0 +1,44 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 1
+release_version: v0.7.8
+git_base_ref: v0.7.7
+git_base_sha: 48df72665f5dcf1e9d1d9e190954a6514cdf108c
+git_head_ref: HEAD
+git_head_sha: f96f3935070c01542893ab76c012d025dd09d839
+git_range: 48df72665f5dcf1e9d1d9e190954a6514cdf108c..f96f3935070c01542893ab76c012d025dd09d839
+commit_count: 1
+rows:
+- sha: f96f3935070c01542893ab76c012d025dd09d839
+  source_ref: git:f96f3935070c01542893ab76c012d025dd09d839
+  short_sha: f96f393
+  changed_paths:
+  - docs/service_boundary_whitelist.md
+  - taskledger/errors.py
+  - taskledger/services/doctor.py
+  - taskledger/storage/layout_migration.py
+  - taskledger/storage/migrations.py
+  - taskledger/storage/project_context.py
+  - taskledger/storage/task_directory_migration.py
+  - taskledger/storage/task_identity.py
+  - taskledger/storage/task_layout.py
+  - taskledger/storage/task_store.py
+  - tests/test_canonical_internal_layout_migration.py
+  - tests/test_canonical_layout_migration.py
+  - tests/test_service_boundaries.py
+  - tests/test_task_directory_migration.py
+  - tests/test_task_identity.py
+  - tests/test_task_layout.py
+  stats:
+    files_changed: 16
+    insertions: 1283
+    deletions: 75
+  inspected: false
+  inspected_paths: []
+  observed_behavior: ''
+  public_impact: unknown
+  decision: needs_review
+  stale: false
+  evidence_subject: 'feat: imporved migration'

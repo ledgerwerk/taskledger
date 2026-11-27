@@ -1,0 +1,1732 @@
+ docs/service_boundary_whitelist.md                |  10 +
+ taskledger/errors.py                              |   1 +
+ taskledger/services/doctor.py                     |  41 ++++
+ taskledger/storage/layout_migration.py            | 217 +++++++++++++++--
+ taskledger/storage/migrations.py                  | 201 ++++++++++++++--
+ taskledger/storage/project_context.py             |  31 ++-
+ taskledger/storage/task_directory_migration.py    |  92 +++++++-
+ taskledger/storage/task_identity.py               |  12 +-
+ taskledger/storage/task_layout.py                 | 270 ++++++++++++++++++++++
+ taskledger/storage/task_store.py                  |  71 +++---
+ tests/test_canonical_internal_layout_migration.py |  90 ++++++++
+ tests/test_canonical_layout_migration.py          |   3 +
+ tests/test_service_boundaries.py                  |  25 +-
+ tests/test_task_directory_migration.py            | 123 +++++++++-
+ tests/test_task_identity.py                       |  23 ++
+ tests/test_task_layout.py                         | 148 ++++++++++++
+ 16 files changed, 1283 insertions(+), 75 deletions(-)
+
+diff --git a/docs/service_boundary_whitelist.md b/docs/service_boundary_whitelist.md
+index b314373..6708b27 100644
+--- a/docs/service_boundary_whitelist.md
++++ b/docs/service_boundary_whitelist.md
+@@ -16,6 +16,16 @@ constants.
+   - Target split direction: Continue reducing to a smaller compatibility
+     facade and move residual helpers into focused modules.
+ 
++- `taskledger/storage/layout_migration.py`
++
++  - Current reason: Unified topology and internal-layout migration status/apply orchestration.
++  - Target split direction: Extract the physical-layout reconciliation adapter from migration orchestration.
++
++- `taskledger/storage/task_store.py`
++
++  - Current reason: Canonical per-ledger path resolution remains with established v2 store APIs.
++  - Target split direction: Keep ledger path construction focused as path helpers move to owning storage modules.
++
+ ## Current split status
+ 
+ Implemented in this tranche:
+diff --git a/taskledger/errors.py b/taskledger/errors.py
+index c3920a5..7eb8a7c 100644
+--- a/taskledger/errors.py
++++ b/taskledger/errors.py
+@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
+ STORAGE_ERROR_CODES = frozenset(
+     {
+         "TASKLEDGER_MIGRATION_REQUIRED",
++        "TASKLEDGER_TASK_DIRECTORY_MIGRATION_REQUIRED",
+         "TASKLEDGER_NOT_INITIALIZED",
+         "TASKLEDGER_REGISTRATION_MISSING",
+         "TASKLEDGER_ORPHAN_CONFIG_INVALID",
+diff --git a/taskledger/services/doctor.py b/taskledger/services/doctor.py
+index ec23dc2..dc3968a 100644
+--- a/taskledger/services/doctor.py
++++ b/taskledger/services/doctor.py
+@@ -1439,6 +1439,7 @@ def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
+         )
+         for item in needed
+     )
++    internal_layout: dict[str, object] | None = None
+     # Check storage.yaml layout version
+     try:
+         from taskledger.storage.meta import read_storage_meta
+@@ -1463,9 +1464,49 @@ def inspect_v2_schema(workspace_root: Path) -> dict[str, object]:
+             )
+     except Exception as exc:  # noqa: BLE001
+         schema_errors.append(f"Cannot read storage.yaml: {exc}")
++    try:
++        if (workspace_root / ".ledger" / "ledger.toml").is_file():
++            from taskledger.storage.task_layout import inspect_task_directory_layout
++
++            layout_inspection = inspect_task_directory_layout(workspace_root)
++            internal_layout = layout_inspection.to_dict()
++            if not layout_inspection.current:
++                if layout_inspection.repairable:
++                    affected = ", ".join(layout_inspection.legacy_ledgers)
++                    if not affected:
++                        affected = "storage metadata"
++                    code = "TASK_DIRECTORY_LAYOUT_DRIFT"
++                    message = (
++                        "Physical task-directory layout requires reconciliation "
++                        f"(declared {layout_inspection.declared_version}, expected "
++                        f"{layout_inspection.target_version}; affected: {affected})."
++                    )
++                else:
++                    code = "TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED"
++                    message = "Physical task-directory layout contains unsafe entries."
++                schema_errors.append(message)
++                project_diagnostics.append(
++                    {
++                        "severity": "error",
++                        "code": code,
++                        "message": message,
++                        "details": internal_layout,
++                    }
++                )
++    except Exception as exc:  # noqa: BLE001
++        message = f"Unable to inspect physical task-directory layout: {exc}"
++        schema_errors.append(message)
++        project_diagnostics.append(
++            {
++                "severity": "error",
++                "code": "TASK_DIRECTORY_LAYOUT_INSPECTION_FAILED",
++                "message": message,
++            }
++        )
+ 
+     return {
+         "kind": "taskledger_schema_inspection",
++        "internal_layout": internal_layout,
+         "healthy": not schema_errors,
+         "errors": schema_errors,
+         "diagnostics": project_diagnostics
+diff --git a/taskledger/storage/layout_migration.py b/taskledger/storage/layout_migration.py
+index 38bb846..d960288 100644
+--- a/taskledger/storage/layout_migration.py
++++ b/taskledger/storage/layout_migration.py
+@@ -46,6 +46,10 @@ from taskledger.storage.project_context import (
+     TaskledgerProjectContext,
+     load_project_context,
+ )
++from taskledger.storage.task_layout import (
++    TaskDirectoryLayoutInspection,
++    inspect_task_directory_layout,
++)
+ from taskledger.storage.yaml_store import write_yaml_object
+ 
+ try:
+@@ -145,6 +149,8 @@ class TaskledgerMigrationInspection:
+     request_sibling_ledger_root: Path | None = None
+     request_create_sibling_store: bool = False
+     request_adopt_sibling_store: bool = False
++    internal_layout: TaskDirectoryLayoutInspection | None = None
++    internal_layout_status: str = "not_inspected"
+ 
+     @property
+     def blockers(self) -> tuple[str, ...]:
+@@ -247,6 +253,10 @@ class TaskledgerMigrationInspection:
+                 if self.current_registration is not None
+                 else "missing; will be added",
+                 "classification": self.target_classification,
++                "internal_layout": (
++                    self.internal_layout.to_dict() if self.internal_layout else None
++                ),
++                "internal_layout_status": self.internal_layout_status,
+                 "fingerprint": _tree_fingerprint(self.target_data_root),
+                 "authoritative_files": len(_authoritative_files(self.target_data_root)),
+             },
+@@ -721,6 +731,73 @@ def _is_legacy_sibling_root(path: Path) -> bool:
+     return False
+ 
+ 
++def _inspect_active_target_layout(
++    project_root: Path,
++    target_data_root: Path,
++    current_registration: Mapping[str, object] | None,
++) -> tuple[TaskDirectoryLayoutInspection | None, str, MigrationIssue | None]:
++    if current_registration is None:
++        return (
++            None,
++            "pending_activation_migration",
++            _issue(
++                "info",
++                "INTERNAL_LAYOUT_PENDING_ACTIVATION",
++                "The target is not the registered active Taskledger store; "
++                "internal layout reconciliation remains pending activation.",
++            ),
++        )
++    try:
++        context = load_project_context(
++            project_root, require_initialized=False, allow_legacy=False
++        )
++        if context.paths.data_root.resolve(strict=False) != target_data_root.resolve(
++            strict=False
++        ):
++            return (
++                None,
++                "pending_activation_migration",
++                _issue(
++                    "info",
++                    "INTERNAL_LAYOUT_PENDING_ACTIVATION",
++                    "The migration target is not the active canonical Taskledger "
++                    "store; internal layout reconciliation remains pending activation.",
++                ),
++            )
++        inspection = inspect_task_directory_layout(project_root)
++    except LaunchError as exc:
++        issue = _issue(
++            "blocker",
++            "TASK_DIRECTORY_LAYOUT_INSPECTION_FAILED",
++            f"Cannot inspect the active Taskledger physical layout: {exc}",
++            "Run `taskledger doctor schema` and resolve the storage diagnostics.",
++        )
++        return None, "inspection_failed", issue
++
++    if inspection.current:
++        return inspection, "current", None
++    if inspection.repairable:
++        affected = ", ".join(inspection.legacy_ledgers)
++        issue = _issue(
++            "warning",
++            "TASK_DIRECTORY_LAYOUT_DRIFT",
++            f"Storage metadata declares layout {inspection.declared_version}, but "
++            f"legacy task directories remain in ledger(s): {affected}.",
++            "Run `taskledger migrate apply`.",
++            details={"internal_layout": inspection.to_dict()},
++        )
++        return inspection, "reconciliation_required", issue
++
++    issue = _issue(
++        "blocker",
++        "TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED",
++        "Taskledger physical storage layout contains unsafe or unrecoverable entries.",
++        "Run `taskledger doctor schema` and review the reported ledger details.",
++        details={"internal_layout": inspection.to_dict()},
++    )
++    return inspection, "recovery_required", issue
++
++
+ def _inspect_migration_phases(  # noqa: C901
+     start: Path,
+     *,
+@@ -1321,17 +1398,22 @@ def _inspect_migration_phases(  # noqa: C901
+     }:
+         items = _copy_items(source_data, source_logs, target_data)
+     # Check for valid completion receipt
+-    has_valid_receipt = False
+-    if target_data is not None and target_data.is_dir():
+-        migrations_dir = target_data / "migrations"
+-        if migrations_dir.is_dir():
+-            receipts = list(migrations_dir.glob("*.json"))
+-            has_valid_receipt = len(receipts) > 0
+-    migration_required = not (
++    internal_layout: TaskDirectoryLayoutInspection | None = None
++    internal_layout_status = "not_inspected"
++    if target_classification in {"IDENTICAL_SOURCE", "COMPLETE_CANONICAL"}:
++        (
++            internal_layout,
++            internal_layout_status,
++            internal_layout_issue,
++        ) = _inspect_active_target_layout(root, target_data, current_registration)
++        if internal_layout_issue is not None:
++            issues.append(internal_layout_issue)
++    topology_current = (
+         target_classification in {"IDENTICAL_SOURCE", "COMPLETE_CANONICAL"}
+         and current_registration is not None
+-        and has_valid_receipt
+     )
++    internal_current = internal_layout_status == "current"
++    migration_required = not (topology_current and internal_current)
+     ready = not any(issue.severity == "blocker" for issue in issues) and (
+         source_data is not None or target_classification == "COMPLETE_CANONICAL"
+     )
+@@ -1362,6 +1444,8 @@ def _inspect_migration_phases(  # noqa: C901
+         source_selection_reason=source_reason,
+         source_candidates=tuple(candidates),
+         target_classification=target_classification,
++        internal_layout=internal_layout,
++        internal_layout_status=internal_layout_status,
+         would_create_sibling_store=create_sibling_store and not sibling_root.exists(),
+         request_source_data_root=source_data_root,
+         request_sibling_ledger_root=sibling_ledger_root,
+@@ -1543,6 +1627,34 @@ def _ledgercore_migration_plan(
+     )
+ 
+ 
++def _write_internal_layout_reconciliation_receipt(
++    target_data_root: Path,
++    reconciliation: Mapping[str, object],
++    internal_layout: TaskDirectoryLayoutInspection,
++) -> Path | None:
++    if not reconciliation.get("changed"):
++        return None
++    migrations_dir = target_data_root / "migrations"
++    migrations_dir.mkdir(parents=True, exist_ok=True)
++    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
++    receipt = migrations_dir / f"{stamp}-task-directory-layout-reconciliation.json"
++    atomic_write_text(
++        receipt,
++        json.dumps(
++            {
++                "schema_version": 1,
++                "object_type": "task_directory_layout_reconciliation",
++                "reconciliation": dict(reconciliation),
++                "internal_layout": internal_layout.to_dict(),
++            },
++            indent=2,
++            sort_keys=True,
++        )
++        + "\n",
++    )
++    return receipt
++
++
+ def _apply_migration_phases(
+     inspection: TaskledgerMigrationInspection,
+     *,
+@@ -1583,12 +1695,70 @@ def _apply_migration_phases(
+         fresh.source_kind == "canonical-0.4-sibling"
+         or fresh.target_classification == "IDENTICAL_SOURCE"
+     ):
++        if fresh.internal_layout_status not in {"current", "reconciliation_required"}:
++            canonical_sibling_root = (fresh.project_root / ".." / "ledger").resolve(
++                strict=False
++            )
++            migration_only_override = fresh.sibling_root != canonical_sibling_root
++            receipts = sorted((fresh.target_data_root / "migrations").glob("*.json"))
++            return {
++                "kind": "migration_apply",
++                "status": (
++                    "applied"
++                    if migration_only_override
++                    else "pending_activation_migration"
++                ),
++                "inspection": fresh.to_dict(),
++                "receipt": str(receipts[-1]) if receipts else None,
++                "internal_layout_status": fresh.internal_layout_status,
++                "canonical_activation": False,
++                "source_retired": False,
++                "warnings": [
++                    (
++                        "The target is not the active canonical store; internal layout "
++                        "migration remains pending activation."
++                    )
++                ],
++            }
++        from taskledger.storage.migrations import (
++            reconcile_storage_layout,
++            require_current_storage_layout,
++        )
++
++        reconciliation_result = reconcile_storage_layout(fresh.project_root)
++        verified_layout = require_current_storage_layout(fresh.project_root)
++        fresh = inspect_migration(
++            fresh.project_root,
++            source_checkout=fresh.source_checkout_id,
++            source_data_root=fresh.source_data_root,
++            project_uuid=fresh.project_uuid,
++            sibling_ledger_root=fresh.sibling_root,
++        )
++        if fresh.migration_required:
++            raise LaunchError(
++                "Canonical migration apply did not converge to up_to_date.",
++                code="TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE",
++                details={"inspection": fresh.to_dict()},
++            )
++        reconciliation_receipt = _write_internal_layout_reconciliation_receipt(
++            fresh.target_data_root,
++            reconciliation_result.to_dict(),
++            verified_layout,
++        )
+         receipts = sorted((fresh.target_data_root / "migrations").glob("*.json"))
+         return {
+             "kind": "migration_apply",
+-            "status": "applied",
++            "status": "applied" if reconciliation_result.changed else "up_to_date",
+             "inspection": fresh.to_dict(),
+-            "receipt": str(receipts[-1]) if receipts else None,
++            "internal_layout": verified_layout.to_dict(),
++            "internal_layout_reconciliation": reconciliation_result.to_dict(),
++            "receipt": (
++                str(reconciliation_receipt)
++                if reconciliation_receipt is not None
++                else str(receipts[-1])
++                if receipts
++                else None
++            ),
+             "canonical_activation": True,
+             "source_retired": False,
+             "next_commands": [
+@@ -1699,7 +1869,7 @@ def _apply_migration_phases(
+             "last_migrated_at": datetime.now(timezone.utc).isoformat(),
+         },
+     )
+-    verification_report = {
++    verification_report: dict[str, object] = {
+         "target_exists": target.is_dir(),
+         "binding": (target / ".ledger-project.toml").is_file(),
+         "state": (target / "state.toml").is_file(),
+@@ -1735,6 +1905,7 @@ def _apply_migration_phases(
+                     "inspection": fresh.to_dict(),
+                     "backup": str(backup_path),
+                     "verified": verification_report,
++                    "internal_layout_status": "pending_activation_migration",
+                     "canonical_activation": False,
+                     "identity": {
+                         "canonical_uuid": fresh.canonical_project_uuid,
+@@ -1754,6 +1925,7 @@ def _apply_migration_phases(
+             "backup": str(backup_path),
+             "receipt": str(receipt),
+             "verification": verification_report,
++            "internal_layout_status": "pending_activation_migration",
+             "canonical_activation": False,
+             "source_retired": False,
+             "next_commands": [
+@@ -1763,8 +1935,9 @@ def _apply_migration_phases(
+             ],
+             "warnings": [
+                 (
+-                    "Migration-only destination override was used; canonical "
+-                    "project activation was not changed."
++                    "Migration-only destination override was used; "
++                    "canonical activation was not changed and internal "
++                    "layout conversion remains pending activation."
+                 )
+             ],
+         }
+@@ -1795,6 +1968,21 @@ def _apply_migration_phases(
+         fresh.project_uuid or "",
+         fresh.current_registration,
+     )
++    from taskledger.storage.migrations import (
++        reconcile_storage_layout,
++        require_current_storage_layout,
++    )
++
++    layout_reconciliation = reconcile_storage_layout(fresh.project_root)
++    verified_layout = require_current_storage_layout(fresh.project_root)
++    verification_report["internal_layout"] = verified_layout.to_dict()
++    fresh = inspect_migration(
++        fresh.project_root,
++        source_checkout=fresh.source_checkout_id,
++        source_data_root=fresh.source_data_root,
++        project_uuid=fresh.project_uuid,
++        sibling_ledger_root=fresh.sibling_root,
++    )
+     context = load_project_context(fresh.project_root)
+     from taskledger.storage.indexes import rebuild_v2_indexes
+     from taskledger.storage.task_store import resolve_v2_paths
+@@ -1812,6 +2000,7 @@ def _apply_migration_phases(
+                 "inspection": fresh.to_dict(),
+                 "backup": str(backup_path),
+                 "verified": verification_report,
++                "internal_layout_reconciliation": layout_reconciliation.to_dict(),
+                 "identity": {
+                     "canonical_uuid": fresh.canonical_project_uuid,
+                     "legacy_uuid": fresh.legacy_project_uuid,
+@@ -1839,6 +2028,8 @@ def _apply_migration_phases(
+         "backup": str(backup_path),
+         "receipt": str(receipt),
+         "verification": verification_report,
++        "internal_layout": verified_layout.to_dict(),
++        "internal_layout_reconciliation": layout_reconciliation.to_dict(),
+         "canonical_activation": True,
+         "source_retired": retire_source,
+         "next_commands": [
+diff --git a/taskledger/storage/migrations.py b/taskledger/storage/migrations.py
+index 789b079..53561bd 100644
+--- a/taskledger/storage/migrations.py
++++ b/taskledger/storage/migrations.py
+@@ -12,6 +12,11 @@ from typing import Any
+ from taskledger.domain.states import TASKLEDGER_STORAGE_LAYOUT_VERSION
+ from taskledger.errors import LaunchError
+ from taskledger.storage.ledger_config import load_ledger_config
++from taskledger.storage.meta import StorageMeta
++from taskledger.storage.task_layout import (
++    TaskDirectoryLayoutInspection,
++    inspect_task_directory_layout,
++)
+ 
+ Record = dict[str, Any]
+ MigrationFunc = Callable[[Path], None]
+@@ -50,6 +55,28 @@ class MigrationScanIssue:
+     message: str
+ 
+ 
++@dataclass(frozen=True, slots=True)
++class StorageLayoutReconciliation:
++    changed: bool
++    declared_version_before: int | None
++    declared_version_after: int | None
++    applied: tuple[str, ...]
++    repaired_drift: bool
++    inspection_before: TaskDirectoryLayoutInspection
++    inspection_after: TaskDirectoryLayoutInspection
++
++    def to_dict(self) -> dict[str, object]:
++        return {
++            "changed": self.changed,
++            "declared_version_before": self.declared_version_before,
++            "declared_version_after": self.declared_version_after,
++            "applied": list(self.applied),
++            "repaired_drift": self.repaired_drift,
++            "inspection_before": self.inspection_before.to_dict(),
++            "inspection_after": self.inspection_after.to_dict(),
++        }
++
++
+ LAYOUT_MIGRATIONS: tuple[LayoutMigration, ...] = (
+     LayoutMigration(
+         from_version=2,
+@@ -105,6 +132,144 @@ def required_layout_migrations(current: int, target: int) -> list[LayoutMigratio
+     return migrations
+ 
+ 
++def inspect_storage_layout(workspace_root: Path) -> TaskDirectoryLayoutInspection:
++    """Return read-only physical layout inspection for every canonical ledger."""
++    return inspect_task_directory_layout(workspace_root)
++
++
++def require_current_storage_layout(
++    workspace_root: Path,
++) -> TaskDirectoryLayoutInspection:
++    """Require all canonical ledgers to satisfy the current physical layout."""
++    inspection = inspect_storage_layout(workspace_root)
++    if not inspection.current:
++        code = (
++            "TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE"
++            if inspection.repairable
++            else "TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED"
++        )
++        raise LaunchError(
++            "Taskledger physical storage layout is not current.",
++            code=code,
++            details={"internal_layout": inspection.to_dict()},
++        )
++    return inspection
++
++
++def _write_migration_metadata(
++    workspace_root: Path, meta: StorageMeta, version: int
++) -> StorageMeta:
++    from taskledger.storage.meta import write_storage_meta
++
++    try:
++        from taskledger._version import __version__ as tl_version
++    except ImportError:
++        tl_version = "unknown"
++    from taskledger.timeutils import utc_now_iso
++
++    updated = type(meta)(
++        storage_layout_version=version,
++        record_schema_version=meta.record_schema_version,
++        created_with_taskledger=meta.created_with_taskledger,
++        created_at=meta.created_at,
++        last_migrated_with_taskledger=tl_version,
++        last_migrated_at=utc_now_iso(),
++    )
++    write_storage_meta(workspace_root, updated)
++    return updated
++
++
++def reconcile_storage_layout(
++    workspace_root: Path, *, dry_run: bool = False
++) -> StorageLayoutReconciliation:
++    """Apply safe layout migrations and repair known physical metadata drift."""
++    from taskledger.storage.meta import read_storage_meta
++
++    meta = read_storage_meta(workspace_root)
++    if meta is None:
++        raise LaunchError(
++            "Missing storage metadata; cannot reconcile Taskledger layout.",
++            code="TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE",
++        )
++    declared_version = meta.storage_layout_version
++    if declared_version > TASKLEDGER_STORAGE_LAYOUT_VERSION:
++        raise LaunchError(
++            f"Storage layout {declared_version} is newer than supported "
++            f"{TASKLEDGER_STORAGE_LAYOUT_VERSION}.",
++            code="TASKLEDGER_STORAGE_LAYOUT_OLD",
++        )
++
++    before = inspect_storage_layout(workspace_root)
++    if not before.repairable:
++        raise LaunchError(
++            "Taskledger storage layout requires explicit recovery.",
++            code="TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED",
++            details={"internal_layout": before.to_dict()},
++        )
++
++    if dry_run:
++        if declared_version < TASKLEDGER_STORAGE_LAYOUT_VERSION:
++            applied = tuple(
++                migration.name
++                for migration in required_layout_migrations(
++                    declared_version, TASKLEDGER_STORAGE_LAYOUT_VERSION
++                )
++            )
++        elif not before.current:
++            applied = ("uuidv7-task-directories-reconcile",)
++        else:
++            applied = ()
++        return StorageLayoutReconciliation(
++            changed=False,
++            declared_version_before=declared_version,
++            declared_version_after=declared_version,
++            applied=applied,
++            repaired_drift=False,
++            inspection_before=before,
++            inspection_after=before,
++        )
++
++    applied_names: list[str] = []
++    repaired_drift = False
++    if declared_version < TASKLEDGER_STORAGE_LAYOUT_VERSION:
++        applied_names.extend(apply_layout_migrations(workspace_root, declared_version))
++    elif not before.current:
++        from taskledger.storage.task_directory_migration import (
++            migrate_v5_task_directories_to_uuidv7,
++        )
++
++        migrate_v5_task_directories_to_uuidv7(workspace_root)
++        repaired_drift = True
++        applied_names.append("uuidv7-task-directories-reconcile")
++
++    after = inspect_storage_layout(workspace_root)
++    if not after.current:
++        code = (
++            "TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE"
++            if after.repairable
++            else "TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED"
++        )
++        raise LaunchError(
++            "Storage layout reconciliation did not converge.",
++            code=code,
++            details={"internal_layout": after.to_dict()},
++        )
++    if repaired_drift:
++        _write_migration_metadata(workspace_root, meta, declared_version)
++    final_meta = read_storage_meta(workspace_root)
++    return StorageLayoutReconciliation(
++        changed=bool(applied_names),
++        declared_version_before=declared_version,
++        declared_version_after=(
++            final_meta.storage_layout_version if final_meta is not None else None
++        ),
++        applied=tuple(applied_names),
++        repaired_drift=repaired_drift,
++        inspection_before=before,
++        inspection_after=after,
++    )
++
++
+ def scan_records_for_migration(
+     workspace_root: Path,
+ ) -> list[MigrationNeeded]:
+@@ -157,7 +322,7 @@ def apply_layout_migrations(
+ 
+     Returns list of migration names that were applied (or would be applied in dry_run).
+     """
+-    from taskledger.storage.meta import read_storage_meta, write_storage_meta
++    from taskledger.storage.meta import read_storage_meta
+ 
+     migrations = required_layout_migrations(
+         current_version, TASKLEDGER_STORAGE_LAYOUT_VERSION
+@@ -171,22 +336,26 @@ def apply_layout_migrations(
+     if not dry_run and applied:
+         meta = read_storage_meta(workspace_root)
+         if meta is not None:
+-            try:
+-                from taskledger._version import __version__ as tl_version
+-            except ImportError:
+-                tl_version = "unknown"
+-            from taskledger.timeutils import utc_now_iso
+-
+-            updated = type(meta)(
+-                storage_layout_version=TASKLEDGER_STORAGE_LAYOUT_VERSION,
+-                record_schema_version=meta.record_schema_version,
+-                created_with_taskledger=meta.created_with_taskledger,
+-                created_at=meta.created_at,
+-                last_migrated_with_taskledger=tl_version,
+-                last_migrated_at=utc_now_iso(),
++            if any(
++                migration.name == "uuidv7-task-directories" for migration in migrations
++            ):
++                from taskledger.storage.project_context import load_project_context
++
++                context = load_project_context(
++                    workspace_root, require_initialized=False, allow_legacy=True
++                )
++                if context.mode == "canonical":
++                    physical = inspect_storage_layout(workspace_root)
++                    if not physical.current:
++                        raise LaunchError(
++                            "Task-directory migration completed without satisfying "
++                            "the all-ledger physical layout invariant.",
++                            code="TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE",
++                            details={"internal_layout": physical.to_dict()},
++                        )
++            _write_migration_metadata(
++                workspace_root, meta, TASKLEDGER_STORAGE_LAYOUT_VERSION
+             )
+-            write_storage_meta(workspace_root, updated)
+-
+     return applied
+ 
+ 
+diff --git a/taskledger/storage/project_context.py b/taskledger/storage/project_context.py
+index dbb2525..309e73c 100644
+--- a/taskledger/storage/project_context.py
++++ b/taskledger/storage/project_context.py
+@@ -213,6 +213,26 @@ def _paths_for_mounts(
+     )
+ 
+ 
++def paths_for_ledger_ref(
++    context: TaskledgerProjectContext, ledger_ref: str
++) -> TaskledgerPaths:
++    """Build canonical mount paths for any physical ledger namespace."""
++    if context.mode != "canonical":
++        raise LaunchError(
++            "Arbitrary ledger paths require canonical Taskledger storage."
++        )
++    paths = context.paths
++    return _paths_for_mounts(
++        context.project_root,
++        context.config_path,
++        paths.data_root,
++        paths.runtime_root,
++        paths.logs_root,
++        paths.indexes_root,
++        ledger_ref,
++    )
++
++
+ def _load_toml(path: Path) -> dict[str, object]:
+     try:
+         value = tomllib.loads(path.read_text(encoding="utf-8"))
+@@ -429,14 +449,11 @@ def require_mutable_project_context(
+         require_initialized=False,
+         allow_legacy=allow_legacy,
+     )
+-    if context.mode == "canonical":
+-        from taskledger.storage.meta import read_storage_meta
+-
+-        meta = read_storage_meta(start)
+-        if meta is not None and meta.storage_layout_version == 5:
+-            from taskledger.storage.migrations import apply_layout_migrations
++    if context.mode == "canonical" and context.paths.storage_meta_path.exists():
++        from taskledger.storage.migrations import reconcile_storage_layout
+ 
+-            apply_layout_migrations(start, meta.storage_layout_version)
++        reconciliation = reconcile_storage_layout(start)
++        if reconciliation.changed:
+             context = load_project_context(
+                 start,
+                 require_initialized=False,
+diff --git a/taskledger/storage/task_directory_migration.py b/taskledger/storage/task_directory_migration.py
+index 4423f52..bd026ca 100644
+--- a/taskledger/storage/task_directory_migration.py
++++ b/taskledger/storage/task_directory_migration.py
+@@ -36,8 +36,96 @@ _LOCK_NAME = ".task-directory-uuidv7-migration.lock"
+ 
+ 
+ def migrate_v5_task_directories_to_uuidv7(workspace_root: Path) -> None:
+-    """Rename numeric task bundles to deterministic UUIDv7 storage paths."""
+-    paths = resolve_v2_paths(workspace_root)
++    """Migrate every canonical ledger before the global layout can advance."""
++    from taskledger.storage.meta import read_storage_meta
++    from taskledger.storage.project_context import load_project_context
++    from taskledger.storage.task_layout import (
++        discover_canonical_ledger_refs,
++        inspect_ledger_task_directory_layout,
++    )
++    from taskledger.storage.task_store import v2_paths_for_ledger_ref
++
++    context = load_project_context(
++        workspace_root, require_initialized=False, allow_legacy=True
++    )
++    if context.mode != "canonical":
++        _migrate_v5_task_directories_for_paths(resolve_v2_paths(workspace_root))
++        return
++
++    ledger_refs = discover_canonical_ledger_refs(context)
++    project_lock = (
++        context.paths.data_root / "migrations" / ".task-directory-uuidv7-project.lock"
++    )
++    project_lock.parent.mkdir(parents=True, exist_ok=True)
++    with FileLock(str(project_lock)):
++        meta = read_storage_meta(context.project_root)
++        declared_version = meta.storage_layout_version if meta is not None else None
++        ledger_paths = {
++            ledger_ref: v2_paths_for_ledger_ref(context, ledger_ref)
++            for ledger_ref in ledger_refs
++        }
++        inspections = {
++            ledger_ref: inspect_ledger_task_directory_layout(
++                paths, declared_version=declared_version
++            )
++            for ledger_ref, paths in ledger_paths.items()
++        }
++        blocked = {
++            ledger_ref: inspection.to_dict()
++            for ledger_ref, inspection in inspections.items()
++            if not inspection.repairable
++        }
++        if blocked:
++            reasons = []
++            for ledger_ref, inspection in inspections.items():
++                if inspection.repairable:
++                    continue
++                if inspection.kind == "mixed":
++                    reasons.append(
++                        f"{ledger_ref}: Mixed numeric and UUID task directories "
++                        "without a recoverable migration journal."
++                    )
++                else:
++                    reasons.append(
++                        f"{ledger_ref}: " + "; ".join(inspection.invalid_entries)
++                    )
++            raise LaunchError(
++                "Canonical task-directory migration found unsafe ledger layouts. "
++                + " ".join(reasons),
++                code="TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED",
++                details={"ledgers": blocked},
++            )
++
++        _assert_no_unmerged_git_paths(context.project_root)
++        for paths in ledger_paths.values():
++            _assert_no_active_locks(paths)
++            journal = _read_journal(paths.ledger_dir / _JOURNAL_NAME)
++            if journal is None or journal.get("status") == "rolled_back":
++                _build_rename_plan(paths)
++            elif journal.get("status") == "complete":
++                _validate_completed_migration(paths, journal)
++
++        for paths in ledger_paths.values():
++            _migrate_v5_task_directories_for_paths(paths)
++
++        final = [
++            inspect_ledger_task_directory_layout(
++                paths, declared_version=declared_version
++            )
++            for paths in ledger_paths.values()
++        ]
++        if any(not inspection.is_current for inspection in final):
++            raise LaunchError(
++                "All-ledger task-directory migration did not reach layout 6.",
++                code="TASKLEDGER_STORAGE_MIGRATION_INCOMPLETE",
++                details={
++                    "ledgers": [inspection.to_dict() for inspection in final],
++                },
++            )
++
++
++def _migrate_v5_task_directories_for_paths(paths: V2Paths) -> None:
++    """Migrate one ledger using its recoverable v5-to-v6 journal."""
+     journal_path = paths.ledger_dir / _JOURNAL_NAME
+     lock_path = paths.ledger_dir / _LOCK_NAME
+     lock_path.parent.mkdir(parents=True, exist_ok=True)
+diff --git a/taskledger/storage/task_identity.py b/taskledger/storage/task_identity.py
+index dbb0121..4aa52ee 100644
+--- a/taskledger/storage/task_identity.py
++++ b/taskledger/storage/task_identity.py
+@@ -651,7 +651,17 @@ def allocate_task_identity(paths: V2Paths, *, max_attempts: int = 32) -> TaskAll
+             identity.path.name.startswith("task-") for identity in inventory.entries
+         ):
+             raise LaunchError(
+-                "Legacy task directories must be migrated before UUID allocation."
++                "Legacy task directories must be migrated before UUID allocation.",
++                code="TASKLEDGER_TASK_DIRECTORY_MIGRATION_REQUIRED",
++                remediation=[
++                    "Run `taskledger migrate status`.",
++                    "Run `taskledger migrate apply`.",
++                    "Run `taskledger doctor schema` if migration does not converge.",
++                ],
++                details={
++                    "ledger_ref": paths.ledger_ref,
++                    "tasks_dir": str(paths.tasks_dir),
++                },
+             )
+         for _ in range(max_attempts):
+             task_uuid = parse_uuid7(uuid7())
+diff --git a/taskledger/storage/task_layout.py b/taskledger/storage/task_layout.py
+new file mode 100644
+index 0000000..09863d2
+--- /dev/null
++++ b/taskledger/storage/task_layout.py
+@@ -0,0 +1,270 @@
++"""Read-only inspection of canonical task-directory storage layouts."""
++
++from __future__ import annotations
++
++from dataclasses import dataclass
++from pathlib import Path
++from typing import TYPE_CHECKING, Literal
++
++from taskledger.domain.states import TASKLEDGER_STORAGE_LAYOUT_VERSION
++from taskledger.errors import LaunchError
++
++if TYPE_CHECKING:
++    from taskledger.storage.project_context import TaskledgerProjectContext
++    from taskledger.storage.task_store import V2Paths
++
++TaskDirectoryLayoutKind = Literal["empty", "legacy", "uuid", "mixed", "invalid"]
++
++
++@dataclass(frozen=True, slots=True)
++class LedgerTaskDirectoryLayout:
++    ledger_ref: str
++    tasks_dir: Path
++    kind: TaskDirectoryLayoutKind
++    legacy_dirs: tuple[str, ...] = ()
++    uuid_dirs: tuple[str, ...] = ()
++    invalid_entries: tuple[str, ...] = ()
++    journal_path: Path | None = None
++    journal_status: str | None = None
++
++    @property
++    def needs_v5_to_v6(self) -> bool:
++        return bool(self.legacy_dirs)
++
++    @property
++    def is_current(self) -> bool:
++        return self.kind in {"empty", "uuid"} and not self.invalid_entries
++
++    @property
++    def repairable(self) -> bool:
++        if self.kind == "invalid":
++            return False
++        if self.kind == "mixed":
++            return self.journal_status == "prepared"
++        return True
++
++    def to_dict(self) -> dict[str, object]:
++        return {
++            "ledger_ref": self.ledger_ref,
++            "tasks_dir": str(self.tasks_dir),
++            "kind": self.kind,
++            "legacy_dirs": list(self.legacy_dirs),
++            "uuid_dirs": list(self.uuid_dirs),
++            "invalid_entries": list(self.invalid_entries),
++            "journal_path": str(self.journal_path) if self.journal_path else None,
++            "journal_status": self.journal_status,
++            "current": self.is_current,
++            "repairable": self.repairable,
++        }
++
++
++@dataclass(frozen=True, slots=True)
++class TaskDirectoryLayoutInspection:
++    declared_version: int | None
++    target_version: int
++    ledgers: tuple[LedgerTaskDirectoryLayout, ...]
++    legacy_ledgers: tuple[str, ...]
++    mixed_ledgers: tuple[str, ...]
++    invalid_ledgers: tuple[str, ...]
++    current: bool
++    repairable: bool
++
++    @property
++    def needs_reconciliation(self) -> bool:
++        return not self.current
++
++    def to_dict(self) -> dict[str, object]:
++        return {
++            "declared_version": self.declared_version,
++            "expected_version": self.target_version,
++            "ledgers": [ledger.to_dict() for ledger in self.ledgers],
++            "legacy_ledgers": list(self.legacy_ledgers),
++            "mixed_ledgers": list(self.mixed_ledgers),
++            "invalid_ledgers": list(self.invalid_ledgers),
++            "current": self.current,
++            "repairable": self.repairable,
++            "requires_reconciliation": self.needs_reconciliation,
++        }
++
++
++def discover_canonical_ledger_refs(
++    context: TaskledgerProjectContext,
++) -> tuple[str, ...]:
++    """Return every physical canonical ledger namespace in deterministic order."""
++    ledgers_root = context.paths.data_root / "ledgers"
++    if ledgers_root.is_symlink():
++        raise LaunchError(f"Canonical ledger directory is a symlink: {ledgers_root}")
++    if not ledgers_root.exists():
++        return ()
++    if not ledgers_root.is_dir():
++        raise LaunchError(f"Canonical ledger path is not a directory: {ledgers_root}")
++
++    from taskledger.storage.project_context import paths_for_ledger_ref
++
++    refs: list[str] = []
++    for entry in sorted(ledgers_root.iterdir(), key=lambda path: path.name):
++        if entry.is_symlink() or not entry.is_dir():
++            raise LaunchError(f"Invalid canonical ledger directory: {entry}")
++        # Use the same single-segment validation as canonical path construction.
++        paths_for_ledger_ref(context, entry.name)
++        refs.append(entry.name)
++    return tuple(refs)
++
++
++def _inspect_task_directories(
++    tasks_dir: Path,
++) -> tuple[list[str], list[str], list[str]]:
++    from taskledger.storage.task_directory_migration import (
++        _is_uuid_directory_name,
++        _parse_legacy_id,
++    )
++
++    legacy_dirs: list[str] = []
++    uuid_dirs: list[str] = []
++    invalid_entries: list[str] = []
++    if tasks_dir.is_symlink():
++        invalid_entries.append(f"symlink: {tasks_dir}")
++    elif tasks_dir.exists() and not tasks_dir.is_dir():
++        invalid_entries.append(f"not a directory: {tasks_dir}")
++    elif tasks_dir.is_dir():
++        for entry in sorted(tasks_dir.iterdir(), key=lambda path: path.name):
++            if entry.is_symlink():
++                invalid_entries.append(f"symlink: {entry}")
++                continue
++            if not entry.is_dir():
++                invalid_entries.append(f"not a task directory: {entry}")
++                continue
++            invalid_entries.extend(
++                f"nested symlink: {nested}"
++                for nested in entry.rglob("*")
++                if nested.is_symlink()
++            )
++            if entry.name.startswith("task-"):
++                try:
++                    _parse_legacy_id(entry.name, entry)
++                except LaunchError as exc:
++                    invalid_entries.append(str(exc))
++                else:
++                    legacy_dirs.append(entry.name)
++            elif _is_uuid_directory_name(entry.name):
++                uuid_dirs.append(entry.name)
++            else:
++                invalid_entries.append(f"unknown task directory: {entry}")
++    return legacy_dirs, uuid_dirs, invalid_entries
++
++
++def _inspect_migration_journal(
++    paths: V2Paths,
++) -> tuple[str | None, Path | None, list[str]]:
++    from taskledger.storage.task_directory_migration import (
++        _JOURNAL_NAME,
++        _read_journal,
++        _validate_completed_migration,
++    )
++
++    journal_path = paths.ledger_dir / _JOURNAL_NAME
++    invalid_entries: list[str] = []
++    if journal_path.is_symlink():
++        return None, None, [f"migration journal is a symlink: {journal_path}"]
++    try:
++        journal = _read_journal(journal_path)
++    except LaunchError as exc:
++        return None, None, [str(exc)]
++    if journal is None:
++        return None, None, invalid_entries
++
++    journal_status = str(journal["status"])
++    if journal_status == "complete":
++        try:
++            _validate_completed_migration(paths, journal)
++        except LaunchError as exc:
++            invalid_entries.append(str(exc))
++    return journal_status, journal_path, invalid_entries
++
++
++def _directory_layout_kind(
++    legacy_dirs: list[str], uuid_dirs: list[str], invalid_entries: list[str]
++) -> TaskDirectoryLayoutKind:
++    if invalid_entries:
++        return "invalid"
++    if legacy_dirs and uuid_dirs:
++        return "mixed"
++    if legacy_dirs:
++        return "legacy"
++    if uuid_dirs:
++        return "uuid"
++    return "empty"
++
++
++def inspect_ledger_task_directory_layout(
++    paths: V2Paths, *, declared_version: int | None = None
++) -> LedgerTaskDirectoryLayout:
++    """Inspect one ledger's task directories and migration journal without mutation."""
++    legacy_dirs, uuid_dirs, invalid_entries = _inspect_task_directories(paths.tasks_dir)
++    journal_status, journal_path, journal_errors = _inspect_migration_journal(paths)
++    invalid_entries.extend(journal_errors)
++    if (
++        declared_version is not None
++        and declared_version < TASKLEDGER_STORAGE_LAYOUT_VERSION
++        and uuid_dirs
++        and not legacy_dirs
++        and journal_status != "complete"
++    ):
++        invalid_entries.append(
++            "UUID task directories under an older storage layout require a "
++            "complete migration journal."
++        )
++
++    return LedgerTaskDirectoryLayout(
++        ledger_ref=paths.ledger_ref,
++        tasks_dir=paths.tasks_dir,
++        kind=_directory_layout_kind(legacy_dirs, uuid_dirs, invalid_entries),
++        legacy_dirs=tuple(legacy_dirs),
++        uuid_dirs=tuple(uuid_dirs),
++        invalid_entries=tuple(invalid_entries),
++        journal_path=journal_path,
++        journal_status=journal_status,
++    )
++
++
++def inspect_task_directory_layout(
++    workspace_root: Path,
++) -> TaskDirectoryLayoutInspection:
++    """Inspect every canonical ledger's physical task-directory layout."""
++    from taskledger.storage.meta import read_storage_meta
++    from taskledger.storage.project_context import load_project_context
++    from taskledger.storage.task_store import v2_paths_for_ledger_ref
++
++    context = load_project_context(
++        workspace_root, require_initialized=False, allow_legacy=False
++    )
++    meta = read_storage_meta(context.project_root)
++    declared_version = meta.storage_layout_version if meta is not None else None
++    ledger_layouts = tuple(
++        inspect_ledger_task_directory_layout(
++            v2_paths_for_ledger_ref(context, ledger_ref),
++            declared_version=declared_version,
++        )
++        for ledger_ref in discover_canonical_ledger_refs(context)
++    )
++    legacy_ledgers = tuple(
++        ledger.ledger_ref for ledger in ledger_layouts if ledger.legacy_dirs
++    )
++    mixed_ledgers = tuple(
++        ledger.ledger_ref
++        for ledger in ledger_layouts
++        if ledger.legacy_dirs and ledger.uuid_dirs
++    )
++    invalid_ledgers = tuple(
++        ledger.ledger_ref for ledger in ledger_layouts if ledger.invalid_entries
++    )
++    return TaskDirectoryLayoutInspection(
++        declared_version=declared_version,
++        target_version=TASKLEDGER_STORAGE_LAYOUT_VERSION,
++        ledgers=ledger_layouts,
++        legacy_ledgers=legacy_ledgers,
++        mixed_ledgers=mixed_ledgers,
++        invalid_ledgers=invalid_ledgers,
++        current=all(ledger.is_current for ledger in ledger_layouts),
++        repairable=all(ledger.repairable for ledger in ledger_layouts),
++    )
+diff --git a/taskledger/storage/task_store.py b/taskledger/storage/task_store.py
+index 7fcb312..f10d1d7 100644
+--- a/taskledger/storage/task_store.py
++++ b/taskledger/storage/task_store.py
+@@ -16,7 +16,10 @@ from pathlib import Path
+ from typing import TYPE_CHECKING, Any, Literal, TypeVar
+ 
+ if TYPE_CHECKING:
+-    from taskledger.storage.project_context import TaskledgerProjectContext
++    from taskledger.storage.project_context import (
++        TaskledgerPaths,
++        TaskledgerProjectContext,
++    )
+ 
+ from taskledger import timing as _timing
+ from taskledger.domain.models import (
+@@ -135,6 +138,35 @@ class V2Paths:
+     introductions_index_path: Path
+ 
+ 
++def _v2_paths_from_taskledger_paths(
++    context: TaskledgerProjectContext, paths: TaskledgerPaths
++) -> V2Paths:
++    ledger_dir = paths.ledger_data_dir
++    return V2Paths(
++        workspace_root=context.project_root,
++        taskledger_root=paths.data_root,
++        runtime_root=paths.runtime_root,
++        ledger_ref=paths.ledger_ref,
++        ledger_dir=ledger_dir,
++        project_dir=ledger_dir,
++        introductions_dir=paths.introductions_dir,
++        releases_dir=paths.releases_dir,
++        tasks_dir=paths.tasks_dir,
++        plans_dir=ledger_dir / "plans",
++        questions_dir=ledger_dir / "questions",
++        runs_dir=ledger_dir / "runs",
++        changes_dir=ledger_dir / "changes",
++        events_dir=paths.events_dir,
++        indexes_dir=paths.ledger_indexes_dir,
++        active_task_path=paths.active_task_path,
++        actor_path=paths.actor_path,
++        harness_path=paths.harness_path,
++        active_locks_index_path=paths.active_locks_index_path,
++        dependencies_index_path=paths.dependencies_index_path,
++        introductions_index_path=paths.introductions_index_path,
++    )
++
++
+ def v2_paths_from_context(context: TaskledgerProjectContext) -> V2Paths:
+     """Derive V2Paths from an already-loaded project context.
+ 
+@@ -142,35 +174,20 @@ def v2_paths_from_context(context: TaskledgerProjectContext) -> V2Paths:
+     e.g. from a command-scoped runtime.
+     """
+     if context.mode == "canonical":
+-        taskledger_root = context.paths.data_root
+-        ledger_dir = context.paths.ledger_data_dir
+-        indexes_dir = context.paths.ledger_indexes_dir
+-        return V2Paths(
+-            workspace_root=context.project_root,
+-            taskledger_root=taskledger_root,
+-            runtime_root=context.paths.runtime_root,
+-            ledger_ref=context.ledger_state.ref,
+-            ledger_dir=ledger_dir,
+-            project_dir=ledger_dir,
+-            introductions_dir=context.paths.introductions_dir,
+-            releases_dir=context.paths.releases_dir,
+-            tasks_dir=context.paths.tasks_dir,
+-            plans_dir=ledger_dir / "plans",
+-            questions_dir=ledger_dir / "questions",
+-            runs_dir=ledger_dir / "runs",
+-            changes_dir=ledger_dir / "changes",
+-            events_dir=context.paths.events_dir,
+-            indexes_dir=indexes_dir,
+-            active_task_path=context.paths.active_task_path,
+-            actor_path=context.paths.actor_path,
+-            harness_path=context.paths.harness_path,
+-            active_locks_index_path=context.paths.active_locks_index_path,
+-            dependencies_index_path=context.paths.dependencies_index_path,
+-            introductions_index_path=context.paths.introductions_index_path,
+-        )
++        return _v2_paths_from_taskledger_paths(context, context.paths)
+     return _resolve_legacy_v2_paths(context.project_root)
+ 
+ 
++def v2_paths_for_ledger_ref(
++    context: TaskledgerProjectContext, ledger_ref: str
++) -> V2Paths:
++    """Derive a complete V2Paths object for any canonical ledger namespace."""
++    from taskledger.storage.project_context import paths_for_ledger_ref
++
++    paths = paths_for_ledger_ref(context, ledger_ref)
++    return _v2_paths_from_taskledger_paths(context, paths)
++
++
+ def resolve_v2_paths(workspace_root: Path) -> V2Paths:
+     from taskledger.errors import LaunchError
+     from taskledger.storage.paths import probe_taskledger_project
+diff --git a/tests/test_canonical_internal_layout_migration.py b/tests/test_canonical_internal_layout_migration.py
+new file mode 100644
+index 0000000..c618be5
+--- /dev/null
++++ b/tests/test_canonical_internal_layout_migration.py
+@@ -0,0 +1,90 @@
++from __future__ import annotations
++
++import json
++from pathlib import Path
++
++from typer.testing import CliRunner
++
++from taskledger.cli import app
++from taskledger.storage.layout_migration import inspect_migration
++from taskledger.storage.project_context import load_project_context
++
++
++def _canonical_project(root: Path):
++    result = CliRunner().invoke(
++        app, ["--root", str(root), "init", "--create-sibling-store"]
++    )
++    assert result.exit_code == 0, result.stdout
++    marker = root.parent / "ledger" / ".ledger-store"
++    marker.parent.mkdir(parents=True, exist_ok=True)
++    marker.write_text("Ledgercore sibling store\n", encoding="utf-8")
++    context = load_project_context(root)
++    assert marker.is_file()
++    return context
++
++
++def _invoke_json(root: Path, command: str, subcommand: str) -> dict[str, object]:
++    result = CliRunner().invoke(
++        app, ["--root", str(root), "--json", command, subcommand]
++    )
++    assert result.exit_code == 0, result.stdout
++    payload = json.loads(result.stdout)
++    assert isinstance(payload, dict)
++    return payload
++
++
++def test_complete_canonical_store_without_receipt_is_up_to_date(
++    tmp_path: Path,
++) -> None:
++    context = _canonical_project(tmp_path / "project")
++    receipts = list((context.paths.data_root / "migrations").glob("*.json"))
++    assert receipts == []
++
++    inspection = inspect_migration(context.project_root)
++
++    assert inspection.target_classification == "COMPLETE_CANONICAL"
++    assert inspection.internal_layout_status == "current"
++    assert inspection.migration_required is False
++    assert inspection.to_dict()["status"] == "up_to_date"
++
++    status_payload = _invoke_json(context.project_root, "migrate", "status")
++    assert status_payload["ok"] is True
++    assert status_payload["result"]["status"] == "up_to_date"
++
++    apply_payload = _invoke_json(context.project_root, "migrate", "apply")
++    final = inspect_migration(context.project_root)
++
++    assert apply_payload["result"]["status"] == "up_to_date"
++    assert final.to_dict()["status"] == "up_to_date"
++    assert list((context.paths.data_root / "migrations").glob("*.json")) == []
++
++
++def test_complete_canonical_apply_reconciles_stale_task_directory_layout(
++    tmp_path: Path,
++) -> None:
++    context = _canonical_project(tmp_path / "project")
++    legacy_dir = context.paths.tasks_dir / "task-0001"
++    legacy_dir.mkdir()
++    (legacy_dir / "allocation.marker").write_text("reserved\n", encoding="utf-8")
++
++    inspection = inspect_migration(context.project_root)
++
++    assert inspection.target_classification == "COMPLETE_CANONICAL"
++    assert inspection.internal_layout_status == "reconciliation_required"
++    assert inspection.migration_required is True
++    assert inspection.to_dict()["status"] == "migration_needed"
++    assert any(
++        issue.code == "TASK_DIRECTORY_LAYOUT_DRIFT" for issue in inspection.issues
++    )
++
++    status_payload = _invoke_json(context.project_root, "migrate", "status")
++    assert status_payload["result"]["status"] == "migration_needed"
++
++    apply_payload = _invoke_json(context.project_root, "migrate", "apply")
++    final = inspect_migration(context.project_root)
++
++    assert apply_payload["result"]["status"] == "applied"
++    assert apply_payload["result"]["internal_layout"]["current"] is True
++    assert not legacy_dir.exists()
++    assert final.internal_layout_status == "current"
++    assert final.to_dict()["status"] == "up_to_date"
+diff --git a/tests/test_canonical_layout_migration.py b/tests/test_canonical_layout_migration.py
+index 418748a..ed16967 100644
+--- a/tests/test_canonical_layout_migration.py
++++ b/tests/test_canonical_layout_migration.py
+@@ -110,6 +110,7 @@ def test_migration_override_copies_without_canonical_activation(
+     )
+     assert result["status"] == "applied"
+     assert result["canonical_activation"] is False
++    assert result["internal_layout_status"] == "pending_activation_migration"
+     assert result["inspection"]["target"]["data"] == str(
+         destination / "taskledger" / UUID / "data"
+     )
+@@ -178,6 +179,8 @@ def test_migration_rehomes_existing_direct_sibling_project(tmp_path: Path) -> No
+     target = sibling / "taskledger" / UUID / "data"
+     assert result["status"] == "applied"
+     assert (target / ".ledger-project.toml").is_file()
++    assert result["internal_layout"]["current"] is True
++    assert result["inspection"]["status"] == "up_to_date"
+     assert direct.is_dir()
+     context = load_project_context(project)
+     assert context.paths.data_root == target
+diff --git a/tests/test_service_boundaries.py b/tests/test_service_boundaries.py
+index cd6c7af..aa9585a 100644
+--- a/tests/test_service_boundaries.py
++++ b/tests/test_service_boundaries.py
+@@ -12,6 +12,12 @@ MODULE_LINE_WHITELIST: dict[str, str] = {
+     "taskledger/services/tasks.py": (
+         "Temporary compatibility facade while workflow services are extracted."
+     ),
++    "taskledger/storage/layout_migration.py": (
++        "Unified topology and internal-layout migration status/apply orchestration."
++    ),
++    "taskledger/storage/task_store.py": (
++        "Canonical per-ledger path resolution remains with established v2 store APIs."
++    ),
+ }
+ 
+ FUNCTION_LINE_WHITELIST: dict[str, str] = {
+@@ -192,6 +198,17 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
+     "taskledger/services/doctor.py::inspect_v2_schema:except-2": (
+         "Doctor schema inspection records unreadable storage metadata as an error."
+     ),
++    "taskledger/services/doctor.py::inspect_v2_schema:except-4": (
++        "Schema doctor records physical task-directory inspection failures."
++    ),
++    (
++        "taskledger/storage/task_directory_migration.py::"
++        "_migrate_v5_task_directories_for_paths:except-1"
++    ): ("Task-directory migration rolls back a failed per-ledger transaction."),
++    (
++        "taskledger/storage/task_directory_migration.py::"
++        "_migrate_v5_task_directories_for_paths:except-2"
++    ): ("Task-directory migration reports rollback failure with its recovery journal."),
+     "taskledger/services/doctor.py::inspect_v2_indexes:except-1": (
+         "Doctor index inspection degrades gracefully when event loading fails."
+     ),
+@@ -388,14 +405,6 @@ EXCEPT_EXCEPTION_WHITELIST: dict[str, str] = {
+     "taskledger/storage/task_store.py::remove_lock_from_paths:except-2": (
+         "remove_lock_from_paths sidecar summary update degrades gracefully."
+     ),
+-    (
+-        "taskledger/storage/task_directory_migration.py::"
+-        "migrate_v5_task_directories_to_uuidv7:except-1"
+-    ): ("Task-directory migration rolls back state when migration phases fail."),
+-    (
+-        "taskledger/storage/task_directory_migration.py::"
+-        "migrate_v5_task_directories_to_uuidv7:except-2"
+-    ): ("Task-directory migration reports when rollback itself fails."),
+     (
+         "taskledger/services/active_task_recovery.py::"
+         "_append_active_repair_event:except-1"
+diff --git a/tests/test_task_directory_migration.py b/tests/test_task_directory_migration.py
+index e56eefc..9410eb1 100644
+--- a/tests/test_task_directory_migration.py
++++ b/tests/test_task_directory_migration.py
+@@ -14,11 +14,16 @@ from taskledger.storage.init import init_canonical_project_state
+ from taskledger.storage.locks import write_lock
+ from taskledger.storage.meta import StorageMeta, read_storage_meta, write_storage_meta
+ from taskledger.storage.migrations import apply_layout_migrations
++from taskledger.storage.project_context import load_project_context
+ from taskledger.storage.task_identity import (
+     deterministic_legacy_task_uuid,
+     scan_task_identity_inventory,
+ )
+-from taskledger.storage.task_store import V2Paths, resolve_v2_paths
++from taskledger.storage.task_store import (
++    V2Paths,
++    resolve_v2_paths,
++    v2_paths_for_ledger_ref,
++)
+ 
+ PROJECT_UUID = "d1fb158a-6755-4b26-8fbe-aef47f5a6d3a"
+ 
+@@ -424,3 +429,119 @@ def test_layout5_migration_fails_with_source_and_field_for_reserved_relation(
+     assert relation_source.endswith("/task.md")
+     assert (paths.tasks_dir / "task-0002" / "task.md").read_bytes() == original
+     assert (paths.tasks_dir / "task-0004").is_dir()
++
++
++def test_layout5_migration_converts_every_canonical_ledger_before_version_bump(
++    tmp_path: Path,
++) -> None:
++    root, main_paths = _legacy_project(tmp_path / "multi-ledger")
++    context = load_project_context(root, require_initialized=False, allow_legacy=False)
++    feature_paths = v2_paths_for_ledger_ref(context, "clean-start")
++    feature_paths.tasks_dir.mkdir(parents=True)
++    _add_task(main_paths, "task-0001", "2024-11-01T10:00:00+00:00")
++    _add_task(feature_paths, "task-0001", "2024-11-02T10:00:00+00:00")
++
++    _migrate(root)
++
++    assert _storage_version(root) == 6
++    for paths in (main_paths, feature_paths):
++        assert not any(
++            path.name.startswith("task-") for path in paths.tasks_dir.iterdir()
++        )
++        inventory = scan_task_identity_inventory(paths)
++        assert len(inventory.entries) == 1
++        assert inventory.entries[0].task_id == "task-0001"
++
++
++def test_multi_ledger_failure_keeps_version_five_and_retry_resumes(
++    tmp_path: Path,
++) -> None:
++    root, main_paths = _legacy_project(tmp_path / "multi-ledger-lock")
++    context = load_project_context(root, require_initialized=False, allow_legacy=False)
++    feature_paths = v2_paths_for_ledger_ref(context, "clean-start")
++    feature_paths.tasks_dir.mkdir(parents=True)
++    _add_task(main_paths, "task-0001", "2024-12-01T10:00:00+00:00")
++    _add_task(feature_paths, "task-0001", "2024-12-02T10:00:00+00:00")
++    lock_path = feature_paths.tasks_dir / "task-0001" / "lock.yaml"
++    lock_path.write_text("active: true\n", encoding="utf-8")
++
++    with pytest.raises(LaunchError, match="migration is blocked"):
++        _migrate(root)
++
++    assert _storage_version(root) == 5
++    assert (main_paths.tasks_dir / "task-0001").is_dir()
++    assert (feature_paths.tasks_dir / "task-0001").is_dir()
++
++    lock_path.unlink()
++    _migrate(root)
++
++    assert _storage_version(root) == 6
++    for paths in (main_paths, feature_paths):
++        assert not any(
++            path.name.startswith("task-") for path in paths.tasks_dir.iterdir()
++        )
++
++
++def test_layout6_physical_drift_is_read_only_until_mutation_reconciles(
++    tmp_path: Path,
++) -> None:
++    from taskledger.storage.migrations import reconcile_storage_layout
++
++    root, paths = _legacy_project(tmp_path / "layout6-drift")
++    _add_task(paths, "task-0001", "2025-01-01T10:00:00+00:00")
++    write_storage_meta(root, StorageMeta(storage_layout_version=6))
++
++    dry_run = reconcile_storage_layout(root, dry_run=True)
++
++    assert dry_run.changed is False
++    assert dry_run.applied == ("uuidv7-task-directories-reconcile",)
++    assert (paths.tasks_dir / "task-0001").is_dir()
++    assert not (paths.ledger_dir / "task-directory-migration-v5-to-v6.json").exists()
++
++    load_project_context(root, require_initialized=False, allow_legacy=False)
++    assert (paths.tasks_dir / "task-0001").is_dir()
++    assert not (paths.ledger_dir / "task-directory-migration-v5-to-v6.json").exists()
++
++    created = create_task(root, title="new", description="", slug="new")
++
++    assert created.id == "task-0002"
++    assert not (paths.tasks_dir / "task-0001").exists()
++    assert _storage_version(root) == 6
++    assert read_storage_meta(root).last_migrated_at is not None
++
++
++def test_doctor_reports_layout6_task_directory_drift(tmp_path: Path) -> None:
++    from taskledger.services.doctor import inspect_v2_schema
++
++    root, paths = _legacy_project(tmp_path / "doctor-layout-drift")
++    _add_task(paths, "task-0001", "2025-01-01T10:00:00+00:00")
++    write_storage_meta(root, StorageMeta(storage_layout_version=6))
++
++    result = inspect_v2_schema(root)
++
++    diagnostic = next(
++        item
++        for item in result["diagnostics"]
++        if item["code"] == "TASK_DIRECTORY_LAYOUT_DRIFT"
++    )
++    assert result["healthy"] is False
++    assert diagnostic["details"]["legacy_ledgers"] == ["main"]
++    assert (paths.tasks_dir / "task-0001").is_dir()
++
++
++def test_doctor_reports_unrecoverable_task_directory_layout(tmp_path: Path) -> None:
++    from taskledger.services.doctor import inspect_v2_schema
++
++    root, paths = _legacy_project(tmp_path / "doctor-layout-invalid")
++    write_storage_meta(root, StorageMeta(storage_layout_version=6))
++    (paths.tasks_dir / "unexpected.txt").write_text("invalid\n", encoding="utf-8")
++
++    result = inspect_v2_schema(root)
++
++    diagnostic = next(
++        item
++        for item in result["diagnostics"]
++        if item["code"] == "TASKLEDGER_STORAGE_MIGRATION_RECOVERY_REQUIRED"
++    )
++    assert result["healthy"] is False
++    assert diagnostic["details"]["invalid_ledgers"] == ["main"]
+diff --git a/tests/test_task_identity.py b/tests/test_task_identity.py
+index d7102f8..5dbd5b6 100644
+--- a/tests/test_task_identity.py
++++ b/tests/test_task_identity.py
+@@ -220,3 +220,26 @@ def test_uuid_identity_allocation_is_unique_and_inventory_backed(
+     assert len(inventory.entries) == 4
+     assert len({entry.task_id for entry in inventory.entries}) == 4
+     assert all(entry.state == "reserved" for entry in inventory.entries)
++
++
++def test_legacy_task_directory_allocation_error_has_migration_details(
++    tmp_path: Path,
++) -> None:
++    project = _init(tmp_path)
++    paths = resolve_v2_paths(project)
++    (paths.tasks_dir / "task-0001").mkdir()
++
++    with pytest.raises(LaunchError) as caught:
++        allocate_task_identity(paths)
++
++    assert caught.value.code == "TASKLEDGER_TASK_DIRECTORY_MIGRATION_REQUIRED"
++    assert caught.value.exit_code == 4
++    assert caught.value.details == {
++        "ledger_ref": "main",
++        "tasks_dir": str(paths.tasks_dir),
++    }
++    assert caught.value.remediation == [
++        "Run `taskledger migrate status`.",
++        "Run `taskledger migrate apply`.",
++        "Run `taskledger doctor schema` if migration does not converge.",
++    ]
+diff --git a/tests/test_task_layout.py b/tests/test_task_layout.py
+new file mode 100644
+index 0000000..f83516e
+--- /dev/null
++++ b/tests/test_task_layout.py
+@@ -0,0 +1,148 @@
++from __future__ import annotations
++
++from pathlib import Path
++
++import pytest
++
++from taskledger.errors import LaunchError
++from taskledger.storage.init import init_canonical_project_state
++from taskledger.storage.project_context import paths_for_ledger_ref
++from taskledger.storage.task_layout import inspect_task_directory_layout
++from taskledger.storage.task_store import v2_paths_for_ledger_ref
++
++PROJECT_UUID = "d1fb158a-6755-4b26-8fbe-aef47f5a6d3a"
++UUID_TASK_DIR = "0190a5e0-0000-7000-8000-000000000001"
++
++
++def _canonical_project(root: Path):
++    context, _created = init_canonical_project_state(
++        root,
++        project_uuid=PROJECT_UUID,
++        external_root=f"../{root.parent.name}-{root.name}-ledger",
++    )
++    return context
++
++
++def test_arbitrary_ledger_paths_cover_all_canonical_mounts(tmp_path: Path) -> None:
++    context = _canonical_project(tmp_path / "project")
++
++    paths = paths_for_ledger_ref(context, "feature-a")
++    v2_paths = v2_paths_for_ledger_ref(context, "feature-a")
++
++    assert paths.ledger_data_dir == context.paths.data_root / "ledgers" / "feature-a"
++    assert paths.ledger_logs_dir == context.paths.logs_root / "ledgers" / "feature-a"
++    assert paths.ledger_indexes_dir == (
++        context.paths.indexes_root / "ledgers" / "feature-a"
++    )
++    assert paths.active_task_path == (
++        context.paths.runtime_root / "checkouts" / "feature-a" / "active-task.yaml"
++    )
++    assert v2_paths.ledger_ref == "feature-a"
++    assert v2_paths.ledger_dir == paths.ledger_data_dir
++    assert v2_paths.tasks_dir == paths.tasks_dir
++    assert v2_paths.events_dir == paths.events_dir
++    assert v2_paths.indexes_dir == paths.ledger_indexes_dir
++    assert v2_paths.active_task_path == paths.active_task_path
++
++    with pytest.raises(LaunchError, match="Invalid ledger reference"):
++        paths_for_ledger_ref(context, "../outside")
++
++
++def test_inspection_discovers_empty_uuid_and_legacy_ledgers(tmp_path: Path) -> None:
++    context = _canonical_project(tmp_path / "project")
++    main_paths = v2_paths_for_ledger_ref(context, "main")
++    uuid_paths = v2_paths_for_ledger_ref(context, "feature-a")
++    empty_paths = v2_paths_for_ledger_ref(context, "empty-ledger")
++    (uuid_paths.tasks_dir / UUID_TASK_DIR).mkdir(parents=True)
++    empty_paths.tasks_dir.mkdir(parents=True)
++
++    current = inspect_task_directory_layout(context.project_root)
++
++    assert [ledger.ledger_ref for ledger in current.ledgers] == [
++        "empty-ledger",
++        "feature-a",
++        "main",
++    ]
++    assert current.current is True
++    assert {ledger.ledger_ref: ledger.kind for ledger in current.ledgers} == {
++        "empty-ledger": "empty",
++        "feature-a": "uuid",
++        "main": "empty",
++    }
++
++    (main_paths.tasks_dir / "task-0001").mkdir()
++    drift = inspect_task_directory_layout(context.project_root)
++
++    assert drift.current is False
++    assert drift.repairable is True
++    assert drift.legacy_ledgers == ("main",)
++    main_layout = next(
++        ledger for ledger in drift.ledgers if ledger.ledger_ref == "main"
++    )
++    assert main_layout.legacy_dirs == ("task-0001",)
++
++
++def test_inspection_reports_mixed_layout_as_unrepairable_without_journal(
++    tmp_path: Path,
++) -> None:
++    context = _canonical_project(tmp_path / "project")
++    paths = v2_paths_for_ledger_ref(context, "main")
++    (paths.tasks_dir / "task-0001").mkdir(parents=True)
++    (paths.tasks_dir / UUID_TASK_DIR).mkdir()
++
++    inspection = inspect_task_directory_layout(context.project_root)
++
++    assert inspection.current is False
++    assert inspection.repairable is False
++    assert inspection.mixed_ledgers == ("main",)
++    assert inspection.ledgers[0].kind == "mixed"
++
++
++@pytest.mark.parametrize("entry_name", ["unexpected", "task-not-a-number"])
++def test_inspection_reports_unknown_task_directories(
++    tmp_path: Path, entry_name: str
++) -> None:
++    context = _canonical_project(tmp_path / "project")
++    paths = v2_paths_for_ledger_ref(context, "main")
++    (paths.tasks_dir / entry_name).mkdir(parents=True)
++
++    inspection = inspect_task_directory_layout(context.project_root)
++
++    assert inspection.current is False
++    assert inspection.repairable is False
++    assert inspection.invalid_ledgers == ("main",)
++    assert inspection.ledgers[0].kind == "invalid"
++
++
++def test_inspection_reports_symlinked_task_directory(tmp_path: Path) -> None:
++    context = _canonical_project(tmp_path / "project")
++    paths = v2_paths_for_ledger_ref(context, "main")
++    target = tmp_path / "target-task"
++    target.mkdir()
++    (paths.tasks_dir / "task-0001").symlink_to(target, target_is_directory=True)
++
++    inspection = inspect_task_directory_layout(context.project_root)
++
++    assert inspection.current is False
++    assert inspection.repairable is False
++    assert inspection.invalid_ledgers == ("main",)
++    assert "symlink" in inspection.ledgers[0].invalid_entries[0]
++
++
++def test_inspection_reports_nested_symlink(tmp_path: Path) -> None:
++    context = _canonical_project(tmp_path / "project")
++    paths = v2_paths_for_ledger_ref(context, "main")
++    task_dir = paths.tasks_dir / UUID_TASK_DIR
++    task_dir.mkdir(parents=True)
++    target = tmp_path / "sidecar"
++    target.write_text("external", encoding="utf-8")
++    (task_dir / "linked-sidecar").symlink_to(target)
++
++    inspection = inspect_task_directory_layout(context.project_root)
++
++    assert inspection.current is False
++    assert inspection.repairable is False
++    assert inspection.invalid_ledgers == ("main",)
++    assert any(
++        "nested symlink" in entry for entry in inspection.ledgers[0].invalid_entries
++    )
